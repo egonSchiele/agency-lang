@@ -74,6 +74,7 @@ async function startAndPause() {
       preset: "",
       models: { pin: "claude-sonnet-4-6", slots: {}, provider: "", local: null, effort: null },
       limits: { maxToolCallRounds: null, maxToolResultChars: null },
+      localModels: true,
       session: {
         cwd: project,
         replyStyle: "",

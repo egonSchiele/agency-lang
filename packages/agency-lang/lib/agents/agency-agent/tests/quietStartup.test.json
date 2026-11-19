@@ -24,6 +24,18 @@
       "input": "",
       "expectedOutput": "\"true|claude-sonnet-4-6|true|true\"",
       "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "localModelThatCannotLoadIsAFailure",
+      "input": "",
+      "expectedOutput": "\"true|still running\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "localModelsTurnedOffIsAFailure",
+      "input": "",
+      "expectedOutput": "\"Local models are not available here.\"",
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

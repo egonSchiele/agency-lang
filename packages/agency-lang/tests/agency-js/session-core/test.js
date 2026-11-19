@@ -62,6 +62,7 @@ function startData(overrides = {}) {
     preset: "",
     models: { pin: "claude-sonnet-4-6", slots: {}, provider: "", local: null, effort: null },
     limits: { maxToolCallRounds: null, maxToolResultChars: null },
+    localModels: true,
     session: {
       cwd: project,
       replyStyle: "",
@@ -184,6 +185,12 @@ const badBrain = await startSession({ brain: "no-such-brain" });
 result.unknownBrainEndsTheRun = badBrain.ended && errorText(badBrain.result).slice(0, 13);
 const badPreset = await startSession({ preset: "no-such-preset" });
 result.unusablePresetEndsTheRun = badPreset.ended && errorText(badPreset.result) !== "";
+// A local model, where the process cannot host one: refused before anything is loaded.
+const localRefused = await startSession({
+  localModels: false,
+  models: { pin: "", slots: {}, provider: "", local: "no-such-model", effort: null },
+});
+result.localModelWhereNoneCanRun = localRefused.ended && errorText(localRefused.result);
 // The process goes on: the next session starts and reaches its pause.
 const afterFailures = await startSession();
 result.sessionStartsAfterFailedSetups = !afterFailures.ended && afterFailures.pause[0].effect;

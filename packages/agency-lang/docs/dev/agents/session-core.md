@@ -146,6 +146,12 @@ skills. Each read has to become a function of the session's folder
 (`getAgentCwd()`). `tests/agency-js/session-core-handoff` runs both
 processes in one folder, so it does not catch this.
 
+**Local models.** A program started with `localModels: false` refuses a
+local request, at the start or from a later answer, with "Local models
+are not available here." An app whose one process holds every session
+sets this. Where they are allowed, a local model that cannot be set up is
+a failure too: nothing in the program ends the process.
+
 **Each process sets up its own MCP servers** before it resumes a session.
 Connections belong to the process.
 

@@ -12,6 +12,7 @@ import {
   applyModelSpec,
   currentModelRequest,
   modelChoices,
+  setLocalModelsAllowed,
   setStartupModelFlags,
  } from "../lib/session.agency"
 import { getResolvedSlots } from "../shared.agency"
@@ -55,4 +56,22 @@ node badSpecChangesNothing(): string {
   }
   const choicesKept = JSON.stringify(modelChoices()) == JSON.stringify(noModelChoices())
   return "${isFailure(switched)}|${mainModel()}|${choicesKept}|${reason.startsWith("Unknown model slot 'resoning'")}"
+}
+
+// A local model that cannot be set up is a value too. Before, it printed
+// the reason and ended the process, which would end an app's engine.
+node localModelThatCannotLoadIsAFailure(): string {
+  setStartupModelFlags({ ...noModelFlags(), local: "no-such-local-model" }, {})
+  const applied = applyModelRequest(currentModelRequest(noModelChoices()), {})
+  return "${isFailure(applied)}|still running"
+}
+
+node localModelsTurnedOffIsAFailure(): string {
+  setLocalModelsAllowed(false)
+  setStartupModelFlags({ ...noModelFlags(), local: "mlx:mlx-community/Qwen3-4B-4bit" }, {})
+  const applied = applyModelRequest(currentModelRequest(noModelChoices()), {})
+  if (applied is failure(reason)) {
+    return reason
+  }
+  return "applied"
 }

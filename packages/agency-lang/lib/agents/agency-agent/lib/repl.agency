@@ -270,7 +270,11 @@ def localSlashCommand(): boolean {
   const before = getResolvedSlots()
   // A local model can still route with the decision model the user set.
   // The default router stays out of a local session.
-  configureLocalModel(choice, "", explicitRouterSpec())
+  const configured = configureLocalModel(choice, "", explicitRouterSpec())
+  if (configured is failure(reason)) {
+    print(color.red(reason))
+    return true
+  }
   configureSearch(true)
   for (change in diffResolved(before, getResolvedSlots())) {
     reactToSlotChange(change)

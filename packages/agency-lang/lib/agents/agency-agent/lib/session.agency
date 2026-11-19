@@ -124,11 +124,29 @@ export def currentModelRequest(choices: ModelChoices): ModelRequest {
   }
 }
 
+export static const LOCAL_MODELS_OFF = "Local models are not available here."
+
+// Whether this session may run a local model. A global, so it follows the
+// session to whichever process resumes it. A session saved before this
+// existed restores it as null, which counts as allowed.
+let _localModelsAllowed: boolean = true
+
+/** Turn local models off for this session. An app whose one process holds
+  every session does this: a local model is a server that process would
+  have to host. */
+export def setLocalModelsAllowed(on: boolean) {
+  _localModelsAllowed = on
+}
+
+def localModelsAllowed(): boolean {
+  return _localModelsAllowed ?? true
+}
+
 export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Result<boolean> {
   """
-  Resolve and apply a request's models, local or hosted. A hosted
-  failure changes nothing and returns the message. A local model that
-  fails to load still ends the process (configureLocalModel). The
+  Resolve and apply a request's models, local or hosted. A failure
+  changes nothing and returns the message. A local request is a failure
+  where local models are turned off (setLocalModelsAllowed). The
   web-search setup is the caller's job.
 
   @param request - What the run asked for
@@ -136,7 +154,13 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
   """
   const local = localModelOf(request)
   if (local != null) {
-    configureLocalModel(local.model, local.embedding, local.router)
+    if (!localModelsAllowed()) {
+      return failure(LOCAL_MODELS_OFF)
+    }
+    const configured = configureLocalModel(local.model, local.embedding, local.router)
+    if (isFailure(configured)) {
+      return configured
+    }
     applyRequestOptions(request, settings)
     return success(true)
   }

@@ -38,6 +38,7 @@
   "approveAllWithoutThePin": "ended",
   "unknownBrainEndsTheRun": "Unknown brain",
   "unusablePresetEndsTheRun": true,
+  "localModelWhereNoneCanRun": "Local models are not available here.",
   "sessionStartsAfterFailedSetups": "agent::sessionInput",
   "settingsFileWritten": false
 }

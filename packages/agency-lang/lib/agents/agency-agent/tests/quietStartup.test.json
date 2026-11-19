@@ -36,12 +36,6 @@
       "input": "",
       "expectedOutput": "\"Local models are not available here.\"",
       "evaluationCriteria": [{ "type": "exact" }]
-    },
-    {
-      "nodeName": "traceSettingsAreTheProcesss",
-      "input": "",
-      "expectedOutput": "\"true|false|false\"",
-      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

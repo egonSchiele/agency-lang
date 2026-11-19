@@ -15,6 +15,7 @@ export {
   type ResolvedModel,
   type SessionStart,
   type SettingsAnswer,
+  type TraceSettings,
   type TurnBudget,
 } from "./interface.js";
 export { sessionRunPolicy, withPauseLeftAlone } from "./policy.js";

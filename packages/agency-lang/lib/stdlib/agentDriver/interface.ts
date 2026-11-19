@@ -48,7 +48,14 @@ export type ProgramStart = {
   /** A run that takes one message and ends, as `agency agent -p`. It gets
    *  more tool rounds by default. Left out, the session goes on. */
   oneShot?: boolean;
+  /** What the run shows of its work, for a process that loaded the
+   *  terminal's trace callbacks. Left out: debug from AGENT_DEBUG, not
+   *  verbose, and interactive. */
+  trace?: TraceSettings;
 };
+
+/** The terminal's tracing flags, for one run. */
+export type TraceSettings = { debug: boolean; verbose: boolean; interactive: boolean };
 
 /** A slot's model. `provider` is the name the run uses, which for OpenAI
  *  is `openai-responses`, not the name a person sees. */

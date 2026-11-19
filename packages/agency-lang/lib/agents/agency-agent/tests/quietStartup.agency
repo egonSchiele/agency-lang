@@ -3,7 +3,7 @@
  * comes back as a value. Nothing is printed and the process is not ended,
  * so the session core can run them inside an app's engine.
  */
-import { _setLocalModelsAllowed, _traceOptions } from "agency-lang/stdlib-lib/agentProcess.js"
+import { _setLocalModelsAllowed } from "agency-lang/stdlib-lib/agentProcess.js"
 import { setEnv } from "std::system"
 
 import { noModelChoices, noModelFlags } from "../lib/modelRequest.agency"
@@ -15,7 +15,6 @@ import {
   modelChoices,
   setStartupModelFlags,
  } from "../lib/session.agency"
-import { setDebug, setInteractive, setVerbose } from "../lib/trace.agency"
 import { getResolvedSlots } from "../shared.agency"
 
 // The models as a session has them after startup, with no real key.
@@ -75,15 +74,4 @@ node localModelsTurnedOffIsAFailure(): string {
     return reason
   }
   return "applied"
-}
-
-// The trace settings are the process's, so a reader outside this module
-// (another run's copy of trace.agency) sees what these setters wrote.
-node traceSettingsAreTheProcesss(): string {
-  setVerbose(true)
-  setInteractive(false)
-  const options = _traceOptions()
-  setVerbose(false)
-  setInteractive(true)
-  return "${options.verbose}|${options.interactive}|${options.debug}"
 }

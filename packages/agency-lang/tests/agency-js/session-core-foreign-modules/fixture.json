@@ -2,5 +2,7 @@
   "pauseHoldsTerminalGlobals": true,
   "secondProcessReplied": true,
   "secondProcessError": "",
-  "usageCarriedOver": true
+  "usageCarriedOver": true,
+  "verboseSessionPrintsLlmCalls": true,
+  "quietSessionPrintsLlmCalls": false
 }

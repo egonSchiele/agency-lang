@@ -14,7 +14,7 @@ const PROGRAM = "../../../dist/lib/agents/agency-agent/program.js";
 const TERMINAL = "../../../dist/lib/agents/agency-agent/agent.js";
 // A terminal module with globals of its own. Process one's checkpoint holds
 // them, so the second process really resumes a pause the terminal shaped.
-const TRACE_MODULE = "dist/lib/agents/agency-agent/lib/trace.agency";
+const TERMINAL_MODULE = "dist/lib/agents/agency-agent/lib/runSession.agency";
 const policy = { "agent::sessionInput": [{ action: "propagate" }] };
 const USAGE = { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 };
 const COST = { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" };
@@ -38,7 +38,7 @@ function installClient(setClient) {
   });
 }
 
-function startData(project) {
+function startData(project, id = "s1") {
   return {
     brain: "simple",
     preset: "",
@@ -47,7 +47,7 @@ function startData(project) {
     session: {
       cwd: project,
       replyStyle: "",
-      record: { id: "s1", cwd: project, brain: "", created: 1, lastActive: 1, turns: 0, title: "" },
+      record: { id, cwd: project, brain: "", created: 1, lastActive: 1, turns: 0, title: "" },
       flags: null,
       budget: { maxCost: -1, maxTime: -1 },
     },
@@ -55,6 +55,24 @@ function startData(project) {
 }
 
 const totalTokens = (result) => result?.usage?.tokens?.totalTokens ?? 0;
+
+/** Whether a turn of a session started with `trace` printed the line
+ *  trace.agency prints for each LLM call when verbose is on. The callback
+ *  is the terminal's, and it reads the session run's own settings. */
+async function printsLlmCalls(program, project, id, trace) {
+  const started = await program.main({ ...startData(project, id), trace }, { policy });
+  const printed = [];
+  const log = console.log;
+  console.log = (...values) => void printed.push(values.join(" "));
+  try {
+    await program.respondToInterrupts(started.data, [program.approve(message("a turn"))], {
+      invocation: { policy },
+    });
+  } finally {
+    console.log = log;
+  }
+  return printed.some((line) => line.includes("💬 ["));
+}
 
 async function startAndPause() {
   const scratch = mkdtempSync(path.join(os.tmpdir(), "foreign-modules-"));
@@ -79,6 +97,9 @@ async function startAndPause() {
   const pauseBytes = statSync(pauseFile).size;
   const firstTotal = totalTokens(paused);
   const savedGlobals = Object.keys(paused.data[0]?.checkpoint?.globals?.store ?? {});
+  const quiet = { debug: false, verbose: false, interactive: false };
+  const verboseTrace = await printsLlmCalls(program, project, "t1", { ...quiet, verbose: true });
+  const quietTrace = await printsLlmCalls(program, project, "t2", quiet);
 
   execFileSync(process.execPath, ["./test.js"], {
     stdio: "inherit",
@@ -97,10 +118,12 @@ async function startAndPause() {
     "__result.json",
     JSON.stringify(
       {
-        pauseHoldsTerminalGlobals: savedGlobals.includes(TRACE_MODULE),
+        pauseHoldsTerminalGlobals: savedGlobals.includes(TERMINAL_MODULE),
         secondProcessReplied: second.replies.includes("stub reply"),
         secondProcessError: second.error,
         usageCarriedOver: second.total >= firstTotal && firstTotal > 0,
+        verboseSessionPrintsLlmCalls: verboseTrace,
+        quietSessionPrintsLlmCalls: quietTrace,
       },
       null,
       2,

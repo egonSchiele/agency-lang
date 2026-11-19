@@ -24,6 +24,12 @@ import { activePreset, startPresetQuiet } from "./lib/presets.agency"
 import { startModels } from "./lib/session.agency"
 import { loadSettings } from "./lib/settings.agency"
 import { LimitFlags, applyToolLimits, setStartupLimitFlags } from "./lib/toolLimits.agency"
+import {
+  TraceSettings,
+  setDebug,
+  setInteractive,
+  setVerbose,
+ } from "./lib/traceSettings.agency"
 import { resolveBrainName, setBrainName } from "./lib/turn.agency"
 import { getCapabilities } from "./shared.agency"
 
@@ -44,12 +50,21 @@ export type ProgramStart = {
   // Whether the run takes one message and ends, as `agency agent -p`
   // does. Such a run gets more tool rounds by default. Left out, it is a
   // session that goes on.
-  oneShot?: boolean
+  oneShot?: boolean;
+  // What the run shows of its work, for a process that loaded the
+  // terminal's trace callbacks. Left out: debug from AGENT_DEBUG, not
+  // verbose, and interactive, as the terminal starts.
+  trace?: TraceSettings
 }
 
 // `start` is checked against its type. A front-end built for another
 // version of this program is refused with the field that does not fit.
 node main(start: ProgramStart!) {
+  if (start.trace != null) {
+    setDebug(start.trace.debug)
+    setVerbose(start.trace.verbose)
+    setInteractive(start.trace.interactive)
+  }
   const settings = loadSettings()
   const brainName = resolveBrainName(start.brain, settings)
   const brainNames = map(agencyAgentBrains(), \entry -> entry.name)

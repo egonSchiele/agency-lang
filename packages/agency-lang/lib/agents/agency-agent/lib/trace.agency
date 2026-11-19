@@ -6,14 +6,20 @@
  * No @module banner here on purpose: a file holding a top-level callback()
  * cannot also carry one, or the preprocessor rejects it. See issue below.
  */
-import { _setTraceOptions, _traceOptions } from "agency-lang/stdlib-lib/agentProcess.js"
 import { _printAgentTrace } from "agency-lang/stdlib-lib/agentToolTrace.js"
 import { searchProviderName } from "std::agents/lib/search"
-import { env } from "std::system"
 import { pushMessage } from "std::ui/cli"
 
 import { REPL_STYLE, setReplyStyle } from "./answer.agency"
 import { setJobToolsOn } from "./cliTools.agency"
+import {
+  isDebug as debugOn,
+  isInteractive as interactiveOn,
+  isVerbose as verboseOn,
+  setDebug as setDebugOn,
+  setInteractive as setInteractiveOn,
+  setVerbose as setVerboseOn,
+ } from "./traceSettings.agency"
 import {
   isPlainObject,
   retryReasonLabel,
@@ -21,28 +27,13 @@ import {
 import { renderLLMCallResponse } from "./utils/renderLLMCallResponse.agency"
 
 
-let AGENT_DEBUG_ENV = env("AGENT_DEBUG") with approve
-
-// Debug, verbose and interactive are facts about the process, so they live
-// in process state (agentProcess.ts), not in this module's globals: the
-// shell run and the session run each have their own copy of those. Only the
-// AGENT_DEBUG environment variable is read here, per run, and it adds to
-// the process's debug flag.
-def debugOn(): boolean {
-  return _traceOptions().debug || AGENT_DEBUG_ENV == "1"
-}
-
-def verboseOn(): boolean {
-  return _traceOptions().verbose
-}
-
 // Live tool-call tracing. Always shown in the interactive REPL, but in
 // one-shot mode it's suppressed unless the user opts in
 // with `--verbose` / `--debug` (AGENT_DEBUG). A function, not a static
 // const: it reads globals that `main()` sets after module init, so the
 // value must be computed per call.
 export def isTraceEnabled(): boolean {
-  return _traceOptions().interactive || verboseOn() || debugOn()
+  return interactiveOn() || verboseOn() || debugOn()
 }
 
 // Which tools print, and how, is the renderer's table (TOOL_PRESENTATIONS in
@@ -115,7 +106,7 @@ callback("onEmit") as data {
     print(color.dim(data.error))
   } else if (isPlainObject(data) && data.type == "session.notice") {
     printNotice(data.text, data.level)
-  } else if (isPlainObject(data) && data.type == "session.budgetStop" && _traceOptions().interactive) {
+  } else if (isPlainObject(data) && data.type == "session.budgetStop" && interactiveOn()) {
     // Only with a person at the terminal. A one-shot run's output is
     // the reply and nothing else.
     print(color.yellow(
@@ -154,7 +145,7 @@ export def setDebug(on: boolean) {
 
   @param on - Whether to trace
   """
-  _setTraceOptions({ ..._traceOptions(), debug: on })
+  setDebugOn(on)
 }
 
 export def setVerbose(on: boolean) {
@@ -163,7 +154,7 @@ export def setVerbose(on: boolean) {
 
   @param on - Whether to trace
   """
-  _setTraceOptions({ ..._traceOptions(), verbose: on })
+  setVerboseOn(on)
 }
 
 export def setInteractive(on: boolean) {
@@ -176,7 +167,7 @@ export def setInteractive(on: boolean) {
 
   @param on - Whether the run is interactive
   """
-  _setTraceOptions({ ..._traceOptions(), interactive: on })
+  setInteractiveOn(on)
   if (on) {
     setReplyStyle(REPL_STYLE)
   } else {
@@ -190,5 +181,5 @@ export def isInteractive(): boolean {
   Whether a user is at a terminal to answer prompts. False in one-shot and
   piped runs, where there is nobody to respond to an interrupt.
   """
-  return _traceOptions().interactive
+  return interactiveOn()
 }

@@ -1,0 +1,154 @@
+/** @module
+  @summary A trial brain: the minimal brain, plus tools that write and run a short Agency program in place of a node or shell script.
+
+  A brain of the Agency agent. It is the minimal brain with two more
+  tools and a short primer on Agency in its system message:
+
+  - `runAgency` type-checks a program the model wrote and runs it.
+  - `agencyScript` hands a task to the stdlib Agency writer, which writes
+    and checks the program on a thread of its own, then runs it.
+
+  The primer is about 2 KB. The writer's full tutorial stays on the
+  writer's own thread, so it costs nothing on the calls where
+  `agencyScript` is not used.
+
+  A program run either way runs in a separate process, and every file
+  read, file write, and command in it raises its own interrupt, which
+  reaches the same handlers as the agent's other tools. So the user
+  approves what the program does, and does not have to read the program
+  first, as they would for `node -e '<script>'`.
+*/
+import { TypeCheckDiagnostic, runCode, typecheck } from "std::agency"
+import { agencyCodingAgent } from "std::agents/agency/coding"
+import { minimalBrain } from "std::agents/brains/minimal"
+import { AgentSettings } from "std::agents/brains/settings"
+import { getAgentCwd } from "std::index"
+import { Attachment, ensureSystemMessage } from "std::thread"
+
+static const SCRIPT_PRIMER = """
+You can write and run Agency programs. When you need a short script to compute, parse, or check something, such as reading a JSON file and counting its entries, write it in Agency and run it with runAgency, instead of running `node -e`, `python -c`, or a shell script. Use node, python, or the shell only when the question is about those programs themselves, such as how Python imports a module.
+
+A program run with runAgency asks for approval for each file it reads or writes and each command it runs, as your other tools do. It must have `export node main()`, and main must return the value you want to see. Printed output does not come back to you. When the program has type errors, runAgency returns them and runs nothing, so fix them and call it again. A program can import from an Agency file in the working directory: `import { solve } from "./solve.agency"`.
+
+Agency in brief:
+
+```
+import { keys } from "std::object"
+
+export def solve(text: string): number {
+  let total = 0
+  for (line in text.trim().split("\n")) {
+    const parts = line.split(",")
+    if (parts.length > 1) {
+      total = total + parseInt(parts[1])
+    }
+  }
+  return total
+}
+
+export node main() {
+  const text = read("data.csv") catch ""
+  const config = JSON.parse(read("config.json") catch "{}")
+  const people = [{ name: "a", total: 3 }, { name: "b", total: 1 }]
+  const byTotal = sortBy(people, \p -> p.total)
+  return { sum: solve(text), fields: keys(config), first: byTotal[0].name }
+}
+```
+
+- `if`, `for`, and `while` need parentheses and braces: `if (x > 0) { }`, `for (item in items) { }`. Declare every variable with `let` or `const`.
+- A condition must be a boolean: `if (count > 0)`, never `if (count)`.
+- A function another file imports must be `export def`.
+- `read` is built in. There is no readFile, and read is not in std::fs. It returns a Result, so add `catch ""` or check it.
+- sortBy, groupBy, unique, count, map, filter, and range are built in. They take a block such as `\p -> p.total`. JavaScript callbacks such as `.map(x => ...)` or `.filter(...)` are errors.
+- `keys` and `values` come from std::object and must be imported.
+- Strings and arrays have the JavaScript methods that take no callback: split, trim, includes, join, slice, push, and length. JSON.parse, parseInt, and Number work as in JavaScript.
+
+For a longer program, call agencyScript with the task. A separate writer, who knows the whole language, writes the program and runs it, and you get back its result and its source.
+"""
+
+// The writer's budget for one program. A short script needs far less than
+// the writer's defaults of $20 and 15 minutes.
+static const SCRIPT_MAX_COST = $1.00
+static const SCRIPT_MAX_TIME = 5m
+
+/** One diagnostic as a line the model can act on. A diagnostic counts
+  lines and columns from 0; the model reads them from 1, as an editor
+  shows them. */
+def diagnosticLine(diagnostic: TypeCheckDiagnostic): string {
+  if (diagnostic.loc == null) {
+    return "${diagnostic.code}: ${diagnostic.message}"
+  }
+  return "line ${diagnostic.loc.line + 1}, column ${diagnostic.loc.col + 1}: ${diagnostic.code}: ${diagnostic.message}"
+}
+
+export def runAgency(source: string): Result {
+  """
+  Type-check an Agency program and, when it has no errors, run it in a separate process and return the value its main node returns. Each file it reads or writes and each command it runs asks for approval as your other tools do. When the program has type errors, they are returned and nothing runs.
+
+  @param source - A complete Agency program with `export node main()`, which returns the value you want to see
+  """
+  // A strict check also reports the imports and JavaScript names the
+  // separate process refuses, so they come back as errors to fix rather
+  // than as a failed run. Local imports resolve in the agent's working
+  // directory, so a program can import a file the agent wrote there.
+  const report = typecheck(source, strict: true, dir: getAgentCwd())
+  if (report is failure(err)) {
+    return failure("Could not type-check the program: ${err}")
+  }
+  const errors = report.value.errors
+  if (errors.length > 0) {
+    const lines = [diagnosticLine(diagnostic) for diagnostic in errors]
+    return failure(
+      "The program was not run, because it has type errors:\n${lines.join("\n")}",
+    )
+  }
+  // The program's relative paths name files in the agent's working
+  // directory, as the agent's own file tools do.
+  return runCode(source, cwd: getAgentCwd(), dir: getAgentCwd())
+}
+
+export def agencyScript(task: string): Result {
+  """
+  Have a separate writer write a short Agency program for a task, run it, and return the program's result and its source. The writer writes Agency only, so do not ask it for Python or a shell script. Each file the program reads or writes and each command it runs asks for approval as your other tools do. The writer does not see this conversation, so the task must name every file and say what result to return.
+
+  @param task - What the program should do and return, with every file path it needs
+  """
+  // `strict` checks the draft against the rules the separate process
+  // enforces, so a program that passes the writer's checks also compiles
+  // there.
+  const written = agencyCodingAgent(
+    task,
+    strict: true,
+    maxCost: SCRIPT_MAX_COST,
+    maxTime: SCRIPT_MAX_TIME,
+  )
+  if (written is failure(err)) {
+    return failure("The Agency writer could not write the program: ${err}")
+  }
+  const source = written.value
+  const ran = runCode(source, cwd: getAgentCwd(), dir: getAgentCwd())
+  if (ran is failure(runErr)) {
+    return failure("The program failed: ${runErr}\n\nThe program:\n${source}")
+  }
+  return success({
+    result: ran.value,
+    source: source
+  })
+}
+
+export def scripttestBrain(
+  prompt: string | (string | Attachment)[],
+  settings: AgentSettings,
+  extraTools: any[],
+): Result<string> {
+  """
+  Answer one message with the minimal brain, plus tools that write and run
+  a short Agency program in place of a node or shell script.
+
+  @param prompt - The message, alone or followed by its attachments
+  @param settings - The call's settings
+  @param extraTools - Tools added to the brain's own
+  """
+  ensureSystemMessage(SCRIPT_PRIMER)
+  return minimalBrain(prompt, settings, [runAgency, agencyScript, ...extraTools])
+}

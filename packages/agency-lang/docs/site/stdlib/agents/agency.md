@@ -50,10 +50,15 @@ Which brain answers.
 
 ```ts
 /** Which brain answers. */
-export type AgencyAgentBrain = "coordinator" | "minimal" | "simple" | "spawntest"
+export type AgencyAgentBrain =
+  | "coordinator"
+  | "minimal"
+  | "simple"
+  | "spawntest"
+  | "scripttest"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L50))
 
 ### AgentExtraTools
 
@@ -70,7 +75,7 @@ export type AgentExtraTools = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L53))
 
 ### BrainInfo
 
@@ -84,7 +89,7 @@ export type BrainInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L62))
 
 ## Functions
 
@@ -98,7 +103,7 @@ Return the brains `agencyAgent` can run, each with a one-line description.
 
 **Returns:** `BrainInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L67))
 
 ### agencyAgent
 
@@ -137,7 +142,7 @@ A negative `maxCost` or `maxTime` means no limit. A model that is given
 |---|---|---|---|
 | task | `string` |  | What the user wants, as they would say it to an assistant |
 | context | `string` | "" | Extra text for the agent, such as the user's own instructions, or "" |
-| brain | [AgencyAgentBrain](#agencyagentbrain) | "coordinator" | Which brain answers: "coordinator", "minimal", "simple", or "spawntest" |
+| brain | [AgencyAgentBrain](#agencyagentbrain) | "coordinator" | Which brain answers: "coordinator", "minimal", "simple", "spawntest", or "scripttest" |
 | maxCost | `number` | $50.00 | Cost budget in USD |
 | maxTime | `number` | 30m | Time budget in milliseconds |
 | model | `string` | "" | The main model, or "" for the ambient model |
@@ -153,4 +158,4 @@ A negative `maxCost` or `maxTime` means no limit. A model that is given
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L100))

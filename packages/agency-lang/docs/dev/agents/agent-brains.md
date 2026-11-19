@@ -42,7 +42,7 @@ export def agencyAgent(
 - `context` is extra text, such as the user's instructions. Each brain adds
   it as a system message that expires with the call, and each subagent
   wrapper passes it to its stdlib agent.
-- `brain` picks one of four brains (`stdlib/agents/brains/`):
+- `brain` picks one of five brains (`stdlib/agents/brains/`):
   - `coordinator`, the default: one model that answers itself or hands
     the turn to the code, Agency code, research, oracle, explorer, review,
     writing, and rewrite subagents.
@@ -51,6 +51,9 @@ export def agencyAgent(
   - `simple`: one LLM call with no tools of its own.
   - `spawntest`: a trial. The minimal brain, plus a tool that starts
     another agent as a process of its own. See "The spawntest brain" below.
+  - `scripttest`: a trial. The minimal brain, plus tools that write and
+    run a short Agency program in place of a node or shell script.
+    See "The scripttest brain" below.
 
   `agencyAgentBrains()` lists them with a one-line description each.
 - `maxCost` and `maxTime` are the budget for the whole call. A negative
@@ -289,6 +292,78 @@ the reply, and exits.
   with `sudo npm install -g`, the manifest is never saved, so every start
   tries to compile again and fails. The `task.js` the package ships is not
   used.
+
+## The scripttest brain
+
+A trial of having the agent write its quick checks in Agency. In one
+session, the coordinator ran five `node -e` scripts to read a JSON file
+and call a function. Each script asked one question for the whole script,
+so the user had to read the script to answer it. An Agency program asks
+about each file it reads or writes and each command it runs, through the
+same handlers as the agent's other tools, so the user answers questions
+about what the program does instead of reading it.
+
+`scripttestBrain` in `stdlib/agents/brains/scripttest.agency` is the
+minimal brain with two more tools and a short primer on Agency in its
+system message:
+
+- `runAgency(source)` type-checks a program the model wrote and runs it.
+- `agencyScript(task)` hands a task to the stdlib Agency writer, which
+  writes and checks the program, then runs it.
+
+The primer tells the model to write a quick check in Agency instead of
+`node -e`, `python -c`, or a shell script, and to use those only when the
+question is about Node or Python themselves. It holds one example program
+and a list of the mistakes models make most often in Agency, such as
+`if (count)` on a number or `readFile`. It is about 2 KB.
+
+It is built on the minimal brain so that it can be benchmarked against
+it: the two differ only in the two tools and the primer.
+
+- **Why a primer and not the tutorial.** The full tutorial is about 34 KB,
+  and on the main thread it is sent with every model call, whether or not
+  the call writes Agency. Without any Agency in the main context, the model
+  writes Python every time it is free to choose. The primer is the
+  smallest text that still moves that choice. The tutorial stays in the
+  writer's own system prompt, where `agencyScript` uses it.
+- **runAgency checks first.** It runs `typecheck(strict: true)`, which also
+  reports the imports and JavaScript names the separate process refuses.
+  When the program has errors, they come back as one line each and nothing
+  runs. The strict check does not catch every undefined name: it accepts
+  `keys(x)` with no import of `keys`, which then fails at run time.
+- **agencyScript is a subagent, not a handoff.** The writer,
+  `agencyCodingAgent`, works on a thread of its own with `strict: true`
+  and a budget of $1 and 5 minutes. It does not see the conversation, so
+  the task has to name every file and say what to return. The tool returns
+  the result and the program's source, so the model can save the program
+  to a file. If the writer gives up, its failure comes back and nothing
+  runs.
+- **The run.** Both tools call `runCode` with the agent working directory
+  as `cwd` and as `dir`. So a relative path names a file there, and a
+  program can import an Agency file there, such as
+  `import { solve } from "./solve.agency"`. `runCode` raises `std::run` to
+  start the process. Every effect the program raises goes to the session's
+  handlers (`docs/dev/runtime/subprocess-ipc.md`). The tool returns what
+  `main` returns. Printed output does not come back to the model.
+- **A handler inside the program approves nothing on its own.** Models
+  write `ls(dir) with approve` into these programs. The program's own
+  approval still sends the interrupt on to the session's handlers
+  (`docs/dev/runtime/subprocess-ipc.md`, "The distributed handler chain"),
+  and the agent's policy handler always answers: with a saved rule, with a
+  rejection in a one-shot run, or by asking the user
+  (`cliPolicyHandler` in `stdlib/policy.agency`). It never returns "no
+  answer", which is the one case where the program's approval would stand.
+- **A question inside the program.** The agent's handler asks the user
+  inside the handler, so the program waits for the answer and does not
+  pause. A host whose handlers leave an interrupt undecided gets the usual
+  subprocess pause: the child saves a checkpoint and exits, and resuming
+  runs it again from that point in a new process.
+- **Nothing forces the tool.** The model can still run `node -e`, because
+  some checks are about Node itself, such as how Node resolves a package.
+  Whether the model follows the message is the question the trial answers.
+- **The harness treats it as the minimal brain.** `agency agent` gives it
+  no CLI tools, no REPL style line, no session facts rule, and no
+  `--agent` start targets, as for `minimal`.
 
 ## Adding a brain
 

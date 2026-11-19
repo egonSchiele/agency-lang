@@ -1,0 +1,64 @@
+import { cliPolicyHandler, askAbout, currentPolicy, parsePolicyFile } from "std::policy"
+
+// Interrupts another run raised, as they reach this program: as data.
+def readInterrupt(root: string): any {
+  return {
+    type: "interrupt",
+    effect: "std::read",
+    message: "Read a file",
+    data: { dir: "${root}/x", filename: "f" }
+  }
+}
+
+def deployInterrupt(): any {
+  return {
+    type: "interrupt",
+    effect: "myapp::deploy",
+    message: "Deploy?",
+    data: { env: "prod" }
+  }
+}
+
+// Asked before `cliPolicyHandler` was called: rejected, and no prompt.
+node withoutHandler(args: { root: string }): any {
+  const response = askAbout(readInterrupt(args.root))
+  return { type: response.type, policy: currentPolicy() }
+}
+
+node main(args: { policyFile: string, root: string }): any {
+  const handler = cliPolicyHandler(file: args.policyFile)
+
+  // Answered "always approve": the rule is in the policy and on disk
+  // before askAbout returns.
+  const approved = askAbout(readInterrupt(args.root))
+  const afterApprove = currentPolicy()
+  const onDisk = parsePolicyFile(args.policyFile)
+  let savedRules: any = null
+  if (onDisk is success(saved)) {
+    savedRules = saved["std::read"]
+  }
+
+  // The program's own read of the same kind: the saved rule approves it,
+  // so no prompt.
+  let ownRead = "rejected"
+  handle {
+    interrupt std::read("Read another file", { dir: "${args.root}/x", filename: "g" })
+    ownRead = "approved"
+  } with handler
+
+  // Answered "reject once", then a message at the follow-up: a reject
+  // that carries the message, and no new rule.
+  const before = JSON.stringify(currentPolicy())
+  const rejected = askAbout(deployInterrupt())
+  const after = JSON.stringify(currentPolicy())
+
+  return {
+    approved: approved.type,
+    policyRule: afterApprove["std::read"],
+    savedRules: savedRules,
+    ownRead: ownRead,
+    rejected: rejected.type,
+    rejectReason: rejected.value,
+    policyUnchanged: before == after
+  }
+}

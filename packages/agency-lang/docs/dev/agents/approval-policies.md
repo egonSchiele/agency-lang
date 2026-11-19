@@ -596,6 +596,35 @@ give and the policy to carry on with.
   unchanged and writes nothing. The stdlib's `recordRule` is a different
   function: it appends.
 
+## Asking about another run's interrupt in the terminal
+
+A terminal program that runs a second Agency run gets that run's
+interrupts back as data. It asks about them with the prompt
+`cliPolicyHandler` draws, through two hidden functions in `std::policy`:
+
+```
+const handler = cliPolicyHandler(file: policyFile)
+const response = askAbout(intr)   // approve(...) or reject(...)
+const rules = currentPolicy()
+```
+
+- **One prompt.** `_handler` and `askAbout` both end in `askPerson`:
+  `askUser`, then the answer as a response (a rule saved while it waited,
+  reject always, approve, a typed value, a typed reason, or the "What
+  should the agent do instead?" follow-up).
+- **One policy and one writer.** `askAbout` uses the handler's `_policy`
+  and file. An "always" answer is recorded by `recordAnswer` and written
+  by `maybeFlush` before `askAbout` returns. The handler would otherwise
+  write it at its next interrupt, and there may be none.
+- **The handler comes first.** Before `cliPolicyHandler` is called there is
+  no file, so `askAbout` prints an error and rejects.
+- **Esc is not caught.** The cancellation the prompt raises leaves
+  `askAbout` unchanged.
+- **`askAbout` does not check `interactive`.** The caller decided a person
+  should be asked. Its rule check is the one `askUser` runs under the lock.
+- **`intr` must be the host's own copy**, as for `resolvePromptOption`
+  above: an "always" answer saves a rule built from `intr.data`.
+
 ## Effects that carry their own bookkeeping
 
 Some stdlib work is a file operation only incidentally: the toolbox

@@ -1198,6 +1198,15 @@ def typedValue(intr: any, answer: any): string | null {
   return null
 }
 
+// The answer when the handler has no policy to check: there is nothing
+// to decide by and no rules to save an answer into.
+def rejectWithoutPolicy(): any {
+  print(
+    "Error: no policy loaded. Rejecting by default. Load a policy with parsePolicyFile and set it using setPolicy before installing the handler.",
+  )
+  return reject()
+}
+
 /**
 Internal handler returned by `cliPolicyHandler`.
 */
@@ -1224,10 +1233,7 @@ def _handler(intr: any): any {
   maybeFlush()
 
   if (_policy == null) {
-    print(
-      "Error: no policy loaded. Rejecting by default. Load a policy with parsePolicyFile and set it using setPolicy before installing the handler.",
-    )
-    return reject()
+    return rejectWithoutPolicy()
   }
 
   // A rule may reject anything. A rule may not approve a raise that
@@ -1267,6 +1273,13 @@ def _handler(intr: any): any {
     )
   }
 
+  return askPerson(intr)
+}
+
+// Ask the person at the terminal about one interrupt and turn the answer
+// into a response. `_handler` and `askAbout` both end here, so there is
+// one prompt.
+def askPerson(intr: any): any {
   const answer = askUser(intr)
   if (answer.rule != null) {
     // A rule saved by the interrupt ahead of this one decided it while it
@@ -1305,6 +1318,45 @@ def _handler(intr: any): any {
   // agent can course-correct without ending the turn.
   const reason = input("What should the agent do instead? (press enter to skip) ")
   return reject(userRejection(reason))
+}
+
+/** Ask the user about an interrupt another run raised. */
+@hidden
+export def askAbout(intr: any): any {
+  """
+  Ask the user about an interrupt passed as data, with the CLI handler's
+  prompt and policy, and return the response. Call `cliPolicyHandler` first.
+  An "always" answer is saved to the handler's file before this returns.
+  """
+  // The handler's options name the policy file. Without them there is no
+  // policy to check and no file to save an answer to.
+  if (globalCliPolicyOpts.file == "") {
+    const message = "askAbout was called before cliPolicyHandler, so there is no policy to use. Rejecting by default. Call cliPolicyHandler first."
+    print("Error: ${message}")
+    return reject(message)
+  }
+  maybeLoadPolicy()
+  maybeFlush()
+  if (_policy == null) {
+    return rejectWithoutPolicy()
+  }
+  const response = askPerson(intr)
+  // The handler saves an "always" answer at its next interrupt. There may
+  // be none here, so save it now.
+  maybeFlush()
+  return response
+}
+
+/**
+The policy this program's handler is using now. An empty policy when
+`cliPolicyHandler` has not loaded one yet.
+*/
+@hidden
+export def currentPolicy(): Policy {
+  """
+  Return the CLI handler's active policy, or an empty one when none is loaded.
+  """
+  return _policy ?? {}
 }
 
 // What the model reads when the user rejects a call at the prompt. It has

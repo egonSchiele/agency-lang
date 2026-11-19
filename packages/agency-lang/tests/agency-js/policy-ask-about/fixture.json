@@ -1,0 +1,14 @@
+{
+  "withoutHandler": {
+    "type": "reject",
+    "policy": {}
+  },
+  "approved": "approve",
+  "policyRule": [{ "action": "approve" }],
+  "savedRules": [{ "action": "approve" }],
+  "ownRead": "approved",
+  "rejected": "reject",
+  "rejectReason": "The user rejected this call and wrote you this message:\nuse staging",
+  "policyUnchanged": true,
+  "remainingAnswers": 0
+}

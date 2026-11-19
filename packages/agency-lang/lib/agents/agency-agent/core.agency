@@ -73,7 +73,10 @@ export type PauseData = {
   effort: string;
   budget: TurnBudget;
   // How full the conversation's context window is, as the footer says it.
-  context: string
+  context: string;
+  // The brain that runs the session, by its name. Unlike `record.brain`,
+  // it is there when the session is not saved.
+  brain: string
 }
 
 effect agent::sessionInput {
@@ -85,7 +88,8 @@ effect agent::sessionInput {
   fixedProvider: string;
   effort: string;
   budget: any;
-  context: string
+  context: string;
+  brain: string
 }
 
 export type SessionStart = {
@@ -166,7 +170,8 @@ def pauseData(budget: TurnBudget): PauseData {
     fixedProvider: fixedProvider(),
     effort: askedEffort(),
     budget: budget,
-    context: contextStatus(threadId)
+    context: contextStatus(threadId),
+    brain: currentBrainName()
   }
 }
 

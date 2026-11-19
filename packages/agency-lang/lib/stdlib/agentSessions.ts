@@ -1,7 +1,8 @@
-import { currentRun, type Run } from "../runtime/asyncContext.js";
+import { currentRun, currentRunOrNone, type Run } from "../runtime/asyncContext.js";
 import type { MessageJSON } from "smoltalk";
 import type { Host, Root } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
+import { processSlot } from "../runtime/processSlot.js";
 import { __call } from "../runtime/call.js";
 import { hasInterrupts } from "../runtime/interrupts.js";
 import { checkpointFor, getCheckpointFor } from "../runtime/checkpoint.js";
@@ -9,6 +10,9 @@ import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { stripSlug } from "../runtime/runner.js";
 import { _contentToString } from "./threads.js";
 import { printAgentTrace } from "./agentToolTrace.js";
+import type { Interrupt } from "../runtime/interrupts.js";
+import { getModuleFingerprint } from "../runtime/moduleFingerprintRegistry.js";
+import { isPlainObject } from "../utils/isPlainObject.js";
 
 /**
  * File I/O for the agency agent's saved sessions
@@ -30,7 +34,7 @@ import { printAgentTrace } from "./agentToolTrace.js";
  *   writes this, and resumes it with `restore`.
  * - `savedRun`: the interrupts a session core paused on, each with its
  *   checkpoint, as a front-end that drives the core from outside saves it
- *   (`{ version, pause, cancelledTexts, turn }`). Perry writes this.
+ *   (`{ version, pause, cancelledTexts, failedTexts, turn }`). Perry writes this.
  *
  * Both programs save into the same folders, and neither can resume the
  * other's file yet.
@@ -42,6 +46,13 @@ const RUN_FORMATS: string[] = ["checkpoint", "savedRun"];
 // The brain Perry gave its records before it ran the agent's own program.
 // They carry no `runFormat`, and their run files are saved runs.
 const OLD_PERRY_BRAIN = "perry";
+
+/** The front-end that has a session open: its name, such as `terminal`,
+ *  its process id, and `processId`, a random id its process made at start.
+ *  Two holders are the same when the name and `processId` match: pids
+ *  repeat across machines, and the system reuses one after a crash. The
+ *  pid is kept for messages. */
+export type SessionHolder = { frontEnd: string; pid: number; processId: string };
 
 export type SessionRecord = {
   id: string;
@@ -57,6 +68,8 @@ export type SessionRecord = {
   conversationThread?: string;
   /** What the run file holds. A record without it is a checkpoint. */
   runFormat?: RunFormat;
+  /** The front-end that has this session open now, and its process id. */
+  heldBy?: SessionHolder;
 };
 
 /** What a record's run file holds. A record that does not say is a
@@ -87,19 +100,35 @@ async function readJson(host: Host, dir: Root, name: string): Promise<unknown> {
   }
 }
 
-function isRecord(value: unknown): value is SessionRecord {
-  if (typeof value !== "object" || value === null) return false;
-  const r = value as Record<string, unknown>;
-  const isText = (k: string) => typeof r[k] === "string";
-  const isCount = (k: string) => typeof r[k] === "number" && Number.isFinite(r[k]) && r[k] >= 0;
+function isSessionHolder(value: unknown): value is SessionHolder {
+  return (
+    isPlainObject(value) &&
+    typeof value.frontEnd === "string" &&
+    Number.isInteger(value.pid) &&
+    typeof value.processId === "string" &&
+    value.processId !== ""
+  );
+}
+
+/** True for a session record, such as one read back from its file. */
+export function isSessionRecord(value: unknown): value is SessionRecord {
+  if (!isPlainObject(value)) return false;
+  const isText = (key: string): boolean => typeof value[key] === "string";
+  const isCount = (key: string): boolean => {
+    const field: unknown = value[key];
+    return typeof field === "number" && Number.isFinite(field) && field >= 0;
+  };
   // Agency writes a field that was never set as null.
-  const forkIsValid = r.forkedFrom == null || isText("forkedFrom");
-  const threadIsValid = r.conversationThread == null || isText("conversationThread");
+  const forkIsValid = value.forkedFrom == null || isText("forkedFrom");
+  const threadIsValid = value.conversationThread == null || isText("conversationThread");
   const formatIsValid =
-    r.runFormat == null || (typeof r.runFormat === "string" && RUN_FORMATS.includes(r.runFormat));
+    value.runFormat == null ||
+    (typeof value.runFormat === "string" && RUN_FORMATS.includes(value.runFormat));
+  const heldByIsValid = value.heldBy == null || isSessionHolder(value.heldBy);
   return (
     forkIsValid &&
     threadIsValid &&
+    heldByIsValid &&
     formatIsValid &&
     isText("id") &&
     isText("cwd") &&
@@ -121,10 +150,18 @@ export async function _listSessions(dir: string): Promise<SessionRecord[]> {
   for (const entry of await host.files.list(sessions, ".")) {
     if (entry.type !== "file" || !entry.name.endsWith(META_SUFFIX)) continue;
     const parsed = await readJson(host, sessions, entry.name);
-    if (isRecord(parsed)) records.push(parsed);
+    if (isSessionRecord(parsed)) records.push(parsed);
   }
   records.sort((a, b) => b.lastActive - a.lastActive);
   return records;
+}
+
+/** The record of session `id` in `dir`, or null when it has none or its
+ *  file is malformed. Reads that one file. */
+export async function _readSessionRecord(dir: string, id: string): Promise<SessionRecord | null> {
+  const host = currentHost();
+  const parsed = await readJson(host, await host.files.root(dir), metaFile(id));
+  return isSessionRecord(parsed) ? parsed : null;
 }
 
 /** Write the checkpoint, then the record. Returns "" on success, else the
@@ -144,13 +181,57 @@ async function saveSession(
   record: SessionRecord,
   checkpoint: unknown,
 ): Promise<string> {
+  return writeInSessions(host, dir, async (sessions) => {
+    await host.files.writeText(sessions, checkpointFile(record.id), JSON.stringify(checkpoint));
+    await host.files.writeText(sessions, metaFile(record.id), JSON.stringify(record));
+  });
+}
+
+// The host a record's lock is taken on outside a run. A lock lives on its
+// host, and `currentHost()` with no run current builds a new host on every
+// call, so this one is kept for the process.
+const processLockHost = processSlot<Host>("agency.sessionLockHost", () => currentHost());
+
+function lockHost(): Host {
+  const run = currentRunOrNone();
+  if (run !== undefined) return run.ctx.host;
+  return processLockHost.get();
+}
+
+/** Runs `work` holding the lock on session `id`'s record, so a read of the
+ *  record and the write after it have no other locked work between them.
+ *  It is the host's lock: it covers this process, not another one. */
+export async function _withRecordLock<T>(
+  dir: string,
+  id: string,
+  work: () => Promise<T>,
+): Promise<T> {
+  const host = lockHost();
+  return host.files.withLock(await host.files.root(dir), metaFile(id), work);
+}
+
+/** Write the record alone, leaving the run file as it is. Returns "" on
+ *  success, else the error message. */
+export async function _saveSessionRecord(dir: string, record: SessionRecord): Promise<string> {
+  const host = currentHost();
+  return writeInSessions(host, dir, async (sessions) => {
+    await host.files.writeText(sessions, metaFile(record.id), JSON.stringify(record));
+  });
+}
+
+/** Runs `write` in `dir`, made first if it is missing. Returns "" on
+ *  success, else the error message. */
+async function writeInSessions(
+  host: Host,
+  dir: string,
+  write: (sessions: Root) => Promise<void>,
+): Promise<string> {
   try {
     const sessions = await host.files.root(dir);
     await host.files.mkdir(sessions, ".");
     // writeText renames a finished sibling over the target, so a crash
     // mid-write never leaves a half-written file.
-    await host.files.writeText(sessions, checkpointFile(record.id), JSON.stringify(checkpoint));
-    await host.files.writeText(sessions, metaFile(record.id), JSON.stringify(record));
+    await write(sessions);
     return "";
   } catch (err) {
     return err instanceof Error ? err.message : String(err);
@@ -291,7 +372,7 @@ export async function _searchSessions(
       break;
     }
     const transcript = _readTranscript(
-      checkpointIn(record, await _readCheckpointFile(dir, record.id)),
+      checkpointOfRecord(record, await _readCheckpointFile(dir, record.id)),
       record.conversationThread ?? "",
     );
     const matches = matchingMessages(transcript, words).slice(0, MAX_HITS_PER_SESSION);
@@ -308,14 +389,104 @@ export async function _searchSessions(
   return hits.slice(0, limit);
 }
 
-// The checkpoint to read a session's conversation from. A saved run holds
-// one in each interrupt it paused on, and they all carry the conversation.
-function checkpointIn(record: SessionRecord, runFile: unknown): unknown {
+function checkpointOfRecord(record: SessionRecord, runFile: unknown): unknown {
   if (_recordRunFormat(record) === "checkpoint") return runFile;
+  return checkpointIn(runFile);
+}
+
+/** The checkpoint to read a saved run's conversation from. A saved run
+ *  holds one in each interrupt it paused on, and they all carry the
+ *  conversation. */
+export function checkpointIn(runFile: unknown): unknown {
   if (typeof runFile !== "object" || runFile === null) return null;
   const pause: unknown = (runFile as Record<string, unknown>).pause;
   if (!Array.isArray(pause) || typeof pause[0] !== "object" || pause[0] === null) return null;
   return (pause[0] as Record<string, unknown>).checkpoint ?? null;
+}
+
+/** The turn a session was in when it was saved. `approvals` is null while
+ *  the turn was running, and the approvals it waits on once it paused. */
+export type SavedTurn = { text: string; approvals: Interrupt[] | null };
+
+/** What `<id>.json` holds for a `savedRun` record: everything needed to go
+ *  on with the run. Every interrupt carries its checkpoint. `pause` is where
+ *  the session waits for a message, or where the current turn started. */
+export type SavedRun = {
+  version: 1;
+  pause: Interrupt[];
+  cancelledTexts: string[];
+  /** The requests whose turn failed since the last turn that finished.
+   *  Absent is the same as empty. */
+  failedTexts?: string[];
+  turn: SavedTurn | null;
+};
+
+function isSavedInterrupt(value: unknown): boolean {
+  return (
+    isPlainObject(value) &&
+    typeof value.interruptId === "string" &&
+    typeof value.effect === "string" &&
+    isPlainObject(value.checkpoint)
+  );
+}
+
+function isSavedInterrupts(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0 && value.every(isSavedInterrupt);
+}
+
+function isSavedTurn(value: unknown): boolean {
+  return (
+    isPlainObject(value) &&
+    typeof value.text === "string" &&
+    (value.approvals === null || isSavedInterrupts(value.approvals))
+  );
+}
+
+function isTexts(value: unknown): boolean {
+  return Array.isArray(value) && value.every((text) => typeof text === "string");
+}
+
+export function isSavedRun(value: unknown): value is SavedRun {
+  return (
+    isPlainObject(value) &&
+    value.version === 1 &&
+    isSavedInterrupts(value.pause) &&
+    isTexts(value.cancelledTexts) &&
+    (value.failedTexts === undefined || isTexts(value.failedTexts)) &&
+    (value.turn === null || isSavedTurn(value.turn))
+  );
+}
+
+/** The saved run in `<dir>/<id>.json`, or null when the file is missing or
+ *  is not a saved run. */
+export async function readSavedRun(dir: string, id: string): Promise<SavedRun | null> {
+  const run: unknown = await _readCheckpointFile(dir, id);
+  return isSavedRun(run) ? run : null;
+}
+
+/** Whether the code loaded now can resume the run. A checkpoint records a
+ *  hash of the generated code of each module it is paused in, and the
+ *  runtime refuses to resume when one differs. The generated code changes
+ *  with the agency-lang version. This is the comparison the runtime makes
+ *  on resume, made when the session loads, so it is found then and not on
+ *  the next message.
+ *
+ *  - `yes`: every module is loaded, with the hash it was saved with.
+ *  - `changed`: a module is loaded with another hash. The run can't go on.
+ *  - `notLoaded`: none differs, but a module is not loaded in this
+ *    process, so it is not known yet. Load the session program first. */
+export function canResume(run: SavedRun): "yes" | "changed" | "notLoaded" {
+  const waiting = [...run.pause, ...(run.turn?.approvals ?? [])];
+  const fingerprints = waiting.flatMap((interrupt) =>
+    Object.entries(interrupt.checkpoint?.moduleFingerprints ?? {}),
+  );
+  const loaded = fingerprints.map(([moduleId, saved]) => ({
+    saved: saved.hash,
+    now: getModuleFingerprint(moduleId)?.hash,
+  }));
+  if (loaded.some(({ saved, now }) => now !== undefined && now !== saved)) return "changed";
+  if (loaded.some(({ now }) => now === undefined)) return "notLoaded";
+  return "yes";
 }
 
 type SaveTarget = { dir: string; record: SessionRecord } | null;

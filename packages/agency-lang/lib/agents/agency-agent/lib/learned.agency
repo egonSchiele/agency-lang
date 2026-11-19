@@ -50,15 +50,21 @@ export def maxLearnedToolName(): number {
   return MAX_TOOL_NAME_LEN - LEARNED_TOOL_PREFIX.length
 }
 
-// A directory that does not exist is skipped without a prompt. A scan the
-// user rejected offers nothing.
+// A directory that does not exist is skipped without a prompt. The scans
+// of the agent's own home are approved here with `with approve`, for these
+// calls only: they read what the agent itself saved, and no user rule has
+// to name them.
 
 def learnedSkillsTool(): any | null {
   const dir = learnedSkillsDir()
   if (!exists(dir)) {
     return null
   }
-  return skillsDir(dir, "flat", LEARNED_SKILLS_TOOL) catch null
+  const scanned = try skillsDir(dir, "flat", LEARNED_SKILLS_TOOL) with approve
+  if (scanned is success(tool)) {
+    return tool
+  }
+  return null
 }
 
 // `runTool` takes the request as `Json`, so on its own the parameter
@@ -89,7 +95,11 @@ def learnedTools(): any[] {
   if (!exists(dir)) {
     return []
   }
-  const entries: ToolEntry[] = listTools(dir) catch []
+  const scanned = try listTools(dir) with approve
+  if (scanned is failure) {
+    return []
+  }
+  const entries: ToolEntry[] = scanned.value
   return map(filter(entries, offerable), learnedToolFromEntry)
 }
 

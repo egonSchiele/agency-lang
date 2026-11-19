@@ -1,7 +1,7 @@
 // Drives the agent's session program (lib/agents/agency-agent/program.agency)
 // the way a front-end does: start it, answer its pause, read its events.
 // No model is called: a test client answers every llm() call.
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ToolCall } from "smoltalk";
@@ -138,6 +138,7 @@ const result = {};
 // A turn.
 const chat = await startSession();
 result.firstPauseEffect = chat.pause[0].effect;
+result.firstPauseBrain = pauseData(chat).brain;
 result.firstPauseModules = Object.keys(chat.pause[0].checkpoint?.moduleFingerprints ?? {});
 result.mainSlotIsSet = pauseData(chat).models.main?.model === "claude-sonnet-4-6";
 result.recordHasTheRealBrain = pauseData(chat).record.brain;
@@ -161,6 +162,15 @@ result.badModelNoticeLevel = notices[notices.length - 1]?.level;
 result.badModelKeptMainSlot = pauseData(chat).models.main?.model === "claude-sonnet-4-6";
 await chat.answer({ kind: "model", spec: "claude-opus-4-8" });
 result.goodModelChangedMainSlot = pauseData(chat).models.main?.model;
+// A spec naming a provider the core does not know is refused.
+const noticesBeforeUnknown = eventsOf(chat, "session.notice").length;
+await chat.answer({ kind: "model", spec: "groq/llama-3" });
+const unknownNotice = eventsOf(chat, "session.notice").slice(noticesBeforeUnknown).pop();
+result.unknownProviderRefused = {
+  level: unknownNotice?.level,
+  text: unknownNotice?.text?.slice(0, 40),
+  mainKept: pauseData(chat).models.main?.model,
+};
 
 // The session's own LLM options reach the next turn's model call.
 await chat.answer({ kind: "options", options: { temperature: 0.2 } });
@@ -291,6 +301,17 @@ await asker.answer(undefined);
 result.editThatIsAsked.eventsAfterApproving = eventsOf(asker, "session.editDiff").length;
 result.editThatIsAsked.fileAfter = readFileSync(path.join(project, "note.txt"), "utf8");
 
+// The agent's own scans of what it learned are approved by the core: under
+// a policy with no rules, a turn asks nothing about them.
+mkdirSync(path.join(process.env.AGENCY_AGENT_HOME, "skills"), { recursive: true });
+mkdirSync(path.join(process.env.AGENCY_AGENT_HOME, "tools"), { recursive: true });
+const scanner = await startSession({ brain: "coordinator" });
+await scanner.answer(message("a turn that lists the learned things"));
+result.learnedScansAskNothing = {
+  pausedOn: scanner.pause[0].effect,
+  reply: eventsOf(scanner, "session.reply").pop()?.text,
+};
+
 // A session can start with a turn budget.
 const budgeted = await startSession({
   session: { ...startData().session, budget: { maxCost: 3, maxTime: 1000 } },
@@ -361,6 +382,32 @@ result.specUnderAFixedProvider = {
   provider: pauseData(preset).models.main?.provider,
 };
 rmSync(settingsFile);
+
+// A provider found from its API key fixes nothing. OpenRouter's own model
+// names hold a slash, so on an OpenRouter session `z-ai/glm-5.2` is one of
+// its models, not an unknown provider. (`groq/llama-3` on the anthropic
+// session above is still refused.)
+const keysBefore = {};
+for (const name of ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"]) {
+  keysBefore[name] = process.env[name];
+  delete process.env[name];
+}
+process.env.OPENROUTER_API_KEY = "test-key";
+const routed = await startSession({ models: noModelFlags });
+const noticesBeforeSlash = eventsOf(routed, "session.notice").length;
+await routed.answer({ kind: "model", spec: "z-ai/glm-5.2" });
+result.slashModelOnOpenRouter = {
+  fixedProvider: pauseData(routed).fixedProvider,
+  model: pauseData(routed).models.main?.model,
+  provider: pauseData(routed).models.main?.provider,
+  errors: eventsOf(routed, "session.notice")
+    .slice(noticesBeforeSlash)
+    .filter((notice) => notice.level === "error").length,
+};
+delete process.env.OPENROUTER_API_KEY;
+for (const [name, value] of Object.entries(keysBefore)) {
+  if (value !== undefined) process.env[name] = value;
+}
 
 writeFileSync("__result.json", JSON.stringify(result, null, 2));
 process.exit(0);

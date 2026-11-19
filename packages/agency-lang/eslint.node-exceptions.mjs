@@ -31,7 +31,6 @@ export const NODE_ONLY = {
     "takes the title, seed, and output file out of the process environment at startup",
   "lib/runtime/outputCap.ts":
     "limits what a detached program saves, by wrapping the process's two output streams",
-  "lib/runtime/processSlot.ts": "keeps a value on process, shared by every copy of the runtime",
   "lib/runtime/ipc.ts": "runs a child Agency program and extends the handler chain into it",
   "lib/runtime/localProvider.ts": "loads a model provider module from disk",
   "lib/runtime/platform.node.ts":

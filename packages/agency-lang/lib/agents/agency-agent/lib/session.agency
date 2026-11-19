@@ -38,10 +38,12 @@ import {
  } from "./modelRequest.agency"
 import {
   LOCAL_PROVIDERS,
+  knownProviders,
   parseModelFlag,
   lacksProviderForm,
   missingProviderEnvVar,
   Resolved,
+  takesSlashModelNames,
  } from "./models.agency"
 import { activePreset, activePresetName, editPresets, findPreset, setActivePreset } from "./presets.agency"
 import { checkPreset, Preset } from "./presetRules.agency"
@@ -406,6 +408,31 @@ export def setModelChoices(choices: ModelChoices) {
   _choices = choices
 }
 
+/** The part of a spec before its first `/`, when it is not a provider the
+  agent knows and the spec is no model of the session's provider, else "".
+  With a provider fixed, the spec is read whole, as its model. So it is
+  under a provider whose model names hold a `/`: on an OpenRouter session
+  `z-ai/glm-5.2` is one of its models. `reasoning=openai/gpt-4o` names its
+  provider after the slot. A spec with no `/` names no provider. */
+def unknownProvider(spec: string): string {
+  if (fixedProvider() != "") {
+    return ""
+  }
+  if (takesSlashModelNames(demoteProvider(currentProvider()))) {
+    return ""
+  }
+  const model = parseModelFlag(spec).model
+  const idx = model.indexOf("/")
+  if (idx <= 0) {
+    return ""
+  }
+  const prefix = model.substring(0, idx)
+  if (knownProviders().includes(prefix)) {
+    return ""
+  }
+  return prefix
+}
+
 /** Switch models from a spec such as `opus` or `reasoning=claude-opus-4-8`,
   for the session's own choices. Returns every resolved slot. A switch
   that cannot be made is a failure, and nothing changes. */
@@ -413,6 +440,10 @@ export def applyModelSpec(spec: string): Result<Record<string, Resolved>> {
   const ctx: Ctx = {
     provider: currentProvider(),
     price: "standard"
+  }
+  const unknown = unknownProvider(spec)
+  if (unknown != "") {
+    return failure("Unknown provider: ${unknown}. Known: ${knownProviders().join(", ")}")
   }
   const switched = trySwitchModel(_choices, spec, ctx, getResolvedSlots())
   if (isFailure(switched)) {

@@ -407,6 +407,20 @@ export def knownProviders(): string[] {
   return [...Object.keys(MODELS), ...Object.keys(BASE_URL_PROVIDERS), ...LOCAL_PROVIDERS]
 }
 
+/** True when the provider's own model names can hold a `/`, so a spec
+  such as `z-ai/glm-5.2` is a model of it and not a provider prefix.
+  OpenRouter's defaults hold one. A provider with no built-in defaults
+  (litellm's `azure/gpt-4o`, a local `mlx-community/...` model, a custom
+  one) may. Only a provider whose defaults hold none, such as anthropic,
+  is known not to. */
+export def takesSlashModelNames(provider: string): boolean {
+  const defaults = MODELS[provider]
+  if (defaults == null) {
+    return true
+  }
+  return defaults.fast.includes("/") || defaults.slow.includes("/")
+}
+
 /** Split a --model value: `slot=model` becomes per-slot (alias-resolved); a bare
   `model` becomes a global pin ({slot:""}). The "=" must precede any "/" so a
   unified provider/model value (anthropic/claude) is NOT misread as a slot key.

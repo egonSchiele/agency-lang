@@ -1,0 +1,22 @@
+{
+  "startWaits": "waitingForUser",
+  "startReportsUsage": true,
+  "messageWaitsAgain": "waitingForUser",
+  "replyEmitted": true,
+  "approvalWithNoPolicy": "needsApproval",
+  "approvalEffect": "driver::testApproval",
+  "crashIsFailure": true,
+  "abortIsCancelled": "cancelled",
+  "ruleApproves": "waitingForUser",
+  "ruleRejects": true,
+  "noRuleAsks": "needsApproval",
+  "withNoPolicyAtAll": ["driver::testApproval"],
+  "underRejectAll": "waitingForUser",
+  "rejectAllReplies": ["echo: one", "echo: two"],
+  "pausedOn": "driver::testApproval",
+  "saved": true,
+  "loadedCanResume": "yes",
+  "loadedPhase": "approving",
+  "afterApproval": "waitingForUser",
+  "replyAfterLoad": true
+}

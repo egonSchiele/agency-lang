@@ -58,6 +58,7 @@ export const BROWSER_FILES = [
   "lib/statelogClient.ts",
   "lib/statelogSender.ts",
   "lib/types/function.ts",
+  "lib/types/result.ts",
   "lib/backends/typescriptGenerator/typeToString.ts",
   "lib/utils/canonicalize.ts",
   "lib/utils/columnWidths.ts",

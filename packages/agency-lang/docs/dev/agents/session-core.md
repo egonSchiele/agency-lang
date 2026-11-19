@@ -42,8 +42,11 @@ not ended.
 **The pause.** The core waits with one interrupt, `agent::sessionInput`.
 Its data is what a front-end shows and saves between turns: `thread`,
 `cwd`, `record`, `models`, `preset`, `fixedProvider`, `effort`, `budget`,
-`context`.
+`context`, `brain`.
 
+- `brain` is the name of the brain that runs the session. `record.brain`
+  holds it too, but a session that is not saved has no record. A front-end
+  reads the brain from this field only.
 - `effort` is what the session asks for: a level, `default` to send none,
   or "" when no one named one and the models' own rule decides.
 - `fixedProvider` is the provider the session is fixed to, by the name a
@@ -64,10 +67,20 @@ Its data is what a front-end shows and saves between turns: `thread`,
 A `model`, `effort` or `preset` answer the core cannot apply changes
 nothing and sends a `session.notice` at level `error` with the reason.
 
-- **A model's provider.** With no provider fixed, `openai/gpt-4o` switches
-  to OpenAI. With one fixed, the spec is read whole, as a model of that
-  provider, which is how an OpenRouter model keeps its slash. A front-end
-  reads `fixedProvider` to know which it will get.
+- **A model's provider.** `openai/gpt-4o` names a known provider, so with
+  no provider fixed it switches to OpenAI.
+  - With a provider fixed, the spec is read whole, as a model of that
+    provider. That is how an OpenRouter model keeps its slash. A
+    front-end reads `fixedProvider` to know which it will get.
+  - A provider found from an API key fixes nothing. Some providers' own
+    model names hold a slash: OpenRouter's `z-ai/glm-5.2`, LiteLLM's
+    `azure/gpt-4o`. On such a session the spec is read whole too.
+  - Otherwise a spec whose part before the first `/` is not a known
+    provider is refused. On an anthropic session, `groq/llama-3` gives
+    `Unknown provider: groq. Known: ...`.
+  - `takesSlashModelNames` in `lib/models.agency` says which providers
+    take slash names: any without built-in defaults, and any whose
+    defaults hold a slash.
 - **A preset replaces the session's own choices:** its models and its
   effort. The preset's effort is then the one in force.
 
@@ -99,7 +112,8 @@ makes the diff on an approval with the same function
 
 - **A front-end must pin the pause.** Its policy has to leave
   `agent::sessionInput` to `propagate`. Otherwise a `*` approve rule
-  answers the pause with nothing.
+  answers the pause with nothing. The session driver
+  (`session-driver.md`) pins it in every policy it gives a run.
 - **An answer of nothing ends the session.** That is what a policy sends
   when it answers the pause. Raising again would get the same answer
   forever, without ever pausing, so the node returns.
@@ -184,6 +198,12 @@ They describe the process, so they are not saved with a session.
 Both default to the terminal's answer. An engine that forgets one gets no
 error, so its own tests should check both: a command added while it runs
 is seen, and a local preset is refused.
+
+**The agent's own scans.** The core's scans of what the agent learned
+(`<agent-home>/skills` by `std::skills`, `<agent-home>/tools` by
+`std::toolbox`) are approved by the core itself, with `with approve` on
+those calls only (`lib/learned.agency`). A policy with no rules asks
+nothing about them, so a front-end needs no rule for them.
 
 ## Local models
 

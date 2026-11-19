@@ -5,9 +5,9 @@ start the run, answer its pause, answer its approvals, save it, and load
 it again. It lives in `lib/stdlib/agentDriver/`. A front-end imports it
 as `agency-lang/stdlib-lib/agentDriver/index.js`.
 
-It came from Perry, so that Perry and the `agency agent` terminal share
-one copy. Two copies would have to agree exactly on the file format and
-on what a crash in the middle of a turn means.
+Every front-end shares this one copy. Two copies would have to agree
+exactly on the file format and on what a crash in the middle of a turn
+means.
 
 The program it drives is described in `session-core.md`. Read that first.
 
@@ -15,8 +15,7 @@ The program it drives is described in `session-core.md`. Read that first.
 
 The driver decides what the run does next. It does not draw anything.
 Each step it takes reports a list of `Happened` events, and each
-front-end shows them its own way. Perry will turn them into transcript
-items. The terminal will print a line.
+front-end shows them its own way.
 
 The driver keeps no state either. The front-end holds the phase and
 passes it in:
@@ -59,8 +58,8 @@ from there, with the conversation as it was before the turn.
   forgets the request but its changes to files stay
   (`withCancelNote`).
 - **A turn that finishes** reports `turnFinished`: a leg came back and
-  the run waits for a message again. Perry closes the tool calls that
-  never got an end. The terminal saves and prints at the end of a turn.
+  the run waits for a message again. A front-end saves and closes any
+  tool calls that never got an end.
 - **A failed leg** goes back to the pause and reports `legFailed`.
 - **A settings answer is not a turn.** When the run pauses again,
   `answered` reports what the pause said before and after, and not
@@ -135,8 +134,8 @@ in `lib/stdlib/agentSessions.ts`.
 It returns a `Result`. When the record on disk names another holder, it
 writes nothing and fails with `held by perry (process 20)`.
 
-`saveRun` does not make the sessions folder private. The terminal never
-did. Perry makes its folder private itself.
+`saveRun` does not make the sessions folder private. A front-end that
+wants that does it itself.
 
 ## Where a loaded session picks up
 
@@ -144,8 +143,7 @@ did. Perry makes its folder private itself.
 
 - **Waiting for a message:** where it was.
 - **Waiting on approvals:** each goes through `settle`, as a new
-  pause's approvals do. The front-end chooses it. Perry passes the one
-  that declines a raise wanting a typed value. With no `settle`, every
+  pause's approvals do. The front-end chooses it. With no `settle`, every
   approval is asked again.
 - **A turn that was running** (the process stopped mid-turn): back to the
   turn's start, as if the person had cancelled it. It reports

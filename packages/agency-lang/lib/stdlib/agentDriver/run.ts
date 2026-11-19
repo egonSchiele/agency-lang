@@ -13,8 +13,7 @@ import { SESSION_INPUT_EFFECT } from "./interface.js";
 import { withPauseLeftAlone } from "./policy.js";
 
 export const RUN_ENDED_ERROR = "The agent run ended unexpectedly.";
-export const PAUSE_WITH_OTHER_INTERRUPTS_ERROR =
-  "The session's pause came with other interrupts.";
+export const PAUSE_WITH_OTHER_INTERRUPTS_ERROR = "The session's pause came with other interrupts.";
 
 // `policy` is the run's policy: it answers the approvals a rule matches,
 // inside the run. `host` is what the run takes from its platform, its

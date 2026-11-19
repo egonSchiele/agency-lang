@@ -130,7 +130,7 @@ describe("restoredPhase", () => {
     expect(happened).toEqual([]);
   });
 
-  // Perry declines a raise that wants a typed value: it can't ask for one.
+  // A front-end that can't ask for a typed value declines it in `settle`.
   it("passes a paused turn's approvals through the settle it is given", () => {
     const question: Interrupt = { ...waitingOn("std::question", "q1"), expectsValue: true };
     const declinesQuestions: Settle = (interrupt) =>
@@ -183,8 +183,8 @@ describe("saving and holding a session", () => {
       expect(saved.success ? "" : saved.error).toContain("Could not save session s1");
     }));
 
-  // Review Focus 3: the second front-end takes the session at once, before
-  // it has saved anything, and the first sees it at its next check.
+  // The second front-end takes the session at once, before it has saved
+  // anything, and the first sees it at its next check.
   it("is no longer held once another front-end takes hold, before it saves", () =>
     withDir(async (dir) => {
       await saveRun({ dir, record: RECORD, run: run(null), holder: TERMINAL });

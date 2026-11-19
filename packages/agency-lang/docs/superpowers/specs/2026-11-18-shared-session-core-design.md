@@ -156,7 +156,7 @@ checker does not cover object unions (B2 in
 | `message`  | `text`, `notes`, `target`      | Runs a turn                                        |
 | `model`    | `spec`                         | `switchModel`, as `/model <spec>` does             |
 | `preset`   | `name`                         | `switchPreset`                                     |
-| `options`  | `options`                      | Sets LLM options for later turns (effort, routing) |
+| `options`  | `options`                      | Sets LLM options for later turns (temperature, routing) |
 | `budget`   | `maxCost`, `maxTime`           | Sets one turn's limits                             |
 | `compact`  | `instructions`                 | Compacts the conversation                          |
 | `rename`   | `title`                        | Sets and pins the title                            |
@@ -188,7 +188,9 @@ checker does not cover object unions (B2 in
 - **`/jobs` is removed** with background jobs. See "Left out".
 
 Perry's one `settings` answer goes away. Its panel sends `model`,
-`options` and `budget`.
+`options` and `budget`. The effort is not an LLM option in the agent (it
+comes from `--effort` or a preset), so Perry's effort picker needs one
+more kind of answer, `effort`. That is part of Perry's plan.
 
 ### Events
 

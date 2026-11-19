@@ -32,7 +32,8 @@ import {
  } from "./lib/record.agency"
 import { applyLlmOptionsAnswer, applyModelSpec, takePendingLlmOptions } from "./lib/session.agency"
 import { SessionRecord } from "./lib/sessions.agency"
-import { currentBrainName, runTurn } from "./lib/turn.agency"
+import { currentBrainName, resolveStartTarget, runTurn, startTargetsFor } from "./lib/turn.agency"
+import { isPlainObject } from "./lib/utils.agency"
 import { getResolvedSlots } from "./shared.agency"
 
 /** One turn's limits: a cost in dollars and a time in milliseconds. A
@@ -96,7 +97,9 @@ export type ModelChange = {
   spec: string
 }
 
-/** Set the session's own LLM options, such as the effort. `options` is
+/** Set the session's own LLM options, such as the temperature or the
+  routing (the keys of `LlmOptions`). The effort is not one of them: it
+  has no answer yet. `options` is
   `any` and not `LlmOptions` on purpose: checking a value against a type
   fills each optional field it lacks with null, and a null there means
   "remove this option". */
@@ -190,6 +193,21 @@ export node session(start: SessionStart) {
     } else if (answer is success(next)) {
       match(next) {
         { kind: "message", text, notes, target } => {
+          const brainName = currentBrainName()
+          if (resolveStartTarget(brainName, target) == null) {
+            // Refused before anything runs, so it is not a turn.
+            const valid = ["main", ...startTargetsFor(brainName)].join(", ")
+            emit({
+              type: "session.error",
+              message: "Unknown start target: ${target}. Valid for the ${brainName} brain: ${valid}"
+            })
+            continue
+          }
+          if (target != "" && target != "main" && (budget.maxCost >= 0 || budget.maxTime >= 0)) {
+            // A start target calls its subagent directly, and the turn
+            // budget is applied where the main agent is called.
+            notice("The turn budget does not apply to a turn sent straight to the ${target} agent.", "warning")
+          }
           for (note in notes) {
             addNote(note)
           }
@@ -199,7 +217,8 @@ export node session(start: SessionStart) {
           // resumed, and takes the saved frame of the turn (a compiler bug:
           // "Resume desync").
           const message = withPendingNotes(text)
-          const reply = try runTurn(target, message)
+          const startTarget = if target == "main" then "" else target
+          const reply = try runTurn(startTarget, message)
           if (reply is success(replyText)) {
             emit({ type: "session.reply", text: replyText })
           } else if (reply is failure(err)) {
@@ -217,7 +236,14 @@ export node session(start: SessionStart) {
           }
         }
         { kind: "options", options } => {
-          applyLlmOptionsAnswer(options)
+          if (isPlainObject(options)) {
+            applyLlmOptionsAnswer(options)
+          } else {
+            emit({
+              type: "session.error",
+              message: "The run was sent LLM options it can't read: they must be an object."
+            })
+          }
         }
         { kind: "budget", maxCost, maxTime } => {
           budget = {

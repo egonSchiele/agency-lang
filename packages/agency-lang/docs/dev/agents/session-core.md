@@ -52,8 +52,12 @@ Its data is what a front-end shows and saves between turns: `thread`,
 | --------- | ------------------------- | ------------------------------- |
 | `message` | `text`, `notes`, `target` | Runs a turn                     |
 | `model`   | `spec`                    | Switches models, as `/model`    |
-| `options` | `options`                 | Sets the session's LLM options  |
+| `options` | `options`                 | Sets the session's LLM options, such as the temperature |
 | `budget`  | `maxCost`, `maxTime`      | Sets the limits of later turns  |
+
+`target` is a start target such as `code`, or "" for the main agent. One
+the brain does not have is refused with a `session.error`, and is not a
+turn.
 
 `notes` are lines put above the message. A front-end sends an image as a
 note with its path, since the turn finds attachments by scanning the
@@ -89,10 +93,24 @@ checkpoint, and the front-end answers it.
   again when a paused run is resumed, and `g` takes the saved frame of
   `f` ("Resume desync"). This is a compiler bug. The core works the
   turn's message out on its own line, then calls `try runTurn(...)`.
+  `lib/repl.agency` has the old shape, `try runTurn("", withPendingNotes(msg))`.
+  It is safe there only because the terminal never resumes in the middle
+  of a turn, and has to change when the terminal moves onto the core.
 - **A model call that fails is a reply, not an error.** `answerTurn`
   turns it into the text "The agent stopped before finishing: ...", and
   the core emits it as `session.reply`. `session.error` is for a turn
   that throws outside `agencyAgent`.
+- **The turn budget covers the main agent only.** It is applied where
+  `agencyAgent` is called. A turn sent straight to a start target is not
+  limited by it, and the core says so in a warning notice.
+- **The effort has no answer yet.** It is not one of the `LlmOptions`
+  keys: in the terminal it comes from `--effort` or a preset. An app that
+  wants an effort picker needs a new kind of answer.
+- **Starting a session does not save the search backend.** `main` calls
+  `startModels(flags, false)`, so the backend picked for the session is
+  not written to `settings.json`. The terminal does save it. An app's
+  environment often lacks the search keys a terminal has, and a choice
+  saved from there would follow the user back.
 - **No job tools.** A background job belongs to the run and stops when
   the run pauses, and this run pauses after every turn. The core turns
   the job tools off.

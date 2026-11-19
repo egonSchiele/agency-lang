@@ -59,7 +59,9 @@ node main(start: ProgramStart) {
   for (warning in preset.value) {
     notice(warning, "warning")
   }
-  const models = startModels(start.models)
+  // The search backend is chosen for this session and not saved: the
+  // settings file is the user's, and this may not be their terminal.
+  const models = startModels(start.models, false)
   if (models is failure(modelProblem)) {
     throw(modelProblem)
     return

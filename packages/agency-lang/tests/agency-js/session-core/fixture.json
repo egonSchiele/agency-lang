@@ -18,16 +18,26 @@
   "badModelNoticeLevel": "error",
   "badModelKeptMainSlot": true,
   "goodModelChangedMainSlot": "claude-opus-4-8",
+  "temperatureSentAfterOptions": 0.2,
+  "optionsRefusal": "The run was sent LLM options it can't read: they must be an object.",
+  "optionsThatAreNotAnObjectAreRefused": 1,
+  "unknownTargetError": "Unknown start target: code. Valid for the simple brain: main",
+  "unknownTargetIsNotATurn": true,
   "failedTurnErrors": 0,
   "failedTurnReplies": [
     "The agent stopped before finishing"
   ],
   "pausedAgainAfterFailure": true,
-  "turnsAfterTheFailedTurn": 2,
+  "turnsAfterTheFailedTurn": 3,
   "replyAfterTheFailedTurn": "stub reply",
+  "overBudgetTurn": {
+    "budgetStops": [],
+    "reply": "The agent stopped before finishing: its cost budget of $2 ra"
+  },
   "nullAnswerEndsTheRun": true,
   "approveAllWithoutThePin": "ended",
   "unknownBrainEndsTheRun": "Unknown brain",
   "unusablePresetEndsTheRun": true,
-  "processStillAliveAfterFailedSetups": true
+  "processStillAliveAfterFailedSetups": true,
+  "settingsFileWritten": false
 }

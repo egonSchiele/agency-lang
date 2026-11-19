@@ -28,10 +28,16 @@ function installClient(setClient, noteDir) {
   setClient({
     async text(config) {
       const hasTools = (config.tools ?? []).length > 0;
-      const readDone = config.messages.some((message) => message.role === "tool");
+      // The read's result, with the file's text in it: a rejected or a
+      // failed read also leaves a tool message, and must not count.
+      const readDone = config.messages.some(
+        (message) => message.role === "tool" && JSON.stringify(message.content).includes("a note"),
+      );
+      const readTried = config.messages.some((message) => message.role === "tool");
       // The session title is asked for with no tools.
       if (!hasTools) return reply("A title");
       if (readDone) return reply("stub reply after the read");
+      if (readTried) return reply("the read did not return the note");
       return reply(null, [new ToolCall("call-1", "read", { filename: "note.txt", dir: noteDir })]);
     },
     async *textStream(config) {

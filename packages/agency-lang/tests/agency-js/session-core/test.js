@@ -1,7 +1,7 @@
 // Drives the agent's session program (lib/agents/agency-agent/program.agency)
 // the way a front-end does: start it, answer its pause, read its events.
 // No model is called: a test client answers every llm() call.
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -24,11 +24,18 @@ function lastUserText(config) {
   return typeof content === "string" ? content : content.map((part) => part.text ?? "").join("");
 }
 
+// The temperature each model call was sent, keyed by the call's last user message.
+const temperatureSent = {};
+
 __setLLMClient({
   async text(config) {
-    if (lastUserText(config).includes("fail this turn")) {
+    const said = lastUserText(config);
+    temperatureSent[said] = config.temperature ?? "none";
+    if (said.includes("fail this turn")) {
       throw new Error("the test client was told to fail");
     }
+    // A call that costs more than the turn budget the test sets.
+    const spent = said.includes("an expensive question") ? 5 : 0;
     return {
       success: true,
       value: {
@@ -36,7 +43,7 @@ __setLLMClient({
         toolCalls: [],
         model: "test",
         usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 },
-        cost: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" },
+        cost: { inputCost: spent, outputCost: 0, totalCost: spent, currency: "USD" },
       },
     };
   },
@@ -127,6 +134,22 @@ result.badModelKeptMainSlot = pauseData(chat).models.main?.model === "claude-son
 await chat.answer({ kind: "model", spec: "claude-opus-4-8" });
 result.goodModelChangedMainSlot = pauseData(chat).models.main?.model;
 
+// The session's own LLM options reach the next turn's model call.
+await chat.answer({ kind: "options", options: { temperature: 0.2 } });
+await chat.answer(message("with a temperature"));
+result.temperatureSentAfterOptions = temperatureSent["with a temperature"];
+const errorsBeforeBadOptions = eventsOf(chat, "session.error").length;
+await chat.answer({ kind: "options", options: "low" });
+result.optionsRefusal = eventsOf(chat, "session.error").pop()?.message;
+result.optionsThatAreNotAnObjectAreRefused =
+  eventsOf(chat, "session.error").length - errorsBeforeBadOptions;
+
+// A start target the brain does not have is refused, and is not a turn.
+const turnsBeforeBadTarget = pauseData(chat).record.turns;
+await chat.answer({ kind: "message", text: "hi", notes: [], target: "code" });
+result.unknownTargetError = eventsOf(chat, "session.error").pop()?.message;
+result.unknownTargetIsNotATurn = pauseData(chat).record.turns === turnsBeforeBadTarget;
+
 // A turn that fails. The session goes on, and the turn is counted.
 const errorsBefore = eventsOf(chat, "session.error").length;
 const repliesBefore = eventsOf(chat, "session.reply").length;
@@ -139,6 +162,14 @@ result.pausedAgainAfterFailure = !chat.ended && chat.pause[0].effect === PAUSE;
 result.turnsAfterTheFailedTurn = pauseData(chat).record.turns;
 await chat.answer(message("hello again"));
 result.replyAfterTheFailedTurn = eventsOf(chat, "session.reply").pop()?.text;
+
+// The turn budget reaches the turn: a call that costs more than it stops the turn.
+await chat.answer({ kind: "budget", maxCost: 2, maxTime: 60000 });
+await chat.answer(message("an expensive question"));
+result.overBudgetTurn = {
+  budgetStops: eventsOf(chat, "session.budgetStop").map((event) => event.dimension),
+  reply: eventsOf(chat, "session.reply").pop()?.text.slice(0, 60),
+};
 
 // An answer of nothing ends the session.
 await chat.answer(null);
@@ -155,6 +186,11 @@ result.unknownBrainEndsTheRun = badBrain.ended && errorText(badBrain.result).sli
 const badPreset = await startSession({ preset: "no-such-preset" });
 result.unusablePresetEndsTheRun = badPreset.ended && errorText(badPreset.result) !== "";
 result.processStillAliveAfterFailedSetups = true;
+
+// Starting sessions leaves the user's settings file alone. An app's
+// environment often lacks the search keys a terminal has, and a choice
+// saved from there would follow the user back to the terminal.
+result.settingsFileWritten = existsSync(path.join(process.env.AGENCY_AGENT_HOME, "settings.json"));
 
 writeFileSync("__result.json", JSON.stringify(result, null, 2));
 process.exit(0);

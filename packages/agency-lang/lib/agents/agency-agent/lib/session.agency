@@ -551,9 +551,15 @@ export def pickModelsForAgent(args: Record<string, any>) {
 
 /** Resolve and apply a session's models at startup from the model flags,
   the active preset, and settings.model. A request that cannot be
-  resolved is a failure. It asks nothing and prints nothing, so a
-  front-end with no terminal can call it. */
-export def startModels(flags: ModelFlags): Result<boolean> {
+  resolved is a failure. It asks nothing and never ends the process, so
+  a front-end with no terminal can call it. It can still print a line
+  about the web search backend.
+
+  `saveSearchChoice` is whether the search backend picked for this
+  session is also saved to settings.json. The terminal saves it. An app
+  does not: its environment often lacks the search keys a terminal has,
+  and a choice saved from there would follow the user back. */
+export def startModels(flags: ModelFlags, saveSearchChoice: boolean = true): Result<boolean> {
   // A one-shot run gets the default slots too: this runs before the
   // agent branches on one-shot.
   setStartupModelFlags(flags, getModelSettings(loadSettings()), defaultSlots())
@@ -562,7 +568,7 @@ export def startModels(flags: ModelFlags): Result<boolean> {
   if (applied is failure(reason)) {
     return failure(reason)
   }
-  configureSearch(requestIsLocal(request))
+  configureSearch(requestIsLocal(request), saveSearchChoice)
   return success(true)
 }
 

@@ -1,3 +1,7 @@
+## Nov 19 2026 — v0.42.0
+
+Extract a common core from the agency agent for other agents to share.
+
 ## Nov 17 2026 — v0.41.3
 
 Add highlightTokens and diffTokens to std::syntax.

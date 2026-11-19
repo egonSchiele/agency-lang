@@ -2,6 +2,7 @@
 // not build a transcript: it reports what happened, and each front-end
 // shows that its own way. See docs/dev/agents/session-driver.md.
 import type { Interrupt, InterruptResponse } from "../../runtime/interrupts.js";
+import type { Policy } from "../../runtime/policy.js";
 import { approve } from "../../runtime/interruptResponse.js";
 import type { Result } from "../../types/result.js";
 import {
@@ -58,7 +59,10 @@ export type Happened =
   | { type: "startFailed"; error: string }
   // An approval answered without asking. `by` says what answered it.
   | { type: "settled"; interrupt: Interrupt; response: InterruptResponse; by: "rule" }
-  | { type: "answered"; before: PauseData | null; after: PauseData | null };
+  | { type: "answered"; before: PauseData | null; after: PauseData | null }
+  // A loaded session runs under a policy of its own (`restoredPhase`).
+  // The front-end shows what it approves before the first leg.
+  | { type: "carriedPolicy"; policy: Policy };
 
 export type DriverAction =
   | { type: "submitted"; text: string }

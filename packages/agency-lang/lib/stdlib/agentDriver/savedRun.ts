@@ -1,6 +1,7 @@
 // Saving a session run and loading it back, and which front-end holds it.
 // The files are written and read by agentSessions.ts. See
 // docs/dev/agents/session-driver.md.
+import type { Policy } from "../../runtime/policy.js";
 import { failure, success, type Result } from "../../types/result.js";
 import {
   _readSessionRecord,
@@ -64,8 +65,27 @@ const asksAll: Settle = () => null;
  *  - Saved by code that is not loaded now: ended. It takes nothing.
  *
  *  The two turn cases go through `reduceDriver`, so they behave as the live
- *  ones do. */
-export function restoredPhase(run: SavedRun, settle: Settle = asksAll): DriverStep {
+ *  ones do.
+ *
+ *  `carried` is the session's own policy (`readCarriedPolicy`). When there
+ *  is one, `happened` starts with `carriedPolicy`, so the front-end shows
+ *  the person what that policy approves before the session runs. */
+export function restoredPhase(
+  run: SavedRun,
+  options: { settle?: Settle; carried?: Policy | null } = {},
+): DriverStep {
+  const restored = restoredStep(run, options.settle ?? asksAll);
+  const carried = options.carried ?? null;
+  if (carried === null || restored.phase.kind === "ended") {
+    return restored;
+  }
+  return {
+    phase: restored.phase,
+    happened: [{ type: "carriedPolicy", policy: carried }, ...restored.happened],
+  };
+}
+
+function restoredStep(run: SavedRun, settle: Settle): DriverStep {
   const { pause, cancelledTexts, turn } = run;
   if (!canResume(run)) {
     return { phase: { kind: "ended", reason: CANNOT_CONTINUE }, happened: [] };

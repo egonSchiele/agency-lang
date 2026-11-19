@@ -102,7 +102,8 @@ describe("sessionRunPolicy", () => {
     expect(policy).toEqual(failure(POLICY_UNREADABLE));
   });
 
-  it("puts the flags given at resume ahead of the session's own rules", () => {
+  // Someone who types `--approve std::bash` at resume means it.
+  it("lets an --approve given at resume beat a reject the session was started with", () => {
     const policy = policyOf(
       sessionRunPolicy({
         carried: success({ "std::bash": [{ action: "reject" }] }),

@@ -74,9 +74,7 @@ describe("the session's policy file", () => {
       writePolicyFile(home, "broken", "{ not json");
       const carried = await readCarriedPolicy({ home, id: "broken" });
       const saved: Policy = { "std::read": [{ action: "approve" }] };
-      expect(sessionRunPolicy({ carried, saved, extra: null })).toEqual(
-        failure(POLICY_UNREADABLE),
-      );
+      expect(sessionRunPolicy({ carried, saved, extra: null })).toEqual(failure(POLICY_UNREADABLE));
     });
   });
 });

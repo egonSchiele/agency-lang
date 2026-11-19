@@ -12,6 +12,9 @@ import path from "node:path";
 
 const PROGRAM = "../../../dist/lib/agents/agency-agent/program.js";
 const TERMINAL = "../../../dist/lib/agents/agency-agent/agent.js";
+// A terminal module with globals of its own. Process one's checkpoint holds
+// them, so the second process really resumes a pause the terminal shaped.
+const TRACE_MODULE = "dist/lib/agents/agency-agent/lib/trace.agency";
 const policy = { "agent::sessionInput": [{ action: "propagate" }] };
 const USAGE = { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 };
 const COST = { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" };
@@ -75,6 +78,7 @@ async function startAndPause() {
   writeFileSync(pauseFile, JSON.stringify(paused.data));
   const pauseBytes = statSync(pauseFile).size;
   const firstTotal = totalTokens(paused);
+  const savedGlobals = Object.keys(paused.data[0]?.checkpoint?.globals?.store ?? {});
 
   execFileSync(process.execPath, ["./test.js"], {
     stdio: "inherit",
@@ -93,6 +97,7 @@ async function startAndPause() {
     "__result.json",
     JSON.stringify(
       {
+        pauseHoldsTerminalGlobals: savedGlobals.includes(TRACE_MODULE),
         secondProcessReplied: second.replies.includes("stub reply"),
         secondProcessError: second.error,
         usageCarriedOver: second.total >= firstTotal && firstTotal > 0,

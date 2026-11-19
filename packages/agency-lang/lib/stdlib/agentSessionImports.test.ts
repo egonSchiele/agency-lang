@@ -120,10 +120,19 @@ const TS_IMPORT = /^(?:(?:import|export)\b[^;]*?\bfrom\s+|import\s+)"([^"]+)"/gm
 
 type TsWalk = { tsFiles: string[]; agencyModules: string[]; packages: string[] };
 
-/** Where a relative import in `from` points, as a path under lib/: a
- *  TypeScript file, or a compiled Agency module of the agent. */
+// `@/x` is `lib/x` (the `paths` entry in tsconfig.json).
+const LIB_ALIAS = "@/";
+
+function isLocalImport(spec: string): boolean {
+  return spec.startsWith(".") || spec.startsWith(LIB_ALIAS);
+}
+
+/** Where a relative or `@/` import in `from` points, as a path under lib/:
+ *  a TypeScript file, or a compiled Agency module of the agent. */
 function resolveTsImport(from: string, spec: string): string {
-  const target = path.normalize(path.join(path.dirname(from), spec));
+  const target = spec.startsWith(LIB_ALIAS)
+    ? path.normalize(spec.slice(LIB_ALIAS.length))
+    : path.normalize(path.join(path.dirname(from), spec));
   const asTs = target.replace(/\.js$/, ".ts");
   return existsSync(path.join(LIB_DIR, asTs)) ? asTs : target;
 }
@@ -141,7 +150,7 @@ function tsClosure(roots: string[]): TsWalk {
     const source = readFileSync(path.join(LIB_DIR, file), "utf8");
     for (const match of source.matchAll(TS_IMPORT)) {
       const spec = match[1];
-      if (!spec.startsWith(".")) {
+      if (!isLocalImport(spec)) {
         walk.packages.push(spec);
         continue;
       }
@@ -167,6 +176,15 @@ function driverWalk(): TsWalk {
 
 describe("the session driver reaches no terminal code", () => {
   const walk = driverWalk();
+
+  it("follows an @/ import to its file under lib/, as a relative one", () => {
+    expect(resolveTsImport("stdlib/agentDriver/run.ts", "@/stdlib/cli.js")).toBe("stdlib/cli.ts");
+    expect(resolveTsImport("stdlib/agentDriver/run.ts", "../cli.js")).toBe("stdlib/cli.ts");
+    // stdlib/policy.ts imports runtime/policy.ts as `@/runtime/policy.js`.
+    const walked = tsClosure(["stdlib/policy.ts"]);
+    expect(walked.tsFiles).toContain("runtime/policy.ts");
+    expect(walked.packages.filter((spec) => spec.startsWith("@/"))).toEqual([]);
+  });
 
   it("walks the driver's files and what they import", () => {
     expect(walk.tsFiles).toContain("stdlib/agentDriver/index.ts");

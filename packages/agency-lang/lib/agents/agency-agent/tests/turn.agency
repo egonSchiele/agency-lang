@@ -17,11 +17,10 @@ import { guardStopHandler } from "../lib/budget.agency"
 import { cliSettings, namedMainModel } from "../lib/answer.agency"
 import { messageWasRewritten, setMessageRewritten } from "../lib/rewrittenMessage.agency"
 import { setInteractive } from "../lib/trace.agency"
+import { runSession, setPolicyArg } from "../lib/runSession.agency"
 import {
   setBrainName,
   runTurn,
-  runSession,
-  setPolicyArg,
   resolveBrainName,
   resolveStartTarget,
  } from "../lib/turn.agency"

@@ -65,9 +65,9 @@ import {
   markTurnDone,
   recordTurn,
   renameSession,
-  saveSeedTurn,
   sessionTitle,
- } from "./resume.agency"
+ } from "./record.agency"
+import { saveSeedTurn } from "./resume.agency"
 import { renderReply, renderUserLine } from "./transcript.agency"
 import { withPendingNotes } from "./pendingNotes.agency"
 import { attachClipboardImage } from "./slashCommands/image.agency"

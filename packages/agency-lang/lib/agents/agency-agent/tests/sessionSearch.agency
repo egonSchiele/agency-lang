@@ -11,8 +11,8 @@ import {
   markTurnDone,
   recordTurn,
   setConversationThread,
-  startSession,
- } from "../lib/resume.agency"
+ } from "../lib/record.agency"
+import { startSession } from "../lib/resume.agency"
 import { SessionRecord, displayTitle, saveSession, sessionLabel } from "../lib/sessions.agency"
 import { SessionHit, TimedHit, datedHit, searchSessions } from "../lib/sessionSearch.agency"
 

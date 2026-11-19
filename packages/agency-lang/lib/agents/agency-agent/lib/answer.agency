@@ -15,7 +15,6 @@ import { globalInstructionsText } from "./globalInstructions.agency"
 import { grounding } from "./grounding.agency"
 import { addJobsNote } from "./jobsNote.agency"
 import { messageWasRewritten } from "./rewrittenMessage.agency"
-import { isInteractive } from "./trace.agency"
 import {
   getResolvedSlots,
   getRouterModel,
@@ -30,16 +29,27 @@ static const NO_LIMIT = -1
 
 // How replies are shown in the REPL. The heading rule is about the terminal
 // renderer, which drops the text after a heading that has no blank line.
-static const REPL_STYLE = "Reply for a terminal REPL that renders Markdown. Put code and command output in fenced code blocks, and a blank line after every heading, or the renderer drops the text that follows."
+export static const REPL_STYLE = "Reply for a terminal REPL that renders Markdown. Put code and command output in fenced code blocks, and a blank line after every heading, or the renderer drops the text that follows."
 
-/** Add the reply style to the conversation thread when a person is at the
-  REPL. A one-shot run prints the reply as plain text, so it gets none. The
-  line goes on the thread and not in `context`, because `context` also
-  reaches the writing reviewer and the rewriter, which would read it as
-  part of the task the prose was written for. */
+// The line on how to format a reply, or "" for none. It starts as the
+// REPL's. A one-shot run clears it (setInteractive in trace.agency), and
+// the session core sets the one its front-end gave it.
+let _replyStyle: string = REPL_STYLE
+
+/** Set the line that tells the model how replies are shown, or "" for
+  none. */
+export def setReplyStyle(style: string) {
+  _replyStyle = style
+}
+
+/** Add the reply style to the conversation thread, when there is one. A
+  one-shot run prints the reply as plain text, so it has none. The line
+  goes on the thread and not in `context`, because `context` also reaches
+  the writing reviewer and the rewriter, which would read it as part of
+  the task the prose was written for. */
 export def addReplStyle() {
-  if (isInteractive()) {
-    ensureSystemMessage(REPL_STYLE)
+  if (_replyStyle != "") {
+    ensureSystemMessage(_replyStyle)
   }
 }
 

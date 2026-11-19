@@ -1,12 +1,11 @@
 /** @module
-  @summary The harness side of a turn: which brain is selected, the one
-  session wrapper that installs the policy handler, and the per-turn work
-  (slash expansion, attachments, the hard stop for a subagent budget trip)
-  that happens before `agencyAgent` sees the message. See
-  docs/dev/agents/agent-brains.md.
+  @summary The harness side of a turn: which brain is selected, and the
+  per-turn work (slash expansion, attachments, the hard stop for a subagent
+  budget trip) that happens before `agencyAgent` sees the message. The
+  terminal's session wrapper, which installs the policy handler, is in
+  runSession.agency. See docs/dev/agents/agent-brains.md.
 */
 import { map } from "std::array"
-import { cliPolicyHandler } from "std::policy"
 import { expandSlash } from "std::skills"
 import { Attachment, currentThreadId } from "std::thread"
 import { pushMessage } from "std::ui/cli"
@@ -14,12 +13,9 @@ import { pushMessage } from "std::ui/cli"
 import { answerTurn } from "./answer.agency"
 import { detectAttachments, modalityFilter } from "./attachments.agency"
 import { guardStopHandler } from "./budget.agency"
-import { checkCliBundles } from "./cliTools.agency"
 import { slashCommands } from "./commandPalette.agency"
-import { groundingText, setGrounding } from "./grounding.agency"
-import { getPolicyForAgent } from "./policy.agency"
-import { approvingInstructionReads, withProjectContextIfMoved } from "./projectContext.agency"
-import { setConversationThread } from "./resume.agency"
+import { withProjectContextIfMoved } from "./projectContext.agency"
+import { setConversationThread } from "./record.agency"
 import { setMessageRewritten } from "./rewrittenMessage.agency"
 import { Settings } from "./settings.agency"
 import { START_TARGETS, runStartTarget } from "./startTargets.agency"
@@ -28,15 +24,6 @@ export static const DEFAULT_BRAIN = "coordinator"
 
 // The brain this run talks to. Set once by main(); read by runTurn/runSession.
 let _brainName: string = ""
-
-// The `--policy` argument (a built-in name or a policy-file path), or ""
-// when absent. main() sets it; policyHandlerFor() reads it.
-let _policyArg: string = ""
-
-// The `--approve` / `--reject` arguments (effect lists), or "" when
-// absent. Session-only overlays on the resolved policy.
-let _approveArg: string = ""
-let _rejectArg: string = ""
 
 export def setBrainName(name: string) {
   _brainName = name
@@ -48,13 +35,7 @@ export def currentBrainName(): string {
 
 // A missing brain is a harness bug: main() must call setBrainName() before
 // runSession or runTurn.
-static const NO_BRAIN = "No brain selected: main() must call setBrainName() first"
-
-export def setPolicyArg(arg: string, approve: string = "", reject: string = "") {
-  _policyArg = arg
-  _approveArg = approve
-  _rejectArg = reject
-}
+export static const NO_BRAIN = "No brain selected: main() must call setBrainName() first"
 
 /** The `--agent` values a brain accepts besides `main`. Only the
   coordinator brain has subagents to start. */
@@ -98,47 +79,6 @@ export def resolveBrainName(flag: string | null, settings: Settings): string {
     return fromSettings
   }
   return DEFAULT_BRAIN
-}
-
-/** True when the session's approvals come from the saved policy file,
-  and false under --policy, --approve, or --reject, which run on a
-  per-session copy that is never written back to it. */
-export def usesSavedPolicy(): boolean {
-  return _policyArg == "" && _approveArg == "" && _rejectArg == ""
-}
-
-// Load (or initialize) the policy and return the installed CLI policy handler.
-def policyHandlerFor(interactive: boolean): any {
-  const { policyFile, startPolicy } = getPolicyForAgent(_policyArg, _approveArg, _rejectArg, interactive)
-  const handler = cliPolicyHandler(
-    file: policyFile,
-    policy: startPolicy,
-    // One-shot (-p) runs have no user at a terminal: an undecided effect
-    // is rejected with a reason the model reads, never prompted.
-    interactive: interactive,
-  )
-  return approvingInstructionReads.partial(policyHandler: handler, rules: startPolicy ?? {})
-}
-
-export def runSession(interactive: boolean, body: () -> void raises <*>) {
-  """
-  The only place a turn is answered from. Builds the grounding once, then
-  installs the policy handler, checks the bundled files under it, and runs
-  `body` (the one-shot turn or the REPL) under it. Both production paths
-  go through here.
-  """
-  if (_brainName == "") {
-    throw(NO_BRAIN)
-    return
-  }
-  // Built before the policy handler exists, so reading the project's
-  // AGENTS.md never prompts. Every turn adds this same string.
-  setGrounding(groundingText(_brainName))
-  const handler = policyHandlerFor(interactive)
-  handle {
-    checkCliBundles()
-    body()
-  } with handler
 }
 
 def checkForAttachments(expanded: string): Attachment[] {

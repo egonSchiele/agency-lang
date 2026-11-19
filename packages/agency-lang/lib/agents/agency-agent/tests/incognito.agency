@@ -1,4 +1,5 @@
-import { incognitoProblem, renameSession, startIncognito } from "../lib/resume.agency"
+import { renameSession, startIncognito } from "../lib/record.agency"
+import { incognitoProblem } from "../lib/resume.agency"
 
 node startsWithNoProblem(): string {
   return incognitoProblem(false, null, false)

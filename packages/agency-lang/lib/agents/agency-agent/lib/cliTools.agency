@@ -20,7 +20,6 @@ import { useLlmOptions } from "./llmOptionTools.agency"
 import { getMcpTools } from "./mcp.agency"
 import { deletePreset, listPresets, savePreset, setDefaultPreset } from "./presetTools.agency"
 import { searchSessions } from "./sessionSearch.agency"
-import { isInteractive } from "./trace.agency"
 
 // Skills about the agent itself. The folder ships with the agent, so the
 // scan is approved here, as the bundled prompt reads are. An outer handler
@@ -42,10 +41,22 @@ export def checkCliBundles() {
   }
 }
 
+// Whether a turn is offered the background job tools. On for the REPL.
+// A one-shot run turns them off (setInteractive in trace.agency), and so
+// does the session core: a job belongs to the run and stops when the run
+// pauses.
+let _jobToolsOn: boolean = true
+
+/** Offer the background job tools to later turns, or stop offering them. */
+export def setJobToolsOn(on: boolean) {
+  _jobToolsOn = on
+}
+
 /** The job tools for this session: none in a one-shot run, which exits
-  when its turn ends and would stop its jobs before they finish. */
+  when its turn ends and would stop its jobs before they finish, and none
+  under the session core. */
 export def sessionJobTools(): any[] {
-  if (!isInteractive()) {
+  if (!_jobToolsOn) {
     return []
   }
   return jobTools()

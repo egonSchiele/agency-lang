@@ -20,7 +20,7 @@ static const SLOTS: Record<string, Resolved> = {
   }
 }
 
-static const NO_ARGS: Record<string, any> = {}
+static const NO_ARGS = "{}"
 
 node namesTheAgentAndBrain(): boolean {
   const text = sessionFactsText("coordinator", SLOTS, NO_ARGS)

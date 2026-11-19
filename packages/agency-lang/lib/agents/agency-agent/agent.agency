@@ -20,16 +20,16 @@ import { maybeLoadMcp } from "./lib/mcp.agency"
 import { printPolicyHelp } from "./lib/policy.agency"
 import { activePreset, activePresetName, presetTable, serverNotice, startPreset } from "./lib/presets.agency"
 import { installSessionHooks, startInteractive } from "./lib/repl.agency"
-import { chooseSession, incognitoProblem, startIncognito, startSession } from "./lib/resume.agency"
+import { startIncognito } from "./lib/record.agency"
+import { chooseSession, incognitoProblem, startSession } from "./lib/resume.agency"
 import { pickModelsForAgent } from "./lib/session.agency"
 import { loadSettings } from "./lib/settings.agency"
 import { applyToolLimits, limitFlagsFromArgs, setStartupLimitFlags } from "./lib/toolLimits.agency"
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
+import { runSession, setPolicyArg } from "./lib/runSession.agency"
 import {
   setBrainName,
   runTurn,
-  runSession,
-  setPolicyArg,
   resolveBrainName,
   resolveStartTarget,
   startTargetsFor,

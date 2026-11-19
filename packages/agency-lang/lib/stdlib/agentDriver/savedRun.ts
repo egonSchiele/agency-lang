@@ -3,6 +3,7 @@
 // docs/dev/agents/session-driver.md.
 import { currentHost } from "../../runtime/currentHost.js";
 import type { Policy } from "../../runtime/policy.js";
+import { processSlot } from "../../runtime/processSlot.js";
 import { failure, success, type Result } from "../../types/result.js";
 import {
   _readSessionRecord,
@@ -28,13 +29,12 @@ export const CANNOT_CONTINUE =
 export const PROGRAM_NOT_LOADED =
   "This session's program is not loaded. Load the session program before loading the session.";
 
-let processId: string | null = null;
+const processId = processSlot<string>("agency.sessionHolderId", () => currentHost().random.id());
 
 /** A random id for this process, made on the first call. A front-end puts
  *  it in its `Holder`. */
 export function thisProcessId(): string {
-  processId ??= currentHost().random.id();
-  return processId;
+  return processId.get();
 }
 
 /** The run to save for a phase, or null when there is nothing to go on

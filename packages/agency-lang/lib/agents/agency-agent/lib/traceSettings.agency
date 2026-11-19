@@ -1,0 +1,65 @@
+// What a run shows of the agent's work, and whether a person is at it.
+// They are globals, so each run has its own: the terminal sets them from
+// its flags, and the session program from `ProgramStart.trace`. The
+// callbacks in trace.agency read them. This module has no callbacks, so
+// the session program can import it.
+import { env } from "std::system"
+
+export type TraceSettings = {
+  debug: boolean;
+  verbose: boolean;
+  interactive: boolean
+}
+
+let AGENT_DEBUG_ENV = env("AGENT_DEBUG") with approve
+let debugOn: boolean = AGENT_DEBUG_ENV == "1"
+let verboseOn: boolean = false
+let interactiveOn: boolean = true
+
+export def isDebug(): boolean {
+  """
+  Whether debug tracing is on for this run.
+  """
+  return debugOn
+}
+
+export def isVerbose(): boolean {
+  """
+  Whether verbose tracing is on for this run.
+  """
+  return verboseOn
+}
+
+export def isInteractive(): boolean {
+  """
+  Whether a user is at a terminal to answer prompts.
+  """
+  return interactiveOn
+}
+
+export def setDebug(on: boolean) {
+  """
+  Turn debug tracing on or off for the rest of the run.
+
+  @param on - Whether to trace
+  """
+  debugOn = on
+}
+
+export def setVerbose(on: boolean) {
+  """
+  Turn verbose tracing on or off for the rest of the run.
+
+  @param on - Whether to trace
+  """
+  verboseOn = on
+}
+
+export def setInteractive(on: boolean) {
+  """
+  Record whether a user is at a terminal.
+
+  @param on - Whether the run is interactive
+  """
+  interactiveOn = on
+}

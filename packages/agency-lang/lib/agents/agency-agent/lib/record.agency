@@ -56,24 +56,35 @@ export def markTurnDone() {
   _turnDone = true
 }
 
+/** What a rename did: the title the session has now. */
+export type Renamed = {
+  title: string
+}
+
+/** What a fork did: the id this run writes to now, and the id of the
+  session it was copied from, which stays on disk as it was last saved. */
+export type Forked = {
+  id: string;
+  forkedFrom: string
+}
+
 /** `/rename <title>`: give the session a title of the user's choosing.
-  Returns the line to show. The REPL saves after this line. */
-export def renameSession(title: string): string {
+  Fails with "not saved" when this run has no session, and with "empty
+  title" when the title is blank once cleaned. Each front-end words the
+  result itself. The REPL saves after it. */
+export def renameSession(title: string): Result<Renamed> {
   const record = _current
-  if (record == null && _incognito) {
-    return "Incognito sessions are not saved, so there is nothing to rename."
-  }
   if (record == null) {
-    return "No session to rename."
+    return failure("not saved")
   }
   const clean = cleanTitle(title)
   if (clean == "") {
-    return "Usage: /rename <title>"
+    return failure("empty title")
   }
   record.title = clean
   _renamed = true
   _titlePinned = true
-  return "Session renamed: ${clean}"
+  return success({ title: clean })
 }
 
 /** The id of the session this run writes to, or "" when it has none. */
@@ -98,22 +109,22 @@ export def conversationThread(): string {
 }
 
 /** `/fork`: from here on this run writes to a new session, a copy of the
-  one it was. The original stays on disk as it was last saved. Returns the
-  line to show. The REPL saves after this line. */
-export def forkSession(): string {
+  one it was. The original stays on disk as it was last saved. Fails with
+  "not saved" when this run has no session, and with "no turns" when it
+  has none to copy. Each front-end words the result itself. The REPL
+  saves after it. */
+export def forkSession(): Result<Forked> {
   const record = _current
-  if (record == null && _incognito) {
-    return "Incognito sessions are not saved, so there is nothing to fork."
-  }
   if (record == null) {
-    return "No session to fork."
+    return failure("not saved")
   }
   if (record.turns == 0) {
-    return "This session has no turns yet, so there is nothing to fork."
+    return failure("no turns")
   }
   const t = now()
+  const id = newSessionId()
   _current = {
-    id: newSessionId(),
+    id: id,
     cwd: record.cwd,
     brain: record.brain,
     created: t,
@@ -124,13 +135,19 @@ export def forkSession(): string {
   }
   // Marks the record changed, so it is saved without a turn.
   _renamed = true
-  return "Forked. This session is now a copy. The original is still saved; reopen it with: agency agent --resume ${record.id}"
+  return success({ id: id, forkedFrom: record.id })
 }
 
 /** An --incognito run has no session: nothing is saved and no title is
   made. Marks the run so /rename can say why. */
 export def startIncognito() {
   _incognito = true
+}
+
+/** Whether this is an --incognito run, so the terminal can say why it has
+  no session to rename or fork. */
+export def isIncognito(): boolean {
+  return _incognito
 }
 
 /** Make `record` the session this run writes to. Null is a run that is

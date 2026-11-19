@@ -8,11 +8,18 @@
  */
 import { _printAgentTrace } from "agency-lang/stdlib-lib/agentToolTrace.js"
 import { searchProviderName } from "std::agents/lib/search"
-import { env } from "std::system"
 import { pushMessage } from "std::ui/cli"
 
 import { REPL_STYLE, setReplyStyle } from "./answer.agency"
 import { setJobToolsOn } from "./cliTools.agency"
+import {
+  isDebug as debugOn,
+  isInteractive as interactiveOn,
+  isVerbose as verboseOn,
+  setDebug as setDebugOn,
+  setInteractive as setInteractiveOn,
+  setVerbose as setVerboseOn,
+ } from "./traceSettings.agency"
 import {
   isPlainObject,
   retryReasonLabel,
@@ -20,20 +27,13 @@ import {
 import { renderLLMCallResponse } from "./utils/renderLLMCallResponse.agency"
 
 
-let AGENT_DEBUG_ENV = env("AGENT_DEBUG") with approve
-let AGENT_DEBUG: boolean = AGENT_DEBUG_ENV == "1"
-let VERBOSE: boolean = false
-
-// Whether the agent is running in interactive (TTY) mode.
-let _isInteractive: boolean = true
-
 // Live tool-call tracing. Always shown in the interactive REPL, but in
 // one-shot mode it's suppressed unless the user opts in
 // with `--verbose` / `--debug` (AGENT_DEBUG). A function, not a static
 // const: it reads globals that `main()` sets after module init, so the
 // value must be computed per call.
 export def isTraceEnabled(): boolean {
-  return _isInteractive || VERBOSE || AGENT_DEBUG
+  return interactiveOn() || verboseOn() || debugOn()
 }
 
 // Which tools print, and how, is the renderer's table (TOOL_PRESENTATIONS in
@@ -42,7 +42,7 @@ export def isTraceEnabled(): boolean {
 // the call in the log.
 callback("onToolCallStart") as data {
   if (isTraceEnabled()) {
-    _printAgentTrace({ kind: "toolStart", toolName: data.toolName, args: data.args, provider: searchProviderName(data.toolName) }, AGENT_DEBUG)
+    _printAgentTrace({ kind: "toolStart", toolName: data.toolName, args: data.args, provider: searchProviderName(data.toolName) }, debugOn())
   }
 }
 
@@ -51,19 +51,19 @@ callback("onToolCallEnd") as data {
     const provider = searchProviderName(data.toolName)
     const base = { kind: "toolEnd", toolName: data.toolName, args: data.args, timeTaken: data.timeTaken, provider: provider }
     if (data.result is success(_result)) {
-      _printAgentTrace({ ...base, value: _result, outcome: "success" }, AGENT_DEBUG)
+      _printAgentTrace({ ...base, value: _result, outcome: "success" }, debugOn())
     } else if (data.result is failure(_error)) {
-      _printAgentTrace({ ...base, value: _error, outcome: "failure" }, AGENT_DEBUG)
+      _printAgentTrace({ ...base, value: _error, outcome: "failure" }, debugOn())
     } else if (isPlainObject(data.result) && data.result.type == "reject") {
-      _printAgentTrace({ ...base, value: data.result.value ?? "Tool call rejected", outcome: "failure" }, AGENT_DEBUG)
+      _printAgentTrace({ ...base, value: data.result.value ?? "Tool call rejected", outcome: "failure" }, debugOn())
     } else {
-      _printAgentTrace({ ...base, value: data.result, outcome: "plain" }, AGENT_DEBUG)
+      _printAgentTrace({ ...base, value: data.result, outcome: "plain" }, debugOn())
     }
   }
 }
 
 callback("onLLMCallStart") as data {
-  if (AGENT_DEBUG || VERBOSE) {
+  if (debugOn() || verboseOn()) {
     pushMessage(color.green.dim("💬 [${data.model}] ${data.prompt}"))
   }
 }
@@ -74,7 +74,7 @@ callback("onLLMCallEnd") as data {
       _printAgentTrace({ kind: "hostedSearch", result: result })
     }
   }
-  if (AGENT_DEBUG || VERBOSE) {
+  if (debugOn() || verboseOn()) {
     pushMessage(
       color.green.dim("💬 [${data.model}] ${renderLLMCallResponse(data.result)}"),
     )
@@ -106,7 +106,7 @@ callback("onEmit") as data {
     print(color.dim(data.error))
   } else if (isPlainObject(data) && data.type == "session.notice") {
     printNotice(data.text, data.level)
-  } else if (isPlainObject(data) && data.type == "session.budgetStop" && _isInteractive) {
+  } else if (isPlainObject(data) && data.type == "session.budgetStop" && interactiveOn()) {
     // Only with a person at the terminal. A one-shot run's output is
     // the reply and nothing else.
     print(color.yellow(
@@ -129,14 +129,14 @@ export def isDebug(): boolean {
   """
   Whether debug tracing is on for this run.
   """
-  return AGENT_DEBUG
+  return debugOn()
 }
 
 export def isVerbose(): boolean {
   """
   Whether verbose tracing is on for this run.
   """
-  return VERBOSE
+  return verboseOn()
 }
 
 export def setDebug(on: boolean) {
@@ -145,7 +145,7 @@ export def setDebug(on: boolean) {
 
   @param on - Whether to trace
   """
-  AGENT_DEBUG = on
+  setDebugOn(on)
 }
 
 export def setVerbose(on: boolean) {
@@ -154,7 +154,7 @@ export def setVerbose(on: boolean) {
 
   @param on - Whether to trace
   """
-  VERBOSE = on
+  setVerboseOn(on)
 }
 
 export def setInteractive(on: boolean) {
@@ -167,7 +167,7 @@ export def setInteractive(on: boolean) {
 
   @param on - Whether the run is interactive
   """
-  _isInteractive = on
+  setInteractiveOn(on)
   if (on) {
     setReplyStyle(REPL_STYLE)
   } else {
@@ -181,5 +181,5 @@ export def isInteractive(): boolean {
   Whether a user is at a terminal to answer prompts. False in one-shot and
   piped runs, where there is nobody to respond to an interrupt.
   """
-  return _isInteractive
+  return interactiveOn()
 }

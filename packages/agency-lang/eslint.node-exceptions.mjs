@@ -90,6 +90,8 @@ export const NODE_ONLY = {
   "lib/stdlib/statelogReaders.ts":
     "std::statelog's log readers read a statelog through lib/runDirectory/traces.ts",
   "lib/stdlib/template.ts": "std::template fills a template, which runs the compiler",
+  "lib/stdlib/runPolicy.ts":
+    "resolves the command line's policy flags, and the function it calls reads a policy file with fs; only Node front-ends use it",
   "lib/stdlib/prompts.ts": "the line-mode prompts read the terminal through the prompts package",
   "lib/stdlib/vision.ts": "std::vision runs through local models",
   "lib/stdlib/workflow/**":

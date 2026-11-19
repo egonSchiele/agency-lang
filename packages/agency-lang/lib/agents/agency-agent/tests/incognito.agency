@@ -1,5 +1,6 @@
 import { renameSession, startIncognito } from "../lib/record.agency"
 import { incognitoProblem } from "../lib/resume.agency"
+import { renameLine } from "../lib/slashCommands/session.agency"
 
 node startsWithNoProblem(): string {
   return incognitoProblem(false, null, false)
@@ -18,8 +19,10 @@ node refusesWhenLoggingIsOn(): string {
   return incognitoProblem(false, null, true)
 }
 
+// The terminal's lines. The rename itself says only "not saved", both times.
 node renameSaysWhy(): string {
-  const before = renameSession("a title")
+  const before = renameLine(renameSession("a title"))
   startIncognito()
-  return "${before} | ${renameSession("a title")}"
+  const after = renameLine(renameSession("a title"))
+  return "${before} | ${after}"
 }

@@ -117,6 +117,72 @@ this. Nothing else should call `main` or `respondToInterrupts`.
 Each call returns `{ result, usage }`. `usage` is the run's total spend so
 far, or null when the call threw.
 
+### Which policy a session runs under
+
+A session started with policy flags runs under the policy they resolved
+to, wherever it is resumed. That policy is a file of the session's own,
+`<agent home>/session-policies/<id>.json`, beside the user's
+`policy.json` (`lib/stdlib/agentDriver/sessionPolicy.ts`):
+
+- The front-end that starts the session writes it with
+  `saveCarriedPolicy({ home, id, policy })`, which refuses a policy that
+  is not valid.
+- When a settings answer gives the session a new `record.id` (a `fork`),
+  `reduceDriver` reports `{ type: "forked", from, to }` after `answered`.
+  A front-end handles it by calling `copyCarriedPolicy({ home, from, to
+  })`. Without the copy, a session started with `--policy minimal` would
+  run its fork under the saved policy. No file at `from` copies nothing;
+  one that can't be read is a failure.
+- A front-end that resumes the session reads it with
+  `readCarriedPolicy({ home, id })`: null when there is no file.
+
+The core never holds the policy. If it did, it would be in the
+checkpoint and in the pause's interrupt data, and an edit to either
+would change what the session is allowed to do. The file is guarded as
+`policy.json` is: no built-in policy but `approve-all` approves a write,
+an edit, a remove, a copy onto, or a move of or onto a file under
+`session-policies/` (`lib/runtime/builtinPolicies.ts`). Under
+`with-writes`, a remove of a folder that holds the agent home is not
+caught; see `approval-policies.md`.
+
+`sessionRunPolicy` picks the policy to give the run:
+
+```ts
+const carried = await readCarriedPolicy({ home, id });
+const policy = sessionRunPolicy({ carried, saved: savedPolicyFile, extra: null });
+if (!policy.success) {
+  // Show policy.error. Do not resume the session.
+  return;
+}
+await resumeRun({ agent, callbacks, policy: policy.value, interrupts: pause, responses });
+```
+
+- With a policy of its own, the run gets that policy with the saved
+  policy's reject rules ahead of its rules. The saved approvals are left
+  out. Every handler is consulted, and a policy with no rule for an
+  effect says nothing, so beside `recommended` a session started with
+  `--policy minimal` would have its reads approved.
+- With none, the run gets `saved`.
+- When the file can't be read, or is not a valid policy, it fails with
+  "This session's own policy can't be read, so it can't be continued
+  here." It never falls back to `saved`, which is why `carried` is a
+  `Result` and not a policy or null.
+- `extra` is the flags given at resume. Its rules go ahead of the others
+  for the same effect, as `--approve` and `--reject` do (`layerPolicy` in
+  `lib/runtime/policyFlags.ts`). So `--approve std::bash` at resume beats
+  a reject the session was started with. That is intended: the person
+  typed it.
+
+"Always" answers given in a session with a policy of its own are saved
+to its policy file, approvals and rejections both, so they follow the
+session to any front-end. Only the answer's rule is added to the file;
+the flags given at resume and the saved policy's rejects stay out of it.
+The terminal does this by passing that file to `askAbout`
+(`approval-policies.md`).
+
+`sessionRunPolicy` does not pin the pause. `startRun` and `resumeRun` pin
+whatever policy they are given.
+
 ## What is saved, and when
 
 `savedRun(phase)` is what to write. The front-end saves at every pause.
@@ -145,12 +211,14 @@ wants that does it itself.
 
 ## Where a loaded session picks up
 
-`restoredPhase(run, settle)`:
+`restoredPhase(run, { settle, carried })`, both optional:
 
 - **Waiting for a message:** where it was.
 - **Waiting on approvals:** each goes through `settle`, as a new
   pause's approvals do. The front-end chooses it. With no `settle`, every
-  approval is asked again.
+  approval is asked again. When `settle` answers all of them, the phase
+  is `working` with a leg still to run, and the front-end runs it as it
+  would after a person answered the last one.
 - **A turn that was running** (the process stopped mid-turn): back to the
   turn's start, as if the person had cancelled it. It reports
   `turnCancelled`, and the next message carries the note.
@@ -168,6 +236,12 @@ wants that does it itself.
 
 The two turn cases go through `reduceDriver`, so they behave as the live
 ones do.
+
+`carried` is what `readCarriedPolicy` gave. When it is a policy, and the
+session can go on, `happened` starts with `{ type: "carriedPolicy",
+policy }`. The front-end shows the person what that policy approves
+before the first leg: a session's own policy decides what runs without
+asking on whichever machine opens it.
 
 ## One session, one holder
 
@@ -191,6 +265,10 @@ reuses a pid after a crash. The pid is kept for messages.
   `processId` differs.
 - A session with no record yet, or one no one has taken hold of, is
   still held.
+- After a `fork` answer the session has a new `record.id`. Every later
+  save, `stillHeld` and `takeHold` uses that id. Checking the old one
+  would watch the original session and miss another front-end taking
+  the fork.
 - `saveRun` checks the holder too, so a front-end that forgets
   `stillHeld` does not overwrite newer work.
 - `saveRun` reads the record, checks it and writes under the host's lock
@@ -221,7 +299,8 @@ reuses a pid after a crash. The pid is kept for messages.
 | `lib/stdlib/agentDriver/index.ts`        | The entry point.                                            |
 | `lib/stdlib/agentDriver/interface.ts`    | The core's interface: `ProgramStart`, `PauseData`, `Answer`. |
 | `lib/stdlib/agentDriver/run.ts`          | `startRun`, `resumeRun`, `toStep`, `withCancelNote`.        |
-| `lib/stdlib/agentDriver/policy.ts`       | `withPauseLeftAlone`.                                       |
+| `lib/stdlib/agentDriver/policy.ts`       | `withPauseLeftAlone`, `sessionRunPolicy`.                   |
+| `lib/stdlib/agentDriver/sessionPolicy.ts` | The session's policy file.                                 |
 | `lib/stdlib/agentDriver/approvals.ts`    | The approval queue.                                         |
 | `lib/stdlib/agentDriver/machine.ts`      | `reduceDriver`, the phases, `Happened`.                     |
 | `lib/stdlib/agentDriver/savedRun.ts`     | Saving, loading, and the holder.                            |

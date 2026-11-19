@@ -77,10 +77,10 @@ function withinOneEdit(a: string, b: string): boolean {
  *
  *  Each affected effect's rule list is built in one construction so
  *  precedence is visible in the literal, not implied by statement order:
- *  reject rule, then approve rule, then the base's own rules.
- *  Reject-ahead-of-approve is how overlap resolves to reject under
- *  checkPolicy's first-match-wins — and you cannot break it by reordering
- *  statements.
+ *  reject rule, then approve rule, and `layerPolicy` puts the base's own
+ *  rules after them. Reject-ahead-of-approve is how overlap resolves to
+ *  reject under checkPolicy's first-match-wins — and you cannot break it
+ *  by reordering statements.
  *
  *  Shared by `agency run` (via `resolveRunPolicy`) and the agent's flags. */
 export function policyOverlayFromFlags(
@@ -90,20 +90,42 @@ export function policyOverlayFromFlags(
 ): Policy {
   const approved = expandSetNames(splitEffects(approve), "--approve");
   const rejected = expandSetNames(splitEffects(reject), "--reject");
-  // Null-prototype: effect names come straight from a CLI flag, and on a
-  // plain object a name like "toString" would read an inherited function
-  // out of `policy[effect]` below, and "__proto__" would be a prototype
-  // write instead of a key.
-  const policy: Policy = Object.assign(Object.create(null), base);
+  // Null-prototype, for the reason `layerPolicy` gives.
+  const flagRules: Policy = Object.create(null);
   const rejectRule: PolicyRule = { action: "reject" };
   const approveRule: PolicyRule = { action: "approve" };
   const affected = [...approved, ...rejected].filter((e, i, a) => a.indexOf(e) === i);
   for (const effect of affected) {
-    policy[effect] = [
+    flagRules[effect] = [
       ...(rejected.includes(effect) ? [rejectRule] : []),
       ...(approved.includes(effect) ? [approveRule] : []),
-      ...(policy[effect] ?? []),
     ];
+  }
+  return layerPolicy({ top: flagRules, base });
+}
+
+/** `base` with `top`'s rules laid over it. For each effect `top` names,
+ *  its rules go ahead of the base's own, so under first-match-wins they
+ *  are tried first. An effect only `base` names keeps its rules. Returns a
+ *  new policy; neither argument is changed.
+ *
+ *  ```ts
+ *  layerPolicy({
+ *    top: { "std::bash": [{ action: "approve" }] },
+ *    base: { "std::bash": [{ action: "reject" }], "std::read": [...] },
+ *  });
+ *  // { "std::bash": [approve, reject], "std::read": [...] }
+ *  ```
+ *
+ *  The result has a null prototype: effect names can come straight from a
+ *  CLI flag, and on a plain object a name like "toString" would read an
+ *  inherited function out of `policy[effect]` below, and "__proto__" would
+ *  be a prototype write instead of a key. */
+export function layerPolicy(args: { top: Policy; base: Policy }): Policy {
+  const { top, base } = args;
+  const policy: Policy = Object.assign(Object.create(null), base);
+  for (const effect of Object.keys(top)) {
+    policy[effect] = [...top[effect], ...(policy[effect] ?? [])];
   }
   return policy;
 }

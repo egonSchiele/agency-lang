@@ -39,11 +39,30 @@ front-end built for another version is refused with the field that does
 not fit. A setup that fails ends the run with the reason. The process is
 not ended.
 
+Three fields of `ProgramStart` are optional, so a start that sends none
+of them is not refused:
+
+- `agentName` is the name the run's statelog groups it under, such as
+  `agency-agent/coordinator` (what the terminal sets). `main` calls
+  `setAgentName` with it. Left out or "", none is set. A name that is not
+  a valid statelog name ends the run with the reason.
+- `oneShot` is true for a run that takes one message and ends, as
+  `agency agent -p`. `main` gives it to `applyToolLimits`, so such a run
+  gets 100 tool rounds by default and a session 50. Left out, it is false.
+- `trace` is `{ debug, verbose, interactive }`, what the run shows of its
+  work. Only a process that loaded the terminal's `trace.agency` prints
+  anything: its callbacks fire in every run and read these flags from
+  the run they fire in (`lib/traceSettings.agency`). Each run has its own,
+  so two sessions in one process can differ. Left out: debug from
+  `AGENT_DEBUG`, not verbose, and interactive.
+
 **The pause.** The core waits with one interrupt, `agent::sessionInput`.
 Its data is what a front-end shows and saves between turns: `thread`,
 `cwd`, `record`, `models`, `preset`, `fixedProvider`, `effort`, `budget`,
-`context`, `brain`.
+`context`, `brain`, `search`.
 
+- `search` is the web search backend in force: `hosted`, `tavily`,
+  `brave` or `off`. The driver reads it as "" from a pause that lacks it.
 - `brain` is the name of the brain that runs the session. `record.brain`
   holds it too, but a session that is not saved has no record. A front-end
   reads the brain from this field only.
@@ -55,17 +74,53 @@ Its data is what a front-end shows and saves between turns: `thread`,
 
 **Answers.** A front-end answers the pause with an `Answer`:
 
-| Kind      | Fields                    | What the core does                                      |
-| --------- | ------------------------- | ------------------------------------------------------- |
-| `message` | `text`, `notes`, `target` | Runs a turn                                             |
-| `model`   | `spec`                    | Switches models, as `/model`                            |
-| `options` | `options`                 | Sets the session's LLM options, such as the temperature |
-| `budget`  | `maxCost`, `maxTime`      | Sets the limits of later turns                          |
-| `effort`  | `effort`                  | Sets the reasoning effort. It outlasts a model switch   |
-| `preset`  | `name`                    | Switches to a saved preset, whole, as `/preset`         |
+| Kind         | Fields                    | What the core does                                                   |
+| ------------ | ------------------------- | -------------------------------------------------------------------- |
+| `message`    | `text`, `notes`, `target` | Runs a turn                                                          |
+| `model`      | `spec`                    | Switches models, as `/model`                                         |
+| `options`    | `options`                 | Sets the session's LLM options, such as the temperature              |
+| `budget`     | `maxCost`, `maxTime`      | Sets the limits of later turns                                       |
+| `effort`     | `effort`                  | Sets the reasoning effort. It outlasts a model switch                |
+| `preset`     | `name`                    | Switches to a saved preset, whole, as `/preset`                      |
+| `compact`    | `keep`                    | Summarizes the older messages now, as `/compact <keep>`              |
+| `rename`     | `title`                   | Gives the session a title, as `/rename`                              |
+| `fork`       | none                      | Makes the session a copy with a new `record.id`, as `/fork`          |
+| `search`     | `backend`                 | Switches the web search backend and saves it, as `/search`           |
+| `savePreset` | `name`                    | Saves the session to a preset, "" for the active one, as `/preset save` |
 
-A `model`, `effort` or `preset` answer the core cannot apply changes
-nothing and sends a `session.notice` at level `error` with the reason.
+An answer the core cannot apply changes nothing and sends a
+`session.notice` at level `error` with the reason. What one that worked
+did is a notice at level `info`, except a `model`, `options`, `budget`,
+`effort` or `preset` answer, which the next pause shows.
+
+- **`compact`** calls the model for the summary, in a hidden thread. With
+  nothing older than the part a compaction keeps, it is refused with
+  "Nothing to compact yet." A summary that fails is a `warning` notice,
+  as an automatic compaction's is. `keep` is what the user asked the
+  summary to keep, or "".
+- **`rename` and `fork`** need a saved session, and a fork needs a turn.
+  `renameSession` and `forkSession` (`lib/record.agency`) return facts:
+  `success({ title })`, `success({ id, forkedFrom })`, or a failure of
+  `"not saved"`, `"empty title"` or `"no turns"`. The core words its own
+  notices, and the terminal its own lines
+  (`lib/slashCommands/session.agency`). After a fork the pause's record
+  has the new id and `forkedFrom`. A front-end saves the session under the
+  new id, and the original stays as it was last saved. The hold moves too:
+  every later `stillHeld` and `takeHold` uses the new id, and a front-end
+  that keeps sessions by id (Perry's engine) keys this one by it. A
+  session with a policy file of its own keeps that policy: the front-end
+  saves it for the new id (`saveCarriedPolicy`).
+- **`search`** refuses a name that is no backend, and a backend this
+  session cannot use: `hosted` on a local model, `tavily` or `brave`
+  without its key. The choice is saved to `settings.json`, as `/search`
+  saves it (`switchSearchBackend` in `lib/search.agency`).
+- **`search` and `savePreset` ask no one about their writes.** Each writes
+  the user's settings as a direct result of a command the user gave, so
+  the core approves the write itself with `with approve`. A rule in the
+  run's policy still decides first.
+- **`savePreset`** is `writeSessionPreset` in `lib/session.agency`. A save
+  it refuses, such as one with no name and no active preset, is the error
+  notice. The lines that say what was saved are one `info` notice.
 
 - **A model's provider.** `openai/gpt-4o` names a known provider, so with
   no provider fixed it switches to OpenAI.
@@ -99,7 +154,10 @@ nothing and sends a `session.notice` at level `error` with the reason.
 **Approvals.** The core installs no policy handler and asks no one. The
 policy is the run's own, passed as the `policy` option on `main` and on
 every resume. What no rule decides leaves the run as an interrupt with a
-checkpoint, and the front-end answers it.
+checkpoint, and the front-end answers it. The core never holds a
+session's own policy, so neither a checkpoint nor an interrupt's data
+can change it: a front-end reads it from the session's policy file and
+builds the run's policy from it (`session-driver.md`).
 
 **Edit diffs.** The core's one handler around a turn reports every
 `std::edit` as a `session.editDiff` event and then passes. It never
@@ -232,4 +290,4 @@ Connections belong to the process.
 | `lib/stdlib/agentSessionImports.test.ts` | The import rule. |
 | `tests/agency-js/session-core` | The core, driven as a front-end drives it. |
 | `tests/agency-js/session-core-folders` | Two sessions in two folders in one process. |
-| `tests/agency-js/session-core-handoff` | A second process finishes a paused turn. |
+| `tests/agency-js/session-core-handoff` | A second process finishes a paused turn, and runs a session under its own policy file. |

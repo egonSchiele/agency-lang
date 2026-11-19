@@ -141,10 +141,9 @@ describe("restoredPhase", () => {
     const question: Interrupt = { ...waitingOn("std::question", "q1"), expectsValue: true };
     const declinesQuestions: Settle = (interrupt) =>
       interrupt.expectsValue === true ? { response: reject("can't answer"), by: "rule" } : null;
-    const { phase, happened } = restoredPhase(
-      run({ text: "do it", approvals: [question, BASH] }),
-      declinesQuestions,
-    );
+    const { phase, happened } = restoredPhase(run({ text: "do it", approvals: [question, BASH] }), {
+      settle: declinesQuestions,
+    });
     expect(phase).toEqual({
       kind: "approving",
       pause: PAUSE,
@@ -181,6 +180,22 @@ describe("restoredPhase", () => {
       phase: { kind: "ended", reason: PROGRAM_NOT_LOADED },
       happened: [],
     });
+    const carried = { "*": [{ action: "approve" as const }] };
+    expect(restoredPhase(pausedIn("gone.agency", "0000"), { carried }).happened).toEqual([]);
+  });
+
+  // Whoever opens the session sees what its own policy approves before it runs.
+  it("reports the session's own policy first", () => {
+    const carried = { "*": [{ action: "approve" as const }] };
+    expect(restoredPhase(run(null), { carried })).toEqual({
+      phase: { kind: "waitingForUser", pause: PAUSE, cancelledTexts: ["earlier"] },
+      happened: [{ type: "carriedPolicy", policy: carried }],
+    });
+    expect(restoredPhase(run({ text: "do it", approvals: null }), { carried }).happened).toEqual([
+      { type: "carriedPolicy", policy: carried },
+      { type: "turnCancelled" },
+    ]);
+    expect(restoredPhase(run(null), { carried: null }).happened).toEqual([]);
   });
 
   it("keeps the failed requests, through a save and a load", () =>

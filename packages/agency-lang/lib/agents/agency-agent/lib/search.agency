@@ -295,19 +295,25 @@ def searchKeyPresence(): { hasTavily: boolean, hasBrave: boolean } {
   }
 }
 
-/*
-  Items shown in the /search picker. Built from BACKENDS filtered by
-  isBackendAvailable against the current session.
-*/
-export def availableBackendItems(): ChoiceItem[] {
+// What a backend can be picked against now: this session's locality and
+// the keys set in the environment.
+def pickContext(): SearchContext {
   const keys = searchKeyPresence()
-  const ctx: SearchContext = {
+  return {
     isLocal: session.isLocal,
     isTty: true,
     hasTavily: keys.hasTavily,
     hasBrave: keys.hasBrave,
     savedBackend: ""
   }
+}
+
+/*
+  Items shown in the /search picker. Built from BACKENDS filtered by
+  isBackendAvailable against the current session.
+*/
+export def availableBackendItems(): ChoiceItem[] {
+  const ctx = pickContext()
   const result: ChoiceItem[] = []
   for (b in BACKENDS) {
     if (isBackendAvailable(b, ctx)) {
@@ -315,6 +321,33 @@ export def availableBackendItems(): ChoiceItem[] {
     }
   }
   return result
+}
+
+/** Why `b` cannot be picked in this session. */
+def unavailableReason(b: BackendDescriptor): string {
+  if (b.cloudOnly && session.isLocal) {
+    return "${b.label} needs a cloud provider, and this session runs a local model."
+  }
+  return "${b.label} needs ${b.envKey}, which is not set."
+}
+
+/** Switch to the backend named `backend` and save it to settings.json, as
+  `/search` does. A name that is no backend, or a backend this session
+  cannot use, is a failure, and nothing changes. The session core's
+  `search` answer. */
+export def switchSearchBackend(backend: string): Result<SearchBackend> {
+  const found: BackendDescriptor | null = findBackend(backend)
+  if (found == null) {
+    const names = [b.name for b in BACKENDS]
+    return failure("Unknown search backend: ${backend}. Valid: ${names.join(", ")}")
+  }
+  if (!isBackendAvailable(found, pickContext())) {
+    return failure(unavailableReason(found))
+  }
+  // The user just chose this backend, so the save asks no one. A policy
+  // in the chain still decides.
+  setActiveBackend(found.name, true) with approve
+  return success(getSearchBackend())
 }
 
 // --- Imperative shell (Task 6: configureSearch) -------------------------

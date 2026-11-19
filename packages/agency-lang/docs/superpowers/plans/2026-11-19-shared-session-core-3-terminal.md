@@ -44,9 +44,9 @@ The draft of this plan listed facts to find first. These are the answers, each r
 ## Decisions
 
 - **The driver lives in agency-lang and Perry uses it.** Two drivers would have to agree exactly on the file format and on what a crash mid-turn means.
-- **Policy flags follow the session** (the owner's decision). The session's start data holds the policy the flags resolved to, and the core reports it at every pause. A front-end that resumes such a session runs it under that policy **in place of** its own saved policy, exactly as the terminal does at start when it is given flags. So "follows the session" means at resume what a flag means at start.
+- **Policy flags follow the session** (the owner's decision). The front-end that starts the session saves the policy the flags resolved to in a file of the session's own, `<agent home>/session-policies/<id>.json`, which no built-in policy lets the agent write. The core never holds it: a checkpoint or an interrupt's data cannot change it. A front-end that resumes such a session runs it under that policy **in place of** its own saved policy, keeping only the saved policy's reject rules, which can only make the run stricter. So "follows the session" means at resume what a flag means at start.
 - **Flags given at resume are layered on the session's policy,** as `--approve` and `--reject` are layered on a base today. Someone who types `--approve std::bash` when they resume has said so on purpose. Nothing else can loosen a session's policy: not a saved policy file, and not a front-end that has no flags.
-- **"Always" answers in such a session do not follow it.** The terminal keeps them in `session-policy.json`, as now. Perry keeps them in memory for that session. The other front-end asks again.
+- **"Always" answers in such a session follow it.** They are saved to the session's policy file, approvals and rejections both, so they reach any front-end that resumes it and outlast the sitting.
 - **No runtime change for this.** A run still takes one policy. Two were considered: the runtime taking a list of policies, and the core installing the session's policy as a handler of its own. Both carry over only rejects (see "What was found out"), and the first changes a public option of every run.
 - **The stored policy is the resolved rules, not the flag strings.** A `--policy ./strict.json` path may not exist where the session resumes. Folder placeholders (`.`, `<agent-home>`) stay in the rules and are resolved where the run is.
 - **The driver pins the core's pause in every policy it gives a run.** A stored `{"*": reject}` would otherwise answer `agent::sessionInput` and end the session.
@@ -216,29 +216,32 @@ export function reduceDriver(phase: DriverPhase, action: DriverAction): { phase:
 - Test: `tests/agency-js/session-core/test.js`, `tests/agency-js/session-core-handoff/test.js`, `lib/stdlib/agentDriver/policy.test.ts`
 
 **Interfaces:**
-- `SessionStart` gains `policy: any`: the policy the session's flags resolved to, or null when it was started with no policy flag. It is `any` for the reason `options` is: checking it against a type would fill fields in.
-- `PauseData` gains `policy: any`, the same value, kept in a `let` so every checkpoint holds it.
-- `pauseData` reads it and checks it with `validatePolicy`. A session whose policy is not valid is not resumed: "This session's own policy can't be read, so it can't be continued here."
+- The core takes no policy and reports none.
+- Produces, in `lib/stdlib/agentDriver/sessionPolicy.ts`, through the host's file API:
+  - `saveCarriedPolicy({ home, id, policy }): Promise<Result<null>>` writes `<home>/session-policies/<id>.json`. It refuses a policy `validatePolicy` refuses.
+  - `readCarriedPolicy({ home, id }): Promise<Result<Policy | null>>`: null when there is no file. A file that can't be read or is not a valid policy fails with "This session's own policy can't be read, so it can't be continued here."
+- `builtinPolicies.ts`: no built-in but `approve-all` approves a write under `session-policies/`.
 - Produces, in `policy.ts`:
 
 ```ts
-/** The policy a front-end runs this session under: the session's own when
- *  it carries one, else `saved`. `extra` is what the front-end adds for
- *  this sitting, layered on top as flags are: flags given at resume, and
- *  "always" answers given in a session that carries a policy. */
+/** The policy a front-end runs this session under. With a policy of its
+ *  own: that policy, with the reject rules of `saved` ahead of its rules.
+ *  With none: `saved`. When it can't be read, this fails. `extra` is the
+ *  flags given at resume, laid over the rest. */
 export function sessionRunPolicy(args: {
-  carried: Policy | null;
+  carried: Result<Policy | null>;
   saved: Policy;
   extra: Policy | null;
-}): Policy;
+}): Result<Policy>;
 ```
 
-  The layering is `policyOverlayFromFlags`'s (`lib/runtime/policyFlags.ts`): an effect's rules in `extra` go ahead of the base's.
+  The layering is `layerPolicy`'s (`lib/runtime/policyFlags.ts`): an effect's rules on top go ahead of the base's.
 
 - [ ] **Step 1: Write the failing tests.**
-  - A session started with `policy: { "std::edit": [{ action: "reject" }] }` reports it at its first pause, and at the pause after a turn.
-  - `sessionRunPolicy` with `carried` = `minimal`'s rules and `saved` = `recommended`'s has no rule for `std::read` (Review Focus 2). With `carried: null` it is `saved`. With `extra: { "std::bash": [{ action: "approve" }] }` over a carried `{ "std::bash": [{ action: "reject" }] }`, the approve rule comes first.
-  - In the handoff test: a session started with `minimal`'s rules is resumed by a second process whose saved policy approves every read. A message whose scripted reply reads a file pauses on a `std::read` approval.
+  - A saved policy reads back. A file holding invalid JSON or an invalid policy fails, and `sessionRunPolicy` passes the failure through.
+  - `sessionRunPolicy` with `carried` = `minimal`'s rules and `saved` = `recommended`'s has no rule for `std::read` (Review Focus 2). A saved `std::bash` reject still applies; a saved approve does not. With `carried: null` it is `saved`. With `extra: { "std::bash": [{ action: "approve" }] }` over a carried `{ "std::bash": [{ action: "reject" }] }`, the approve rule comes first.
+  - No built-in but `approve-all` approves a write to `<agent-home>/session-policies/x.json`.
+  - In the handoff test: process one saves `minimal`'s rules as a session's policy file. A second process reads it and resumes the session with a saved policy that approves every read. A message whose scripted reply reads a file pauses on a `std::read` approval.
 - [ ] **Step 2:** Run them. Expected: FAIL.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Run them. Expected: PASS.
@@ -261,7 +264,7 @@ Perry's `resolvePolicy` (`perry/src/agent/policy.ts`) says of itself that it is 
 - [ ] **Step 4:** Run it. Expected: PASS.
 - [ ] **Step 5:** Commit: `Export the function that resolves policy flags`.
 
-**Perry, with the next release:** `resolvePolicy` calls `_resolveRunPolicy` and its copy goes. The engine gives every run `sessionRunPolicy({ carried, saved: policy.json, extra })`, where `extra` is the "always" rules given in a session that carries a policy, kept in memory per session and never written to `policy.json`. Perry's engine takes no policy flags, so a session it starts carries none: `programStart` passes `policy: null`. Its Ink UI and `perry -p` do take flags, and save no session, so there is nothing for the flags to follow.
+**Perry, with the next release:** `resolvePolicy` calls `_resolveRunPolicy` and its copy goes. The engine gives every run `sessionRunPolicy({ carried: await readCarriedPolicy({ home, id }), saved: policy.json, extra: null })`. An "always" answer given in a session with a policy file is saved to that file, never to `policy.json`. After a `fork` answer, the engine saves the policy the session runs under for the new id (`saveCarriedPolicy`). Perry's engine takes no policy flags, so a session it starts has no policy file. Its Ink UI and `perry -p` do take flags, and save no session, so there is nothing for the flags to follow.
 
 ---
 
@@ -385,7 +388,7 @@ One pull request. Until it merges, nothing above changes what `agency agent` doe
 - `agentTerminalDriver.ts` holds one session for the process: the driver's phase and the last `usage`. It holds no policy. It exports, for the shell run's Agency code:
   - `_startSession(start: ProgramStart, shell: Shell): Promise<string>`: "" or the reason it could not start.
   - `_resumeSession(dir: string, id: string, shell: Shell): Promise<string>`. It calls `takeHold` before its first leg.
-  - `Shell` is the two functions of `std::policy` the driver calls back into the shell run, through `callBridgeFn` (`lib/stdlib/cli.ts`): `{ ask: (intr) => response, policy: () => Policy }`. The shell gives `askAbout` and `currentPolicy`.
+  - `Shell` is the two functions of `std::policy` the driver calls back into the shell run, through `callBridgeFn` (`lib/stdlib/cli.ts`): `{ ask: (intr) => response, policy: () => Policy }`. The shell gives `askAbout(intr, currentPolicy(), file)` and `currentPolicy`, where `file` is the handler's file (below).
   - `_send(answer: Answer): Promise<void>`: runs legs until the session waits for a message again.
   - `_cancel()`: aborts a running leg (Esc while the model works).
   - `_pause(): PauseData | null`, `_usage(): RunUsage`.
@@ -396,8 +399,8 @@ One pull request. Until it merges, nothing above changes what `agency agent` doe
 - **The line printed when a job ends** comes from the process's one job watcher, not the run's job table. The terminal driver subscribes to it with `onWatchedJobEnd` (from the jobs plan).
 - It saves at every pause with `saveRun`, holder `{ frontEnd: "terminal", pid }`, and reports to Herdr where `_sessionOnSubmit` did. Before each leg it checks `stillHeld`. When it is not, it stops with `This session was continued in <heldBy.frontEnd>. Reopen it with: agency agent --resume <id>` (Review Focus 3).
 - `agent.agency`'s `main`:
-  - resolves the policy as now with `getPolicyForAgent`. When any policy flag was given, the resolved policy goes in `ProgramStart.session.policy`. With none, that is null.
-  - **On a resume of a session that carries a policy,** it installs `cliPolicyHandler` with `sessionRunPolicy({ carried, saved, extra: <the flags given now, or null> })` and the file `SESSION_POLICY_PATH`, which is what it does today for a session started with flags. So the shell run's own interrupts (`!cmd`, an MCP connect) are judged by the session's policy too.
+  - resolves the policy as now with `getPolicyForAgent`. When any policy flag was given, it saves the resolved policy as the new session's policy file (`saveCarriedPolicy`), and after a `fork` answer for the new id.
+  - **On a resume of a session that has a policy file,** it installs `cliPolicyHandler` with the run policy, `sessionRunPolicy({ carried, saved, extra: <the flags given now, or null> })`, and the session's policy file, so "always" answers are saved there. So the shell run's own interrupts (`!cmd`, an MCP connect) are judged by the session's policy too.
   - calls `maybeLoadMcp` and the guided local picker as now, then `_startSession` or `_resumeSession`, prints the header from the first pause, and runs `repl()` with `onSubmit` → `_send`, and `status` and `tokens` from `_pause()` and `_usage()`.
 - **Two more answers land here,** since only the terminal sends them: `{ kind: "local"; model: string }` (`configureLocalModel`, then `reactToSlotChange`) and `{ kind: "capabilities"; settings: any }` (what `/settings` writes, then `refreshCapabilities`), with `PauseData.capabilities: any` for the `/settings` screen to read. Each gets a case in `tests/agency-js/session-core/test.js`: taken and reported at the next pause, and `local` refused when local models are off.
 - Each slash command sends its answer through `_send`, or reads `_pause()` or `_usage()`, as the table in Task C2 says.
@@ -408,7 +411,7 @@ One pull request. Until it merges, nothing above changes what `agency agent` doe
   - three parallel edits with the first answered "always" ask once and print "Approved … by the rule just saved" twice;
   - Esc at a prompt leaves the session at its last message, and the next message carries the cancel note;
   - a second holder's `takeHold` makes the next line print the "continued in" message, run no leg and write nothing;
-  - a session saved with `policy` = `minimal`'s rules, resumed with no flags while `policy.json` approves every read, asks about a read;
+  - a session whose policy file holds `minimal`'s rules, resumed with no flags while `policy.json` approves every read, asks about a read;
   - `/rename x`, then `--resume` in a new process, shows the title and the transcript.
 - [ ] **Step 2:** Run. Expected: FAIL.
 - [ ] **Step 3:** Implement.

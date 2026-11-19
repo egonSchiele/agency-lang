@@ -71,6 +71,7 @@ import { renderReply, renderUserLine } from "./transcript.agency"
 import { withPendingNotes } from "./pendingNotes.agency"
 import { attachClipboardImage } from "./slashCommands/image.agency"
 import { policySlashCommand } from "./slashCommands/policy.agency"
+import { forkLine, renameLine } from "./slashCommands/session.agency"
 import { shellCommand } from "./slashCommands/shell.agency"
 import { jobsSlashCommand } from "./slashCommands/jobs.agency"
 import { runTurn } from "./turn.agency"
@@ -326,7 +327,7 @@ def _runTurn(msg: string): boolean {
     "/compact" => compactSlashCommand("")
     "/jobs" => jobsSlashCommand("")
     "/fork" => {
-      pushMessage(forkSession())
+      pushMessage(forkLine(forkSession()))
       return true
     }
     _ => {
@@ -361,7 +362,7 @@ def _runTurn(msg: string): boolean {
 
 
 def renameSlashCommand(title: string): boolean {
-  pushMessage(renameSession(title))
+  pushMessage(renameLine(renameSession(title)))
   return true
 }
 

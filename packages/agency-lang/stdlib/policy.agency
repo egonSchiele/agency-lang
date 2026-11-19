@@ -244,6 +244,19 @@ let _internalIoDir: string = ""
 // Whether the last save of pending "always" answers failed, so the warning
 // prints once and not on every retry.
 let _saveFailing: boolean = false
+// Set by `useRunPolicy`. The policy in memory is then a run's policy, which
+// can hold rules its file must not get (the flags given at resume, the
+// saved policy's rejects), so a save applies only the new "always" answers
+// to what the file holds now.
+let _saveAnswersOnly: boolean = false
+// The "always" answers not yet saved, in the order they were given.
+let _pendingAnswers: PendingAnswer[] = []
+
+type PendingAnswer = {
+  intr: any;
+  action: Decision;
+  folder: string
+}
 
 /**
 ```ts
@@ -538,17 +551,27 @@ def maybeLoadPolicy() {
 // interrupt tries again, and prints a warning once.
 def maybeFlush() {
   if (_pendingSave) {
-    // Clear before writing so re-entry cannot repeat the flush.
+    // Clear before writing so re-entry cannot repeat the flush. An answer
+    // given while the save is under way is left for the next flush.
     _pendingSave = false
+    const answers = _pendingAnswers
+    _pendingAnswers = []
     // `_pendingSave` is only set after a decision is recorded, which also
     // sets `_policy` — but if that invariant ever breaks, skip the write
     // rather than clobber the policy file with `null`.
     if (_policy != null) {
-      beginOwnIo("std::write")
-      const written = writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
-      endOwnIo()
+      const toSave = policyToSave(answers)
+      let written: Result = success(null)
+      if (toSave is failure(unreadable)) {
+        written = failure(unreadable)
+      } else if (toSave.value != null) {
+        beginOwnIo("std::write")
+        written = writePolicyFile(globalCliPolicyOpts.file, toSave.value, []) with approve
+        endOwnIo()
+      }
       if (written is failure(why)) {
         _pendingSave = true
+        _pendingAnswers = [...answers, ..._pendingAnswers]
         if (!_saveFailing) {
           print("Warning: could not save your new approval rules to ${globalCliPolicyOpts.file}: ${why}. They apply for the rest of this session, and the next prompt tries to save them again.")
         }
@@ -558,6 +581,47 @@ def maybeFlush() {
       }
     }
   }
+}
+
+// What a flush writes: the policy in memory, or, once `useRunPolicy` has
+// run, what the file holds now with `answers` applied, the same way
+// `recordAnswer` applied them in memory. Null when the file already has
+// every rule. A file that is there but can't be read or is not a valid
+// policy is a failure, so it is not overwritten.
+@capabilities(fileRead)
+def policyToSave(answers: PendingAnswer[]): Result<Policy | null> {
+  if (!_saveAnswersOnly) {
+    return success(_policy)
+  }
+  beginOwnIo("std::read")
+  const loaded = parsePolicyFile(globalCliPolicyOpts.file) with approve
+  endOwnIo()
+  let saved: Policy = {}
+  if (loaded is failure(why)) {
+    if (loaded.data.status != "doesnt-exist") {
+      return loaded
+    }
+  } else {
+    saved = loaded.value
+  }
+  let changed = false
+  for (answer in answers) {
+    const after = _policyAfterDecision(
+      saved,
+      answer.intr,
+      answer.action,
+      answer.folder,
+      globalCliPolicyOpts.fields,
+    )
+    if (after.changed) {
+      saved = after.policy
+      changed = true
+    }
+  }
+  if (!changed) {
+    return success(null)
+  }
+  return success(saved)
 }
 
 /**
@@ -606,7 +670,7 @@ decision. Automatic flushing happens at the next interrupt, so the final
 decision can otherwise remain unsaved. Does nothing without pending changes.
 If a handler refuses the save, the answers stay pending and a warning prints.
 */
-export def flushPolicy() raises <std::write> {
+export def flushPolicy() raises <std::read, std::write> {
   """Write any pending always-rule additions to the policy file now."""
   maybeFlush()
 }
@@ -1135,6 +1199,11 @@ def recordAnswer(intr: any, answer: AskUserResult) {
   )
   if (after.changed) {
     _policy = after.policy
+    _pendingAnswers = [..._pendingAnswers, {
+      intr: intr,
+      action: answer.action,
+      folder: answer.folder ?? ""
+    }]
     _pendingSave = true
   }
 }
@@ -1198,6 +1267,15 @@ def typedValue(intr: any, answer: any): string | null {
   return null
 }
 
+// The answer when the handler has no policy to check: there is nothing
+// to decide by and no rules to save an answer into.
+def rejectWithoutPolicy(): any {
+  print(
+    "Error: no policy loaded. Rejecting by default. Load a policy with parsePolicyFile and set it using setPolicy before installing the handler.",
+  )
+  return reject()
+}
+
 /**
 Internal handler returned by `cliPolicyHandler`.
 */
@@ -1224,12 +1302,15 @@ def _handler(intr: any): any {
   maybeFlush()
 
   if (_policy == null) {
-    print(
-      "Error: no policy loaded. Rejecting by default. Load a policy with parsePolicyFile and set it using setPolicy before installing the handler.",
-    )
-    return reject()
+    return rejectWithoutPolicy()
   }
+  return answerByPolicy(intr, _policy)
+}
 
+// The answer once a policy is in hand, for `_handler` and `askAbout`
+// alike: by a rule if one can decide, else the non-interactive reject when
+// no one is at a terminal, else the person's answer.
+def answerByPolicy(intr: any, policy: Policy): any {
   // A rule may reject anything. A rule may not approve a raise that
   // expects a value: `approve()` carries no value, so the raise site
   // reads it as a bare yes, and for `std::toolbox::review` that accepts a
@@ -1237,7 +1318,7 @@ def _handler(intr: any): any {
   // these for the same reason, and an effect-wide rule is reachable here
   // one round after a plain raise of the same effect was answered
   // "always approve". Such an interrupt goes on to ask.
-  const decision = checkPolicy(_policy, intr)
+  const decision = checkPolicy(policy, intr)
   if (decision.type == "reject") {
     return applyRule(intr, decision)
   }
@@ -1257,16 +1338,30 @@ def _handler(intr: any): any {
   // reads it looking for a policy bug. `--policy approve-all` is the
   // usual way to arrive here.
   if (!_interactive) {
-    if (ruleApproves) {
-      return reject(
-        "\"${intr.effect}\" was rejected automatically: a policy rule approves this effect, but this raise asks for a value and an approval from a rule carries none, so only a person can answer it. This is a non-interactive run. Take an approach that does not need an answer, or re-run interactively.",
-      )
-    }
-    return reject(
-      "\"${intr.effect}\" was rejected automatically: this is a non-interactive run and the approval policy has no rule for this effect, so there is no one to ask. Take an approach that does not need this permission, or the user must re-run with a policy that decides \"${intr.effect}\".",
-    )
+    return nonInteractiveReject(intr, ruleApproves)
   }
 
+  return askPerson(intr)
+}
+
+// The answer when no one is at a terminal to ask. `ruleApproves` says a
+// rule approves the effect but could not be used, because the raise asks
+// for a value.
+def nonInteractiveReject(intr: any, ruleApproves: boolean): any {
+  if (ruleApproves) {
+    return reject(
+      "\"${intr.effect}\" was rejected automatically: a policy rule approves this effect, but this raise asks for a value and an approval from a rule carries none, so only a person can answer it. This is a non-interactive run. Take an approach that does not need an answer, or re-run interactively.",
+    )
+  }
+  return reject(
+    "\"${intr.effect}\" was rejected automatically: this is a non-interactive run and the approval policy has no rule for this effect, so there is no one to ask. Take an approach that does not need this permission, or the user must re-run with a policy that decides \"${intr.effect}\".",
+  )
+}
+
+// Ask the person at the terminal about one interrupt and turn the answer
+// into a response. `_handler` and `askAbout` both end here, so there is
+// one prompt.
+def askPerson(intr: any): any {
   const answer = askUser(intr)
   if (answer.rule != null) {
     // A rule saved by the interrupt ahead of this one decided it while it
@@ -1305,6 +1400,75 @@ def _handler(intr: any): any {
   // agent can course-correct without ending the turn.
   const reason = input("What should the agent do instead? (press enter to skip) ")
   return reject(userRejection(reason))
+}
+
+// Make `policy` and `file` the handler's, so the check, the prompt, an
+// "always" rule and its save all use them, and so does the handler at its
+// next interrupt. An answer still waiting to be saved goes to the old file
+// first; one the old file refused is dropped rather than saved to the new
+// one. From here on a save writes only the new answers into `file`.
+def useRunPolicy(policy: Policy, file: string) {
+  maybeFlush()
+  if (file != globalCliPolicyOpts.file) {
+    _pendingSave = false
+    _pendingAnswers = []
+  }
+  globalCliPolicyOpts = {
+    file: file,
+    fields: globalCliPolicyOpts.fields
+  }
+  _policy = policy
+  _policyLoaded = true
+  _saveFailing = false
+  _saveAnswersOnly = true
+}
+
+/**
+Answer an interrupt another run raised, as the CLI handler answers its own:
+a rule in `policy` decides it if one can, and otherwise the user is asked
+(or, with no one at a terminal, it is rejected). Safe to call on any
+interrupt. `policy` is the policy that run uses, and `file` is where an
+"always" answer is saved. Only the new rule is added to what `file` holds;
+the rest of `policy` is never written. After one, `currentPolicy()` is
+`policy` with the new rule: pass it the next time.
+*/
+@hidden
+export def askAbout(intr: any, policy: Policy, file: string): any {
+  """
+  Answer an interrupt passed as data the way the CLI handler would, under
+  `policy`, and return the response. Call `cliPolicyHandler` first. An
+  "always" answer's rule is added to `policy` in memory and to what `file`
+  holds, which is saved before this returns.
+  """
+  if (globalCliPolicyOpts.file == "") {
+    const message = "askAbout was called before cliPolicyHandler, so there is no policy to use. Rejecting by default. Call cliPolicyHandler first."
+    print("Error: ${message}")
+    return reject(message)
+  }
+  useRunPolicy(policy, file)
+  const response = answerByPolicy(intr, policy)
+  // The handler saves an "always" answer at its next interrupt. There may
+  // be none here, so save it now.
+  maybeFlush()
+  return response
+}
+
+/**
+The policy this program's handler is using now. It loads the handler's
+policy file first, if nothing has yet, so the rules saved there count
+from the first call. An empty policy when `cliPolicyHandler` was not
+called. It is the handler's live policy: read it, do not change it.
+*/
+@hidden
+export def currentPolicy(): Policy {
+  """
+  Return the CLI handler's active policy, or an empty one when none is loaded.
+  """
+  if (globalCliPolicyOpts.file != "") {
+    maybeLoadPolicy()
+    maybeFlush()
+  }
+  return _policy ?? {}
 }
 
 // What the model reads when the user rejects a call at the prompt. It has
@@ -1397,5 +1561,7 @@ export def cliPolicyHandler(
     _policyLoaded = false
   }
   _pendingSave = false
+  _pendingAnswers = []
+  _saveAnswersOnly = false
   return _handler
 }

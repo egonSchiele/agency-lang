@@ -764,6 +764,38 @@ describe("<agent-home> dir patterns", () => {
       expect(checkPolicy(mixed, read(path.join(getStdlibDir(), "docs"))).type).toBe("approve");
     });
   });
+
+  it("resolves the placeholder in a remove's target and a copy's or move's src and dest", () => {
+    const pathRules: Policy = {
+      "std::remove": [{ match: { target: "<agent-home>/policy.json" }, action: "approve" }],
+      "std::copy": [
+        { match: { src: "<agent-home>/a", dest: "<agent-home>/b" }, action: "approve" },
+      ],
+      // Any other field matches the pattern as written.
+      "std::exec": [{ match: { cwd: "<agent-home>" }, action: "approve" }],
+    };
+    const raised = (effect: string, data: Record<string, string>) => ({
+      effect,
+      message: "m",
+      data,
+      origin: "std::fs",
+    });
+    withAgentHome("/nowhere/agent-home", () => {
+      expect(
+        checkPolicy(pathRules, raised("std::remove", { target: "/nowhere/agent-home/policy.json" }))
+          .type,
+      ).toBe("approve");
+      expect(
+        checkPolicy(
+          pathRules,
+          raised("std::copy", { src: "/nowhere/agent-home/a", dest: "/nowhere/agent-home/b" }),
+        ).type,
+      ).toBe("approve");
+      expect(checkPolicy(pathRules, raised("std::exec", { cwd: "/nowhere/agent-home" })).type).toBe(
+        "propagate",
+      );
+    });
+  });
 });
 
 describe("resolveDotDirPattern escaping", () => {

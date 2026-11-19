@@ -18,7 +18,7 @@ import { emit } from "std::statelog"
 
 import { setReplyStyle, setTurnBudget } from "./lib/answer.agency"
 import { checkCliBundles, setJobToolsOn } from "./lib/cliTools.agency"
-import { compactIfDue, contextStatus } from "./lib/compaction.agency"
+import { canCompact, compactAndReport, compactIfDue, contextStatus } from "./lib/compaction.agency"
 import { groundingText, setGrounding } from "./lib/grounding.agency"
 import { Resolved } from "./lib/models.agency"
 import { notice } from "./lib/notice.agency"
@@ -27,10 +27,13 @@ import { activePresetName } from "./lib/presets.agency"
 import {
   conversationThread,
   currentRecord,
+  forkSession,
   markTurnDone,
   recordTurn,
+  renameSession,
   setCurrentRecord,
  } from "./lib/record.agency"
+import { getSearchBackend, switchSearchBackend } from "./lib/search.agency"
 import {
   applyEffortAnswer,
   applyLlmOptionsAnswer,
@@ -39,6 +42,8 @@ import {
   applyPresetAnswer,
   askedEffort,
   fixedProvider,
+  modelChoices,
+  writeSessionPreset,
  } from "./lib/session.agency"
 import { setSessionFolder } from "./lib/sessionFolder.agency"
 import { SessionRecord } from "./lib/sessions.agency"
@@ -76,7 +81,9 @@ export type PauseData = {
   context: string;
   // The brain that runs the session, by its name. Unlike `record.brain`,
   // it is there when the session is not saved.
-  brain: string
+  brain: string;
+  // The web search backend in force: "hosted", "tavily", "brave" or "off".
+  search: string
 }
 
 effect agent::sessionInput {
@@ -89,7 +96,8 @@ effect agent::sessionInput {
   effort: string;
   budget: any;
   context: string;
-  brain: string
+  brain: string;
+  search: string
 }
 
 export type SessionStart = {
@@ -156,8 +164,41 @@ export type PresetChange = {
   name: string
 }
 
+/** Summarize the conversation's older messages now, as `/compact`.
+  `keep` says what the summary must keep, or "". */
+export type Compact = {
+  kind: "compact";
+  keep: string
+}
+
+/** Give the session a title of the user's choosing, as `/rename`. */
+export type Rename = {
+  kind: "rename";
+  title: string
+}
+
+/** From here on, write to a new session, a copy of this one, as `/fork`.
+  The pause after it reports the new record, with `forkedFrom`. */
+export type Fork = {
+  kind: "fork"
+}
+
+/** Switch the web search backend and save the choice to settings.json,
+  as `/search`: "hosted", "tavily", "brave" or "off". */
+export type SearchChange = {
+  kind: "search";
+  backend: string
+}
+
+/** Save this session's models, effort, options and tool limits to a
+  preset, as `/preset save`. `name` is "" for the active preset. */
+export type SavePreset = {
+  kind: "savePreset";
+  name: string
+}
+
 /** Everything the pause accepts. */
-export type Answer = Message | ModelChange | OptionsChange | BudgetChange | EffortChange | PresetChange
+export type Answer = Message | ModelChange | OptionsChange | BudgetChange | EffortChange | PresetChange | Compact | Rename | Fork | SearchChange | SavePreset
 
 def pauseData(budget: TurnBudget): PauseData {
   const threadId = conversationThread()
@@ -171,7 +212,52 @@ def pauseData(budget: TurnBudget): PauseData {
     effort: askedEffort(),
     budget: budget,
     context: contextStatus(threadId),
-    brain: currentBrainName()
+    brain: currentBrainName(),
+    search: getSearchBackend()
+  }
+}
+
+// The core's own lines for a rename and a fork. The terminal words them
+// in lib/slashCommands/session.agency.
+def renameNotice(title: string) {
+  const renamed = renameSession(title)
+  if (renamed is success(fact)) {
+    // Clears the rename's mark, as the save after a turn does.
+    recordTurn("")
+    notice("Session renamed: ${fact.title}")
+  } else if (renamed is failure(reason)) {
+    const why = if reason == "empty title" then "a title can't be empty" else "this session is not saved"
+    notice("Could not rename the session: ${why}.", "error")
+  }
+}
+
+def forkNotice() {
+  const forked = forkSession()
+  if (forked is success(fact)) {
+    // Gives the new record the conversation's thread, as a save does.
+    recordTurn("")
+    notice("Forked. This session is now a copy. The original, ${fact.forkedFrom}, is still saved.")
+  } else if (forked is failure(reason)) {
+    const why = if reason == "no turns" then "it has no turns yet" else "this session is not saved"
+    notice("Could not fork the session: ${why}.", "error")
+  }
+}
+
+def compactNotice(keep: string) {
+  const threadId = conversationThread()
+  if (!canCompact(threadId)) {
+    notice("Nothing to compact yet.", "error")
+    return
+  }
+  compactAndReport(threadId, keep)
+}
+
+def savePresetNotice(name: string) {
+  const saved = writeSessionPreset(name, modelChoices())
+  if (saved is success(lines)) {
+    notice(lines.join("\n"))
+  } else if (saved is failure(reason)) {
+    notice(reason, "error")
   }
 }
 
@@ -318,6 +404,24 @@ export node session(start: SessionStart) {
             maxCost: maxCost,
             maxTime: maxTime
           }
+        }
+        { kind: "compact", keep } => {
+          compactNotice(keep)
+        }
+        { kind: "rename", title } => {
+          renameNotice(title)
+        }
+        { kind: "fork" } => {
+          forkNotice()
+        }
+        { kind: "search", backend } => {
+          const searchSwitch = switchSearchBackend(backend)
+          if (searchSwitch is failure(reason)) {
+            notice("Could not switch the search backend: ${reason}", "error")
+          }
+        }
+        { kind: "savePreset", name } => {
+          savePresetNotice(name)
         }
       }
     }

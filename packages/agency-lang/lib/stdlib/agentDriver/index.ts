@@ -15,9 +15,16 @@ export {
   type ResolvedModel,
   type SessionStart,
   type SettingsAnswer,
+  type TraceSettings,
   type TurnBudget,
 } from "./interface.js";
-export { withPauseLeftAlone } from "./policy.js";
+export { sessionRunPolicy, withPauseLeftAlone } from "./policy.js";
+export {
+  copyCarriedPolicy,
+  POLICY_UNREADABLE,
+  readCarriedPolicy,
+  saveCarriedPolicy,
+} from "./sessionPolicy.js";
 export {
   PAUSE_WITH_OTHER_INTERRUPTS_ERROR,
   RUN_ENDED_ERROR,

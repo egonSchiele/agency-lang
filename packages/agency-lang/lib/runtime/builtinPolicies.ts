@@ -96,8 +96,10 @@ export function readScopeRules(): PolicyRule[] {
 // Three things beside the file are the same kind of hole, which is why
 // no rule covers the directory either:
 //
-//   - policy.json and session-policy.json. They are this policy. An
-//     agent that can rewrite them can grant itself anything.
+//   - policy.json, session-policy.json and session-policies/**. They are
+//     this policy. An agent that can rewrite them can grant itself
+//     anything. `ownPolicyFileRules` keeps with-writes from approving
+//     them too.
 //   - skills/**. A skill enters through `designSkill`'s review.
 //   - tools/**. Same, through the toolbox's review and save gates.
 function settingsReadRule(): PolicyRule[] {
@@ -207,23 +209,69 @@ function dirScope(baseDir: string): string {
   return `{${b},${b}/**}`;
 }
 
+// The agent's own policy files, left to the prompt ahead of with-writes'
+// scope. That scope reaches them when the agent home is inside `baseDir`:
+// AGENCY_AGENT_HOME set to a folder in the project, or the agent run from
+// the home itself.
+function ownPolicyFileRules(): PolicyRule[] {
+  return [
+    {
+      match: { dir: AGENT_HOME, filename: "{policy.json,session-policy.json}" },
+      action: "propagate",
+    },
+    {
+      match: { dir: `{${AGENT_HOME}/session-policies,${AGENT_HOME}/session-policies/**}` },
+      action: "propagate",
+    },
+  ];
+}
+
+// The same files for the effects that name a whole path: a remove's
+// `target`, a copy's `dest`, a move's `src` and `dest`. The home itself is
+// listed too, since a remove or a move of it takes the files with it, and a
+// copy of a folder onto it can replace them.
+const OWN_POLICY_PATHS = `{${AGENT_HOME},${AGENT_HOME}/policy.json,${AGENT_HOME}/session-policy.json,${AGENT_HOME}/session-policies,${AGENT_HOME}/session-policies/**}`;
+
+function ownPolicyPathRules(fields: string[]): PolicyRule[] {
+  return fields.map((field): PolicyRule => ({
+    match: { [field]: OWN_POLICY_PATHS },
+    action: "propagate",
+  }));
+}
+
 // `recommended` plus mutating file-system and git-write effects, each
 // scoped to `baseDir` and its children. Matched on each effect's path
 // field: `dir` (write/edit/mkdir), `target` (remove), `src`+`dest`
 // (copy/move), `cwd` (git).
 export function withWritesPolicy(baseDir: string): Policy {
   const scope = dirScope(baseDir);
-  const dirRule: PolicyRule[] = [{ match: { dir: scope }, action: "approve" }];
+  const dirRule: PolicyRule[] = [
+    ...ownPolicyFileRules(),
+    { match: { dir: scope }, action: "approve" },
+  ];
   const cwdRule: PolicyRule[] = [{ match: { cwd: scope }, action: "approve" }];
   return {
     ...recommendedAutoApprovePolicy,
     "std::write": dirRule,
     "std::writeBinary": dirRule,
     "std::edit": dirRule,
-    "std::mkdir": [{ match: { dir: AGENT_HOME }, action: "approve" }, ...dirRule],
-    "std::remove": [{ match: { target: scope }, action: "approve" }],
-    "std::copy": [{ match: { src: scope, dest: scope }, action: "approve" }],
-    "std::move": [{ match: { src: scope, dest: scope }, action: "approve" }],
+    "std::mkdir": [
+      ...ownPolicyFileRules(),
+      { match: { dir: AGENT_HOME }, action: "approve" },
+      { match: { dir: scope }, action: "approve" },
+    ],
+    "std::remove": [
+      ...ownPolicyPathRules(["target"]),
+      { match: { target: scope }, action: "approve" },
+    ],
+    "std::copy": [
+      ...ownPolicyPathRules(["dest"]),
+      { match: { src: scope, dest: scope }, action: "approve" },
+    ],
+    "std::move": [
+      ...ownPolicyPathRules(["src", "dest"]),
+      { match: { src: scope, dest: scope }, action: "approve" },
+    ],
     "std::git::add": cwdRule,
     "std::git::commit": cwdRule,
     "std::git::checkout": cwdRule,

@@ -596,6 +596,55 @@ give and the policy to carry on with.
   unchanged and writes nothing. The stdlib's `recordRule` is a different
   function: it appends.
 
+## Asking about another run's interrupt in the terminal
+
+A terminal program that runs a second Agency run gets that run's
+interrupts back as data. It answers them as `cliPolicyHandler` answers
+its own, through two hidden functions in `std::policy`:
+
+```
+const handler = cliPolicyHandler(file: policyFile)
+const response = askAbout(intr, runPolicy, runPolicyFile)   // approve(...) or reject(...)
+const rules = currentPolicy()
+```
+
+- **The run's policy, not the handler's file.** `runPolicy` is the policy
+  the other run uses, and `runPolicyFile` is where its "always" answers
+  belong: for a session with a policy of its own, that session's policy
+  file (`session-driver.md`). `askAbout` makes them the handler's state
+  first (`useRunPolicy`), after saving any answer still pending to the
+  old file. So the check, the prompt's re-check, the new rule and its
+  save all use them, and so does the handler at its own next interrupt:
+  the terminal's own later prompts are decided by the run's policy, and
+  their "always" answers go to the run's file. That is intended.
+  After an "always" answer, `currentPolicy()` is `runPolicy` with the new
+  rule. Pass that the next time, or the rule is lost from memory.
+- **The policy that decides is not the policy that is saved.**
+  `runPolicy` holds rules its file must not get: the flags given at
+  resume, and for a session with a policy of its own, the saved policy's
+  rejects. So once `useRunPolicy` has run, an "always" answer is applied
+  twice with `_policyAfterDecision`: to `runPolicy` in memory, and, when
+  `maybeFlush` saves, to what the file holds then (an empty policy when
+  there is no file). Nothing else from `runPolicy` is written. A file that
+  is there but can't be read or is not a valid policy is not overwritten:
+  the save fails and the answer stays pending.
+- **One decision.** `_handler` and `askAbout` both go through
+  `answerByPolicy`: a reject rule decides any raise, an approve rule
+  decides a raise that wants no value, and otherwise the person is asked
+  (`askPerson`), or, with `cliPolicyHandler(..., interactive: false)`,
+  the raise gets the non-interactive reject. So `askAbout` is safe to
+  call on any interrupt.
+- **One writer.** An "always" answer is recorded by `recordAnswer` and
+  written by `maybeFlush` (through `policyToSave`) before `askAbout`
+  returns. The handler would
+  otherwise write it at its next interrupt, and there may be none.
+- **The handler comes first.** Before `cliPolicyHandler` is called there is
+  no handler state, so `askAbout` prints an error and rejects.
+- **Esc is not caught.** The cancellation the prompt raises leaves
+  `askAbout` unchanged.
+- **`intr` must be the host's own copy**, as for `resolvePromptOption`
+  above: an "always" answer saves a rule built from `intr.data`.
+
 ## Effects that carry their own bookkeeping
 
 Some stdlib work is a file operation only incidentally: the toolbox
@@ -762,9 +811,19 @@ out is one prompt when you change your model.
 Three more things in that same directory are the same kind of hole, so
 no `dir` rule covers the home either:
 
-- `policy.json` and `session-policy.json`. They *are* this policy. An
-  agent that can rewrite them can grant itself anything it likes, and the
-  approval prompt stops meaning what it says.
+- `policy.json`, `session-policy.json` and `session-policies/**` (each
+  saved session's own policy). They *are* this policy. An agent that can
+  rewrite them can grant itself anything it likes, and the approval
+  prompt stops meaning what it says. `with-writes` puts a `propagate`
+  rule for them ahead of its scope, since that scope reaches the home
+  when the home is inside the launch directory: on `dir` for a write,
+  an edit and a mkdir (`ownPolicyFileRules`), and on `target`, `src` and
+  `dest` for a remove, a copy onto one and a move of or onto one
+  (`ownPolicyPathRules`). Removing a session's file changes its policy
+  too: with no file the session runs under `policy.json`. Those path
+  rules also cover the home folder itself. A remove or move of a folder
+  that holds the home, such as the launch directory itself, is still
+  approved by the scope.
 - `skills/**`. A skill gets there through `designSkill`'s review; a plain
   write would put one there without it.
 - `tools/**`. The same, through the toolbox's review and save gates.
@@ -790,8 +849,10 @@ in (`AGENCY_INSTALL_DIR_PLACEHOLDER`, `substituteInstallDir`,
 `~/.agency-agent` (`AGENT_HOME_PLACEHOLDER`, `substituteAgentHome`,
 `agentHomeDir` in `lib/runtime/agentHome.ts`), and `<home>` to the user's
 home directory (`HOME_PLACEHOLDER`, `substituteHome`). `substitutePlaceholders`
-in `lib/runtime/policy.ts` applies the three named placeholders; `.` is
-handled apart, by `substituteDot`. The directories are
+in `lib/runtime/policy.ts` applies the three named placeholders, in the
+fields that hold a path: `dir`, and a remove's `target` and a copy's or
+move's `src` and `dest`. `.` is handled apart, by `substituteDot`, and in
+`dir` only. The directories are
 resolved once, when a run's context is built (`resolvePolicyDirs` in
 `lib/runtime/policyDirs.ts`, kept as `ctx.policyDirs`), and the matcher
 takes them as plain strings, so answering an interrupt reads no file. An

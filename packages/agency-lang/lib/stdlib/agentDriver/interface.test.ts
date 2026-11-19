@@ -13,6 +13,7 @@ const REPORTED: PauseData = {
   budget: { maxCost: 1, maxTime: 2 },
   context: "10%",
   brain: "simple",
+  search: "hosted",
 };
 
 function raised(effect: string, data: unknown): Interrupt {
@@ -50,6 +51,11 @@ describe("pauseData", () => {
       preset: "",
       record: null,
     });
+  });
+
+  it("reads a pause from a core that reports no search backend as an empty one", () => {
+    const { search: _none, ...noSearchField } = REPORTED;
+    expect(pauseData([raised("agent::sessionInput", noSearchField)])?.search).toBe("");
   });
 });
 

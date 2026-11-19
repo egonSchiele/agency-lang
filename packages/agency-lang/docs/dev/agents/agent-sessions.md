@@ -140,7 +140,9 @@ file is read back (see `docs/dev/runtime/checkpointing.md`).
 
 `/fork` makes the running session a copy of itself. `forkSession` in
 `record.agency` gives `_current` a new record: a new id, the same turn
-count and title, and `forkedFrom` set to the original's id. It marks the
+count and title, and `forkedFrom` set to the original's id. It returns
+those two ids, or a failure of `"not saved"` or `"no turns"`, and
+`lib/slashCommands/session.agency` words the REPL line. It marks the
 record changed,
 so the save that follows the REPL line writes the checkpoint under the new
 id. The original session's two files are not touched. They hold the

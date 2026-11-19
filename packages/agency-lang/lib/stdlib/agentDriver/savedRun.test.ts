@@ -13,7 +13,6 @@ import {
   type SessionRecord,
 } from "../agentSessions.js";
 import type { Settle } from "./approvals.js";
-import { POLICY_UNREADABLE } from "./interface.js";
 import type { DriverPhase } from "./machine.js";
 import {
   CANNOT_CONTINUE,
@@ -160,16 +159,6 @@ describe("restoredPhase", () => {
     };
     expect(restoredPhase(old)).toEqual({
       phase: { kind: "ended", reason: CANNOT_CONTINUE },
-      happened: [],
-    });
-  });
-
-  // Run under a front-end's saved policy instead, it could approve what
-  // the session's own policy asks about.
-  it("ends a session whose own policy can't be read", () => {
-    const pause = { ...waitingOn("agent::sessionInput", "p1"), data: { policy: [1] } };
-    expect(restoredPhase({ ...run(null), pause: [pause] })).toEqual({
-      phase: { kind: "ended", reason: POLICY_UNREADABLE },
       happened: [],
     });
   });

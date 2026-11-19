@@ -12,7 +12,6 @@ import {
   type SessionRecord,
 } from "../agentSessions.js";
 import type { Settle } from "./approvals.js";
-import { carriedPolicy } from "./interface.js";
 import { reduceDriver, type DriverPhase, type DriverStep } from "./machine.js";
 import type { AgentStep } from "./run.js";
 
@@ -63,8 +62,6 @@ const asksAll: Settle = () => null;
  *  - A turn that was running (the process stopped mid-turn): back to the
  *    turn's start, as if the person had cancelled it.
  *  - Saved by code that is not loaded now: ended. It takes nothing.
- *  - Carrying a policy that is not valid: ended, with `carriedPolicy`'s
- *    reason. A front-end could only run it under some other policy.
  *
  *  The two turn cases go through `reduceDriver`, so they behave as the live
  *  ones do. */
@@ -72,10 +69,6 @@ export function restoredPhase(run: SavedRun, settle: Settle = asksAll): DriverSt
   const { pause, cancelledTexts, turn } = run;
   if (!canResume(run)) {
     return { phase: { kind: "ended", reason: CANNOT_CONTINUE }, happened: [] };
-  }
-  const policy = carriedPolicy(pause);
-  if (!policy.success) {
-    return { phase: { kind: "ended", reason: policy.error }, happened: [] };
   }
   if (turn === null) {
     return { phase: { kind: "waitingForUser", pause, cancelledTexts }, happened: [] };

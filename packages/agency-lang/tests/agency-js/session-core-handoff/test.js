@@ -3,10 +3,11 @@
 // finishes the turn. Both load the program through the package export,
 // as two front-ends would.
 //
-// The first process also starts a session under `minimal`'s rules, as
-// `--policy minimal` would, and saves its first pause. The second resumes
-// it through the session driver with a saved policy that approves every
-// read, and the session's own policy is the one that holds.
+// The first process also starts a session as `--policy minimal` would: it
+// saves `minimal`'s rules as the session's policy file, and saves the
+// session's first pause. The second reads that file and resumes the
+// session through the session driver, with a saved policy that approves
+// every read, and the session's own policy is the one that holds.
 //
 // This file is both processes: the second is started with RESUME set.
 // (Only test.js is kept in git under tests/, so there is no second file.)
@@ -85,9 +86,8 @@ function installClient(setClient, noteDir, projectDir) {
 const TERMINAL =
   /agency-agent\/(agent|lib\/(repl|capabilitiesUi|mcpMenu|header|transcript|args|policy|trace|runSession|resume|slashCommands\/[^.]+))\.agency$/;
 
-/** What a front-end starts a session in `project` with. `sessionPolicy` is
- *  what its policy flags resolved to, or null. */
-function startData({ project, id, sessionPolicy }) {
+/** What a front-end starts a session in `project` with. */
+function startData({ project, id }) {
   return {
     brain: "minimal",
     preset: "",
@@ -99,7 +99,6 @@ function startData({ project, id, sessionPolicy }) {
       record: { id, cwd: project, brain: "", created: 1, lastActive: 1, turns: 0, title: "" },
       flags: null,
       budget: { maxCost: -1, maxTime: -1 },
-      policy: sessionPolicy,
     },
   };
 }
@@ -124,9 +123,7 @@ async function startAndPause() {
   const program = await import("agency-lang/agent-session");
   installClient(program.__setLLMClient, noteDir, project);
 
-  const started = await program.main(startData({ project, id: "s1", sessionPolicy: null }), {
-    policy,
-  });
+  const started = await program.main(startData({ project, id: "s1" }), { policy });
   const paused = await program.respondToInterrupts(
     started.data,
     [program.approve({ kind: "message", text: "read the note", notes: [], target: "" })],
@@ -138,10 +135,14 @@ async function startAndPause() {
   );
 
   // A session started under `minimal`'s rules, saved at its first pause.
-  const minimal = await program.main(
-    startData({ project, id: "s2", sessionPolicy: minimalAutoApprovePolicy }),
-    { policy },
-  );
+  const driver = await import("agency-lang/stdlib-lib/agentDriver/index.js");
+  const savedPolicy = await driver.saveCarriedPolicy({
+    home: process.env.AGENCY_AGENT_HOME,
+    id: "s2",
+    policy: minimalAutoApprovePolicy,
+  });
+  if (!savedPolicy.success) throw new Error(savedPolicy.error);
+  const minimal = await program.main(startData({ project, id: "s2" }), { policy });
 
   // What a front-end saves: the interrupts, each with its checkpoint.
   const pauseFile = path.join(scratch, "pause.json");
@@ -229,15 +230,14 @@ async function resume() {
 }
 
 /** The session started under `minimal`'s rules, resumed through the driver
- *  by a front-end whose saved policy approves every read. The session's
- *  own policy replaces the saved one, and says nothing about reads, so the
- *  read the turn makes is asked about. */
+ *  by a front-end whose saved policy approves every read. The saved
+ *  policy's approvals do not reach a session with a policy of its own, and
+ *  `minimal` says nothing about reads, so the read the turn makes is asked
+ *  about. */
 async function resumeMinimalSession(program) {
   const driver = await import("agency-lang/stdlib-lib/agentDriver/index.js");
   const pause = JSON.parse(readFileSync(process.env.MINIMAL_PAUSE_FILE, "utf8"));
-  // The session's policy, read from its pause and checked. One that can't
-  // be read fails here, and the session is not resumed.
-  const carried = driver.carriedPolicy(pause);
+  const carried = await driver.readCarriedPolicy({ home: process.env.AGENCY_AGENT_HOME, id: "s2" });
   const policy = driver.sessionRunPolicy({ carried, saved: APPROVES_EVERY_READ, extra: null });
   if (!policy.success) {
     return { refused: policy.error };

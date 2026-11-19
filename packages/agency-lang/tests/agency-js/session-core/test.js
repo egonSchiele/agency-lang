@@ -146,7 +146,6 @@ function startData(overrides = {}) {
       record: { id: "s1", cwd: project, brain: "", created: 1, lastActive: 1, turns: 0, title: "" },
       flags: null,
       budget: { maxCost: -1, maxTime: -1 },
-      policy: null,
     },
     ...overrides,
   };
@@ -368,26 +367,6 @@ const budgeted = await startSession({
   session: { ...startData().session, budget: { maxCost: 3, maxTime: 1000 } },
 });
 result.startingBudget = pauseData(budgeted).budget;
-
-// A session started with policy flags carries the policy they resolved
-// to, at every pause, so whoever resumes it runs it under that policy.
-const editsRejected = { "std::edit": [{ action: "reject" }] };
-const carrying = await startSession({ session: { ...startData().session, policy: editsRejected } });
-result.policyCarried = { atFirstPause: pauseData(carrying).policy };
-await carrying.answer(message("hello"));
-result.policyCarried.afterATurn = pauseData(carrying).policy;
-await carrying.answer({ kind: "budget", maxCost: 1, maxTime: 1000 });
-result.policyCarried.afterABudgetAnswer = pauseData(carrying).policy;
-await carrying.answer({ kind: "effort", effort: "low" });
-result.policyCarried.afterAnEffortAnswer = pauseData(carrying).policy;
-result.policyCarried.withNoPolicyFlag = pauseData(budgeted).policy;
-// A front-end built before the field existed sends no `policy` at all. Its
-// start is not refused, and the session carries none.
-const { policy: _absent, ...sessionWithNoPolicyField } = startData().session;
-const olderFrontEnd = await startSession({ session: sessionWithNoPolicyField });
-result.policyCarried.withNoPolicyField = olderFrontEnd.ended
-  ? `refused: ${errorText(olderFrontEnd.result)}`
-  : pauseData(olderFrontEnd).policy;
 
 // Presets. These need a settings file, so they come after the check above
 // that starting sessions writes none. The session names no model, so the

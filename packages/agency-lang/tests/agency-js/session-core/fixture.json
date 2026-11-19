@@ -98,14 +98,6 @@
     "maxCost": 3,
     "maxTime": 1000
   },
-  "policyCarried": {
-    "atFirstPause": { "std::edit": [{ "action": "reject" }] },
-    "afterATurn": { "std::edit": [{ "action": "reject" }] },
-    "afterABudgetAnswer": { "std::edit": [{ "action": "reject" }] },
-    "afterAnEffortAnswer": { "std::edit": [{ "action": "reject" }] },
-    "withNoPolicyFlag": null,
-    "withNoPolicyField": null
-  },
   "presetSwitch": {
     "preset": "big",
     "mainModel": "claude-opus-4-8",

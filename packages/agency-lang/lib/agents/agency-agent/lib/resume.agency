@@ -16,6 +16,7 @@ import { recordTurn, setCurrentRecord } from "./record.agency"
 import {
   SessionRecord,
   findSession,
+  isAnotherFrontEndsSession,
   listSessions,
   mostRecentSession,
   newSessionId,
@@ -53,6 +54,10 @@ export def chooseSession(
 ): SessionRecord | null {
   if (resumeArg != null && resumeArg != "") {
     const found = findSession(resumeArg)
+    if (found == null && isAnotherFrontEndsSession(resumeArg)) {
+      print(color.red("Session ${resumeArg} was saved by another app and can't be opened here yet."))
+      _exit(1)
+    }
     if (found == null) {
       print(color.red("No saved session with id ${resumeArg} in ${cwd()}."))
       _exit(1)

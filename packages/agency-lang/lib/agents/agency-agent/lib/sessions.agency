@@ -5,6 +5,7 @@
 */
 import {
   _listSessions,
+  _recordRunFormat,
   _saveSession,
   _readCheckpointFile,
  } from "agency-lang/stdlib-lib/agentSessions.js"
@@ -27,7 +28,11 @@ export type SessionRecord = {
   forkedFrom?: string;
   // The slug id of the thread the conversation runs on, such as "t3". The
   // transcript printed on resume is read from it.
-  conversationThread?: string
+  conversationThread?: string;
+  // What the session's run file holds. A front-end that drives the session
+  // core from outside saves the core's pause ("savedRun"), which this
+  // terminal cannot resume yet. A record without it is a checkpoint.
+  runFormat?: "checkpoint" | "savedRun"
 }
 
 export static const SESSIONS_DIR = path.join(POLICY_DIR, "sessions")
@@ -51,10 +56,22 @@ export def newSessionId(): string {
   return "${now()}-${random.slice(2, 8)}"
 }
 
-/** Every saved session for this directory, most recently saved first. */
+/** Every session saved in this directory that this terminal can resume,
+  most recently saved first. A session another front-end saved is left
+  out: its run file is not a checkpoint, and `restore` cannot read it. */
 @capabilities(fileRead)
 export def listSessions(): SessionRecord[] {
-  return _listSessions(projectDir())
+  const all: SessionRecord[] = _listSessions(projectDir())
+  return [record for record in all if _recordRunFormat(record) == "checkpoint"]
+}
+
+/** True when a session with this id is saved here by another front-end,
+  so `--resume <id>` can say why it will not open. */
+@capabilities(fileRead)
+export def isAnotherFrontEndsSession(id: string): boolean {
+  const all: SessionRecord[] = _listSessions(projectDir())
+  const found = find(all, \record -> record.id == id)
+  return found != null && _recordRunFormat(found) != "checkpoint"
 }
 
 export def mostRecentSession(): SessionRecord | null {

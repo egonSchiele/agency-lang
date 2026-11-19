@@ -5,6 +5,7 @@ import test {
   saveSession,
   listSessions,
   findSession,
+  isAnotherFrontEndsSession,
   mostRecentSession,
   readCheckpointFile,
   SessionRecord,
@@ -100,6 +101,33 @@ node refreshSchedule(): boolean[] {
 // sessions saved, listed most recently active first, found by id, and
 // the checkpoint read back unchanged. Saving a session again replaces
 // its record.
+// A session another front-end saved in this folder is not offered: its run
+// file is the session core's pause, which `restore` cannot read. Before,
+// `--continue` took the newest record of any kind and restored its file.
+node anotherFrontEndsSessionIsSkipped(): any {
+  // Only the other front-end's session is saved here. A session of this
+  // terminal's would be counted by storeRoundTrip, which shares the folder.
+  const theirs: SessionRecord = {
+    id: "theirs",
+    cwd: "/x",
+    brain: "coordinator",
+    created: 20,
+    lastActive: 9999999999999,
+    turns: 1,
+    title: "an app's",
+    runFormat: "savedRun"
+  }
+  saveSession(theirs, { version: 1, pause: [] })
+  const recent = mostRecentSession()
+  return {
+    listed: [r.id for r in listSessions() if r.id == "theirs"],
+    newestIsTheirs: recent != null && recent.id == "theirs",
+    foundById: findSession("theirs") != null,
+    saysWhy: isAnotherFrontEndsSession("theirs"),
+    saysNothingForAnUnknownId: isAnotherFrontEndsSession("no-such-session")
+  }
+}
+
 node storeRoundTrip(): any {
   const first: SessionRecord = {
     id: "s1",

@@ -56,6 +56,17 @@
       ]
     },
     {
+      "nodeName": "anotherFrontEndsSessionIsSkipped",
+      "description": "a session another front-end saved is not listed, not the most recent, and --resume can say why",
+      "input": "",
+      "expectedOutput": "{\"listed\":[],\"newestIsTheirs\":false,\"foundById\":false,\"saysWhy\":true,\"saysNothingForAnUnknownId\":false}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "storeRoundTrip",
       "description": "save, list most recently active first, find, load, replace",
       "input": "",

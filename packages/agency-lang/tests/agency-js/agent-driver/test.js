@@ -7,16 +7,18 @@ import os from "node:os";
 import path from "node:path";
 import * as fixture from "./agent.js";
 import { approve } from "../../../dist/lib/runtime/index.js";
-import { canResume, readSavedRun } from "../../../dist/lib/stdlib/agentSessions.js";
 import {
+  canResume,
   initialPhase,
   messageAnswer,
+  readSavedRun,
   reduceDriver,
   restoredPhase,
   resumeRun,
   saveRun,
   savedRun,
   startRun,
+  thisProcessId,
 } from "../../../dist/lib/stdlib/agentDriver/index.js";
 
 const SLOW_ABORT_MS = 300;
@@ -177,7 +179,7 @@ async function savedMidTurn() {
     dir,
     record: RECORD,
     run: savedRun(step.phase),
-    holder: { frontEnd: "test", pid: 1 },
+    holder: { frontEnd: "test", pid: 1, processId: thisProcessId() },
   });
   const run = await readSavedRun(dir, RECORD.id);
   const loaded = restoredPhase(run);

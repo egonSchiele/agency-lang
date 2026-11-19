@@ -21,6 +21,7 @@ export {
 export { sessionRunPolicy, withPauseLeftAlone } from "./policy.js";
 export { POLICY_UNREADABLE, readCarriedPolicy, saveCarriedPolicy } from "./sessionPolicy.js";
 export {
+  PAUSE_WITH_OTHER_INTERRUPTS_ERROR,
   RUN_ENDED_ERROR,
   resumeRun,
   startRun,
@@ -52,15 +53,27 @@ export {
   type DriverAction,
   type DriverPhase,
   type DriverStep,
+  type DroppedTexts,
   type Happened,
   type Leg,
 } from "./machine.js";
 export {
   CANNOT_CONTINUE,
+  PROGRAM_NOT_LOADED,
   restoredPhase,
   saveRun,
   savedRun,
   stillHeld,
   takeHold,
+  thisProcessId,
   type Holder,
 } from "./savedRun.js";
+export {
+  canResume,
+  checkpointIn,
+  isSavedRun,
+  readSavedRun,
+  type SavedRun,
+  type SavedTurn,
+  type SessionHolder,
+} from "../agentSessions.js";

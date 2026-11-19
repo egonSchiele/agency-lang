@@ -18,6 +18,8 @@ describe("the driver's entry point", () => {
       "resumeRun",
       "toStep",
       "withCancelNote",
+      "RUN_ENDED_ERROR",
+      "PAUSE_WITH_OTHER_INTERRUPTS_ERROR",
       "startQueue",
       "respondWith",
       "currentApproval",
@@ -29,6 +31,13 @@ describe("the driver's entry point", () => {
       "saveRun",
       "takeHold",
       "stillHeld",
+      "thisProcessId",
+      "CANNOT_CONTINUE",
+      "PROGRAM_NOT_LOADED",
+      "readSavedRun",
+      "canResume",
+      "isSavedRun",
+      "checkpointIn",
     ];
     expect(names.filter((name) => !(name in driver))).toEqual([]);
   });

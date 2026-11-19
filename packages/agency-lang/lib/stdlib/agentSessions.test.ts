@@ -247,18 +247,41 @@ describe("saved run format", () => {
       turn: null,
     }) as never;
 
-  it("canResume is false for a module that is not loaded or has another hash", () => {
-    expect(canResume(pausedIn("src/agency/gone.agency", "0000"))).toBe(false);
+  it("canResume tells a module loaded with another hash from one not loaded", () => {
+    expect(canResume(pausedIn("src/agency/gone.agency", "0000"))).toBe("notLoaded");
     expect(canResume({ version: 1, pause: [pause], cancelledTexts: [], turn: null } as never)).toBe(
-      true,
+      "yes",
     );
     registerModuleFingerprint("src/agency/loaded.agency", "1111");
     try {
-      expect(canResume(pausedIn("src/agency/loaded.agency", "1111"))).toBe(true);
-      expect(canResume(pausedIn("src/agency/loaded.agency", "2222"))).toBe(false);
+      expect(canResume(pausedIn("src/agency/loaded.agency", "1111"))).toBe("yes");
+      expect(canResume(pausedIn("src/agency/loaded.agency", "2222"))).toBe("changed");
+      const both = {
+        version: 1,
+        pause: [
+          {
+            ...pause,
+            checkpoint: {
+              moduleFingerprints: {
+                "src/agency/gone.agency": { hash: "0000" },
+                "src/agency/loaded.agency": { hash: "2222" },
+              },
+            },
+          },
+        ],
+        cancelledTexts: [],
+        turn: null,
+      } as never;
+      expect(canResume(both)).toBe("changed");
     } finally {
       __resetModuleFingerprintRegistry();
     }
+  });
+
+  it("accepts a saved run with failedTexts, or without, and not with a bad one", () => {
+    const run = { version: 1, pause: [pause], cancelledTexts: [], turn: null };
+    expect(isSavedRun({ ...run, failedTexts: ["x"] })).toBe(true);
+    expect(isSavedRun({ ...run, failedTexts: [1] })).toBe(false);
   });
 
   it("readSavedRun reads a saved run and returns null for anything else", () =>
@@ -274,11 +297,15 @@ describe("saved run format", () => {
 
   it("a record's heldBy round-trips, and a malformed one is skipped", () =>
     withDir(async (dir) => {
-      const held = { ...record("h", 1), heldBy: { frontEnd: "terminal", pid: 42 } };
+      const holder = { frontEnd: "terminal", pid: 42, processId: "p-42" };
+      const held = { ...record("h", 1), heldBy: holder };
       await _saveSession(dir, held, {});
       await _saveSession(dir, { ...record("bad", 2), heldBy: { frontEnd: 1 } } as never, {});
-      const fractionalPid = { frontEnd: "terminal", pid: 1.5 };
+      const fractionalPid = { ...holder, pid: 1.5 };
       await _saveSession(dir, { ...record("half", 3), heldBy: fractionalPid }, {});
+      const noProcessId = { frontEnd: "terminal", pid: 42 };
+      await _saveSession(dir, { ...record("old", 4), heldBy: noProcessId } as never, {});
+      await _saveSession(dir, { ...record("empty", 5), heldBy: { ...holder, processId: "" } }, {});
       expect(await _listSessions(dir)).toEqual([held]);
     }));
 

@@ -1,4 +1,4 @@
-import { currentRun, type Run } from "../runtime/asyncContext.js";
+import { currentRun, currentRunOrNone, type Run } from "../runtime/asyncContext.js";
 import type { MessageJSON } from "smoltalk";
 import type { Host, Root } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
@@ -33,7 +33,7 @@ import { isPlainObject } from "../utils/isPlainObject.js";
  *   writes this, and resumes it with `restore`.
  * - `savedRun`: the interrupts a session core paused on, each with its
  *   checkpoint, as a front-end that drives the core from outside saves it
- *   (`{ version, pause, cancelledTexts, turn }`). Perry writes this.
+ *   (`{ version, pause, cancelledTexts, failedTexts, turn }`). Perry writes this.
  *
  * Both programs save into the same folders, and neither can resume the
  * other's file yet.
@@ -47,8 +47,11 @@ const RUN_FORMATS: string[] = ["checkpoint", "savedRun"];
 const OLD_PERRY_BRAIN = "perry";
 
 /** The front-end that has a session open: its name, such as `terminal`,
- *  and its process id. */
-export type SessionHolder = { frontEnd: string; pid: number };
+ *  its process id, and `processId`, a random id its process made at start.
+ *  Two holders are the same when the name and `processId` match: pids
+ *  repeat across machines, and the system reuses one after a crash. The
+ *  pid is kept for messages. */
+export type SessionHolder = { frontEnd: string; pid: number; processId: string };
 
 export type SessionRecord = {
   id: string;
@@ -97,7 +100,13 @@ async function readJson(host: Host, dir: Root, name: string): Promise<unknown> {
 }
 
 function isSessionHolder(value: unknown): value is SessionHolder {
-  return isPlainObject(value) && typeof value.frontEnd === "string" && Number.isInteger(value.pid);
+  return (
+    isPlainObject(value) &&
+    typeof value.frontEnd === "string" &&
+    Number.isInteger(value.pid) &&
+    typeof value.processId === "string" &&
+    value.processId !== ""
+  );
 }
 
 /** True for a session record, such as one read back from its file. */
@@ -175,6 +184,30 @@ async function saveSession(
     await host.files.writeText(sessions, checkpointFile(record.id), JSON.stringify(checkpoint));
     await host.files.writeText(sessions, metaFile(record.id), JSON.stringify(record));
   });
+}
+
+// The host a record's lock is taken on outside a run. A lock lives on its
+// host, and `currentHost()` with no run current builds a new host on every
+// call, so this one is kept for the process.
+let processLockHost: Host | null = null;
+
+function lockHost(): Host {
+  const run = currentRunOrNone();
+  if (run !== undefined) return run.ctx.host;
+  processLockHost ??= currentHost();
+  return processLockHost;
+}
+
+/** Runs `work` holding the lock on session `id`'s record, so a read of the
+ *  record and the write after it have no other locked work between them.
+ *  It is the host's lock: it covers this process, not another one. */
+export async function _withRecordLock<T>(
+  dir: string,
+  id: string,
+  work: () => Promise<T>,
+): Promise<T> {
+  const host = lockHost();
+  return host.files.withLock(await host.files.root(dir), metaFile(id), work);
 }
 
 /** Write the record alone, leaving the run file as it is. Returns "" on
@@ -382,6 +415,9 @@ export type SavedRun = {
   version: 1;
   pause: Interrupt[];
   cancelledTexts: string[];
+  /** The requests whose turn failed since the last turn that finished.
+   *  Absent is the same as empty. */
+  failedTexts?: string[];
   turn: SavedTurn | null;
 };
 
@@ -406,13 +442,17 @@ function isSavedTurn(value: unknown): boolean {
   );
 }
 
+function isTexts(value: unknown): boolean {
+  return Array.isArray(value) && value.every((text) => typeof text === "string");
+}
+
 export function isSavedRun(value: unknown): value is SavedRun {
   return (
     isPlainObject(value) &&
     value.version === 1 &&
     isSavedInterrupts(value.pause) &&
-    Array.isArray(value.cancelledTexts) &&
-    value.cancelledTexts.every((text) => typeof text === "string") &&
+    isTexts(value.cancelledTexts) &&
+    (value.failedTexts === undefined || isTexts(value.failedTexts)) &&
     (value.turn === null || isSavedTurn(value.turn))
   );
 }
@@ -424,19 +464,29 @@ export async function readSavedRun(dir: string, id: string): Promise<SavedRun | 
   return isSavedRun(run) ? run : null;
 }
 
-/** True when the run can still be resumed by the code loaded now. A
- *  checkpoint records a hash of the generated code of each module it is
- *  paused in, and the runtime refuses to resume when one differs. The
- *  generated code changes with the agency-lang version. This is the
- *  comparison the runtime makes on resume, made when the session loads, so
- *  it is found then and not on the next message. */
-export function canResume(run: SavedRun): boolean {
+/** Whether the code loaded now can resume the run. A checkpoint records a
+ *  hash of the generated code of each module it is paused in, and the
+ *  runtime refuses to resume when one differs. The generated code changes
+ *  with the agency-lang version. This is the comparison the runtime makes
+ *  on resume, made when the session loads, so it is found then and not on
+ *  the next message.
+ *
+ *  - `yes`: every module is loaded, with the hash it was saved with.
+ *  - `changed`: a module is loaded with another hash. The run can't go on.
+ *  - `notLoaded`: none differs, but a module is not loaded in this
+ *    process, so it is not known yet. Load the session program first. */
+export function canResume(run: SavedRun): "yes" | "changed" | "notLoaded" {
   const waiting = [...run.pause, ...(run.turn?.approvals ?? [])];
-  return waiting.every((interrupt) =>
-    Object.entries(interrupt.checkpoint?.moduleFingerprints ?? {}).every(
-      ([moduleId, saved]) => getModuleFingerprint(moduleId)?.hash === saved.hash,
-    ),
+  const fingerprints = waiting.flatMap((interrupt) =>
+    Object.entries(interrupt.checkpoint?.moduleFingerprints ?? {}),
   );
+  const loaded = fingerprints.map(([moduleId, saved]) => ({
+    saved: saved.hash,
+    now: getModuleFingerprint(moduleId)?.hash,
+  }));
+  if (loaded.some(({ saved, now }) => now !== undefined && now !== saved)) return "changed";
+  if (loaded.some(({ now }) => now === undefined)) return "notLoaded";
+  return "yes";
 }
 
 type SaveTarget = { dir: string; record: SessionRecord } | null;

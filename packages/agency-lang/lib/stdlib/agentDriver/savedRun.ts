@@ -1,27 +1,41 @@
 // Saving a session run and loading it back, and which front-end holds it.
 // The files are written and read by agentSessions.ts. See
 // docs/dev/agents/session-driver.md.
+import { currentHost } from "../../runtime/currentHost.js";
 import type { Policy } from "../../runtime/policy.js";
 import { failure, success, type Result } from "../../types/result.js";
 import {
   _readSessionRecord,
   _saveSession,
   _saveSessionRecord,
+  _withRecordLock,
   canResume,
   type SavedRun,
   type SessionHolder,
   type SessionRecord,
 } from "../agentSessions.js";
 import type { Settle } from "./approvals.js";
-import { reduceDriver, type DriverPhase, type DriverStep } from "./machine.js";
+import { droppedOf, reduceDriver, type DriverPhase, type DriverStep } from "./machine.js";
 import type { AgentStep } from "./run.js";
 
 /** The front-end that has a session open: its name, such as `terminal`,
- *  and its process id. */
+ *  its process id, and `thisProcessId()`. */
 export type Holder = SessionHolder;
 
 export const CANNOT_CONTINUE =
   "This session was saved by another version of the agent and can't continue.";
+
+export const PROGRAM_NOT_LOADED =
+  "This session's program is not loaded. Load the session program before loading the session.";
+
+let processId: string | null = null;
+
+/** A random id for this process, made on the first call. A front-end puts
+ *  it in its `Holder`. */
+export function thisProcessId(): string {
+  processId ??= currentHost().random.id();
+  return processId;
+}
 
 /** The run to save for a phase, or null when there is nothing to go on
  *  with: the run has not reached its first pause, or it ended. */
@@ -34,19 +48,19 @@ export function savedRun(phase: DriverPhase): SavedRun | null {
     // waiting for a message, with the settings it had.
     case "waitingForUser":
     case "answering":
-      return { version: 1, pause: phase.pause, cancelledTexts: phase.cancelledTexts, turn: null };
+      return { version: 1, pause: phase.pause, ...droppedOf(phase), turn: null };
     case "working":
       return {
         version: 1,
         pause: phase.pause,
-        cancelledTexts: phase.cancelledTexts,
+        ...droppedOf(phase),
         turn: { text: phase.text, approvals: null },
       };
     case "approving":
       return {
         version: 1,
         pause: phase.pause,
-        cancelledTexts: phase.cancelledTexts,
+        ...droppedOf(phase),
         turn: { text: phase.text, approvals: phase.queue.interrupts },
       };
   }
@@ -62,7 +76,10 @@ const asksAll: Settle = () => null;
  *    do. With none given, every one is asked again.
  *  - A turn that was running (the process stopped mid-turn): back to the
  *    turn's start, as if the person had cancelled it.
- *  - Saved by code that is not loaded now: ended. It takes nothing.
+ *  - Saved by code that differs from the code loaded now: ended. It takes
+ *    nothing.
+ *  - Saved by a module that is not loaded: ended, with `PROGRAM_NOT_LOADED`.
+ *    The front-end loads the session program before it loads a session.
  *
  *  The two turn cases go through `reduceDriver`, so they behave as the live
  *  ones do.
@@ -86,18 +103,24 @@ export function restoredPhase(
 }
 
 function restoredStep(run: SavedRun, settle: Settle): DriverStep {
-  const { pause, cancelledTexts, turn } = run;
-  if (!canResume(run)) {
-    return { phase: { kind: "ended", reason: CANNOT_CONTINUE }, happened: [] };
+  const { pause, turn } = run;
+  const dropped = droppedOf(run);
+  switch (canResume(run)) {
+    case "changed":
+      return { phase: { kind: "ended", reason: CANNOT_CONTINUE }, happened: [] };
+    case "notLoaded":
+      return { phase: { kind: "ended", reason: PROGRAM_NOT_LOADED }, happened: [] };
+    case "yes":
+      break;
   }
   if (turn === null) {
-    return { phase: { kind: "waitingForUser", pause, cancelledTexts }, happened: [] };
+    return { phase: { kind: "waitingForUser", pause, ...dropped }, happened: [] };
   }
   const running: DriverPhase = {
     kind: "working",
     pause,
     text: turn.text,
-    cancelledTexts,
+    ...dropped,
     leg: { interrupts: pause, responses: [] },
   };
   const step: AgentStep =
@@ -114,7 +137,8 @@ function restoredStep(run: SavedRun, settle: Settle): DriverStep {
 /** Writes the run, then its record, which says the file holds a saved run
  *  and who holds the session. Fails, and writes nothing, when the record
  *  names another holder: that front-end took the session, and this save
- *  would overwrite its work. A session with no record yet may be saved. */
+ *  would overwrite its work. A session with no record yet may be saved.
+ *  The check and the write are made under the record's lock. */
 export async function saveRun(args: {
   dir: string;
   record: SessionRecord;
@@ -123,15 +147,31 @@ export async function saveRun(args: {
 }): Promise<Result<null>> {
   const { dir, run, holder } = args;
   const record: SessionRecord = { ...args.record, runFormat: "savedRun", heldBy: holder };
-  const heldBy = (await _readSessionRecord(dir, record.id))?.heldBy;
-  if (heldBy != null && !sameHolder(heldBy, holder)) {
-    return failure(`Could not save session ${record.id}: ${heldByText(heldBy)}.`);
+  const failed = `Could not save session ${record.id}`;
+  return underRecordLock({ dir, id: record.id, failed }, async () => {
+    const heldBy = (await _readSessionRecord(dir, record.id))?.heldBy;
+    if (heldBy != null && !sameHolder(heldBy, holder)) {
+      return failure(`${failed}: ${heldByText(heldBy)}.`);
+    }
+    const problem = await _saveSession(dir, record, run);
+    if (problem !== "") {
+      return failure(`${failed}: ${problem}`);
+    }
+    return success(null);
+  });
+}
+
+/** Runs `work` under the record's lock. A lock that can't be taken, as on
+ *  a sessions folder that is a file, fails with `failed` and the reason. */
+async function underRecordLock(
+  where: { dir: string; id: string; failed: string },
+  work: () => Promise<Result<null>>,
+): Promise<Result<null>> {
+  try {
+    return await _withRecordLock(where.dir, where.id, work);
+  } catch (error) {
+    return failure(`${where.failed}: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const problem = await _saveSession(dir, record, run);
-  if (problem !== "") {
-    return failure(`Could not save session ${record.id}: ${problem}`);
-  }
-  return success(null);
 }
 
 function heldByText(holder: Holder): string {
@@ -141,26 +181,30 @@ function heldByText(holder: Holder): string {
 /** Marks the session as held by `holder`, on its record alone. A
  *  front-end calls it when it resumes a session, before its first leg, so
  *  the front-end that had it open sees at once that it moved. Fails when
- *  there is no such session or its record can't be written. */
+ *  there is no such session or its record can't be written. The read and
+ *  the write are made under the record's lock. */
 export async function takeHold(args: {
   dir: string;
   id: string;
   holder: Holder;
 }): Promise<Result<null>> {
   const { dir, id, holder } = args;
-  const record = await _readSessionRecord(dir, id);
-  if (record === null) {
-    return failure(`Could not take hold of session ${id}: it has no record in ${dir}.`);
-  }
-  const problem = await _saveSessionRecord(dir, { ...record, heldBy: holder });
-  if (problem !== "") {
-    return failure(`Could not take hold of session ${id}: ${problem}`);
-  }
-  return success(null);
+  const failed = `Could not take hold of session ${id}`;
+  return underRecordLock({ dir, id, failed }, async () => {
+    const record = await _readSessionRecord(dir, id);
+    if (record === null) {
+      return failure(`${failed}: it has no record in ${dir}.`);
+    }
+    const problem = await _saveSessionRecord(dir, { ...record, heldBy: holder });
+    if (problem !== "") {
+      return failure(`${failed}: ${problem}`);
+    }
+    return success(null);
+  });
 }
 
 function sameHolder(left: Holder, right: Holder): boolean {
-  return left.frontEnd === right.frontEnd && left.pid === right.pid;
+  return left.frontEnd === right.frontEnd && left.processId === right.processId;
 }
 
 /** False when another front-end has taken the session since: its record

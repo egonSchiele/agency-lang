@@ -140,18 +140,34 @@ function quoted(texts: string[]): string {
   return texts.map((text) => `"${text}"`).join(", ");
 }
 
-/** Prefixes a message with a note about requests the user cancelled, since
- *  the agent no longer remembers them but their side effects remain. */
-export function withCancelNote(args: { message: string; cancelledTexts: string[] }): string {
+function requests(texts: string[]): string {
+  return `${texts.length === 1 ? "request" : "requests"}, ${quoted(texts)},`;
+}
+
+/** Prefixes a message with one note about the requests the user cancelled
+ *  and the ones that failed, since the agent no longer remembers them but
+ *  their side effects remain. */
+export function withCancelNote(args: {
+  message: string;
+  cancelledTexts: string[];
+  failedTexts?: string[];
+}): string {
   const { message, cancelledTexts } = args;
-  if (cancelledTexts.length === 0) {
+  const failedTexts = args.failedTexts ?? [];
+  const sentences: string[] = [];
+  if (cancelledTexts.length > 0) {
+    sentences.push(
+      `The user cancelled their previous ${requests(cancelledTexts)} partway through.`,
+    );
+  }
+  if (failedTexts.length > 0) {
+    const whose = cancelledTexts.length > 0 ? "Their" : "The user's";
+    sentences.push(`${whose} previous ${requests(failedTexts)} failed partway through.`);
+  }
+  if (sentences.length === 0) {
     return message;
   }
-  let note: string;
-  if (cancelledTexts.length === 1) {
-    note = `(The user cancelled their previous request, ${quoted(cancelledTexts)}, partway through. Some of its changes may already have been made.)`;
-  } else {
-    note = `(The user cancelled their previous requests, ${quoted(cancelledTexts)}, partway through. Some of their changes may already have been made.)`;
-  }
+  const its = cancelledTexts.length + failedTexts.length === 1 ? "its" : "their";
+  const note = `(${sentences.join(" ")} Some of ${its} changes may already have been made.)`;
   return `${note}\n\n${message}`;
 }

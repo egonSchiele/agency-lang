@@ -12,7 +12,7 @@
 4. **The terminal switches over.** `agency agent` runs its sessions through the driver. Its old loop is deleted.
 5. **Both front-ends see each other's sessions** without stepping on them.
 
-**Not in this plan: background jobs.** A job belongs to its run and is stopped when the run pauses, and the session run pauses after every turn. Jobs need their own design, and **the switch (Part D) must not land before it**: until then the terminal keeps its old loop and its jobs. Parts A, B and C do not touch jobs and can land now.
+**Not in this plan: background jobs.** Jobs are designed in `docs/superpowers/specs/2026-11-19-jobs-interface-design.md` (on `adit/jobs-interface`). A job becomes a separate process with a record on disk. It no longer belongs to its run, so a pause does not stop it. **The switch (Part D) waits on one ticket, ADI-341:** the agent's job tools move onto the new jobs, and the run's job table is deleted. Until then the terminal keeps its old loop and its jobs. Parts A, B and C do not touch jobs and can land now.
 
 **Architecture:** `agency agent` becomes two runs in one process. The *shell run* is `agent.agency`: it parses flags, picks the session, and runs `repl()`. It is never saved. The *session run* is `program.agency`, started and resumed by the driver, in TypeScript. For each line the REPL submits, the driver sends an answer to the session run. When the run pauses on an approval, the shell run draws the prompt and the driver resumes with the result. The driver saves at every pause.
 
@@ -300,7 +300,7 @@ Which command needs what, after the switch:
 | `/init`, a skill, a user command | `message` answer |
 | `/compact`, `/rename`, `/fork`, `/search`, `/preset save` | **New answers, below.** Perry can use these too |
 | `/local`, `/settings` | New answers, added with the switch (Task D2). Only the terminal uses them |
-| `/jobs` | Decided by the jobs design |
+| `/jobs` | Kept, same name |
 
 **Files:**
 - Modify: `AGENT/core.agency`, `AGENT/program.agency`, `AGENT/lib/record.agency`, `AGENT/lib/session.agency`, `AGENT/lib/search.agency`, `lib/stdlib/agentDriver/interface.ts`
@@ -357,7 +357,7 @@ Open the pull request for Parts B and C together. A release follows.
 
 ---
 
-# Part D: the switch (agency-lang). Blocked on the jobs design.
+# Part D: the switch (agency-lang). Waits on ADI-341.
 
 One pull request. Until it merges, nothing above changes what `agency agent` does.
 
@@ -396,6 +396,7 @@ One pull request. Until it merges, nothing above changes what `agency agent` doe
 - **Approvals in one pause.** The driver walks the queue. `settle` checks each waiting interrupt against `shell.policy()` (a reject rule answers anything; an approve rule answers only a raise that wants no typed value, as `cliPolicyHandler` does). What it does not decide is asked with `shell.ask`. After each answer the rest are checked again, so an "always" settles them (Review Focus 4). For each `settled` in `Happened` the driver prints the line `std::policy` prints today ("Approved … by the rule just saved", "Policy rejected …"), and an edit's diff.
 - **Esc at a prompt** arrives as the cancellation `shell.ask` throws. `_send` catches it and dispatches `approvalCancelled`, so the turn is dropped as it is for an abort (Review Focus 5).
 - It prints `session.reply`, `session.error` and an edit's diff. `trace.agency`'s callbacks print the rest.
+- **The line printed when a job ends** comes from the process's one job watcher, not the run's job table. The terminal driver subscribes to it with `onWatchedJobEnd` (from the jobs plan).
 - It saves at every pause with `saveRun`, holder `{ frontEnd: "terminal", pid }`, and reports to Herdr where `_sessionOnSubmit` did. Before each leg it checks `stillHeld`. When it is not, it stops with `This session was continued in <heldBy.frontEnd>. Reopen it with: agency agent --resume <id>` (Review Focus 3).
 - `agent.agency`'s `main`:
   - resolves the policy as now with `getPolicyForAgent`. When any policy flag was given, it saves the resolved policy as the new session's policy file (`saveCarriedPolicy`), and after a `fork` answer for the new id.
@@ -438,7 +439,7 @@ One pull request. Until it merges, nothing above changes what `agency agent` doe
 - Delete: `AGENT/lib/runSession.agency`; `_sessionOnSubmit` and `_installSessionHooks` in `lib/stdlib/agentSessions.ts`; `saveSeedTurn` and the in-run `restore` in `AGENT/lib/resume.agency`; `approvingInstructionReads` in `AGENT/lib/projectContext.agency`; the tests of each
 - Modify: `lib/stdlib/agentSessionImports.test.ts` (the terminal list loses `runSession`)
 
-- [ ] **Step 1:** Delete them. Whatever the jobs design decided about the job tools and `/jobs` is applied here, not before.
+- [ ] **Step 1:** Delete them. The job tools and `/jobs` stay. `setJobToolsOn(false)` in `core.agency` is not removed here: the jobs plan removes it in its last task.
 - [ ] **Step 2:** Run the agent's tests in full once, and `pnpm vitest run`. Expected: PASS.
 - [ ] **Step 3:** Run `agency agent` by hand: a turn, an approval answered "always", Esc mid-turn, `/model`, `/compact`, `/fork`, `--continue`, `-p`, and one MCP tool call that asks for approval. Compare the order of an attachment line, a tool trace and the reply with the version before.
 - [ ] **Step 4:** Commit: `Remove the terminal's own session loop`.

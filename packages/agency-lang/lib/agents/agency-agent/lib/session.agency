@@ -36,6 +36,7 @@ import {
   requestProvider,
  } from "./modelRequest.agency"
 import {
+  LOCAL_PROVIDERS,
   parseModelFlag,
   lacksProviderForm,
   missingProviderEnvVar,
@@ -142,6 +143,22 @@ def localModelsAllowed(): boolean {
   return _localModelsAllowed ?? true
 }
 
+// A slot can name a local provider without `--local` or a local preset:
+// `mlx/some-model` as a model spec does. Where local models are off, that
+// is refused too.
+def refusesALocalSlot(resolved: Record<string, Resolved>): boolean {
+  if (localModelsAllowed()) {
+    return false
+  }
+  for (slot in Object.keys(resolved)) {
+    const model = resolved[slot]
+    if (model != null && LOCAL_PROVIDERS.includes(model.provider)) {
+      return true
+    }
+  }
+  return false
+}
+
 export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Result<boolean> {
   """
   Resolve and apply a request's models, local or hosted. A failure
@@ -167,6 +184,9 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
   const resolved = resolveHostedModels(request, settings, startupDefaultSlots())
   if (isFailure(resolved)) {
     return resolved
+  }
+  if (refusesALocalSlot(resolved.value)) {
+    return failure(LOCAL_MODELS_OFF)
   }
   applyResolved(resolved.value)
   applyRequestOptions(request, settings)
@@ -378,6 +398,9 @@ export def trySwitchModel(
     return failure("Could not switch model: ${reason}")
   }
   const resolved = all.value
+  if (refusesALocalSlot(resolved)) {
+    return failure("Could not switch model: ${LOCAL_MODELS_OFF}")
+  }
   applyResolved(resolved)
   applyRequestOptions(request, settings)
   return success({

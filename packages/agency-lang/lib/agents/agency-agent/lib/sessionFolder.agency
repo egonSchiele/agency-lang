@@ -11,6 +11,7 @@
   It is not the agent's working folder either (`getAgentCwd`), which a
   coder moves during a session. See docs/dev/agents/session-core.md.
 */
+import { _forgetFolderScans } from "agency-lang/stdlib-lib/agentFolderScans.js"
 import { cwd } from "std::system"
 
 // A `let`, so it follows the session to whichever process resumes it.
@@ -26,4 +27,13 @@ export def sessionFolder(): string {
     return cwd()
   }
   return folder
+}
+
+/** Forget what this process kept from scanning the session's folder (its
+  `.claude/commands` and its Claude skills), so the next read scans again.
+
+  The session core calls this before each turn. The terminal must not: a
+  scan made during one of its turns runs under its policy handler. */
+export def forgetSessionFolderScans() {
+  _forgetFolderScans(sessionFolder())
 }

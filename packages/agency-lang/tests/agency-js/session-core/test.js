@@ -267,6 +267,19 @@ result.editDiff = {
   fileAfter: readFileSync(path.join(project, "note.txt"), "utf8"),
 };
 
+// An edit no rule decides leaves the run as an approval. It is reported
+// once: not again when the approved edit goes on.
+writeFileSync(path.join(project, "note.txt"), "first\nold line\nlast\n");
+const asker = await startSession({ brain: "minimal" });
+await asker.answer(message("edit the note"));
+result.editThatIsAsked = {
+  pausedOn: asker.pause[0].effect,
+  eventsAtTheApproval: eventsOf(asker, "session.editDiff").length,
+};
+await asker.answer(undefined);
+result.editThatIsAsked.eventsAfterApproving = eventsOf(asker, "session.editDiff").length;
+result.editThatIsAsked.fileAfter = readFileSync(path.join(project, "note.txt"), "utf8");
+
 // A session can start with a turn budget.
 const budgeted = await startSession({
   session: { ...startData().session, budget: { maxCost: 3, maxTime: 1000 } },
@@ -309,8 +322,18 @@ result.localPresetWhereNoneCanRun = {
 // A model named with the provider a person sees. The agent runs every
 // OpenAI model through its `openai-responses` client, and reports that.
 process.env.OPENAI_API_KEY = "test-key";
-const plain = await startSession({ models: noModelFlags });
+const plain = await startSession({ models: noModelFlags, localModels: false });
 result.fixedProviderWithNoPreset = pauseData(plain).fixedProvider;
+// A model spec that names a local provider is refused too.
+const mainBeforeLocalSpec = pauseData(plain).models.main?.model;
+await plain.answer({ kind: "model", spec: "mlx/some-local-model" });
+const localSpecNotice = eventsOf(plain, "session.notice").pop();
+result.localProviderInAModelSpec = {
+  level: localSpecNotice?.level,
+  text: localSpecNotice?.text,
+  mainModelKept: pauseData(plain).models.main?.model === mainBeforeLocalSpec,
+};
+
 await plain.answer({ kind: "model", spec: "openai/gpt-4o" });
 result.publicProviderName = {
   model: pauseData(plain).models.main?.model,

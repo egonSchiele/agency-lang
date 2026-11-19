@@ -53,6 +53,16 @@ Paths in Part A are relative to `packages/agency-lang/`, and `AGENT` means `lib/
 
 # Part A: agency-lang
 
+**Part A is done** (branch `adit/session-core-app`). It differs from the tasks below in these ways, and Part B should follow what was built:
+
+- **The pause reports `fixedProvider`.** When a preset, `--provider` or `settings.model` fixes the provider, a `model` answer's spec is read whole, as a model of that provider. `openai/gpt-4o` under a fixed `anthropic` is a model by that name. So in Task B2, Perry sends `<provider>/<model>` only when `fixedProvider` is "". When one is fixed, it sends the bare model for that provider, and refuses a change to another provider with a reason that names the preset.
+- **The pause's `effort` is "" when no one named one.** The models' own rule then decides what is sent. Perry shows that as its default.
+- **`projectDir()` kept its signature.** It reads `sessionFolder()`, a new global the core sets from `start.cwd`.
+- **The core scans its folder again before each turn,** so an engine that stays up sees a command added since. The terminal keeps its scans for its whole life.
+- **`SavedRun` did not move.** Task A5 added only the record's `runFormat` and `_recordRunFormat`. Perry keeps its own `SavedRun`, `isSavedRun` and reader in Task B4. They move when the terminal writes the format (Plan 3).
+- **The terminal's own approval diff has no size limit still.** It renders through `diff` in `std::syntax`, not through hunks, so `editDiff` does not fit it.
+- **With no provider key, `main` fails** with "No LLM API key found. Set one of: …".
+
 One branch and one pull request. When it merges, a release of agency-lang is needed before Part B can start.
 
 Tests in Part A that send a message name their brain: `brain: "simple"`. The coordinator may make its own model calls to route a message, and a test client that echoes the last user message would answer those too.

@@ -77,6 +77,12 @@
     "reply": "edited",
     "fileAfter": "first\nnew line\nlast\n"
   },
+  "editThatIsAsked": {
+    "pausedOn": "std::edit",
+    "eventsAtTheApproval": 1,
+    "eventsAfterApproving": 1,
+    "fileAfter": "first\nnew line\nlast\n"
+  },
   "startingBudget": {
     "maxCost": 3,
     "maxTime": 1000
@@ -93,6 +99,11 @@
     "mainModelKept": "claude-opus-4-8"
   },
   "fixedProviderWithNoPreset": "",
+  "localProviderInAModelSpec": {
+    "level": "error",
+    "text": "Could not switch model: Local models are not available here.",
+    "mainModelKept": true
+  },
   "publicProviderName": {
     "model": "gpt-4o",
     "provider": "openai-responses"

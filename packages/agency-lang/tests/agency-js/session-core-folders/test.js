@@ -110,6 +110,10 @@ const firstReply = await one.say("/hello");
 const secondReply = await two.say("/hello");
 // And again, the other way round: what a process keeps is kept by folder.
 const firstAgain = await one.say("/hello");
+// A command added while the process is up is there on the next message.
+// An app's engine can stay up for days.
+writeFileSync(path.join(first, ".claude", "commands", "later.md"), "added later to the first folder");
+const addedLater = await one.say("/later");
 
 writeFileSync(
   "__result.json",
@@ -118,6 +122,7 @@ writeFileSync(
       firstSessionSawItsOwnCommand: firstReply.includes("hello from the first folder"),
       secondSessionSawItsOwnCommand: secondReply.includes("hello from the second folder"),
       firstSessionStillSeesItsOwn: firstAgain.includes("hello from the first folder"),
+      commandAddedLaterIsSeen: addedLater.includes("added later to the first folder"),
       approvalsAsked,
     },
     null,

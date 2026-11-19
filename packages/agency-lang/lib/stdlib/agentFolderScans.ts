@@ -8,7 +8,13 @@
 //
 // This is process state on purpose, like an MCP connection. It is never in
 // a checkpoint, so a process that resumes a session scans again and sees a
-// command the user added since. See docs/dev/agents/session-core.md.
+// command the user added since.
+//
+// A terminal keeps a scan for its whole life, as it kept the statics: a
+// scan made during a turn would run under its policy handler and be put to
+// the user. The session core forgets its folder's scans before each turn,
+// so an app that stays open for days sees a command added an hour ago.
+// See docs/dev/agents/session-core.md.
 
 const scans: Record<string, unknown> = {};
 
@@ -23,13 +29,27 @@ export function _folderScan(kind: string, folder: string): unknown {
   return Object.hasOwn(scans, key) ? scans[key] : null;
 }
 
-export function _keepFolderScan(kind: string, folder: string, value: unknown): void {
-  scans[keyFor(kind, folder)] = value;
+// Every caller, and every session in the folder, is handed the same value.
+// Frozen, as the statics were, so none of them can change it for the rest.
+function frozen(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) {
+    frozen(child);
+  }
+  return Object.freeze(value);
 }
 
-/** Forget every scan. For tests, which reuse one process. */
-export function _forgetFolderScans(): void {
+export function _keepFolderScan(kind: string, folder: string, value: unknown): void {
+  scans[keyFor(kind, folder)] = frozen(value);
+}
+
+/** Forget every scan kept for a folder, so the next read of each scans
+ *  again. */
+export function _forgetFolderScans(folder: string): void {
+  const suffix = keyFor("", folder);
   for (const key of Object.keys(scans)) {
-    delete scans[key];
+    if (key.endsWith(suffix)) {
+      delete scans[key];
+    }
   }
 }

@@ -269,7 +269,7 @@ def localSlashCommand(): boolean {
   // The default router stays out of a local session.
   const configured = configureLocalModel(choice, "", explicitRouterSpec())
   if (configured is failure(reason)) {
-    print(color.red(reason))
+    pushMessage(color.red(reason))
     return true
   }
   configureSearch(true)

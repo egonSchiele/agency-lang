@@ -126,8 +126,8 @@ differ.
 - **The turn budget covers the main agent only.** It is applied where
   `agencyAgent` is called. A turn sent straight to a start target is not
   limited by it, and the core says so in a warning notice.
-- **The effort has no answer.** It is not one of the `LlmOptions` keys:
-  in the terminal it comes from `--effort` or a preset.
+- **The effort is not an LLM option.** It is not one of the `LlmOptions`
+  keys, so an `options` answer cannot set it. It has its own answer.
 - **Starting a session does not save the search backend.** `main` calls
   `startModels(flags, false)`. The terminal does save it. An app's
   environment often lacks the search keys a terminal has, and a choice
@@ -159,7 +159,6 @@ A line for the person is a notice (`lib/notice.agency`), which
 | --- | --- |
 | `session.agency`: `pickGuidedLocalModel`, `pickModelsForAgent`, `maybeEnableMemory`, `switchModel` | Terminal only. The core uses `startModels` and `applyModelSpec`. |
 | `presets.agency`: `startPreset` | Terminal only. The core uses `startPresetQuiet`. |
-| `shared.agency`: `configureLocalModel` | A local model that fails to load ends the process. |
 | `settings.agency`, `capabilities.agency`, `globalInstructions.agency`, and `configureSearch` in `search.agency` | Startup warnings that `print`. In an app they reach the engine's log and no client. |
 | `mcp.agency`: `maybeLoadMcp` | A front-end's own startup. The program does not call it. |
 
@@ -175,18 +174,22 @@ either, which a coder moves.
 The scans of that folder are made the first time a process needs them and
 kept for the process, by folder (`lib/stdlib/agentFolderScans.ts`). They
 are not in a checkpoint. A process that resumes a session scans again, and
-sees a command added since.
+sees a command added since. The core also forgets its folder's scans
+before each turn, so an app that stays open sees a new command on the
+next message.
 
 The terminal makes its scans in `runSession` before it installs its policy
 handler. Every handler is asked about an interrupt, so a scan made under
-that handler would be put to the user, or rejected in a `-p` run. In the
-core there is no such handler, and each scan's own `with approve` settles
-it.
+that handler would be put to the user, or rejected in a `-p` run. So the
+terminal keeps its scans for its whole life, as it kept the statics. In
+the core there is no such handler, and each scan's own `with approve`
+settles it.
 
 ## Local models
 
 A program started with `localModels: false` refuses a
-local request, at the start or from a later answer, with "Local models
+local request, at the start or from a later answer (`--local`, a local
+preset, or a model spec that names a local provider such as `mlx/…`), with "Local models
 are not available here." An app whose one process holds every session
 sets this. Where they are allowed, a local model that cannot be set up is
 a failure too: nothing in the program ends the process.

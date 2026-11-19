@@ -1,5 +1,6 @@
 {
   "firstPauseEffect": "agent::sessionInput",
+  "firstPauseBrain": "simple",
   "firstPauseModules": [
     "dist/lib/agents/agency-agent/core.agency"
   ],
@@ -18,6 +19,11 @@
   "badModelNoticeLevel": "error",
   "badModelKeptMainSlot": true,
   "goodModelChangedMainSlot": "claude-opus-4-8",
+  "unknownProviderRefused": {
+    "level": "error",
+    "text": "Unknown provider: groq. Known: openai, a",
+    "mainKept": "claude-opus-4-8"
+  },
   "temperatureSentAfterOptions": 0.2,
   "optionsRefusal": "The run was sent LLM options it can't read: they must be an object.",
   "optionsThatAreNotAnObjectAreRefused": 1,
@@ -83,6 +89,10 @@
     "eventsAtTheApproval": 1,
     "eventsAfterApproving": 1,
     "fileAfter": "first\nnew line\nlast\n"
+  },
+  "learnedScansAskNothing": {
+    "pausedOn": "agent::sessionInput",
+    "reply": "stub reply"
   },
   "startingBudget": {
     "maxCost": 3,

@@ -12,6 +12,7 @@ const REPORTED: PauseData = {
   effort: "",
   budget: { maxCost: 1, maxTime: 2 },
   context: "10%",
+  brain: "simple",
 };
 
 function raised(effect: string, data: unknown): Interrupt {

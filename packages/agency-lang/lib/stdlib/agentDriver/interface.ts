@@ -61,6 +61,7 @@ export type PauseData = {
   effort: string;
   budget: TurnBudget;
   context: string;
+  brain: string;
 };
 
 export type MessageAnswer = { kind: "message"; text: string; notes: string[]; target: string };
@@ -135,5 +136,6 @@ export function pauseData(pause: Interrupt[]): PauseData | null {
     effort: text(data.effort),
     budget: data.budget,
     context: text(data.context),
+    brain: text(data.brain),
   };
 }

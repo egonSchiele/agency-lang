@@ -42,8 +42,11 @@ not ended.
 **The pause.** The core waits with one interrupt, `agent::sessionInput`.
 Its data is what a front-end shows and saves between turns: `thread`,
 `cwd`, `record`, `models`, `preset`, `fixedProvider`, `effort`, `budget`,
-`context`.
+`context`, `brain`.
 
+- `brain` is the name of the brain that runs the session. `record.brain`
+  holds it too, but a session that is not saved has no record. A front-end
+  reads the brain from this field only.
 - `effort` is what the session asks for: a level, `default` to send none,
   or "" when no one named one and the models' own rule decides.
 - `fixedProvider` is the provider the session is fixed to, by the name a
@@ -65,7 +68,8 @@ A `model`, `effort` or `preset` answer the core cannot apply changes
 nothing and sends a `session.notice` at level `error` with the reason.
 
 - **A model's provider.** With no provider fixed, `openai/gpt-4o` switches
-  to OpenAI. With one fixed, the spec is read whole, as a model of that
+  to OpenAI, and a spec whose part before the first `/` is not a known
+  provider (`groq/llama-3`) is refused: `Unknown provider: groq. Known: ...`. With one fixed, the spec is read whole, as a model of that
   provider, which is how an OpenRouter model keeps its slash. A front-end
   reads `fixedProvider` to know which it will get.
 - **A preset replaces the session's own choices:** its models and its
@@ -185,6 +189,12 @@ They describe the process, so they are not saved with a session.
 Both default to the terminal's answer. An engine that forgets one gets no
 error, so its own tests should check both: a command added while it runs
 is seen, and a local preset is refused.
+
+**The agent's own scans.** The core's scans of what the agent learned
+(`<agent-home>/skills` by `std::skills`, `<agent-home>/tools` by
+`std::toolbox`) are approved by the core itself, with `with approve` on
+those calls only (`lib/learned.agency`). A policy with no rules asks
+nothing about them, so a front-end needs no rule for them.
 
 ## Local models
 

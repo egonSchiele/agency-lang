@@ -38,6 +38,7 @@ function reported(model: string): PauseData {
     effort: "",
     budget: { maxCost: 1, maxTime: 1 },
     context: "",
+    brain: "simple",
   };
 }
 

@@ -54,6 +54,7 @@
   "unknownBrainEndsTheRun": "Unknown brain",
   "unusablePresetEndsTheRun": true,
   "localModelWhereNoneCanRun": "Local models are not available here.",
+  "startMissingAField": "Argument \"start\" of main must be ProgramStart, but received an object. Problems: session.budget: Invalid input: expected object, received undefined.",
   "sessionStartsAfterFailedSetups": "agent::sessionInput",
   "settingsFileWritten": false,
   "editDiff": {

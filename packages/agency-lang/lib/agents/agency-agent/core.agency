@@ -40,7 +40,7 @@ import {
   askedEffort,
   fixedProvider,
  } from "./lib/session.agency"
-import { forgetSessionFolderScans, setSessionFolder } from "./lib/sessionFolder.agency"
+import { setSessionFolder } from "./lib/sessionFolder.agency"
 import { SessionRecord } from "./lib/sessions.agency"
 import { currentBrainName, resolveStartTarget, runTurn, startTargetsFor } from "./lib/turn.agency"
 import { isPlainObject } from "./lib/utils.agency"
@@ -248,10 +248,6 @@ export node session(start: SessionStart) {
             // budget is applied where the main agent is called.
             notice("The turn budget does not apply to a turn sent straight to the ${target} agent.", "warning")
           }
-          // Read the folder's commands and skills again for this turn. The
-          // process may have been up for days, and the user may have added
-          // one a minute ago.
-          forgetSessionFolderScans()
           for (note in notes) {
             addNote(note)
           }

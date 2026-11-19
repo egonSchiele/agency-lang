@@ -31,15 +31,12 @@ the record files. Writes go through a temp file and a rename. The agent home is 
 is the working directory with every non-alphanumeric character replaced by
 `-`, so sessions are per project directory, as in Claude Code.
 
-**Two front-ends save into these folders.** Perry, which drives the
-session core from outside, saves the core's pause in `<id>.json`, not one
-checkpoint. A record's `runFormat` says which the file holds: `checkpoint`
-(the default, when the field is absent) or `savedRun`. `listSessions`
-returns only the checkpoint ones, so the picker and `--continue` never
-offer a file `restore` cannot read, and `--resume <id>` on another
-front-end's session says why it will not open. Session search reads both
-formats (`checkpointIn` in `lib/stdlib/agentSessions.ts`). This ends when
-the terminal runs on the session core too.
+**Two front-ends save into these folders.** Perry saves the session
+core's pause in `<id>.json`, not one checkpoint. A record's `runFormat`
+says which the file holds: `checkpoint` (also when the field is absent) or
+`savedRun`. `listSessions` returns only the checkpoint ones, and
+`startSession` checks the file is a checkpoint before it calls `restore`.
+Session search reads both formats.
 
 The file I/O is TypeScript (`lib/stdlib/agentSessions.ts`), like the REPL
 history file: harness bookkeeping under the agent's own directory, never a

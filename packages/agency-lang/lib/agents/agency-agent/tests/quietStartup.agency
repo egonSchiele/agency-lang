@@ -3,6 +3,7 @@
  * comes back as a value. Nothing is printed and the process is not ended,
  * so the session core can run them inside an app's engine.
  */
+import { _setLocalModelsAllowed } from "agency-lang/stdlib-lib/agentProcess.js"
 import { setEnv } from "std::system"
 
 import { noModelChoices, noModelFlags } from "../lib/modelRequest.agency"
@@ -12,7 +13,6 @@ import {
   applyModelSpec,
   currentModelRequest,
   modelChoices,
-  setLocalModelsAllowed,
   setStartupModelFlags,
  } from "../lib/session.agency"
 import { getResolvedSlots } from "../shared.agency"
@@ -67,7 +67,7 @@ node localModelThatCannotLoadIsAFailure(): string {
 }
 
 node localModelsTurnedOffIsAFailure(): string {
-  setLocalModelsAllowed(false)
+  _setLocalModelsAllowed(false)
   setStartupModelFlags({ ...noModelFlags(), local: "mlx:mlx-community/Qwen3-4B-4bit" }, {})
   const applied = applyModelRequest(currentModelRequest(noModelChoices()), {})
   if (applied is failure(reason)) {

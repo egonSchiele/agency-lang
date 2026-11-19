@@ -70,7 +70,6 @@ async function startIn(project, id) {
       preset: "",
       models: { pin: "claude-sonnet-4-6", slots: {}, provider: "", local: null, effort: null },
       limits: { maxToolCallRounds: null, maxToolResultChars: null },
-      localModels: true,
       session: {
         cwd: project,
         replyStyle: "",
@@ -108,7 +107,7 @@ const one = await startIn(first, "s1");
 const two = await startIn(second, "s2");
 const firstReply = await one.say("/hello");
 const secondReply = await two.say("/hello");
-// And again, the other way round: what a process keeps is kept by folder.
+// And again, the other way round.
 const firstAgain = await one.say("/hello");
 // A command added while the process is up is there on the next message.
 // An app's engine can stay up for days.

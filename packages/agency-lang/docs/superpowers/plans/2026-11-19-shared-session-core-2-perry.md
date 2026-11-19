@@ -58,7 +58,9 @@ Paths in Part A are relative to `packages/agency-lang/`, and `AGENT` means `lib/
 - **The pause reports `fixedProvider`.** When a preset, `--provider` or `settings.model` fixes the provider, a `model` answer's spec is read whole, as a model of that provider. `openai/gpt-4o` under a fixed `anthropic` is a model by that name. So in Task B2, Perry sends `<provider>/<model>` only when `fixedProvider` is "". When one is fixed, it sends the bare model for that provider, and refuses a change to another provider with a reason that names the preset.
 - **The pause's `effort` is "" when no one named one.** The models' own rule then decides what is sent. Perry shows that as its default.
 - **`projectDir()` kept its signature.** It reads `sessionFolder()`, a new global the core sets from `start.cwd`.
-- **The core scans its folder again before each turn,** so an engine that stays up sees a command added since. The terminal keeps its scans for its whole life.
+- **The core scans its folder each time it reads the commands or skills,** and its run's policy is asked. Only the terminal keeps a scan.
+- **`localModels` is not in `ProgramStart`.** It is a fact about the process. Perry calls `_setLocalModelsAllowed(false)` from `agency-lang/stdlib-lib/agentProcess.js` once, when the engine starts.
+- **`main` checks its `start` against the type.** A start with a missing field is refused by name.
 - **`SavedRun` did not move.** Task A5 added only the record's `runFormat` and `_recordRunFormat`. Perry keeps its own `SavedRun`, `isSavedRun` and reader in Task B4. They move when the terminal writes the format (Plan 3).
 - **The terminal's own approval diff has no size limit still.** It renders through `diff` in `std::syntax`, not through hunks, so `editDiff` does not fit it.
 - **With no provider key, `main` fails** with "No LLM API key found. Set one of: …".

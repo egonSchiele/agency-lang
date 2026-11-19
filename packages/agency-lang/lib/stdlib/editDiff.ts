@@ -1,11 +1,8 @@
-// An edit's diff for a front-end to show, from the file before and after
-// it. It is `_diffTokens` with fixed options, limits on how much it will
-// diff, and tokens a client can always decode.
-//
-// The agent's session core emits one for every edit (`session.editDiff`),
-// and a front-end makes the one on an approval from the interrupt's
-// `before` and `after` with this same function, so the two can't differ.
-// See docs/dev/agents/session-core.md.
+// An edit's diff as data for a front-end to draw: `_diffTokens` with the
+// options an approval needs, limits on how much it will diff, and tokens
+// that never split a character. The session core emits one for every edit
+// (`session.editDiff`), and a front-end makes the one on an approval with
+// this same function.
 import { _diffTokens } from "./syntax.js";
 
 /** A piece of a line. `scope` is null: the diff is made with no language,

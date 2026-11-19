@@ -3,23 +3,30 @@ import { SkillCommand, commandsDir } from "std::skills"
 
 import { claudeSkillCommands } from "./claudeSkills.agency"
 import { instructionFolders } from "./projectContext.agency"
-import { sessionFolder } from "./sessionFolder.agency"
+import { oneSessionInThisProcess, sessionFolder } from "./sessionFolder.agency"
 
-/** The commands in the session folder's `.claude/commands`. Scanned the
-  first time this process asks and kept for the process, like the Claude
-  skills (see `skillSources`). */
+// A scan that a rule rejects is no commands, as a missing folder is.
+def scanProjectCommands(folder: string): SkillCommand[] {
+  const scanned = try commandsDir("${folder}/.claude/commands") with approve
+  if (scanned is success(found)) {
+    return found
+  }
+  return []
+}
+
+/** The commands in the session folder's `.claude/commands`. A terminal
+  scans once and keeps the result, like the Claude skills (`skillSources`).
+  Any other front-end scans each time. */
 export def projectCommands(): SkillCommand[] {
   const folder = sessionFolder()
+  if (!oneSessionInThisProcess()) {
+    return scanProjectCommands(folder)
+  }
   const kept = _folderScan("commands", folder)
   if (kept != null) {
     return kept
   }
-  // A scan that a rule rejects is no commands, as a missing folder is.
-  const scanned = try commandsDir("${folder}/.claude/commands") with approve
-  let commands: SkillCommand[] = []
-  if (scanned is success(found)) {
-    commands = found
-  }
+  const commands = scanProjectCommands(folder)
   _keepFolderScan("commands", folder, commands)
   return commands
 }

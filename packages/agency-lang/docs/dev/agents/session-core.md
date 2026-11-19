@@ -32,11 +32,12 @@ own and can change.
 ## The interface
 
 **Start.** `main(start: ProgramStart)`: the brain, a preset, the model
-flags, the tool limits, whether local models may run, and a `SessionStart`
-(the working folder, a reply style line, the session's record, the flags
-the session facts list, and the starting turn budget). A setup that fails
-ends the run with the reason, such as "No LLM API key found. Set one of:
-…" when no provider has a key. The process is not ended.
+flags, the tool limits, and a `SessionStart` (the working folder, a reply
+style line, the session's record, the flags the session facts list, and
+the starting turn budget). `start` is checked against its type, so a
+front-end built for another version is refused with the field that does
+not fit. A setup that fails ends the run with the reason. The process is
+not ended.
 
 **The pause.** The core waits with one interrupt, `agent::sessionInput`.
 Its data is what a front-end shows and saves between turns: `thread`,
@@ -64,13 +65,9 @@ A `model`, `effort` or `preset` answer the core cannot apply changes
 nothing and sends a `session.notice` at level `error` with the reason.
 
 - **A model's provider.** With no provider fixed, `openai/gpt-4o` switches
-  to OpenAI, and the pause then reports the provider as `openai-responses`,
-  the client the agent runs every OpenAI model through. With one fixed, the
-  spec is read whole, as a model of that provider: that is how an
-  OpenRouter model keeps its slash. So under a fixed `anthropic`,
-  `openai/gpt-4o` is a model by that name, and the next turn fails. A
-  front-end reads `fixedProvider` to know which it will get. Only a preset
-  switch changes a fixed provider.
+  to OpenAI. With one fixed, the spec is read whole, as a model of that
+  provider, which is how an OpenRouter model keeps its slash. A front-end
+  reads `fixedProvider` to know which it will get.
 - **A preset replaces the session's own choices:** its models and its
   effort. The preset's effort is then the one in force.
 
@@ -94,12 +91,9 @@ checkpoint, and the front-end answers it.
 **Edit diffs.** The core's one handler around a turn reports every
 `std::edit` as a `session.editDiff` event and then passes. It never
 approves and never rejects. A handler sees an edit even when the run's
-policy answers it, so an edit a rule approves has a diff too. The hunks
-come from `editDiff` in `lib/stdlib/editDiff.ts`, which has limits on how
-much it will diff and returns none past them. A front-end makes the diff
-on an approval from the interrupt's `before` and `after` with the same
-function (`agency-lang/stdlib-lib/editDiff.js`), so the two cannot
-differ.
+policy answers it, so an edit a rule approves has a diff too. A front-end
+makes the diff on an approval with the same function
+(`agency-lang/stdlib-lib/editDiff.js`), so the two cannot differ.
 
 ## Things that are easy to get wrong
 
@@ -167,32 +161,23 @@ A line for the person is a notice (`lib/notice.agency`), which
 The user's own files are read from the folder the session started in
 (`lib/sessionFolder.agency`): `.claude/commands`, the Claude skills, and
 the folder its saved sessions are kept under. The core sets it from
-`start.cwd`. It is not the process's folder, since an engine runs sessions
-from many folders in one process. It is not the agent's working folder
-either, which a coder moves.
+`start.cwd`. The agent's working folder (`getAgentCwd`) starts there too,
+but a coder moves it, and these reads do not follow it.
 
-The scans of that folder are made the first time a process needs them and
-kept for the process, by folder (`lib/stdlib/agentFolderScans.ts`). They
-are not in a checkpoint. A process that resumes a session scans again, and
-sees a command added since. The core also forgets its folder's scans
-before each turn, so an app that stays open sees a new command on the
-next message.
-
-The terminal makes its scans in `runSession` before it installs its policy
-handler. Every handler is asked about an interrupt, so a scan made under
-that handler would be put to the user, or rejected in a `-p` run. So the
-terminal keeps its scans for its whole life, as it kept the statics. In
-the core there is no such handler, and each scan's own `with approve`
-settles it.
+Each read is a scan, with its own `with approve`, that the run's policy is
+asked about. The terminal is the exception: it scans once in `runSession`,
+before it installs its policy handler, and keeps the result for the
+process (`lib/stdlib/agentFolderScans.ts`). A scan made under that handler
+would be put to the user, or rejected in a `-p` run.
 
 ## Local models
 
-A program started with `localModels: false` refuses a
-local request, at the start or from a later answer (`--local`, a local
-preset, or a model spec that names a local provider such as `mlx/…`), with "Local models
-are not available here." An app whose one process holds every session
-sets this. Where they are allowed, a local model that cannot be set up is
-a failure too: nothing in the program ends the process.
+Whether a process can host a local model is a fact about the process, not
+the session. An app whose one process holds every session calls
+`_setLocalModelsAllowed(false)` (`agency-lang/stdlib-lib/agentProcess.js`)
+when it starts. A local request is then refused with "Local models are
+not available here.": `--local`, a local preset, or a model spec that
+names a local provider such as `mlx/…`.
 
 ## Not solved yet
 
@@ -208,7 +193,8 @@ Connections belong to the process.
 | `lib/agents/agency-agent/lib/record.agency` | The session record, the turn count, the title, the thread. |
 | `lib/agents/agency-agent/lib/notice.agency` | `notice`. |
 | `lib/agents/agency-agent/lib/sessionFolder.agency` | The folder a session started in. |
-| `lib/stdlib/agentFolderScans.ts` | The scans a process keeps, by folder. |
+| `lib/stdlib/agentFolderScans.ts` | The scans a terminal keeps. |
+| `lib/stdlib/agentProcess.ts` | What this process can do: host a local model or not. |
 | `lib/stdlib/editDiff.ts` | An edit's hunks, for the core and for a front-end. |
 | `lib/stdlib/agentSessionImports.test.ts` | The import rule. |
 | `tests/agency-js/session-core` | The core, driven as a front-end drives it. |

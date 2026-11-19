@@ -10,7 +10,7 @@ import { now } from "std::date"
 import { cwd } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui/cli"
 
-import { _readTranscript } from "agency-lang/stdlib-lib/agentSessions.js"
+import { _isCheckpoint, _readTranscript } from "agency-lang/stdlib-lib/agentSessions.js"
 
 import { recordTurn, setCurrentRecord } from "./record.agency"
 import {
@@ -131,6 +131,12 @@ export def startSession(chosen: SessionRecord | null, brainName: string) {
   const cp = readCheckpointFile(chosen.id)
   if (cp == null) {
     print(color.red("The checkpoint file for session ${chosen.id} is missing or malformed."))
+    _exit(1)
+  }
+  // The record says the file is a checkpoint. Another front-end's record
+  // that left `runFormat` out would say so too.
+  if (!_isCheckpoint(cp)) {
+    print(color.red("The file for session ${chosen.id} is not a checkpoint this agent can resume."))
     _exit(1)
   }
   print(color.dim("Resuming: ${chosen.title}"))

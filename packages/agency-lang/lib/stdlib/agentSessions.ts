@@ -163,6 +163,11 @@ export async function _readCheckpointFile(dir: string, id: string): Promise<unkn
   return readJson(host, await host.files.root(dir), checkpointFile(id));
 }
 
+/** Whether a run file's JSON is a checkpoint `restore` can read. */
+export function _isCheckpoint(runFile: unknown): boolean {
+  return Checkpoint.fromJSON(runFile) !== null;
+}
+
 export type TranscriptMessage = { role: "user" | "assistant"; content: string };
 
 type ThreadJSON = {

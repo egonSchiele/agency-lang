@@ -3,15 +3,12 @@
   from it: `.claude/commands`, the Claude skills, and the folder its saved
   sessions are kept under.
 
-  It is not the process's folder. A terminal runs one session, in the
-  folder it was started from, so there the two are the same and nothing
-  sets this. An app's engine runs every session from one process, and the
-  session core sets each session's folder at its start.
-
-  It is not the agent's working folder either (`getAgentCwd`), which a
-  coder moves during a session. See docs/dev/agents/session-core.md.
+  The agent's working folder (`getAgentCwd`) starts here too, but a coder
+  moves it during a session, and these reads do not follow it. In a
+  terminal this is the process's folder, and nothing sets it. An app's
+  engine runs sessions from many folders, and the session core sets each
+  one's.
 */
-import { _forgetFolderScans } from "agency-lang/stdlib-lib/agentFolderScans.js"
 import { cwd } from "std::system"
 
 // A `let`, so it follows the session to whichever process resumes it.
@@ -29,11 +26,10 @@ export def sessionFolder(): string {
   return folder
 }
 
-/** Forget what this process kept from scanning the session's folder (its
-  `.claude/commands` and its Claude skills), so the next read scans again.
-
-  The session core calls this before each turn. The terminal must not: a
-  scan made during one of its turns runs under its policy handler. */
-export def forgetSessionFolderScans() {
-  _forgetFolderScans(sessionFolder())
+/** True in a terminal, which runs one session and may keep what it found
+  when it scanned this folder. False once a front-end has set the folder:
+  its process may hold other sessions here, each with a policy of its own,
+  so each read is a scan that session's policy is asked about. */
+export def oneSessionInThisProcess(): boolean {
+  return (_sessionFolder ?? "") == ""
 }

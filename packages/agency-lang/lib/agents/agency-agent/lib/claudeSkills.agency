@@ -10,7 +10,7 @@ import { ClaudeSkillsScan, SkillCommand, SkillEntry, scanClaudeSkills, skillsToo
 import { _folderScan, _keepFolderScan } from "agency-lang/stdlib-lib/agentFolderScans.js"
 import { _repositoryAncestors } from "agency-lang/stdlib-lib/gitignore.js"
 
-import { sessionFolder } from "./sessionFolder.agency"
+import { oneSessionInThisProcess, sessionFolder } from "./sessionFolder.agency"
 
 export type SkillLabel = "personal" | "project"
 
@@ -193,15 +193,13 @@ def loadSkillSources(start: string, home: string): SkillSource[] {
   return mergeSkillSources(sources)
 }
 
-/** The skills of the session's folder. Scanned the first time this
-  process asks, and kept for the process (agentFolderScans.ts), so a turn
-  never scans again.
-
-  The terminal asks once before it installs its policy handler
-  (runSession). A scan made under that handler would be put to the user,
-  or rejected in a `-p` run, since every handler is asked. */
+/** The skills of the session's folder. A terminal scans once and keeps
+  the result (agentFolderScans.ts). Any other front-end scans each time. */
 export def skillSources(): SkillSource[] {
   const folder = sessionFolder()
+  if (!oneSessionInThisProcess()) {
+    return loadSkillSources(folder, os.homedir())
+  }
   const kept = _folderScan("skills", folder)
   if (kept != null) {
     return kept

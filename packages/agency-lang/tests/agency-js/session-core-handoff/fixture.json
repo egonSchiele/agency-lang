@@ -4,6 +4,7 @@
   "pauseModulesHoldNoTerminalCode": true,
   "reply": ["stub reply after the read"],
   "projectCommandAfterResume": "saw: hello from the project",
+  "editDiffsAfterResume": ["edited.txt"],
   "nextPauseEffect": "agent::sessionInput",
   "turnsAfterResume": 1,
   "brainAfterResume": "minimal",

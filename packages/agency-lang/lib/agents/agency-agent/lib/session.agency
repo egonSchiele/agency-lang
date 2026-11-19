@@ -3,6 +3,7 @@
   ABOVE the resolution / slot / shared layers: it imports from them, and
   nothing they own imports back, so there is no import cycle. */
 
+import { _localModelsAllowed } from "agency-lang/stdlib-lib/agentProcess.js"
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import {
   printLocalCatalog,
@@ -127,31 +128,14 @@ export def currentModelRequest(choices: ModelChoices): ModelRequest {
 
 export static const LOCAL_MODELS_OFF = "Local models are not available here."
 
-// Whether this session may run a local model. A global, so it follows the
-// session to whichever process resumes it. A session saved before this
-// existed restores it as null, which counts as allowed.
-let _localModelsAllowed: boolean = true
-
-/** Turn local models off for this session. An app whose one process holds
-  every session does this: a local model is a server that process would
-  have to host. */
-export def setLocalModelsAllowed(on: boolean) {
-  _localModelsAllowed = on
-}
-
-def localModelsAllowed(): boolean {
-  return _localModelsAllowed ?? true
-}
-
-// A slot can name a local provider without `--local` or a local preset:
-// `mlx/some-model` as a model spec does. Where local models are off, that
-// is refused too.
+// Where the process cannot host a local model, a slot on a local provider
+// is refused too. `mlx/some-model` as a model spec names one without
+// `--local` or a local preset.
 def refusesALocalSlot(resolved: Record<string, Resolved>): boolean {
-  if (localModelsAllowed()) {
+  if (_localModelsAllowed()) {
     return false
   }
-  for (slot in Object.keys(resolved)) {
-    const model = resolved[slot]
+  for (slot, model in resolved) {
     if (model != null && LOCAL_PROVIDERS.includes(model.provider)) {
       return true
     }
@@ -163,7 +147,7 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
   """
   Resolve and apply a request's models, local or hosted. A failure
   changes nothing and returns the message. A local request is a failure
-  where local models are turned off (setLocalModelsAllowed). The
+  in a process that cannot host one (agentProcess.ts). The
   web-search setup is the caller's job.
 
   @param request - What the run asked for
@@ -171,13 +155,10 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
   """
   const local = localModelOf(request)
   if (local != null) {
-    if (!localModelsAllowed()) {
+    if (!_localModelsAllowed()) {
       return failure(LOCAL_MODELS_OFF)
     }
-    const configured = configureLocalModel(local.model, local.embedding, local.router)
-    if (isFailure(configured)) {
-      return configured
-    }
+    configureLocalModel(local.model, local.embedding, local.router)?
     applyRequestOptions(request, settings)
     return success(true)
   }

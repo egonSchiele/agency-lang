@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import {
+  _isCheckpoint,
   _listSessions,
   _recordRunFormat,
   _saveSession,
@@ -125,6 +126,13 @@ describe("reading a saved conversation", () => {
       { role: "user", content: "hello" },
       { role: "assistant", content: "hi there" },
     ]);
+  });
+
+  // The check the terminal makes before it restores a file.
+  it("tells a checkpoint from another front-end's saved run", () => {
+    expect(_isCheckpoint(saved)).toBe(true);
+    expect(_isCheckpoint({ version: 1, pause: [{ checkpoint: saved }] })).toBe(false);
+    expect(_isCheckpoint(null)).toBe(false);
   });
 
   it("returns nothing for an unknown id or an empty one", () => {

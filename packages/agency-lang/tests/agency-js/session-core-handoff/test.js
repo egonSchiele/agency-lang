@@ -31,7 +31,7 @@ function lastUserText(config) {
 // The test client. It answers by what the request holds, not by a call
 // count, so the process that resumes needs no state from the one that
 // paused.
-function installClient(setClient, noteDir) {
+function installClient(setClient, noteDir, projectDir) {
   setClient({
     async text(config) {
       const hasTools = (config.tools ?? []).length > 0;
@@ -46,6 +46,19 @@ function installClient(setClient, noteDir) {
       if (said.includes("hello from the project")) return reply(`saw: ${said}`);
       // The session title is asked for with no tools.
       if (!hasTools) return reply("A title");
+      // After the read, in the same turn: one edit, then the reply.
+      const editDone = config.messages.some(
+        (message) => message.role === "tool" && message.name === "edit",
+      );
+      if (readDone && !editDone) {
+        return reply(null, [
+          new ToolCall("call-2", "edit", {
+            filename: "edited.txt",
+            edits: [{ oldText: "before", newText: "after", replaceAll: false }],
+            dir: projectDir,
+          }),
+        ]);
+      }
       if (readDone) return reply("stub reply after the read");
       if (readTried) return reply("the read did not return the note");
       return reply(null, [new ToolCall("call-1", "read", { filename: "note.txt", dir: noteDir })]);
@@ -75,12 +88,14 @@ async function startAndPause() {
   // second has to find it, in a folder that is not the one it runs in.
   mkdirSync(path.join(project, ".claude", "commands"), { recursive: true });
   writeFileSync(path.join(project, ".claude", "commands", "hello.md"), "hello from the project");
+  // The file the turn edits after it is resumed.
+  writeFileSync(path.join(project, "edited.txt"), "before\n");
   // A folder outside the project, so the read is one no rule decides.
   const noteDir = mkdtempSync(path.join(os.tmpdir(), "handoff-notes-"));
   writeFileSync(path.join(noteDir, "note.txt"), "a note");
 
   const program = await import("agency-lang/agent-session");
-  installClient(program.__setLLMClient, noteDir);
+  installClient(program.__setLLMClient, noteDir, project);
 
   const started = await program.main(
     {
@@ -88,7 +103,6 @@ async function startAndPause() {
       preset: "",
       models: { pin: "claude-sonnet-4-6", slots: {}, provider: "", local: null, effort: null },
       limits: { maxToolCallRounds: null, maxToolResultChars: null },
-      localModels: true,
       session: {
         cwd: project,
         replyStyle: "",
@@ -127,6 +141,7 @@ async function startAndPause() {
       ...process.env,
       RESUME: "1",
       NOTE_DIR: noteDir,
+      PROJECT_DIR: project,
       PAUSE_FILE: pauseFile,
       RESUMED_FILE: resumedFile,
     },
@@ -152,13 +167,17 @@ async function startAndPause() {
  *  the approval the first process paused on. */
 async function resume() {
   const program = await import("agency-lang/agent-session");
-  installClient(program.__setLLMClient, process.env.NOTE_DIR);
+  installClient(program.__setLLMClient, process.env.NOTE_DIR, process.env.PROJECT_DIR);
 
   const pause = JSON.parse(readFileSync(process.env.PAUSE_FILE, "utf8"));
   const emitted = [];
+  // The turn goes on to edit a file, which this policy approves. A handler
+  // is not saved in a checkpoint: the core's edit-diff handler has to be
+  // in place again in this process for the edit to be reported.
+  const resumePolicy = { ...policy, "std::edit": [{ action: "approve" }] };
   const next = await program.respondToInterrupts(pause, [program.approve()], {
     metadata: { callbacks: { onEmit: (event) => void emitted.push(event) } },
-    invocation: { policy },
+    invocation: { policy: resumePolicy },
   });
   const paused = program.hasInterrupts(next.data);
   const data = paused ? next.data[0].data : null;
@@ -181,6 +200,9 @@ async function resume() {
     JSON.stringify({
       reply: replies.slice(0, 1),
       projectCommandAfterResume: replies[1] ?? "no reply",
+      editDiffsAfterResume: emitted
+        .filter((event) => event.type === "session.editDiff")
+        .map((event) => event.filename),
       nextPauseEffect: paused ? next.data[0].effect : "the run ended",
       turnsAfterResume: data?.record?.turns,
       brainAfterResume: data?.record?.brain,

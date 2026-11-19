@@ -20,7 +20,7 @@ import { SessionStart } from "./core.agency"
 import { ModelFlags } from "./lib/modelRequest.agency"
 import { notice } from "./lib/notice.agency"
 import { activePreset, startPresetQuiet } from "./lib/presets.agency"
-import { setLocalModelsAllowed, startModels } from "./lib/session.agency"
+import { startModels } from "./lib/session.agency"
 import { loadSettings } from "./lib/settings.agency"
 import { LimitFlags, applyToolLimits, setStartupLimitFlags } from "./lib/toolLimits.agency"
 import { resolveBrainName, setBrainName } from "./lib/turn.agency"
@@ -35,13 +35,12 @@ export type ProgramStart = {
   models: ModelFlags;
   // The startup tool limits.
   limits: LimitFlags;
-  // False where the process cannot host a local model. A local request,
-  // at the start or later, is then refused with the reason.
-  localModels: boolean;
   session: SessionStart
 }
 
-node main(start: ProgramStart) {
+// `start` is checked against its type. A front-end built for another
+// version of this program is refused with the field that does not fit.
+node main(start: ProgramStart!) {
   const settings = loadSettings()
   const brainName = resolveBrainName(start.brain, settings)
   const brainNames = map(agencyAgentBrains(), \entry -> entry.name)
@@ -62,7 +61,6 @@ node main(start: ProgramStart) {
   }
   // The search backend is chosen for this session and not saved: the
   // settings file is the user's, and this may not be their terminal.
-  setLocalModelsAllowed(start.localModels)
   const models = startModels(start.models, false)
   if (models is failure(modelProblem)) {
     throw(modelProblem)

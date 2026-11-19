@@ -14,6 +14,8 @@ const project = mkdtempSync(path.join(os.tmpdir(), "session-core-project-"));
 
 const program = await import("../../../dist/lib/agents/agency-agent/program.js");
 const { main, respondToInterrupts, approve, hasInterrupts, __setLLMClient } = program;
+// Whether this process can host a local model: a front-end says so once.
+const { _setLocalModelsAllowed } = await import("../../../dist/lib/stdlib/agentProcess.js");
 
 const PAUSE = "agent::sessionInput";
 const PIN = { [PAUSE]: [{ action: "propagate" }] };
@@ -85,7 +87,6 @@ function startData(overrides = {}) {
     preset: "",
     models: { pin: "claude-sonnet-4-6", slots: {}, provider: "", local: null, effort: null },
     limits: { maxToolCallRounds: null, maxToolResultChars: null },
-    localModels: true,
     session: {
       cwd: project,
       replyStyle: "",
@@ -234,11 +235,18 @@ result.unknownBrainEndsTheRun = badBrain.ended && errorText(badBrain.result).sli
 const badPreset = await startSession({ preset: "no-such-preset" });
 result.unusablePresetEndsTheRun = badPreset.ended && errorText(badPreset.result) !== "";
 // A local model, where the process cannot host one: refused before anything is loaded.
+_setLocalModelsAllowed(false);
 const localRefused = await startSession({
-  localModels: false,
   models: { pin: "", slots: {}, provider: "", local: "no-such-model", effort: null },
 });
 result.localModelWhereNoneCanRun = localRefused.ended && errorText(localRefused.result);
+_setLocalModelsAllowed(true);
+
+// A start that does not fit the program's type is refused by name. A
+// front-end built for another version of the program sends one.
+const { budget: _left, ...sessionWithoutABudget } = startData().session;
+const misfit = await startSession({ session: sessionWithoutABudget });
+result.startMissingAField = misfit.ended && errorText(misfit.result);
 // The process goes on: the next session starts and reaches its pause.
 const afterFailures = await startSession();
 result.sessionStartsAfterFailedSetups = !afterFailures.ended && afterFailures.pause[0].effect;
@@ -300,7 +308,8 @@ writeFileSync(
   }),
 );
 const noModelFlags = { pin: "", slots: {}, provider: "", local: null, effort: null };
-const preset = await startSession({ models: noModelFlags, localModels: false });
+_setLocalModelsAllowed(false);
+const preset = await startSession({ models: noModelFlags });
 await preset.answer({ kind: "effort", effort: "low" });
 await preset.answer({ kind: "preset", name: "big" });
 result.presetSwitch = {
@@ -322,7 +331,7 @@ result.localPresetWhereNoneCanRun = {
 // A model named with the provider a person sees. The agent runs every
 // OpenAI model through its `openai-responses` client, and reports that.
 process.env.OPENAI_API_KEY = "test-key";
-const plain = await startSession({ models: noModelFlags, localModels: false });
+const plain = await startSession({ models: noModelFlags });
 result.fixedProviderWithNoPreset = pauseData(plain).fixedProvider;
 // A model spec that names a local provider is refused too.
 const mainBeforeLocalSpec = pauseData(plain).models.main?.model;

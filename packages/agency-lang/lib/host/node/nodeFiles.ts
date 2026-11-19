@@ -762,12 +762,16 @@ export function mkdir(root: Root, target: string): void {
 
 /** See `HostFiles.privateDir`. `lstat` reads the folder itself, so a link
  *  planted at the name fails the "real folder" check. */
-export function privateDir(root: Root, target: string): void {
+export function privateDir(
+  root: Root,
+  target: string,
+  options: { mustBeNew?: boolean } = {},
+): void {
   const dir = resolveUnder(root, target);
   try {
     fs.mkdirSync(dir, { mode: 0o700 });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST" || options.mustBeNew) {
       throw error;
     }
   }

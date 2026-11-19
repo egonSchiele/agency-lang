@@ -148,8 +148,10 @@ export type HostFiles = {
    *  anyone else (mode 0700). Its parent must exist. Throws, naming the
    *  folder, when an existing one fails a check; it never changes an
    *  existing folder's mode. For a folder in a shared place such as
-   *  `/tmp`, where another user could create it first. */
-  privateDir(root: Root, target: string): Promise<void>;
+   *  `/tmp`, where another user could create it first. With `mustBeNew`,
+   *  an existing folder is an error whose `code` is `EEXIST`, for a caller
+   *  that picks a fresh name and must never share a folder. */
+  privateDir(root: Root, target: string, options?: { mustBeNew?: boolean }): Promise<void>;
   remove(root: Root, target: string): Promise<void>;
   copy(from: Located, to: Located): Promise<void>;
   move(from: Located, to: Located): Promise<void>;

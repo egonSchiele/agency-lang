@@ -6,7 +6,7 @@
 // file appears, and writes the ending into the record. See
 // docs/dev/stdlib/jobs.md.
 import type { AppendableFile, Host, Root, RunResult, RunningProcess } from "../../host/host.js";
-import type { Clock } from "../clock.js";
+import { clockSleep } from "./clockSleep.js";
 import {
   JOB_OUTPUT_CAP_BYTES,
   STDERR_FILE,
@@ -107,7 +107,7 @@ async function watch(
     .wait()
     .then((result: RunResult) => endingOf(result, JOB_OUTPUT_CAP_BYTES), failedEnding);
   for (;;) {
-    const pause = sleep(host.clock, pollMs);
+    const pause = clockSleep(host.clock, pollMs);
     const ended = await Promise.race([outcome, pause.done.then(() => null)]);
     pause.cancel();
     await outputs.copy(running.output());
@@ -167,23 +167,6 @@ async function openOutputs(host: Host, root: Root): Promise<Outputs> {
     close: async () => {
       await files.stdout.close();
       await files.stderr.close();
-    },
-  };
-}
-
-/** A wait on the host's clock that can be cancelled, so a runner whose
- *  command has ended does not wait out a timer before it exits. */
-function sleep(clock: Clock, ms: number): { done: Promise<void>; cancel: () => void } {
-  let handle: ReturnType<Clock["setTimer"]> | null = null;
-  const done = new Promise<void>((resolve) => {
-    handle = clock.setTimer(resolve, ms);
-  });
-  return {
-    done,
-    cancel: () => {
-      if (handle !== null) {
-        clock.clearTimer(handle);
-      }
     },
   };
 }

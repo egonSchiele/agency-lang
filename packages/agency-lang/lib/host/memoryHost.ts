@@ -474,8 +474,14 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
       makeFolders(state, resolve(root, target), "mkdir");
     },
     // One user and no modes in memory, so a folder is always private.
-    privateDir: async (root, target) => {
-      makeFolders(state, resolve(root, target), "mkdir");
+    privateDir: async (root, target, options) => {
+      const full = resolve(root, target);
+      if (options?.mustBeNew && store.kindOf(full) !== null) {
+        throw Object.assign(new Error(`EEXIST: folder already exists, mkdir '${full}'`), {
+          code: "EEXIST",
+        });
+      }
+      makeFolders(state, full, "mkdir");
     },
     remove: async (root, target) => store.removeTree(resolve(root, target)),
     copy: async (from: Located, to: Located) => {

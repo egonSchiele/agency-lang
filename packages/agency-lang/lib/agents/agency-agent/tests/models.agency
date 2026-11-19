@@ -14,6 +14,7 @@ import {
   parseModelFlag,
   knownProviders,
   providerForModel,
+  takesSlashModelNames,
  } from "../lib/models.agency"
 
 static const KNOWN = ["openai", "anthropic", "google", "openrouter", "litellm"]
@@ -156,4 +157,16 @@ node uncatalogedModelFallsBackToOpenai(): string {
     return "ERR"
   }
   return r.value
+}
+
+// Which providers' own model names can hold a `/`.
+node slashModelNamesByProvider(): Record<string, boolean> {
+  return {
+    anthropic: takesSlashModelNames("anthropic"),
+    openai: takesSlashModelNames("openai"),
+    google: takesSlashModelNames("google"),
+    openrouter: takesSlashModelNames("openrouter"),
+    litellm: takesSlashModelNames("litellm"),
+    mlx: takesSlashModelNames("mlx")
+  }
 }

@@ -52,6 +52,7 @@
     { "nodeName": "openaiModelStaysOpenai", "input": "", "expectedOutput": "\"openai\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "responsesOnlyModelGetsThePublicName", "input": "", "expectedOutput": "\"openai\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "uncatalogedModelHasNoProvider", "input": "", "expectedOutput": "\"\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "uncatalogedModelFallsBackToOpenai", "input": "", "expectedOutput": "\"openai\"", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "uncatalogedModelFallsBackToOpenai", "input": "", "expectedOutput": "\"openai\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "slashModelNamesByProvider", "input": "", "expectedOutput": "{\"anthropic\":false,\"openai\":false,\"google\":false,\"openrouter\":true,\"litellm\":true,\"mlx\":true}", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

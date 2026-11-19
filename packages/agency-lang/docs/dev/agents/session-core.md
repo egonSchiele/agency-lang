@@ -67,11 +67,20 @@ Its data is what a front-end shows and saves between turns: `thread`,
 A `model`, `effort` or `preset` answer the core cannot apply changes
 nothing and sends a `session.notice` at level `error` with the reason.
 
-- **A model's provider.** With no provider fixed, `openai/gpt-4o` switches
-  to OpenAI, and a spec whose part before the first `/` is not a known
-  provider (`groq/llama-3`) is refused: `Unknown provider: groq. Known: ...`. With one fixed, the spec is read whole, as a model of that
-  provider, which is how an OpenRouter model keeps its slash. A front-end
-  reads `fixedProvider` to know which it will get.
+- **A model's provider.** `openai/gpt-4o` names a known provider, so with
+  no provider fixed it switches to OpenAI.
+  - With a provider fixed, the spec is read whole, as a model of that
+    provider. That is how an OpenRouter model keeps its slash. A
+    front-end reads `fixedProvider` to know which it will get.
+  - A provider found from an API key fixes nothing. Some providers' own
+    model names hold a slash: OpenRouter's `z-ai/glm-5.2`, LiteLLM's
+    `azure/gpt-4o`. On such a session the spec is read whole too.
+  - Otherwise a spec whose part before the first `/` is not a known
+    provider is refused. On an anthropic session, `groq/llama-3` gives
+    `Unknown provider: groq. Known: ...`.
+  - `takesSlashModelNames` in `lib/models.agency` says which providers
+    take slash names: any without built-in defaults, and any whose
+    defaults hold a slash.
 - **A preset replaces the session's own choices:** its models and its
   effort. The preset's effort is then the one in force.
 

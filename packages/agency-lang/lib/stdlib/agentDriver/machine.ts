@@ -50,6 +50,9 @@ export type DriverPhase =
 export type Happened =
   | { type: "submitted"; text: string }
   | { type: "turnCancelled" }
+  // A turn ran to its end: the run waits for a message again. A settings
+  // change that comes back reports `answered` instead.
+  | { type: "turnFinished" }
   | { type: "legFailed"; error: string }
   | { type: "startFailed"; error: string }
   // An approval answered without asking. `by` says what answered it.
@@ -184,7 +187,10 @@ function legSucceeded(args: { phase: WorkingPhase; step: AgentStep; settle: Sett
   const { phase, step, settle } = args;
   switch (step.kind) {
     case "waitingForUser":
-      return unchanged({ kind: "waitingForUser", pause: step.interrupts, cancelledTexts: [] });
+      return {
+        phase: { kind: "waitingForUser", pause: step.interrupts, cancelledTexts: [] },
+        happened: [{ type: "turnFinished" }],
+      };
     case "needsApproval":
       return toApprovalOrWork(turnOf(phase), startQueue({ interrupts: step.interrupts, settle }));
     case "cancelled":

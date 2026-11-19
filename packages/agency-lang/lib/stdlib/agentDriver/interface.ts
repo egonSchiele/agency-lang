@@ -7,7 +7,7 @@
 // fixture program never loads the agent.
 import type { Interrupt } from "../../runtime/interrupts.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
-import type { SessionRecord } from "../agentSessions.js";
+import { isSessionRecord, type SessionRecord } from "../agentSessions.js";
 
 /** The effect of the pause the core waits for an answer at. */
 export const SESSION_INPUT_EFFECT = "agent::sessionInput";
@@ -98,19 +98,6 @@ function isResolvedModel(value: unknown): value is ResolvedModel {
 
 function isModels(value: unknown): value is Record<string, ResolvedModel> {
   return isPlainObject(value) && Object.values(value).every(isResolvedModel);
-}
-
-function isSessionRecord(value: unknown): value is SessionRecord {
-  return (
-    isPlainObject(value) &&
-    typeof value.id === "string" &&
-    typeof value.cwd === "string" &&
-    typeof value.brain === "string" &&
-    typeof value.created === "number" &&
-    typeof value.lastActive === "number" &&
-    typeof value.turns === "number" &&
-    typeof value.title === "string"
-  );
 }
 
 function text(value: unknown): string {

@@ -12,12 +12,17 @@ import {
   _saveSession,
   _searchSessions,
   _readCheckpointFile,
+  _readSessionRecord,
   _readTranscript,
   matchingMessages,
   queryWords,
   type TranscriptMessage,
 } from "./agentSessions.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
+import {
+  __resetModuleFingerprintRegistry,
+  registerModuleFingerprint,
+} from "../runtime/moduleFingerprintRegistry.js";
 
 async function withDir(fn: (dir: string) => Promise<void>): Promise<void> {
   const dir = fs.mkdtempSync(path.join(process.cwd(), ".sessions-test-"));
@@ -247,6 +252,13 @@ describe("saved run format", () => {
     expect(canResume({ version: 1, pause: [pause], cancelledTexts: [], turn: null } as never)).toBe(
       true,
     );
+    registerModuleFingerprint("src/agency/loaded.agency", "1111");
+    try {
+      expect(canResume(pausedIn("src/agency/loaded.agency", "1111"))).toBe(true);
+      expect(canResume(pausedIn("src/agency/loaded.agency", "2222"))).toBe(false);
+    } finally {
+      __resetModuleFingerprintRegistry();
+    }
   });
 
   it("readSavedRun reads a saved run and returns null for anything else", () =>
@@ -265,6 +277,17 @@ describe("saved run format", () => {
       const held = { ...record("h", 1), heldBy: { frontEnd: "terminal", pid: 42 } };
       await _saveSession(dir, held, {});
       await _saveSession(dir, { ...record("bad", 2), heldBy: { frontEnd: 1 } } as never, {});
+      const fractionalPid = { frontEnd: "terminal", pid: 1.5 };
+      await _saveSession(dir, { ...record("half", 3), heldBy: fractionalPid }, {});
       expect(await _listSessions(dir)).toEqual([held]);
+    }));
+
+  it("_readSessionRecord reads one record, and null for a missing or malformed one", () =>
+    withDir(async (dir) => {
+      await _saveSession(dir, record("a", 1), {});
+      await _saveSession(dir, { ...record("bad", 2), turns: -1 }, {});
+      expect(await _readSessionRecord(dir, "a")).toEqual(record("a", 1));
+      expect(await _readSessionRecord(dir, "bad")).toBeNull();
+      expect(await _readSessionRecord(dir, "missing")).toBeNull();
     }));
 });

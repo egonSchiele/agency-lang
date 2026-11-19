@@ -93,6 +93,7 @@ checkpoint, and the front-end answers it.
   again when a paused run is resumed, and `g` takes the saved frame of
   `f` ("Resume desync"). This is a compiler bug. The core works the
   turn's message out on its own line, then calls `try runTurn(...)`.
+  Reported as agency-lang #1506.
   `lib/repl.agency` has the old shape, `try runTurn("", withPendingNotes(msg))`.
   It is safe there only because the terminal never resumes in the middle
   of a turn, and has to change when the terminal moves onto the core.
@@ -172,10 +173,26 @@ Connections belong to the process.
 
 ## The terminal: what the check found
 
-Not run yet. The check is whether `repl()` works over a session run on a
-real terminal: the pinned approval prompt, Esc, the turn's footer and
-Ctrl+D. It needs a person at a terminal. The program for it is on the
-branch `spike/run-in-run`, in `spike-run-in-run/shell.agency`.
+Run by hand on 2026-11-19, on a real terminal, with the program on the
+branch `spike/run-in-run` (`spike-run-in-run/shell.agency`). It runs
+`repl()` in a shell run, and each line goes to a driver that runs a small
+core as a second run.
+
+- **A line reaches the core and its reply is printed.** Works.
+- **The pinned approval prompt.** Works: the core paused on an approval,
+  the prompt was drawn by `interruptChoice` in the shell's run, and the
+  answer reached the core.
+- **Esc during a turn.** Works. The driver gives the core's leg the shell
+  run's abort signal, and Esc returned to the prompt.
+- **Ctrl+D.** Exits cleanly.
+- **The turn's footer.** Not tested. The check passed no `status`
+  callback, and `printFooter` in `lib/stdlib/cli.ts` prints nothing
+  without one. The footer's token counts are read from the shell's run,
+  so they would have shown none of the core's usage in any case. That
+  still has to change.
+
+So the terminal can keep `repl()` and its prompt code when it moves onto
+the core.
 
 ## Files
 

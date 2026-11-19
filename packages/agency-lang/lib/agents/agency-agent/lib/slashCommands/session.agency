@@ -1,0 +1,38 @@
+/** @module
+  @summary `/rename` and `/fork`: the terminal's lines for what they did.
+  `renameSession` and `forkSession` return facts, and each front-end
+  words them itself.
+*/
+import { Forked, Renamed, isIncognito } from "../record.agency"
+
+/** The line `/rename` prints. */
+export def renameLine(result: Result<Renamed>): string {
+  if (result is success(renamed)) {
+    return "Session renamed: ${renamed.title}"
+  }
+  if (result is failure(reason)) {
+    if (reason == "empty title") {
+      return "Usage: /rename <title>"
+    }
+    if (isIncognito()) {
+      return "Incognito sessions are not saved, so there is nothing to rename."
+    }
+  }
+  return "No session to rename."
+}
+
+/** The line `/fork` prints. */
+export def forkLine(result: Result<Forked>): string {
+  if (result is success(forked)) {
+    return "Forked. This session is now a copy. The original is still saved; reopen it with: agency agent --resume ${forked.forkedFrom}"
+  }
+  if (result is failure(reason)) {
+    if (reason == "no turns") {
+      return "This session has no turns yet, so there is nothing to fork."
+    }
+    if (isIncognito()) {
+      return "Incognito sessions are not saved, so there is nothing to fork."
+    }
+  }
+  return "No session to fork."
+}

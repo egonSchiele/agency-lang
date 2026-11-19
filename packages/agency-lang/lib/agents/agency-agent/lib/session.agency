@@ -748,19 +748,31 @@ export def saveSessionPreset(name: string, choices: ModelChoices): string[] {
   @param name - The preset to write, or "" for the active one
   @param choices - This session's /model choices
   """
+  const saved = writeSessionPreset(name, choices)
+  if (saved is failure(reason)) {
+    return [reason]
+  }
+  return saved.value
+}
+
+/** `saveSessionPreset`, with a save that was refused as a failure that
+  holds the line saying why. Success holds the lines to show, which say
+  what was saved, or that there was nothing to save. The session core
+  sends a failure as an error notice. */
+export def writeSessionPreset(name: string, choices: ModelChoices): Result<string[]> {
   const target = if name == "" then activePresetName() else name
   if (target == "") {
-    return ["No preset is active. Name one: /preset save <name>"]
+    return failure("No preset is active. Name one: /preset save <name>")
   }
   const request = currentModelRequest(choices)
   if (movedByLocalCommand(request)) {
-    return ["Not saved: this session moved to or from a local model with /local, which a save cannot copy. Start with --local or a local preset, then save."]
+    return failure("Not saved: this session moved to or from a local model with /local, which a save cannot copy. Start with --local or a local preset, then save.")
   }
   const settingsFixProvider = (_startupModelSettings.provider ?? "") != ""
   const preset = sessionPreset(request, startupLimitFlags(), getResolvedSlots(), settingsFixProvider)
   const checked = checkPreset(target, preset, false)
   if (checked is failure(reason)) {
-    return ["Not saved: ${reason}"]
+    return failure("Not saved: ${reason}")
   }
   // A new name, or a saved preset that is not valid: every field prints.
   let before: Preset | null = null
@@ -770,16 +782,16 @@ export def saveSessionPreset(name: string, choices: ModelChoices): string[] {
   }
   const changes = presetChangeLines(before, checked.value)
   if (changes.length == 0 && before != null) {
-    return ["Nothing to save: this session matches the '${target}' preset."]
+    return success(["Nothing to save: this session matches the '${target}' preset."])
   }
   // The user asked for this write, so this handler does not object. A
   // policy in the chain still decides.
   const edited = editPresets({ kind: "save", name: target, preset: checked.value }) with approve
   if (edited is failure(reason)) {
-    return ["Not saved: ${reason}"]
+    return failure("Not saved: ${reason}")
   }
   const heading = if edited.value.existed then "Saved the '${target}' preset:" else "Created the '${target}' preset:"
-  return [heading, ...changes]
+  return success([heading, ...changes])
 }
 
 export def switchPreset(name: string): Result<PresetSwitch> {

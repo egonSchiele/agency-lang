@@ -308,6 +308,8 @@ Replacing the default preset keeps its `default` flag.
 limits to the active preset, and `/preset save <name>` writes them to
 that name. `saveSessionPreset` in `lib/session.agency` does the save, and
 `sessionPreset` in `lib/presetSnapshot.agency` builds the preset.
+`writeSessionPreset` is the same save with a refusal as a failure, which
+the session core's `savePreset` answer sends as an error notice.
 
 The rule is that the saved preset, loaded in a fresh session with no
 flags and no `/model` choices, resolves to the same models, effort,

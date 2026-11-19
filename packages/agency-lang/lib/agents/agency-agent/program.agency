@@ -14,6 +14,7 @@ import { agencyAgentBrains } from "std::agents/agency"
 import { map } from "std::array"
 import { setLlmOptions } from "std::llm"
 import { disableMemory } from "std::memory"
+import { setAgentName } from "std::statelog"
 
 import node { session } from "./core.agency"
 import { SessionStart } from "./core.agency"
@@ -35,7 +36,15 @@ export type ProgramStart = {
   models: ModelFlags;
   // The startup tool limits.
   limits: LimitFlags;
-  session: SessionStart
+  session: SessionStart;
+  // The name the run's statelog groups it under, such as
+  // "agency-agent/coordinator". Left out or "", none is set. Optional, so
+  // a front-end built before it existed still starts.
+  agentName?: string;
+  // Whether the run takes one message and ends, as `agency agent -p`
+  // does. Such a run gets more tool rounds by default. Left out, it is a
+  // session that goes on.
+  oneShot?: boolean
 }
 
 // `start` is checked against its type. A front-end built for another
@@ -49,6 +58,15 @@ node main(start: ProgramStart!) {
     return
   }
   setBrainName(brainName)
+  // A name that is not a valid statelog name ends the run with the reason.
+  const agentName = start.agentName ?? ""
+  if (agentName != "") {
+    const named = try setAgentName(agentName)
+    if (named is failure(nameProblem)) {
+      throw(nameProblem)
+      return
+    }
+  }
 
   // The preset comes before the models: it is one of their layers.
   const preset = startPresetQuiet(start.preset, settings)
@@ -68,9 +86,9 @@ node main(start: ProgramStart!) {
   }
 
   setStartupLimitFlags(start.limits)
-  // The limits of a session that goes on, not of a run that takes one
-  // message and ends: the core pauses again after every turn.
-  applyToolLimits(activePreset(), false)
+  // A one-shot run gets more tool rounds by default, as `-p` does: no one
+  // is there to ask for more.
+  applyToolLimits(activePreset(), start.oneShot ?? false)
   const capsMaxTokens = getCapabilities().maxTokens
   if (capsMaxTokens != null) {
     setLlmOptions({

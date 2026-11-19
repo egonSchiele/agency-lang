@@ -54,6 +54,12 @@ export type ProgramStart = {
   models: ModelFlags;
   limits: LimitFlags;
   session: SessionStart;
+  /** The name the run's statelog groups it under, such as
+   *  "agency-agent/coordinator". Left out or "", none is set. */
+  agentName?: string;
+  /** A run that takes one message and ends, as `agency agent -p`. It gets
+   *  more tool rounds by default. Left out, the session goes on. */
+  oneShot?: boolean;
 };
 
 /** A slot's model. `provider` is the name the run uses, which for OpenAI
@@ -63,7 +69,9 @@ export type ResolvedModel = { model: string; provider: string; via: string };
 /** What the core reports at its pause. `effort` is "" when no one named
  *  one. `fixedProvider` is "" or the provider the session is fixed to, by
  *  the name a person sees. `policy` is the session's own policy, or null
- *  when it carries none. */
+ *  when it carries none. `search` is the web search backend in force:
+ *  "hosted", "tavily", "brave" or "off" ("" from a core that did not
+ *  report one). */
 export type PauseData = {
   thread: string;
   cwd: string;
@@ -76,20 +84,37 @@ export type PauseData = {
   context: string;
   brain: string;
   policy: Policy | null;
+  search: string;
 };
 
 export type MessageAnswer = { kind: "message"; text: string; notes: string[]; target: string };
 
-/** An answer that changes the chat's settings. Each is one of the core's:
- *  it applies it and pauses again, with no model call. `options` is
- *  `unknown` for the reason the core types it `any`: checking it against
- *  a type would fill in fields, and a null LLM option means "remove it". */
+/** An answer that changes the session and is not a turn. The core applies
+ *  it and pauses again. Only `compact` calls a model, for the summary.
+ *  One the core refuses changes nothing, and it says why in an error
+ *  notice. `options` is `unknown` for the reason the core types it `any`:
+ *  checking it against a type would fill in fields, and a null LLM option
+ *  means "remove it".
+ *
+ *  - `compact`: summarize the older messages now. `keep` says what the
+ *    summary must keep, or "".
+ *  - `rename`: the session's new title.
+ *  - `fork`: from here on the session is a copy with a new `record.id`,
+ *    and `record.forkedFrom` names the original.
+ *  - `search`: switch the web search backend, and save it to settings.json.
+ *  - `savePreset`: save the session's models and options to a preset, ""
+ *    for the active one. */
 export type SettingsAnswer =
   | { kind: "model"; spec: string }
   | { kind: "options"; options: unknown }
   | { kind: "effort"; effort: string }
   | { kind: "preset"; name: string }
-  | { kind: "budget"; maxCost: number; maxTime: number };
+  | { kind: "budget"; maxCost: number; maxTime: number }
+  | { kind: "compact"; keep: string }
+  | { kind: "rename"; title: string }
+  | { kind: "fork" }
+  | { kind: "search"; backend: string }
+  | { kind: "savePreset"; name: string };
 
 export type Answer = MessageAnswer | SettingsAnswer;
 
@@ -166,5 +191,6 @@ export function pauseData(pause: Interrupt[]): PauseData | null {
     context: text(data.context),
     brain: text(data.brain),
     policy: policy.value,
+    search: text(data.search),
   };
 }

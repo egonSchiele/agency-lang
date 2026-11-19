@@ -31,7 +31,8 @@ export type Leg = { interrupts: Interrupt[]; responses: InterruptResponse[] };
  *  requests cancelled since the last turn that finished.
  *
  *  `answering` is a settings change on its way into the run. It is not a
- *  turn: the run applies it and pauses again, with no model call. */
+ *  turn: the run applies it and pauses again. Only a `compact` calls a
+ *  model, for its summary. */
 export type DriverPhase =
   | { kind: "starting" }
   | { kind: "waitingForUser"; pause: Interrupt[]; cancelledTexts: string[] }

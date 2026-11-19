@@ -40,6 +40,7 @@ function reported(model: string): PauseData {
     context: "",
     brain: "simple",
     policy: null,
+    search: "hosted",
   };
 }
 

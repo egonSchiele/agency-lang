@@ -137,5 +137,95 @@
     "model": "z-ai/glm-5.2",
     "provider": "openrouter",
     "errors": 0
+  },
+  "rename": {
+    "notice": { "level": "info", "text": "Session renamed: The grep work" },
+    "title": "The grep work",
+    "emptyTitle": {
+      "notice": { "level": "error", "text": "Could not rename the session: a title can't be empty." },
+      "titleKept": "The grep work"
+    },
+    "notSaved": {
+      "notice": { "level": "error", "text": "Could not rename the session: this session is not saved." },
+      "record": null
+    }
+  },
+  "fork": {
+    "noTurns": {
+      "notice": { "level": "error", "text": "Could not fork the session: it has no turns yet." },
+      "idKept": "s1"
+    },
+    "taken": {
+      "notice": {
+        "level": "info",
+        "text": "Forked. This session is now a copy. The original, s1, is still saved."
+      },
+      "newId": true,
+      "forkedFrom": "s1",
+      "turns": 1,
+      "title": "The grep work",
+      "keepsTheThread": true
+    },
+    "notSaved": { "level": "error", "text": "Could not fork the session: this session is not saved." }
+  },
+  "compact": {
+    "nothingYet": { "level": "error", "text": "Nothing to compact yet." },
+    "notices": [
+      "info: Compacting the conversation.",
+      "info: Compacted: a summary replaced 2 earlier messages."
+    ],
+    "summaryAskedForTheKeep": true,
+    "nextMessage": {
+      "reply": "stub reply",
+      "longMessageSent": false,
+      "pausedOn": "agent::sessionInput"
+    }
+  },
+  "search": {
+    "atStart": "hosted",
+    "afterOff": "off",
+    "saved": { "backend": "off" },
+    "unknown": {
+      "notice": {
+        "level": "error",
+        "text": "Could not switch the search backend: Unknown search backend: bing. Valid: hosted, brave, tavily, off"
+      },
+      "kept": "off"
+    },
+    "withNoKey": {
+      "notice": {
+        "level": "error",
+        "text": "Could not switch the search backend: Tavily needs TAVILY_API_KEY, which is not set."
+      },
+      "kept": "off"
+    }
+  },
+  "savePreset": {
+    "notice": {
+      "level": "info",
+      "text": "Created the 'fast' preset:\n  slots.main: (none) → anthropic/claude-sonnet-4-6\n  slots.reasoning: (none) → anthropic/claude-sonnet-4-6"
+    },
+    "saved": {
+      "slots": {
+        "main": "anthropic/claude-sonnet-4-6",
+        "reasoning": "anthropic/claude-sonnet-4-6"
+      }
+    },
+    "presetKept": "",
+    "noneActive": {
+      "level": "error",
+      "text": "No preset is active. Name one: /preset save <name>"
+    },
+    "badName": "error",
+    "refusalsWroteNothing": true
+  },
+  "agentName": {
+    "valid": "agent::sessionInput",
+    "invalid": "setAgentName:"
+  },
+  "startWithNeither": "agent::sessionInput",
+  "toolRounds": {
+    "oneShot": "Of the 100 tool rounds for this ",
+    "session": "Of the 50 tool rounds for this r"
   }
 }

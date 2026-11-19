@@ -13,6 +13,7 @@ import {
   setConversationThread,
  } from "../lib/record.agency"
 import { startSession } from "../lib/resume.agency"
+import { forkLine } from "../lib/slashCommands/session.agency"
 import { SessionRecord, displayTitle, saveSession, sessionLabel } from "../lib/sessions.agency"
 import { SessionHit, TimedHit, datedHit, searchSessions } from "../lib/sessionSearch.agency"
 
@@ -101,8 +102,13 @@ node aHitCarriesADateAndAnAge(): boolean {
 node forkNeedsATurn(): boolean {
   startSession(null, BRAIN)
   const before = currentSessionId()
-  const line = forkSession()
-  return line.includes("no turns yet") && currentSessionId() == before
+  const forked = forkSession()
+  const line = forkLine(forked)
+  let fact = false
+  if (forked is failure(reason)) {
+    fact = reason == "no turns"
+  }
+  return fact && line.includes("no turns yet") && currentSessionId() == before
 }
 
 node forkWritesToANewSession(): boolean {
@@ -110,10 +116,15 @@ node forkWritesToANewSession(): boolean {
   markTurnDone()
   recordTurn("hello")
   const original = currentSessionId()
-  const line = forkSession()
+  const forked = forkSession()
+  const line = forkLine(forked)
   const target = recordTurn("")
   const isNew = currentSessionId() != original
-  const namesTheOriginal = line.includes("--resume ${original}")
+  let fact = false
+  if (forked is success(ids)) {
+    fact = ids.id == currentSessionId() && ids.forkedFrom == original
+  }
+  const namesTheOriginal = fact && line.includes("--resume ${original}")
   const savedWithoutATurn = target != null && target.record.id == currentSessionId() && target.record.turns == 1
   const remembersItsOrigin = target != null && target.record.forkedFrom == original
   return isNew && namesTheOriginal && savedWithoutATurn && remembersItsOrigin

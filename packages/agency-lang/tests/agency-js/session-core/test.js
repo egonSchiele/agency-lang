@@ -34,12 +34,62 @@ function lastUserText(config) {
 // call's last user message.
 const temperatureSent = {};
 const effortSent = {};
+// Whether a call's messages held the long message a compaction summarizes,
+// keyed the same way.
+const LONG_MARK = "LONGMARK";
+const longTextSent = {};
+// The prompts of the summary calls compactions made.
+const summaryPrompts = [];
+
+function messageText(message) {
+  const content = message.content;
+  if (typeof content === "string") return content;
+  return Array.isArray(content) ? content.map((part) => part.text ?? "").join("") : "";
+}
+
+function stubReply(output, toolCalls = []) {
+  return {
+    success: true,
+    value: {
+      output,
+      toolCalls,
+      model: "test",
+      usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 },
+      cost: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" },
+    },
+  };
+}
+
+// One edit, then a reply that quotes the round warning the tool loop sent
+// after it. The warning names the call's limit on tool rounds.
+function roundsReply(config) {
+  const edited = config.messages.some((message) => message.role === "tool");
+  if (!edited) {
+    const edit = new ToolCall("call-rounds", "edit", {
+      filename: "rounds.txt",
+      edits: [{ oldText: "old line", newText: "new line", replaceAll: false }],
+      dir: project,
+    });
+    return stubReply(null, [edit]);
+  }
+  const warning = config.messages
+    .map(messageText)
+    .find((text) => text.includes("tool rounds for this request"));
+  return stubReply(warning ?? "no warning");
+}
 
 __setLLMClient({
   async text(config) {
     const said = lastUserText(config);
     temperatureSent[said] = config.temperature ?? "none";
     effortSent[said] = config.reasoningEffort ?? "none";
+    longTextSent[said] = config.messages.some((message) => messageText(message).includes(LONG_MARK));
+    if (said.includes("Reply with the summary only.")) {
+      summaryPrompts.push(said);
+    }
+    if (config.messages.some((message) => messageText(message).includes("how many tool rounds"))) {
+      return roundsReply(config);
+    }
     if (said.includes("edit the note")) {
       // One edit, then a reply once the tool's result is in the conversation.
       const edited = config.messages.some((message) => message.role === "tool");
@@ -429,6 +479,123 @@ delete process.env.OPENROUTER_API_KEY;
 for (const [name, value] of Object.entries(keysBefore)) {
   if (value !== undefined) process.env[name] = value;
 }
+
+// The terminal's commands as answers. Each is taken, the pause after it
+// reports the change, and a refusal is an error notice that changes
+// nothing.
+const lastNotice = (session) => {
+  const notice = eventsOf(session, "session.notice").pop();
+  return { level: notice?.level, text: notice?.text };
+};
+// The settings file's text, or "" when there is none.
+const settingsText = () => (existsSync(settingsFile) ? readFileSync(settingsFile, "utf8") : "");
+const settingsSaved = () => (existsSync(settingsFile) ? JSON.parse(settingsText()) : {});
+
+// `rename`.
+const renamer = await startSession();
+await renamer.answer({ kind: "rename", title: "  The   grep work " });
+result.rename = { notice: lastNotice(renamer), title: pauseData(renamer).record.title };
+await renamer.answer({ kind: "rename", title: "   " });
+result.rename.emptyTitle = { notice: lastNotice(renamer), titleKept: pauseData(renamer).record.title };
+const unsaved = await startSession({ session: { ...startData().session, record: null } });
+await unsaved.answer({ kind: "rename", title: "a title" });
+result.rename.notSaved = { notice: lastNotice(unsaved), record: pauseData(unsaved).record };
+
+// `fork`. It needs a turn to copy.
+await renamer.answer({ kind: "fork" });
+result.fork = { noTurns: { notice: lastNotice(renamer), idKept: pauseData(renamer).record.id } };
+await renamer.answer(message("hello"));
+const threadBeforeFork = pauseData(renamer).thread;
+await renamer.answer({ kind: "fork" });
+const forkedRecord = pauseData(renamer).record;
+result.fork.taken = {
+  notice: lastNotice(renamer),
+  newId: forkedRecord.id !== "s1",
+  forkedFrom: forkedRecord.forkedFrom,
+  turns: forkedRecord.turns,
+  title: forkedRecord.title,
+  keepsTheThread: forkedRecord.conversationThread === threadBeforeFork,
+};
+await unsaved.answer({ kind: "fork" });
+result.fork.notSaved = lastNotice(unsaved);
+
+// `compact`. A conversation of two turns, the first long enough that it
+// is older than the part a compaction keeps.
+const compacter = await startSession();
+await compacter.answer({ kind: "compact", keep: "" });
+result.compact = { nothingYet: lastNotice(compacter) };
+await compacter.answer(message(`${LONG_MARK} ${"word ".repeat(30000)}`));
+await compacter.answer(message("a second turn"));
+const noticesBeforeCompact = eventsOf(compacter, "session.notice").length;
+await compacter.answer({ kind: "compact", keep: "the grep flags" });
+result.compact.notices = eventsOf(compacter, "session.notice")
+  .slice(noticesBeforeCompact)
+  .map((notice) => `${notice.level}: ${notice.text}`);
+result.compact.summaryAskedForTheKeep = summaryPrompts.some((prompt) =>
+  prompt.includes("The user asked for this in the summary: the grep flags"),
+);
+await compacter.answer(message("after the compaction"));
+result.compact.nextMessage = {
+  reply: eventsOf(compacter, "session.reply").pop()?.text,
+  longMessageSent: longTextSent["after the compaction"],
+  pausedOn: compacter.pause[0].effect,
+};
+
+// `search`. No client search key, so a cloud session starts on hosted search.
+delete process.env.TAVILY_API_KEY;
+delete process.env.BRAVE_API_KEY;
+const searcher = await startSession();
+result.search = { atStart: pauseData(searcher).search };
+await searcher.answer({ kind: "search", backend: "off" });
+result.search.afterOff = pauseData(searcher).search;
+result.search.saved = settingsSaved().search;
+await searcher.answer({ kind: "search", backend: "bing" });
+result.search.unknown = { notice: lastNotice(searcher), kept: pauseData(searcher).search };
+await searcher.answer({ kind: "search", backend: "tavily" });
+result.search.withNoKey = { notice: lastNotice(searcher), kept: pauseData(searcher).search };
+rmSync(settingsFile, { force: true });
+
+// `savePreset`.
+const saver = await startSession();
+await saver.answer({ kind: "savePreset", name: "fast" });
+result.savePreset = {
+  notice: lastNotice(saver),
+  saved: settingsSaved().presets?.fast,
+  presetKept: pauseData(saver).preset,
+};
+const settingsBeforeRefusals = settingsText();
+await saver.answer({ kind: "savePreset", name: "" });
+result.savePreset.noneActive = lastNotice(saver);
+await saver.answer({ kind: "savePreset", name: "Bad Name" });
+result.savePreset.badName = lastNotice(saver).level;
+result.savePreset.refusalsWroteNothing = settingsText() === settingsBeforeRefusals;
+rmSync(settingsFile, { force: true });
+
+// `ProgramStart.agentName` and `oneShot`. Both are optional: a start that
+// sends neither, as Perry's does, is not refused.
+const named = await startSession({ agentName: "agency-agent/simple" });
+result.agentName = { valid: !named.ended && named.pause[0].effect };
+const misnamed = await startSession({ agentName: "not a name!" });
+result.agentName.invalid = misnamed.ended && errorText(misnamed.result).slice(0, 13);
+const { agentName: _noName, oneShot: _noOneShot, ...withNeither } = startData();
+const neither = await startSession(withNeither);
+result.startWithNeither = !neither.ended && neither.pause[0].effect;
+// A one-shot run gets more tool rounds. The tool loop's round warning,
+// turned on from the first round, names the limit.
+async function roundLimitSaid(overrides) {
+  writeFileSync(path.join(project, "rounds.txt"), "first\nold line\nlast\n");
+  const counter = await startSession(
+    { brain: "minimal", ...overrides },
+    { ...PIN, "std::edit": [{ action: "approve" }] },
+  );
+  await counter.answer({ kind: "options", options: { warnAtRoundsLeft: { remaining: 1000 } } });
+  await counter.answer(message("how many tool rounds do you get?"));
+  return eventsOf(counter, "session.reply").pop()?.text.slice(0, 32);
+}
+result.toolRounds = {
+  oneShot: await roundLimitSaid({ oneShot: true }),
+  session: await roundLimitSaid({}),
+};
 
 writeFileSync("__result.json", JSON.stringify(result, null, 2));
 process.exit(0);

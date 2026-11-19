@@ -1,0 +1,153 @@
+import { Feedback } from "std::agents/lib/feedback"
+import { setSearchMode } from "std::agents/lib/search"
+import { reviewAgent } from "std::agents/review"
+import { setLlmOptions } from "std::llm"
+import { glob, grep, ls } from "std::shell"
+import { evalValue } from "std::statelog"
+import { env } from "std::system"
+
+/** @module
+@summary Eval entry nodes that run the stdlib reviewer, `std::agents/review`,
+on a plan for a change to this repository.
+
+The reviewer gets read-only access to the repository as it was when the
+plan was written. `lib/prepare-snapshots.sh` unpacks each test's commit
+under `$ARCH_REVIEW_SNAPSHOTS`. Reads, greps, listings, and globs inside
+that snapshot are approved. Every other interrupt is rejected, which keeps
+the reviewer off the network, so it cannot read a later version of the
+code on GitHub.
+
+`baseline` runs the reviewer as it is. `withSkill` reads
+`$ARCH_REVIEW_SKILL_DIR/SKILL.md` and passes it as the review's context.
+*/
+
+type ArchReviewInput = {
+  plan: string;
+  commit: string;
+  task: string
+}
+
+const MODEL = "z-ai/glm-5.3-flash"
+const PROVIDER = "openrouter"
+
+// OpenRouter providers that serve GLM 5.3 Flash at fp8. Some other providers return empty replies.
+const GLM_ROUTE = {
+  provider: {
+    only: ["baseten/fp8", "siliconflow/fp8", "z-ai/fp8"],
+    order: ["baseten/fp8", "siliconflow/fp8", "z-ai/fp8"]
+  }
+}
+
+def reviewTask(input: ArchReviewInput, repoDir: string): string {
+  return """
+Review this plan. ${input.task}
+
+The repository the plan changes is at ${repoDir}, as it was when the plan was written. Read its CLAUDE.md first. To read code and docs, call the read, grep, ls, and glob tools with `dir` set to ${repoDir} or a folder inside it, and give file names relative to that folder.
+
+Report the problems with the plan, most important first.
+"""
+}
+
+def insideRepo(intr, repoDir: string): boolean {
+  return intr.data.dir == repoDir || intr.data.dir.startsWith("${repoDir}/")
+}
+
+def runReview(
+  input: ArchReviewInput,
+  skill: string,
+  maxTime: number,
+): Feedback[] {
+  evalValue(input)
+  const plan = read(input.plan) with approve
+  if (plan is failure(readErr)) {
+    return [
+      {
+        error: true,
+        feedback: "could not read ${input.plan}: ${readErr}"
+      },
+    ]
+  }
+  const root = env("ARCH_REVIEW_SNAPSHOTS") with approve
+  if (root == null) {
+    return [
+      {
+        error: true,
+        feedback: "ARCH_REVIEW_SNAPSHOTS is not set"
+      },
+    ]
+  }
+  const repoDir = "${root}/${input.commit}/packages/agency-lang"
+  setSearchMode("off")
+  setLlmOptions({
+    openRouter: GLM_ROUTE,
+    maxToolCallRounds: 40
+  })
+  let reviewed: Result<Feedback[]> = failure("the reviewer never ran")
+  handle {
+    reviewed = reviewAgent(
+      work: plan.value,
+      task: reviewTask(input, repoDir),
+      context: skill,
+      model: MODEL,
+      provider: PROVIDER,
+      extraTools: [read, grep, ls, glob],
+      maxTime: maxTime,
+    )
+  } with (intr) {
+    return match(intr.effect) {
+      "std::read" if (insideRepo(intr, repoDir)) => approve()
+      "std::grep" if (insideRepo(intr, repoDir)) => approve()
+      "std::ls" if (insideRepo(intr, repoDir)) => approve()
+      "std::glob" if (insideRepo(intr, repoDir)) => approve()
+      _ => reject()
+    }
+  }
+  if (reviewed is failure(err)) {
+    return [{
+      error: true,
+      feedback: "review agent failed: ${err}"
+    }]
+  }
+  return reviewed.value
+}
+
+def skillText(): Result<string> {
+  const skillDir = env("ARCH_REVIEW_SKILL_DIR") with approve
+  if (skillDir == null) {
+    return failure("ARCH_REVIEW_SKILL_DIR is not set")
+  }
+  return read("SKILL.md", skillDir) with approve
+}
+
+def reviewWithSkill(input: ArchReviewInput, maxTime: number): Feedback[] {
+  const skill = skillText()
+  if (skill is failure(skillErr)) {
+    return [
+      {
+        error: true,
+        feedback: "could not read the skill: ${skillErr}"
+      },
+    ]
+  }
+  return runReview(input, skill.value, maxTime)
+}
+
+/** The stdlib reviewer with no extra guidance, at its default 10-minute budget. */
+node baseline(input: ArchReviewInput): Feedback[] {
+  return runReview(input, "", 10m)
+}
+
+/** The stdlib reviewer with the architecture-review skill as its context, at 10 minutes. */
+node withSkill(input: ArchReviewInput): Feedback[] {
+  return reviewWithSkill(input, 10m)
+}
+
+/** `baseline` with a 20-minute budget. Needs `eval.limits.wallClockSec` above 1200. */
+node baselineLong(input: ArchReviewInput): Feedback[] {
+  return runReview(input, "", 20m)
+}
+
+/** `withSkill` with a 20-minute budget. Needs `eval.limits.wallClockSec` above 1200. */
+node withSkillLong(input: ArchReviewInput): Feedback[] {
+  return reviewWithSkill(input, 20m)
+}

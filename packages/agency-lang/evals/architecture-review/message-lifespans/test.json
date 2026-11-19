@@ -1,0 +1,10 @@
+{
+  "description": "A spec stores each message's lifespan in a side array aligned by index with the thread's messages, instead of on the messages.",
+  "tags": ["flawed", "too-complex"],
+  "files": "./files",
+  "input": {
+    "plan": "plan.md",
+    "commit": "91c6f358566ae545c2b77ba5f74fd9d6de4d7b71",
+    "task": "It is a spec for messages the runtime adds to a thread and later removes, each with a lifespan, plus a warning before the tool-round limit runs out."
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "client": {
+    "logLevel": "warn",
+    "defaultModel": "claude-sonnet-5-5",
+    "defaultProvider": "anthropic"
+  },
+  "typechecker": {
+    "enabled": true
+  }
+}

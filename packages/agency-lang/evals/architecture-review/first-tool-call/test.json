@@ -1,0 +1,10 @@
+{
+  "description": "A plan adds a firstToolCall option to llm() so a router can force the first tool call, instead of calling the subagent as a function.",
+  "tags": ["flawed", "wrong-layer", "already-exists"],
+  "files": "./files",
+  "input": {
+    "plan": "plan.md",
+    "commit": "5b2ff90a8499c922549777139c4f9329ef752d91",
+    "task": "It is one of three plans for letting a fast decision model route each `agency agent` turn to the research subagent or the coding subagent."
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "description": "A safeBash spec adds a safeBash-only statelog event and statelog client method, when a generic log event exists.",
+  "tags": ["flawed", "already-exists", "too-complex"],
+  "files": "./files",
+  "input": {
+    "plan": "plan.md",
+    "commit": "7a801b3e2fdef9809a226442b598419bc1ad4260",
+    "task": "It is a spec for letting safeBash recognize more read-only shell commands and pipelines so they need fewer approvals, followed by the proposed tickets."
+  }
+}

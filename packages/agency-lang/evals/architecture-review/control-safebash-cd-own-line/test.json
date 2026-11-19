@@ -1,0 +1,10 @@
+{
+  "description": "Control: an approved spec for how safeBash handles a cd on a line of its own.",
+  "tags": ["control"],
+  "files": "./files",
+  "input": {
+    "plan": "plan.md",
+    "commit": "18ff6c30f4fc9b334d3f0b03a58e40c65f146c8c",
+    "task": "It is a spec for letting safeBash understand a `cd` on a line of its own, so the commands after it can get narrow approval questions."
+  }
+}

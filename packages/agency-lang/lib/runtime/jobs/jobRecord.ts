@@ -7,7 +7,7 @@
 import path from "#path";
 import { z } from "zod";
 
-import type { Host, RunResult } from "../../host/host.js";
+import type { Host, Root, RunResult } from "../../host/host.js";
 import { agencyHomeDir } from "../agencyHome.js";
 
 export const RECORD_FILE = "record.json";
@@ -20,6 +20,8 @@ export const JOB_ID = /^job-[0-9a-f]{6}$/;
 /** Each output stream of a job is kept up to this many bytes. Past it the
  *  job is stopped, and its note names the stream. */
 export const JOB_OUTPUT_CAP_BYTES = 10 * 1024 * 1024;
+/** How many of the jobs a run holds may be running or starting at once. */
+export const MAX_RUNNING_JOBS = 8;
 /** The smallest pid a record may name. 0 and 1 reach far more than one
  *  job when used as a process group. */
 const MIN_PID = 2;
@@ -38,6 +40,21 @@ export type JobStart = {
 
 /** Characters of each stream a reader has already been given. */
 export type ReadPositions = { stdout: number; stderr: number };
+
+/** A job as a run that holds it sees it. */
+export type JobSummary = {
+  /** "job-" and six random hex digits, such as "job-3fa9c1". */
+  id: string;
+  /** The job's label, which is the command unless the start named one. */
+  command: string;
+  state: JobState;
+  exitCode: number | null;
+  /** Milliseconds since the Unix epoch. */
+  startedAt: number;
+  endedAt: number | null;
+  /** The job has ended and no read has returned its final state yet. */
+  unread: boolean;
+};
 
 const pid = z.number().int().min(MIN_PID);
 
@@ -93,16 +110,35 @@ export function jobDir(host: Pick<Host, "settings" | "system">, id: string): str
   return path.join(jobsDir(host), id);
 }
 
+/** How many times a read of a record that exists is tried. The node host
+ *  checks, after it opens a file, that the path still names the file it
+ *  opened, and refuses the read when it does not. The runner replaces the
+ *  record whole each time it writes, so a read in another process can land
+ *  on that moment. The next try reads the new record. */
+const RECORD_READ_ATTEMPTS = 3;
+
 /** The record in `dir`, or null when there is none or it is not one this
- *  code wrote. */
+ *  code wrote. Throws when a record is there and cannot be read, so a
+ *  failed read is never taken for a job that does not exist. */
 export async function readRecord(host: Host, dir: string): Promise<JobRecord | null> {
-  let text: string;
+  let root: Root;
   try {
-    text = await host.files.readText(await host.files.root(dir), RECORD_FILE);
+    root = await host.files.root(dir);
   } catch {
     return null;
   }
-  return parseRecord(text);
+  for (let attempt = 1; ; attempt++) {
+    if ((await host.files.stat(root, RECORD_FILE)) === null) {
+      return null;
+    }
+    try {
+      return parseRecord(await host.files.readText(root, RECORD_FILE));
+    } catch (error) {
+      if (attempt >= RECORD_READ_ATTEMPTS) {
+        throw error;
+      }
+    }
+  }
 }
 
 export async function writeRecord(host: Host, dir: string, record: JobRecord): Promise<void> {
@@ -120,27 +156,35 @@ export async function changeRecord(
   dir: string,
   change: (current: JobRecord) => JobRecord | null,
 ): Promise<JobRecord | null> {
-  let after: JobRecord | null = null;
-  try {
-    await host.files.updateText(await host.files.root(dir), RECORD_FILE, (text) => {
-      const current = text === null ? null : parseRecord(text);
-      if (current === null) {
-        throw new NoChange();
+  const root = await host.files.root(dir);
+  // The read inside the update can land on another process replacing the
+  // record, as a plain read can (RECORD_READ_ATTEMPTS).
+  for (let attempt = 1; ; attempt++) {
+    let after: JobRecord | null = null;
+    try {
+      await host.files.updateText(root, RECORD_FILE, (text) => {
+        const current = text === null ? null : parseRecord(text);
+        if (current === null) {
+          throw new NoChange();
+        }
+        after = current;
+        const changed = change(current);
+        if (changed === null) {
+          throw new NoChange();
+        }
+        after = changed;
+        return recordText(changed);
+      });
+      return after;
+    } catch (error) {
+      if (error instanceof NoChange) {
+        return after;
       }
-      after = current;
-      const changed = change(current);
-      if (changed === null) {
-        throw new NoChange();
+      if (attempt >= RECORD_READ_ATTEMPTS) {
+        throw error;
       }
-      after = changed;
-      return recordText(changed);
-    });
-  } catch (error) {
-    if (!(error instanceof NoChange)) {
-      throw error;
     }
   }
-  return after;
 }
 
 function parseRecord(text: string): JobRecord | null {

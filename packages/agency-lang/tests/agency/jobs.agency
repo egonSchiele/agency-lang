@@ -1,9 +1,10 @@
 import { jobOutput, stopJob, listJobs } from "std::jobs"
 import { safeBash, startJob } from "std::safeBash"
 
-// Each node is its own run, with its own jobs, and the run's cleanup stops
-// whatever a node leaves running. Job ids are random, so each node reads
-// its job's id from listJobs().
+// Each node is its own run, with its own jobs. A job outlives the run that
+// started it, so every node stops each job it starts, and every job has a
+// one-minute limit in case a node fails before its stop. Job ids are
+// random, so each node reads its job's id from listJobs().
 
 def endsInBackground(question: string): boolean {
   return question.endsWith("in the background?")
@@ -12,7 +13,7 @@ def endsInBackground(question: string): boolean {
 node rejectedStartsNothing() {
   let result: any = null
   handle {
-    result = startJob("sleep 30")
+    result = startJob("sleep 30", maxMinutes: 1)
   } with (intr) {
     return reject("no background jobs")
   }
@@ -22,8 +23,9 @@ node rejectedStartsNothing() {
 node backgroundQuestionSaysSo() {
   let questions: string[] = []
   handle {
-    startJob("sleep 1")
+    startJob("sleep 1", maxMinutes: 1)
     safeBash("sleep 1")
+    stopJob(listJobs()[0].id)
   } with (intr) {
     questions.push(intr.message)
     return approve()
@@ -42,10 +44,11 @@ node startReadStop() {
   handle {
     // The printf form keeps the expected text, A1 and B2, out of the
     // command, so the output cannot match by echoing the command.
-    started = startJob("printf 'A%s\\n' 1; sleep 1; printf 'B%s\\n' 2")
+    started = startJob("printf 'A%s\\n' 1; sleep 1; printf 'B%s\\n' 2", maxMinutes: 1)
     id = listJobs()[0].id
     first = jobOutput(id, wait: 10)
     second = jobOutput(id)
+    stopJob(id)
   } with (intr) {
     return approve()
   }
@@ -62,7 +65,7 @@ node startReadStop() {
 node stopEndsIt() {
   let stopped: any = null
   handle {
-    startJob("sleep 30")
+    startJob("sleep 30", maxMinutes: 1)
     stopped = stopJob(listJobs()[0].id)
   } with (intr) {
     return approve()
@@ -77,7 +80,7 @@ node guardTripDuringWaitAsksTheHandler() {
   let blockFailed = false
   let state = ""
   handle {
-    startJob("sleep 30")
+    startJob("sleep 30", maxMinutes: 1)
     const id = listJobs()[0].id
     const waited = guard(time: 200ms) {
       return jobOutput(id, wait: 30)
@@ -101,7 +104,7 @@ node guardTripDuringWaitCanBeApproved() {
   let asked = false
   let waited: any = null
   handle {
-    startJob("sleep 30")
+    startJob("sleep 30", maxMinutes: 1)
     const id = listJobs()[0].id
     waited = guard(time: 200ms) {
       const report = jobOutput(id, wait: 30)
@@ -129,8 +132,11 @@ node guardTripDuringWaitCanBeApproved() {
 node rejectedWaitKeepsOutput() {
   let later: any = null
   handle {
-    startJob("printf 'A%s\\n' 1; sleep 30")
+    startJob("printf 'A%s\\n' 1; sleep 30", maxMinutes: 1)
     const id = listJobs()[0].id
+    // The runner copies output to disk every quarter second, so give the
+    // job time to print before the wait that is cut short.
+    sleep(2s)
     const waited = guard(time: 200ms) {
       return jobOutput(id, wait: 30)
     }
@@ -182,15 +188,15 @@ node unknownId() {
   const read = jobOutput("job-000000")
   const stopped = stopJob("job-000000")
   return [
-    isFailure(read) && read.error.includes("There is no job job-000000 in this run"),
-    isFailure(stopped) && stopped.error.includes("This run has no jobs"),
+    isFailure(read) && read.error.includes("There is no job job-000000 in this session"),
+    isFailure(stopped) && stopped.error.includes("This session has no jobs"),
   ]
 }
 
 node missingFolder() {
   let result: any = null
   handle {
-    result = startJob("sleep 1", cwd: "/no/such/folder")
+    result = startJob("sleep 1", cwd: "/no/such/folder", maxMinutes: 1)
   } with (intr) {
     return approve()
   }
@@ -201,6 +207,9 @@ node timeLimitCarriesTheLimit() {
   let result: any = null
   handle {
     result = startJob("sleep 1", maxMinutes: 2)
+    for (job in listJobs()) {
+      stopJob(job.id)
+    }
   } with (intr) {
     if (intr.data.timeout != 120000) {
       return reject("timeout was ${intr.data.timeout}")

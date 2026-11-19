@@ -483,7 +483,7 @@ export type JobHandle = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4873))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4847))
 
 ### ShellStart
 
@@ -498,7 +498,7 @@ export type ShellStart =
   | { ran: "foreground"; output: string }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4882))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4856))
 
 ## Constants
 
@@ -974,7 +974,7 @@ startJob(
 ): Result<string> raises <SafeBashEffects>
 ```
 
-Start a shell command in the background and return its job id at once, while the command keeps running. Use it for a command expected to run for minutes or longer, such as a download, a server, a watch, or a long script. It asks the same approvals as running the command in the foreground. Only a plain shell command becomes a job. A file read, an echo, or an agency command runs in the foreground instead, however long it takes. A command that prints more than 10 MiB on one stream is stopped, so redirect such output to a file.
+Start a shell command in the background and return its job id at once, while the command keeps running. Use it for a command expected to run for minutes or longer, such as a download, a server, a watch, or a long script. It asks the same approvals as running the command in the foreground. The job keeps running until it exits, reaches maxMinutes, or is stopped with stopJob, even after this program ends. Only a plain shell command becomes a job. A file read, an echo, or an agency command runs in the foreground instead, however long it takes. A command that prints more than 10 MiB on one stream is stopped, so redirect such output to a file.
 
 **Parameters:**
 
@@ -1022,4 +1022,4 @@ Start a shell command as a detached job, after asking the approvals running it i
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4887))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4861))

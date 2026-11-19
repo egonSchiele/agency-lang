@@ -72,6 +72,30 @@ describe("readRecord", () => {
     expect(await readRecord(hostWith({ [`${DIR}/${RECORD_FILE}`]: text }), DIR)).toBeNull();
   });
 
+  it("tries again when the runner replaced the record during the read", async () => {
+    const host = hostWith({ [`${DIR}/.keep`]: "" });
+    await writeRecord(host, DIR, record());
+    const readText = host.files.readText;
+    let failures = 1;
+    host.files.readText = async (root, target) => {
+      if (failures > 0) {
+        failures -= 1;
+        throw new Error(`'${DIR}/${RECORD_FILE}' changed between validation and read`);
+      }
+      return readText(root, target);
+    };
+    expect(await readRecord(host, DIR)).toEqual(record());
+  });
+
+  it("throws when the read keeps failing, so a failure is not taken for a missing job", async () => {
+    const host = hostWith({ [`${DIR}/.keep`]: "" });
+    await writeRecord(host, DIR, record());
+    host.files.readText = async () => {
+      throw new Error("permission denied");
+    };
+    await expect(readRecord(host, DIR)).rejects.toThrow("permission denied");
+  });
+
   it("is null for a pid that would name every process", async () => {
     const text = JSON.stringify(record({ commandPid: 1 }));
     expect(await readRecord(hostWith({ [`${DIR}/${RECORD_FILE}`]: text }), DIR)).toBeNull();

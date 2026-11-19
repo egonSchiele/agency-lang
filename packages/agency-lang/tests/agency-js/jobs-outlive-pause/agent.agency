@@ -1,0 +1,18 @@
+// A job started with startJob keeps running while its run is paused on an
+// interrupt and has returned to its caller (ADI-307). After the resume the
+// run can still read and stop it.
+import { startJob } from "std::safeBash"
+import { listJobs, stopJob } from "std::jobs"
+
+effect test::pause { id: string }
+
+node main(): string {
+  startJob("sleep 30", maxMinutes: 1) with approve
+  const id = listJobs()[0].id
+  interrupt test::pause("Paused with a job running.", { id: id })
+  const stopped = stopJob(id)
+  if (stopped is success(report)) {
+    return report.state
+  }
+  return "failure"
+}

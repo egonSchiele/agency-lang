@@ -1,46 +1,57 @@
 ---
 name: "jobs"
-description: "Read, stop, and list the shell commands running in the background."
+description: "Start, read, stop, and list the shell commands running in the background."
 ---
 
 # jobs
 
 A background job is a shell command that keeps running while the program
   does other work, such as a download, a server, or a forty-minute
-  benchmark. `startJob` in `std::safeBash` starts one, after asking the same
-  questions `safeBash` asks for the same command. This module reads a job's
-  output, waits for it, stops it, and lists the jobs.
+  benchmark. `start` here, or `startJob` in `std::safeBash`, starts one,
+  after asking the same questions `safeBash` asks for the same command.
+  This module reads a job's output, waits for it, stops it, and lists the
+  jobs.
 
   ```agency
-  import { startJob } from "std::safeBash"
-  import { jobOutput, stopJob, listJobs } from "std::jobs"
+  import { shellJob, start, output, stop } from "std::jobs"
 
   node main() {
     handle {
-      startJob("./run-comparison.sh")
-      // Ids are random, such as job-3fa9c1. The start's reply names it too.
-      const id = listJobs()[0].id
-      const report = jobOutput(id, wait: 300)
-      print(report)
-      stopJob(id)
+      const job = start(shellJob("./run-comparison.sh", label: "comparison"))?
+      print(output(job))
+      stop(job)
     } with (intr) {
       return approve()
     }
   }
   ```
 
-  Jobs belong to the run that started them. They are not saved in a
-  checkpoint, because a running process cannot be saved. A job stops when
-  its run ends, and when the run pauses to hand an interrupt to its caller.
-  After that, reading the job returns a failure that says so.
+  The tools a model calls, `startJob`, `jobOutput`, `stopJob`, and
+  `listJobs`, name a job by its id, such as `job-3fa9c1`, in place of a
+  handle.
+
+  A job is a process of its own, and it outlives the program that started
+  it. It keeps running until its command exits, it reaches its time limit
+  (60 minutes unless the start says otherwise, 720 at most), or it is
+  stopped, with `stop`, `stopJob`, or `agency jobs stop` at a terminal. A
+  program that starts a job and returns leaves the job running. The run
+  keeps the list of jobs it started in every checkpoint, so a pause, or a
+  resume in another process, does not lose one. A job cannot be started
+  inside a `run()` subprocess.
+
+  A job's output is saved under `~/.agency/jobs/`, and stays there after
+  the job ends, until `agency jobs clean` removes it. Anything secret a
+  command prints stays on disk until then. `agency jobs` lists every job
+  on the machine.
 
   None of these functions raises an interrupt. A job exists only because
   its command was approved when it started, and its output is what
   `safeBash` would have returned under the same approval. Stopping a job
-  can only undo what that approval allowed, and an id names a job from the
-  run's own table, so a call can never reach a process the run did not
-  start. A policy that wants to keep a program from using jobs rejects
-  `std::bash` and `std::exec`, which keeps any job from starting.
+  can only undo what that approval allowed, and these functions act only
+  on a job the run itself started, so a call can never reach a process
+  the run did not start. A policy that wants to keep a program from using
+  jobs rejects `std::bash` and `std::exec`, which keeps any job from
+  starting.
 
   A time guard keeps counting during a wait. When it runs out, the wait
   returns the job's state at that moment, and the guard's trip is raised as
@@ -64,7 +75,7 @@ export type JobReport = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L70))
 
 ### JobSummary
 
@@ -80,7 +91,7 @@ export type JobSummary = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L82))
 
 ### JobDescription
 
@@ -95,7 +106,7 @@ export type JobDescription = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L140))
 
 ### ShellJob
 
@@ -106,7 +117,7 @@ A shell command to run as a job.
 export type ShellJob = JobDescription & { command: string; cwd: string }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L147))
 
 ## Functions
 
@@ -127,7 +138,9 @@ Read what a background job has printed since you last read it, and its state. Ea
 
 **Returns:** `Result<JobReport>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L93))
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L103))
 
 ### stopJob
 
@@ -145,9 +158,9 @@ Stop a background job and everything it started, and return its last output.
 
 **Returns:** `Result<JobReport>`
 
-**Needs:** `subprocess`
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L121))
 
 ### listJobs
 
@@ -155,11 +168,13 @@ Stop a background job and everything it started, and return its last output.
 listJobs(): JobSummary[]
 ```
 
-List the background jobs of this run: each one's id, command, state, and running time.
+List the background jobs this session started: each one's id, command, state, and running time.
 
 **Returns:** `JobSummary[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L121))
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L132))
 
 ### shellJob
 
@@ -192,7 +207,7 @@ Describes a shell command to run as a job. Starts nothing: pass the
 
 **Returns:** [ShellJob](#shelljob)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L148))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L159))
 
 ### start
 
@@ -214,7 +229,7 @@ Start a background job and return its handle. It asks the approvals running the 
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L173))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L184))
 
 ### status
 
@@ -234,7 +249,7 @@ The state of a job this program started: running, ended, stopped, or timed out, 
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L193))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L204))
 
 ### output
 
@@ -254,7 +269,7 @@ What a job this program started has printed since the last read, and its state.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L204))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L215))
 
 ### stop
 
@@ -274,4 +289,4 @@ Stop a job this program started, and everything it started, and return its last 
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L215))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L226))

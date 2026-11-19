@@ -18,6 +18,7 @@ import {
 import {
   CLAIM_FILE,
   RECORD_FILE,
+  RUNNER_LOG_FILE,
   STDOUT_FILE,
   STOP_FILE,
   changeRecord,
@@ -173,6 +174,22 @@ describe("launchJob", () => {
     expect(fileText(host, `${dir}/${STOP_FILE}`)).toBeUndefined();
     expect(await readRecord(host, dir)).toMatchObject({ state: "ended", runnerPid: null });
     expect(clock.now()).toBeGreaterThanOrEqual(START_WAIT_MS);
+  });
+
+  it("that times out says what the runner printed, from the runner's log", async () => {
+    const { host, clock, scripted } = setUp([[0x3f, 0xa9, 0xc1]]);
+    scripted.onDetached = async () => {
+      const options = scripted.detached.at(-1)!.options;
+      host.state.files[options!.outputFile!] = new TextEncoder().encode(
+        "Error: Cannot find module 'x'\n",
+      );
+    };
+    await expect(drive(clock, launchJob(host, START))).rejects.toThrow(
+      /did not start within 5 seconds\. It printed: Error: Cannot find module 'x'/,
+    );
+    expect(scripted.detached[0].options?.outputFile).toBe(
+      `${jobDir(host, "job-3fa9c1")}/${RUNNER_LOG_FILE}`,
+    );
   });
 
   it("whose runner claimed the job as the wait ran out succeeds, and ends nothing", async () => {

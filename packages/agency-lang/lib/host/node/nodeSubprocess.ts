@@ -189,15 +189,28 @@ function spawnCommand(command: Command, options: RunOptions): ChildProcess {
 
 /** See `HostSubprocess.startDetached`. Not tracked, so this process's end
  *  does not stop it. */
-function startDetached(command: Command, options: DetachedOptions = {}): Promise<{ pid: number }> {
+// `async`, so a refused output file or a missing bash is a rejection.
+async function startDetached(
+  command: Command,
+  options: DetachedOptions = {},
+): Promise<{ pid: number }> {
   const target = spawnTarget(command, options.env);
-  const child = spawn(target.file, target.args, {
-    cwd: options.cwd,
-    env: target.env,
-    stdio: "ignore",
-    detached: true,
-    shell: false,
-  });
+  const output = options.outputFile === undefined ? null : openForOutput(options.outputFile);
+  let child: ChildProcess;
+  try {
+    child = spawn(target.file, target.args, {
+      cwd: options.cwd,
+      env: target.env,
+      stdio: output === null ? "ignore" : ["ignore", output, output],
+      detached: true,
+      shell: false,
+    });
+  } finally {
+    // The child has its own copy of the descriptor once spawn returns.
+    if (output !== null) {
+      fs.closeSync(output);
+    }
+  }
   return new Promise((resolve, reject) => {
     child.once("error", reject);
     child.once("spawn", () => {
@@ -209,6 +222,18 @@ function startDetached(command: Command, options: DetachedOptions = {}): Promise
       resolve({ pid: child.pid });
     });
   });
+}
+
+/** Only this user reads a detached process's output. The mode applies
+ *  when the file is created. */
+const OUTPUT_FILE_MODE = 0o600;
+
+/** `file` opened for appending, created when missing. A symbolic link at
+ *  the path is refused, not followed, as `agency run --detach` refuses one
+ *  (lib/cli/detached.ts). */
+function openForOutput(file: string): number {
+  const { O_WRONLY, O_APPEND, O_CREAT, O_NOFOLLOW } = fs.constants;
+  return fs.openSync(file, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW, OUTPUT_FILE_MODE);
 }
 
 /** How often `stopGroup` looks for the group to be gone. */

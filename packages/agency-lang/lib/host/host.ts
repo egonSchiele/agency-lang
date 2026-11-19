@@ -366,6 +366,10 @@ export type DetachedOptions = {
   cwd?: string;
   /** The command's whole environment; the host's own when left out. */
   env?: Record<string, string>;
+  /** A file both output streams are appended to, created when missing
+   *  with only this user able to read it. A symbolic link there is
+   *  refused. The streams are ignored when left out. */
+  outputFile?: string;
 };
 
 /** The network, as the platform's own `fetch`: the same arguments and the

@@ -14,6 +14,8 @@ export const RECORD_FILE = "record.json";
 export const STDOUT_FILE = "stdout.log";
 export const STDERR_FILE = "stderr.log";
 export const STOP_FILE = "stop";
+/** What the runner process itself printed, such as a crash at start. */
+export const RUNNER_LOG_FILE = "runner.log";
 /** Made once, by whichever of the runner or a starter that gave up
  *  waiting gets there first. See `claimJob`. */
 export const CLAIM_FILE = "claim";

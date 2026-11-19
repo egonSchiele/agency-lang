@@ -12,6 +12,7 @@ import { processSlot } from "../processSlot.js";
 import { clockSleep } from "./clockSleep.js";
 import {
   JOBS_DIR,
+  RUNNER_LOG_FILE,
   STDERR_FILE,
   STDOUT_FILE,
   STOP_FILE,
@@ -30,6 +31,8 @@ import { collapseCarriageReturns } from "./progressText.js";
 
 /** How long `launchJob` waits for the runner to write its pid. */
 export const START_WAIT_MS = 5000;
+/** How much of the runner's own output a failed start reports. */
+const RUNNER_LOG_TAIL_CHARS = 2000;
 /** How long `requestStop` waits for the runner to write the ending. */
 export const STOP_WAIT_MS = 5000;
 /** How often `launchJob` and `requestStop` read the record while they wait. */
@@ -95,12 +98,17 @@ export async function launchJob(host: Host, start: JobStart): Promise<JobRecord>
     token: hexOf(host.random.bytes(TOKEN_BYTES)),
   });
   try {
-    await host.subprocess.startDetached({
-      kind: "program",
-      // The node running this program, as `spawn` starts the CLI.
-      program: process.execPath,
-      args: [agencyCliPath(), "job-runner", dir],
-    });
+    await host.subprocess.startDetached(
+      {
+        kind: "program",
+        // The node running this program, as `spawn` starts the CLI.
+        program: process.execPath,
+        args: [agencyCliPath(), "job-runner", dir],
+      },
+      // What the runner itself prints, such as a crash before it claims
+      // the job, would otherwise be lost.
+      { outputFile: path.join(dir, RUNNER_LOG_FILE) },
+    );
   } catch (error) {
     await giveUp(host, dir, RUNNER_NEVER_STARTED);
     throw error;
@@ -117,7 +125,11 @@ export async function launchJob(host: Host, start: JobStart): Promise<JobRecord>
     await clockSleep(host.clock, RECORD_POLL_MS).done;
   }
   if (await giveUp(host, dir, RUNNER_NEVER_STARTED)) {
-    throw new Error(`The job's runner did not start within ${START_WAIT_MS / 1000} seconds.`);
+    const printed = (await readIfThere(host, await host.files.root(dir), RUNNER_LOG_FILE)).trim();
+    const said = printed === "" ? "" : ` It printed: ${printed.slice(-RUNNER_LOG_TAIL_CHARS)}`;
+    throw new Error(
+      `The job's runner did not start within ${START_WAIT_MS / 1000} seconds.${said}`,
+    );
   }
   // The runner took the claim first, so it runs the job.
   const claimed = await readRecord(host, dir);

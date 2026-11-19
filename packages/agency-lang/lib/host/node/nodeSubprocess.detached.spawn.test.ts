@@ -1,7 +1,11 @@
 // End to end: the subprocess functions a job needs to start a process that
 // outlives this one, find it again, and stop it. Every process a test
 // starts is stopped before the test ends.
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
+import { safeDeleteDirectoryWithin } from "../../utils.js";
 import { nodeSubprocess } from "./nodeSubprocess.js";
 
 const START_TIME_SLACK_MS = 5_000;
@@ -46,6 +50,42 @@ describe("startDetached", () => {
     await nodeSubprocess.stopGroup(pid);
     expect(await until(() => nodeSubprocess.processState(pid) === "gone")).toBe(true);
     expect(nodeSubprocess.processStartedAt(pid)).toBeNull();
+  });
+});
+
+describe("startDetached with an output file", () => {
+  it("appends what the process prints to the file", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-detached-"));
+    try {
+      const file = path.join(dir, "out.log");
+      fs.writeFileSync(file, "before\n");
+      const { pid } = await nodeSubprocess.startDetached(
+        { kind: "program", program: process.execPath, args: ["-e", "console.error('printed')"] },
+        { outputFile: file },
+      );
+      started.push(pid);
+      expect(await until(() => fs.readFileSync(file, "utf8").includes("printed"))).toBe(true);
+      expect(fs.readFileSync(file, "utf8")).toBe("before\nprinted\n");
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), dir);
+    }
+  });
+
+  it("refuses an output file that is a symbolic link", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-detached-"));
+    try {
+      const link = path.join(dir, "out.log");
+      fs.symlinkSync(path.join(dir, "elsewhere.log"), link);
+      await expect(
+        nodeSubprocess.startDetached(
+          { kind: "program", program: process.execPath, args: ["-e", ""] },
+          { outputFile: link },
+        ),
+      ).rejects.toThrow();
+      expect(fs.existsSync(path.join(dir, "elsewhere.log"))).toBe(false);
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), dir);
+    }
   });
 });
 

@@ -193,6 +193,20 @@ describe("runJob", () => {
     });
   });
 
+  it("output files that cannot be opened end the job and start nothing", async () => {
+    const job = await setUp();
+    job.host.files.openForAppend = async () => {
+      throw new Error("no space left on device");
+    };
+    await runJob(job.host, DIR, POLL_MS);
+    expect(job.scripted.children).toEqual([]);
+    expect(await job.read()).toMatchObject({
+      state: "ended",
+      exitCode: null,
+      note: "no space left on device",
+    });
+  });
+
   it("a command that cannot start reads ended with the error as its note", async () => {
     const job = await setUp();
     job.scripted.startError = new Error("bash was not found on the PATH.");

@@ -8,6 +8,7 @@ import path from "#path";
 import { agencyCliPath } from "../../agencyCliPath.js";
 import type { Host, Root } from "../../host/host.js";
 import { agencyHomeDir } from "../agencyHome.js";
+import { processSlot } from "../processSlot.js";
 import { clockSleep } from "./clockSleep.js";
 import {
   JOBS_DIR,
@@ -36,6 +37,15 @@ export const RECORD_POLL_MS = 100;
 /** How far a live process's start time may be from the one in the record
  *  and still be the same process. `ps` reports whole seconds. */
 export const START_TIME_TOLERANCE_MS = 2000;
+/** How long a runner that passed the start-time check is taken to be the
+ *  same process before `ps` is asked again. */
+export const START_TIME_RECHECK_MS = 30_000;
+export const START_TIME_CHECKS_SLOT = "agency.jobs.runnerStartTimeChecks";
+/** When each live runner last passed the start-time check, by its pid and
+ *  saved start time, on the host's clock. One per process, because the
+ *  process table it describes is the machine's, the same for every run in
+ *  this process, and what it saves is `ps` calls made by this process. */
+const startTimeChecks = processSlot<Record<string, number>>(START_TIME_CHECKS_SLOT, () => ({}));
 /** How many ids `launchJob` tries before it gives up. Folders stay until
  *  `agency jobs clean`, so an id may already be taken. */
 const ID_ATTEMPTS = 100;
@@ -288,14 +298,29 @@ async function neverStarted(host: Host, dir: string, record: JobRecord): Promise
 
 /** Whether the runner is gone: its pid names no process, or names one
  *  that started at another time, which the system gave the pid to later.
- *  A pid whose state cannot be read is taken as alive. */
+ *  A pid whose state cannot be read is taken as alive. The start-time
+ *  check runs `ps`, which blocks, and a reused pid is a rare case that
+ *  can wait, so a runner that passed the check is not checked again for
+ *  START_TIME_RECHECK_MS. A dead runner whose pid was reused is then
+ *  noticed that much late. */
 function runnerGone(host: Host, record: JobRecord): boolean {
   const pid = record.runnerPid!;
   const state = host.subprocess.processState(pid);
   if (state !== "alive") {
     return state === "gone";
   }
-  return !sameProcess(host, pid, record.runnerStartedAt);
+  const checks = startTimeChecks.get();
+  const key = `${pid}:${record.runnerStartedAt}`;
+  const lastChecked = checks[key];
+  const now = host.clock.now();
+  if (lastChecked !== undefined && now - lastChecked < START_TIME_RECHECK_MS) {
+    return false;
+  }
+  if (!sameProcess(host, pid, record.runnerStartedAt)) {
+    return true;
+  }
+  checks[key] = now;
+  return false;
 }
 
 /** False only when both start times are known and differ. */

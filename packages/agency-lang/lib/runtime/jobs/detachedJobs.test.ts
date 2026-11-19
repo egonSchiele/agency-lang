@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { memoryHost, type MemoryHost } from "../../host/memoryHost.js";
 import { FakeClock } from "../clock.js";
+import { processSlot } from "../processSlot.js";
 import {
   RUNNER_DIED_STOPPED,
+  START_TIME_CHECKS_SLOT,
+  START_TIME_RECHECK_MS,
   START_WAIT_MS,
   heldJobStatus,
   jobOutputSince,
@@ -34,6 +37,12 @@ const START = { command: "sleep 30", label: "sleep", cwd: "/work", maxMs: 60_000
 const ADVANCE_MS = 100;
 
 type Setup = { host: MemoryHost; clock: FakeClock; scripted: ScriptedSubprocess };
+
+// The start-time checks are kept per process, and every test's clock starts
+// at 0, so a check one test made must not count in the next.
+beforeEach(() => {
+  processSlot<Record<string, number>>(START_TIME_CHECKS_SLOT, () => ({})).set({});
+});
 
 function setUp(randomBytes: number[][] = []): Setup {
   const scripted = scriptedSubprocess();
@@ -232,6 +241,25 @@ describe("jobStatus", () => {
     await place(host, record("job-000001"));
     scripted.startTimes[500] = 5_000_000;
     expect((await jobStatus(host, "job-000001"))?.state).toBe("ended");
+  });
+
+  it("checks a live runner's start time at most once in START_TIME_RECHECK_MS", async () => {
+    const { host, clock, scripted } = setUp();
+    await place(host, record("job-000001"));
+    const startedAt = scripted.subprocess.processStartedAt;
+    let runnerChecks = 0;
+    scripted.subprocess.processStartedAt = (pid) => {
+      if (pid === 500) {
+        runnerChecks += 1;
+      }
+      return startedAt(pid);
+    };
+    await jobStatus(host, "job-000001");
+    await jobStatus(host, "job-000001");
+    expect(runnerChecks).toBe(1);
+    clock.advance(START_TIME_RECHECK_MS);
+    await jobStatus(host, "job-000001");
+    expect(runnerChecks).toBe(2);
   });
 
   it("keeps a runner whose state is unknown running", async () => {

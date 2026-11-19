@@ -47,36 +47,41 @@ export async function runJob(
   if (job === null) {
     return;
   }
-  const controller = new AbortController();
-  let running: RunningProcess;
+  // The output files are opened before the command starts, so a failure
+  // here ends the job with a note and runs nothing.
+  let outputs: Outputs;
   try {
-    running = await host.subprocess.start(
-      { kind: "shell", script: job.command },
-      {
-        cwd: job.cwd,
-        timeoutMs: job.maxMs,
-        signal: controller.signal,
-        maxOutputBytes: JOB_OUTPUT_CAP_BYTES,
-      },
-    );
+    outputs = await openOutputs(host, root);
   } catch (error) {
     await writeEnding(host, dir, failedEnding(error));
     return;
   }
-  const commandPid = running.pid;
-  if (commandPid !== null) {
-    await changeRecord(host, dir, (current) =>
-      current.state === "running"
-        ? {
-            ...current,
-            commandPid,
-            commandStartedAt: host.subprocess.processStartedAt(commandPid),
-          }
-        : null,
-    );
-  }
-  const outputs = await openOutputs(host, root);
   try {
+    const controller = new AbortController();
+    let running: RunningProcess;
+    try {
+      running = await host.subprocess.start(
+        { kind: "shell", script: job.command },
+        {
+          cwd: job.cwd,
+          timeoutMs: job.maxMs,
+          signal: controller.signal,
+          maxOutputBytes: JOB_OUTPUT_CAP_BYTES,
+        },
+      );
+    } catch (error) {
+      await writeEnding(host, dir, failedEnding(error));
+      return;
+    }
+    const commandPid = running.pid;
+    if (commandPid !== null) {
+      // Read before the update, so the record is read and written with
+      // no `ps` call between.
+      const commandStartedAt = host.subprocess.processStartedAt(commandPid);
+      await changeRecord(host, dir, (current) =>
+        current.state === "running" ? { ...current, commandPid, commandStartedAt } : null,
+      );
+    }
     const ending = await watch(host, root, running, outputs, controller, pollMs);
     await writeEnding(host, dir, ending);
   } finally {
@@ -89,9 +94,12 @@ export async function runJob(
  *  record when this runner holds the job, and null when it does not. */
 async function claim(host: Host, dir: string): Promise<JobRecord | null> {
   const self = host.system.processId();
+  // Read before the update, so the record is read and written with no
+  // `ps` call between.
+  const runnerStartedAt = host.subprocess.processStartedAt(self);
   const after = await changeRecord(host, dir, (current) =>
     current.state === "running" && current.runnerPid === null
-      ? { ...current, runnerPid: self, runnerStartedAt: host.subprocess.processStartedAt(self) }
+      ? { ...current, runnerPid: self, runnerStartedAt }
       : null,
   );
   return after !== null && after.runnerPid === self && after.state === "running" ? after : null;

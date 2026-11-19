@@ -158,7 +158,10 @@ async function readHeldJob(run: Run, id: string): Promise<JobReportForAgency> {
       : await jobOutputSince(host, id, held.read);
   held.read = output.positions;
   const summary = summaryOf(run, held, record);
-  if (summary.state !== "running") {
+  // A job with no record here may be running on the machine that started
+  // it, so it is not marked as read: handed back there, its real ending
+  // still shows as unread.
+  if (record !== null && summary.state !== "running") {
     held.finalRead = true;
   }
   return {
@@ -216,8 +219,10 @@ export async function _waitForJobEnd(id: string, waitSeconds: number): Promise<v
   }
 }
 
-/** The note for a held job whose folder `agency jobs clean` removed. */
-const MISSING_RECORD_NOTE = "The job's record is gone.";
+/** The note for a held job with no record on this machine. A session
+ *  moved to another machine brings its held jobs and not their folders. */
+const MISSING_RECORD_NOTE =
+  "This job's record is not on this machine. It may still be running where it was started, or its folder was removed with `agency jobs clean`.";
 
 function heldOrThrow(run: Run, id: string): HeldJob {
   const held = run.ctx.heldJobs.find((each) => each.handle.id === id);

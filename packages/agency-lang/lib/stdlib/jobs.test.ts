@@ -6,7 +6,7 @@ import { FakeClock } from "../runtime/clock.js";
 import type { HeldJob } from "../runtime/jobs/heldJobs.js";
 import { STOP_FILE, jobDir, writeRecord, type JobRecord } from "../runtime/jobs/jobRecord.js";
 import { scriptedSubprocess } from "../runtime/jobs/__tests__/scriptedSubprocess.js";
-import { _stopHeldJob, _waitForJobEnd } from "./jobs.js";
+import { _readHeldJob, _stopHeldJob, _waitForJobEnd } from "./jobs.js";
 
 const HOME = "/home/me/.agency";
 const ID = "job-000001";
@@ -59,7 +59,8 @@ async function runHolding(rec: JobRecord, token: string) {
   const controller = new AbortController();
   ctx.getAbortSignal = () => controller.signal;
   const call = <T>(fn: () => Promise<T>): Promise<T> => inFrameOf(ctx, ctx.stateStack, fn);
-  return { host, dir, controller, call };
+  const heldJob = (): HeldJob => ctx.heldJobs[0];
+  return { host, dir, controller, call, held: heldJob };
 }
 
 describe("_waitForJobEnd", () => {
@@ -71,12 +72,24 @@ describe("_waitForJobEnd", () => {
   });
 });
 
+describe("a held job whose record is not on this machine", () => {
+  it("says it may still be running elsewhere, and is not marked as read", async () => {
+    const run = await runHolding(record(), "token-1");
+    run.host.state.files = {};
+    const report = await run.call(() => _readHeldJob(ID));
+    expect(report.note).toBe(
+      "This job's record is not on this machine. It may still be running where it was started, or its folder was removed with `agency jobs clean`.",
+    );
+    expect(run.held().finalRead).toBe(false);
+  });
+});
+
 describe("a held id whose token does not match", () => {
   it("is not stopped, and reads as a job whose record is gone", async () => {
     const run = await runHolding(record(), "forged");
     const report = await run.call(() => _stopHeldJob(ID));
     expect(report.state).toBe("ended");
-    expect(report.note).toBe("The job's record is gone.");
+    expect(report.note).toMatch(/^This job's record is not on this machine\./);
     expect(run.host.state.files[`${run.dir}/${STOP_FILE}`]).toBeUndefined();
   });
 });

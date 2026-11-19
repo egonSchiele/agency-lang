@@ -90,9 +90,10 @@ runner to write its pid. The runner:
 
 1. Runs nothing when the record no longer says `running`, a `stop` file is
    there, or it cannot take the claim.
-2. Writes its pid and start time, starts the command through the host, and
-   writes the command's pid and start time. The pid is written before the
-   command starts.
+2. Writes its pid and start time, opens the two output files, starts the
+   command through the host, and writes the command's pid and start time.
+   The pid is written, and the files opened, before the command starts, so
+   a failure in either ends the job with a note and runs nothing.
 3. Every quarter second, appends what the command printed to the two
    files, and aborts the command when a `stop` file appears. The host then
    sends `SIGTERM` to the command's process group, and `SIGKILL` two
@@ -148,6 +149,13 @@ check is `processStartedAt`, which `agency attach` uses for the same
 purpose (`lib/host/node/processStartTime.ts`). A pid whose state cannot be
 read is taken as alive.
 
+The start-time check runs `ps`, which blocks the process until it
+returns, and every status read of a running job would make one: the
+REPL's watch reads each running job every second. So a runner that passed
+the check is not checked again for `START_TIME_RECHECK_MS` (30 seconds).
+The times are kept per process in a `processSlot`. A dead runner whose pid
+was reused in that window is noticed up to 30 seconds late.
+
 A record that says `running` with no runner pid is a launch in progress,
 until it is older than two launch waits. Then either the starter died
 while it waited, or the runner died after it took the claim and before it
@@ -191,6 +199,15 @@ checkpoint is a file a person can edit.
 
 The list never shrinks. A long session's list grows with every job, and so
 does `listJobs()`.
+
+**A held job with no record here.** A session moved to another machine
+brings its list and not the jobs' folders. A held job whose record is not
+on this machine reads as ended, with a note that says it may still be
+running where it was started, or that its folder was cleaned. A read of
+it is not marked as read, so when the session goes back to the machine
+that has the job, its real ending still shows as unread. Naming the
+machine on the handle (the spec's `where`) is left for the plan that
+moves jobs between machines.
 
 At most `MAX_RUNNING_JOBS` (8) of the held jobs may be running or starting
 at once. `_launchJob` counts the running ones, which needs reads, then

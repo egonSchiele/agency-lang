@@ -768,7 +768,9 @@ describe("<agent-home> dir patterns", () => {
   it("resolves the placeholder in a remove's target and a copy's or move's src and dest", () => {
     const pathRules: Policy = {
       "std::remove": [{ match: { target: "<agent-home>/policy.json" }, action: "approve" }],
-      "std::copy": [{ match: { src: "<agent-home>/a", dest: "<agent-home>/b" }, action: "approve" }],
+      "std::copy": [
+        { match: { src: "<agent-home>/a", dest: "<agent-home>/b" }, action: "approve" },
+      ],
       // Any other field matches the pattern as written.
       "std::exec": [{ match: { cwd: "<agent-home>" }, action: "approve" }],
     };
@@ -789,9 +791,9 @@ describe("<agent-home> dir patterns", () => {
           raised("std::copy", { src: "/nowhere/agent-home/a", dest: "/nowhere/agent-home/b" }),
         ).type,
       ).toBe("approve");
-      expect(
-        checkPolicy(pathRules, raised("std::exec", { cwd: "/nowhere/agent-home" })).type,
-      ).toBe("propagate");
+      expect(checkPolicy(pathRules, raised("std::exec", { cwd: "/nowhere/agent-home" })).type).toBe(
+        "propagate",
+      );
     });
   });
 });

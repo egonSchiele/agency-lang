@@ -111,7 +111,10 @@ describe("resolveRunPolicy", () => {
     expect(write.filter((rule) => rule.action === "approve")).toEqual([
       { match: { dir: "{/work,/work/**}" }, action: "approve" },
     ]);
-    expect(write[write.length - 1]).toEqual({ match: { dir: "{/work,/work/**}" }, action: "approve" });
+    expect(write[write.length - 1]).toEqual({
+      match: { dir: "{/work,/work/**}" },
+      action: "approve",
+    });
   });
 
   it("leaves base rules for unaffected effects untouched", () => {

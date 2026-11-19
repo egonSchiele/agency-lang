@@ -224,7 +224,10 @@ describe("builtinPolicy", () => {
     expect(remove[remove.length - 1]).toEqual({ match: { target: scope }, action: "approve" });
     // src + dest fields (copy/move)
     const copy = p!["std::copy"];
-    expect(copy[copy.length - 1]).toEqual({ match: { src: scope, dest: scope }, action: "approve" });
+    expect(copy[copy.length - 1]).toEqual({
+      match: { src: scope, dest: scope },
+      action: "approve",
+    });
     // cwd field (git)
     expect(p!["std::git::commit"]).toEqual([{ match: { cwd: scope }, action: "approve" }]);
   });

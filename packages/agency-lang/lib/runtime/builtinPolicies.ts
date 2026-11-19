@@ -233,7 +233,10 @@ function ownPolicyFileRules(): PolicyRule[] {
 const OWN_POLICY_PATHS = `{${AGENT_HOME},${AGENT_HOME}/policy.json,${AGENT_HOME}/session-policy.json,${AGENT_HOME}/session-policies,${AGENT_HOME}/session-policies/**}`;
 
 function ownPolicyPathRules(fields: string[]): PolicyRule[] {
-  return fields.map((field): PolicyRule => ({ match: { [field]: OWN_POLICY_PATHS }, action: "propagate" }));
+  return fields.map((field): PolicyRule => ({
+    match: { [field]: OWN_POLICY_PATHS },
+    action: "propagate",
+  }));
 }
 
 // `recommended` plus mutating file-system and git-write effects, each

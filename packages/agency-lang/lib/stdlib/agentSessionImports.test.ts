@@ -32,7 +32,9 @@ const TERMINAL_FOLDERS = ["lib/slashCommands/"];
 const RELATIVE_IMPORT = /from\s+"(\.{1,2}\/[^"]+\.agency)"/g;
 
 function isTerminalModule(file: string): boolean {
-  return TERMINAL_MODULES.includes(file) || TERMINAL_FOLDERS.some((folder) => file.startsWith(folder));
+  return (
+    TERMINAL_MODULES.includes(file) || TERMINAL_FOLDERS.some((folder) => file.startsWith(folder))
+  );
 }
 
 /** The agent's own files a module imports, as paths under the agent's folder. */
@@ -81,7 +83,11 @@ describe("the agent's session program reaches no terminal code", () => {
 
   it("the turn, the record and the session search reach none", () => {
     expect(
-      terminalModulesReachedFrom(["lib/turn.agency", "lib/record.agency", "lib/sessionSearch.agency"]),
+      terminalModulesReachedFrom([
+        "lib/turn.agency",
+        "lib/record.agency",
+        "lib/sessionSearch.agency",
+      ]),
     ).toEqual([]);
   });
 });

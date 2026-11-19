@@ -72,7 +72,12 @@ async function startSession(overrides = {}, policy = PIN) {
   const emitted = [];
   const callbacks = { onEmit: (event) => void emitted.push(event) };
   const first = await main(startData(overrides), { callbacks, policy });
-  const session = { pause: first.data, emitted, ended: !hasInterrupts(first.data), result: first.data };
+  const session = {
+    pause: first.data,
+    emitted,
+    ended: !hasInterrupts(first.data),
+    result: first.data,
+  };
   session.answer = async (value) => {
     const next = await respondToInterrupts(session.pause, [approve(value)], {
       metadata: { callbacks },

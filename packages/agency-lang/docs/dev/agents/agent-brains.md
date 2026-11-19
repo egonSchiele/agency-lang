@@ -181,7 +181,7 @@ an `onEmit` callback in `lib/trace.agency`.
 
 No brain opens a `thread` block, so a turn runs on the run's active thread.
 Before and after each turn, `runTurn` in `lib/turn.agency` records that
-thread's id with `setConversationThread` (`lib/resume.agency`). It records
+thread's id with `setConversationThread` (`lib/record.agency`). It records
 before the turn so that a turn the user cancels still leaves the id behind. Compaction,
 the context percentage, the session title, the resume transcript, and
 `searchSessions` read the thread the id names
@@ -189,7 +189,7 @@ the context percentage, the session title, the resume transcript, and
 
 ## The safety boundary
 
-The rule, in one sentence: **`runSession` in `lib/turn.agency` owns the
+The rule, in one sentence: **`runSession` in `lib/runSession.agency` owns the
 outermost `handle ... with cliPolicyHandler`, every turn is answered inside
 it, and both production paths (one-shot and the REPL) go through
 `runSession`.**

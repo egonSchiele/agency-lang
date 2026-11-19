@@ -9,7 +9,7 @@ off, and it does not change the tool loop.
 ## When it runs
 
 - **Between turns.** After a turn's reply is shown, `compactIfDue` in
-  `lib/agents/agency-agent/lib/repl.agency` checks the conversation's
+  `lib/agents/agency-agent/lib/compaction.agency` checks the conversation's
   size. It compacts when the next request would fill 80% of the context
   window. If that compaction fails, the next one waits until the
   conversation has grown by 5% of the window, so a failure that will not
@@ -33,7 +33,7 @@ line.
 ## Which thread
 
 The conversation is the thread whose id `runTurn` records for each turn
-(`conversationThread()` in `lib/resume.agency`), the same thread the title
+(`conversationThread()` in `lib/record.agency`), the same thread the title
 and the resume transcript read. The helpers in `lib/stdlib/agentCompaction.ts`
 take that slug id, such as `"t3"`, and return their empty value for an
 unknown id. Subagent threads are not compacted.
@@ -130,13 +130,17 @@ transcript fits it whenever the window is known.
   the rewrite. The thread is read and written here because the plan needs
   whole messages, with their tool calls and token counts.
 - `lib/agents/agency-agent/lib/compaction.agency`: the thresholds, the
-  window, the prompt, and the summary call.
-- `lib/agents/agency-agent/lib/repl.agency`: `/compact`, the check after
-  each turn, and the footer.
+  window, the prompt, the summary call, and `compactIfDue`, which says
+  what it did in notices.
+- `lib/agents/agency-agent/lib/repl.agency`: `/compact`, the call to
+  `compactIfDue` after each turn, and the footer.
+- `lib/agents/agency-agent/core.agency`: the same call after each turn
+  of the session core.
 - Tests: `lib/stdlib/agentCompaction.test.ts` and
   `lib/agents/agency-agent/tests/compaction.agency`.
 
 ## To remove it
 
 Delete the two compaction files and their tests, and take the three uses
-out of `repl.agency`. Nothing else depends on it.
+out of `repl.agency` and the one out of `core.agency`. Nothing else
+depends on it.

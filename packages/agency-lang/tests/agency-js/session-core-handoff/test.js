@@ -72,7 +72,15 @@ async function startAndPause() {
       session: {
         cwd: project,
         replyStyle: "",
-        record: { id: "s1", cwd: project, brain: "", created: 1, lastActive: 1, turns: 0, title: "" },
+        record: {
+          id: "s1",
+          cwd: project,
+          brain: "",
+          created: 1,
+          lastActive: 1,
+          turns: 0,
+          title: "",
+        },
         startedWith: "",
       },
     },
@@ -94,7 +102,13 @@ async function startAndPause() {
   writeFileSync(pauseFile, JSON.stringify(approval));
   execFileSync(process.execPath, ["./test.js"], {
     stdio: "inherit",
-    env: { ...process.env, RESUME: "1", NOTE_DIR: noteDir, PAUSE_FILE: pauseFile, RESUMED_FILE: resumedFile },
+    env: {
+      ...process.env,
+      RESUME: "1",
+      NOTE_DIR: noteDir,
+      PAUSE_FILE: pauseFile,
+      RESUMED_FILE: resumedFile,
+    },
   });
   const resumed = JSON.parse(readFileSync(resumedFile, "utf8"));
 

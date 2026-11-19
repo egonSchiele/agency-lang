@@ -22,15 +22,17 @@ export const POLICY_UNREADABLE =
 export type TurnBudget = { maxCost: number; maxTime: number };
 
 /** `policy` is the policy the session's policy flags resolved to, or null
- *  when it was started with none. The session carries it, and a front-end
- *  that resumes the session runs it under that policy (`sessionRunPolicy`). */
+ *  (or left out) when it was started with none. The session carries it,
+ *  and a front-end that resumes the session runs it under that policy
+ *  (`sessionRunPolicy`). It must be a valid policy: the core does not
+ *  check it, and a session whose policy is not valid can't be resumed. */
 export type SessionStart = {
   cwd: string;
   replyStyle: string;
   record: SessionRecord | null;
   flags: Record<string, unknown> | null;
   budget: TurnBudget;
-  policy: Policy | null;
+  policy?: Policy | null;
 };
 
 /** The startup model flags. */

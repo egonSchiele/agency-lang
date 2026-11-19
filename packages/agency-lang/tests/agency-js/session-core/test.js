@@ -326,7 +326,18 @@ const carrying = await startSession({ session: { ...startData().session, policy:
 result.policyCarried = { atFirstPause: pauseData(carrying).policy };
 await carrying.answer(message("hello"));
 result.policyCarried.afterATurn = pauseData(carrying).policy;
+await carrying.answer({ kind: "budget", maxCost: 1, maxTime: 1000 });
+result.policyCarried.afterABudgetAnswer = pauseData(carrying).policy;
+await carrying.answer({ kind: "effort", effort: "low" });
+result.policyCarried.afterAnEffortAnswer = pauseData(carrying).policy;
 result.policyCarried.withNoPolicyFlag = pauseData(budgeted).policy;
+// A front-end built before the field existed sends no `policy` at all. Its
+// start is not refused, and the session carries none.
+const { policy: _absent, ...sessionWithNoPolicyField } = startData().session;
+const olderFrontEnd = await startSession({ session: sessionWithNoPolicyField });
+result.policyCarried.withNoPolicyField = olderFrontEnd.ended
+  ? `refused: ${errorText(olderFrontEnd.result)}`
+  : pauseData(olderFrontEnd).policy;
 
 // Presets. These need a settings file, so they come after the check above
 // that starting sessions writes none. The session names no model, so the

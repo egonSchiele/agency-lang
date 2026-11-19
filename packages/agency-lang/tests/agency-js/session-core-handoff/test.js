@@ -235,17 +235,23 @@ async function resume() {
 async function resumeMinimalSession(program) {
   const driver = await import("agency-lang/stdlib-lib/agentDriver/index.js");
   const pause = JSON.parse(readFileSync(process.env.MINIMAL_PAUSE_FILE, "utf8"));
-  const carried = driver.pauseData(pause)?.policy ?? null;
+  // The session's policy, read from its pause and checked. One that can't
+  // be read fails here, and the session is not resumed.
+  const carried = driver.carriedPolicy(pause);
+  const policy = driver.sessionRunPolicy({ carried, saved: APPROVES_EVERY_READ, extra: null });
+  if (!policy.success) {
+    return { refused: policy.error };
+  }
   const outcome = await driver.resumeRun({
     agent: program,
     callbacks: {},
-    policy: driver.sessionRunPolicy({ carried, saved: APPROVES_EVERY_READ, extra: null }),
+    policy: policy.value,
     interrupts: pause,
     responses: [program.approve(driver.messageAnswer("read the note"))],
   });
   const step = outcome.result;
   return {
-    carriesMinimal: JSON.stringify(carried) === JSON.stringify(minimalAutoApprovePolicy),
+    carriesMinimal: JSON.stringify(carried.value) === JSON.stringify(minimalAutoApprovePolicy),
     step: step.success ? step.value.kind : step.error,
     pausedOn: step.success ? (step.value.interrupts ?? []).map((interrupt) => interrupt.effect) : [],
   };

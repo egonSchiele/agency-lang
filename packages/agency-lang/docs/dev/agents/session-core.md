@@ -46,7 +46,10 @@ Its data is what a front-end shows and saves between turns: `thread`,
 
 - `policy` is the policy the session was started under: what its policy
   flags resolved to, such as `--policy minimal`. It is null for a session
-  started with no policy flag. The core does nothing with it but keep it
+  started with no policy flag. `SessionStart.policy` is optional, so a
+  start from a front-end that sends no `policy` field is not refused, and
+  the session carries none. The core does not check it, so a front-end
+  must send a valid policy. The core does nothing with it but keep it
   and report it, so every checkpoint holds it. A front-end that resumes
   the session runs it under this policy, in place of its own saved one
   (`sessionRunPolicy` in `session-driver.md`). It is `any`, like

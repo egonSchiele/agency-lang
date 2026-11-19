@@ -3,7 +3,10 @@ import {
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
 } from "../../runtime/builtinPolicies.js";
+import type { Interrupt } from "../../runtime/interrupts.js";
 import { checkPolicyExplicit, type Policy, type PolicyDirs } from "../../runtime/policy.js";
+import { failure, success, type Result } from "../../types/result.js";
+import { POLICY_UNREADABLE, carriedPolicy } from "./interface.js";
 import { sessionRunPolicy, withPauseLeftAlone } from "./policy.js";
 
 const PIN = [{ action: "propagate" }];
@@ -60,11 +63,13 @@ describe("sessionRunPolicy", () => {
   // says nothing. Beside `recommended`, `minimal`'s silence on reads would
   // let `recommended` approve them. So the session's policy replaces it.
   it("runs a session that carries a policy under it alone", () => {
-    const policy = sessionRunPolicy({
-      carried: minimalAutoApprovePolicy,
-      saved: recommendedAutoApprovePolicy,
-      extra: null,
-    });
+    const policy = policyOf(
+      sessionRunPolicy({
+        carried: success(minimalAutoApprovePolicy),
+        saved: recommendedAutoApprovePolicy,
+        extra: null,
+      }),
+    );
     expect(policy).toEqual(minimalAutoApprovePolicy);
     expect(policy["std::read"]).toBeUndefined();
     expect(checkPolicyExplicit(policy, raise("std::read"), DIRS)).toBeNull();
@@ -72,25 +77,42 @@ describe("sessionRunPolicy", () => {
 
   it("is the saved policy when the session carries none", () => {
     const saved: Policy = { "std::read": [{ action: "approve" }] };
-    expect(sessionRunPolicy({ carried: null, saved, extra: null })).toEqual(saved);
+    expect(sessionRunPolicy({ carried: success(null), saved, extra: null })).toEqual(
+      success(saved),
+    );
+  });
+
+  // A policy that can't be read is not a session with no policy: run under
+  // `saved`, its reads would be approved here.
+  it("fails, and never falls back to the saved policy, when the session's policy can't be read", () => {
+    const policy = sessionRunPolicy({
+      carried: failure(POLICY_UNREADABLE),
+      saved: { "std::read": [{ action: "approve" }] },
+      extra: { "std::bash": [{ action: "approve" }] },
+    });
+    expect(policy).toEqual(failure(POLICY_UNREADABLE));
   });
 
   it("puts the front-end's extra rules ahead of the session's own", () => {
-    const policy = sessionRunPolicy({
-      carried: { "std::bash": [{ action: "reject" }] },
-      saved: {},
-      extra: { "std::bash": [{ action: "approve" }] },
-    });
+    const policy = policyOf(
+      sessionRunPolicy({
+        carried: success({ "std::bash": [{ action: "reject" }] }),
+        saved: {},
+        extra: { "std::bash": [{ action: "approve" }] },
+      }),
+    );
     expect(policy["std::bash"]).toEqual([{ action: "approve" }, { action: "reject" }]);
     expect(checkPolicyExplicit(policy, raise("std::bash"), DIRS)).toEqual({ type: "approve" });
   });
 
   it("layers extra rules over the saved policy when the session carries none", () => {
-    const policy = sessionRunPolicy({
-      carried: null,
-      saved: { "std::read": [{ action: "reject" }] },
-      extra: { "std::read": [{ action: "approve" }], "std::ls": [{ action: "approve" }] },
-    });
+    const policy = policyOf(
+      sessionRunPolicy({
+        carried: success(null),
+        saved: { "std::read": [{ action: "reject" }] },
+        extra: { "std::read": [{ action: "approve" }], "std::ls": [{ action: "approve" }] },
+      }),
+    );
     expect({ ...policy }).toEqual({
       "std::read": [{ action: "approve" }, { action: "reject" }],
       "std::ls": [{ action: "approve" }],
@@ -100,8 +122,36 @@ describe("sessionRunPolicy", () => {
   it("does not change the policies it is given", () => {
     const carried: Policy = { "std::bash": [{ action: "reject" }] };
     const extra: Policy = { "std::bash": [{ action: "approve" }] };
-    sessionRunPolicy({ carried, saved: {}, extra });
+    sessionRunPolicy({ carried: success(carried), saved: {}, extra });
     expect(carried).toEqual({ "std::bash": [{ action: "reject" }] });
     expect(extra).toEqual({ "std::bash": [{ action: "approve" }] });
   });
+
+  // The recipe a front-end follows: the pause, through `carriedPolicy`.
+  it("takes what carriedPolicy reads from a pause", () => {
+    const pause = (policy: unknown): Interrupt[] => [
+      {
+        type: "interrupt",
+        effect: "agent::sessionInput",
+        message: "",
+        origin: "test",
+        interruptId: "p1",
+        data: { policy },
+        runId: "run",
+      },
+    ];
+    const saved: Policy = { "std::read": [{ action: "approve" }] };
+    const run = (policy: unknown) =>
+      sessionRunPolicy({ carried: carriedPolicy(pause(policy)), saved, extra: null });
+    expect(run(minimalAutoApprovePolicy)).toEqual(success(minimalAutoApprovePolicy));
+    expect(run(null)).toEqual(success(saved));
+    expect(run("minimal")).toEqual(failure(POLICY_UNREADABLE));
+  });
 });
+
+function policyOf(result: Result<Policy>): Policy {
+  if (!result.success) {
+    throw new Error(`expected a policy, got: ${result.error}`);
+  }
+  return result.value;
+}

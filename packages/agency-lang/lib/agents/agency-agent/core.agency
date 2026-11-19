@@ -114,8 +114,10 @@ export type SessionStart = {
   // only carries it and reports it at every pause. A front-end that
   // resumes the session runs it under this policy in place of its own
   // saved one. It is `any` for the reason `options` is: checking a value
-  // against a type fills each optional field it lacks with null.
-  policy: any
+  // against a type fills each optional field it lacks with null. It is
+  // optional, so a front-end built before it existed still starts: a
+  // start with no `policy` carries none.
+  policy?: any
 }
 
 /** A message from the user. `notes` are lines put above it, such as the

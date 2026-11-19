@@ -1,11 +1,22 @@
 import type { Policy } from "../../runtime/policy.js";
 import { layerPolicy } from "../../runtime/policyFlags.js";
+import { success, type Result } from "../../types/result.js";
 import { SESSION_INPUT_EFFECT } from "./interface.js";
 
 /** The policy a front-end runs this session under: the session's own when
- *  it carries one, else `saved`. `extra` is what the front-end adds for
+ *  it carries one, else `saved`. `carried` is what `carriedPolicy(pause)`
+ *  gives. When it failed (the session's policy can't be read), so does
+ *  this, and `saved` is never used: the session's own policy may ask
+ *  about what `saved` approves. `extra` is what the front-end adds for
  *  this sitting, layered on top as flags are: flags given at resume, and
  *  "always" answers given in a session that carries a policy.
+ *
+ *  ```ts
+ *  const policy = sessionRunPolicy({ carried: carriedPolicy(pause), saved, extra: null });
+ *  if (!policy.success) {
+ *    // show policy.error; do not resume
+ *  }
+ *  ```
  *
  *  The session's policy replaces `saved`, and does not sit beside it.
  *  Every handler is consulted, and a policy with no rule for an effect
@@ -16,12 +27,16 @@ import { SESSION_INPUT_EFFECT } from "./interface.js";
  *  It does not pin the core's pause. `startRun` and `resumeRun` do that to
  *  every policy they are given. */
 export function sessionRunPolicy(args: {
-  carried: Policy | null;
+  carried: Result<Policy | null>;
   saved: Policy;
   extra: Policy | null;
-}): Policy {
-  const base = args.carried ?? args.saved;
-  return args.extra === null ? base : layerPolicy({ top: args.extra, base });
+}): Result<Policy> {
+  const { carried, saved, extra } = args;
+  if (!carried.success) {
+    return carried;
+  }
+  const base = carried.value ?? saved;
+  return success(extra === null ? base : layerPolicy({ top: extra, base }));
 }
 
 /** `policy` with the core's pause pinned to `propagate`.

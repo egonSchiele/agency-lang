@@ -108,21 +108,37 @@ The callbacks and the policy go in again on every resume. The runtime
 does not keep the ones given to `main`. `startRun` and `resumeRun` do
 this. Nothing else should call `main` or `respondToInterrupts`.
 
+Each call returns `{ result, usage }`. `usage` is the run's total spend so
+far, or null when the call threw.
+
 ### Which policy a session runs under
 
 A session started with policy flags carries the policy they resolved to.
-Its pause reports it as `policy` (`pauseData`), and a front-end that
-resumes the session runs it under that policy. `sessionRunPolicy` picks
-the policy to give the run:
+The front-end puts it in `SessionStart.policy`, and the session's pause
+reports it as `policy`. A front-end that resumes the session runs it
+under that policy. `sessionRunPolicy` picks the policy to give the run:
 
 ```ts
-const carried = pauseData(pause)?.policy ?? null;
-const policy = sessionRunPolicy({ carried, saved: savedPolicyFile, extra: null });
-await resumeRun({ agent, callbacks, policy, interrupts: pause, responses });
+const policy = sessionRunPolicy({
+  carried: carriedPolicy(pause),
+  saved: savedPolicyFile,
+  extra: null,
+});
+if (!policy.success) {
+  // Show policy.error. Do not resume the session.
+  return;
+}
+await resumeRun({ agent, callbacks, policy: policy.value, interrupts: pause, responses });
 ```
 
-- With `carried`, the run gets `carried`. `saved` is not used at all.
-- With no `carried`, the run gets `saved`.
+- When the session carries a policy, the run gets it. `saved` is not
+  used at all.
+- When it carries none, the run gets `saved`.
+- When the session's policy can't be read, `sessionRunPolicy` fails with
+  "This session's own policy can't be read, so it can't be continued
+  here." It never falls back to `saved`. That is why `carried` is the
+  `Result` that `carriedPolicy` gives, and not a policy or null: a null
+  would mean "carries none", and the run would get `saved`.
 - `extra` is what the front-end adds for this sitting: flags given at
   resume, and "always" answers given in a session that carries a policy.
   Its rules go ahead of the others for the same effect, as `--approve`
@@ -138,13 +154,13 @@ rejects would carry over.
 `sessionRunPolicy` does not pin the pause. `startRun` and `resumeRun` pin
 whatever policy they are given.
 
-A policy that is there but is not valid stops the session from being
-resumed. `carriedPolicy` fails with "This session's own policy can't be
-read, so it can't be continued here." `pauseData` is null for such a
-pause, and `restoredPhase` ends the session with that reason.
+A session whose policy can't be read is not resumed. `pauseData` is null
+for its pause, and `restoredPhase` ends a loaded one with the reason.
 
-Each call returns `{ result, usage }`. `usage` is the run's total spend so
-far, or null when the call threw.
+**A front-end must put a valid policy in `SessionStart.policy`.** Neither
+the core nor `startRun` checks it: `startRun` is given `main` with the
+start data already bound, so it never sees them. A policy that is not
+valid shows up only later, and the session then can't be resumed.
 
 ## What is saved, and when
 

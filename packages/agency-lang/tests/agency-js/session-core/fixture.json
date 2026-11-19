@@ -101,7 +101,10 @@
   "policyCarried": {
     "atFirstPause": { "std::edit": [{ "action": "reject" }] },
     "afterATurn": { "std::edit": [{ "action": "reject" }] },
-    "withNoPolicyFlag": null
+    "afterABudgetAnswer": { "std::edit": [{ "action": "reject" }] },
+    "afterAnEffortAnswer": { "std::edit": [{ "action": "reject" }] },
+    "withNoPolicyFlag": null,
+    "withNoPolicyField": null
   },
   "presetSwitch": {
     "preset": "big",

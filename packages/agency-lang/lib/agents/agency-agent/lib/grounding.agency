@@ -11,18 +11,17 @@ import { projectContextText } from "./projectContext.agency"
 export def sessionFactsText(
   brainName: string,
   slots: Record<string, Resolved>,
-  startedWith: string,
+  flags: Record<string, any> | null,
 ): string {
   """
   The identity block: what the agent is, which brain answers turns, and
   the models the run resolved to. Pure — the slots come in as a
   parameter — so tests can call it directly. The same resolved slots
   feed the splash header, so the model names here always match what the
-  user saw at startup. `startedWith` is what the session was started
-  with, as text: the terminal passes its CLI flags as JSON, and a
-  front-end with no flags passes "", which leaves the block out. It is
-  never the positional prompt: this block sits above the user-message
-  boundary, and user text put into it would be a prompt-injection vector.
+  user saw at startup. Takes only the CLI flags, never the positional
+  prompt: this block sits above the user-message boundary, and user
+  text serialized into it would be a prompt-injection vector. A
+  front-end with no flags passes null, which leaves the block out.
   """
   let modelLines = []
   for (slot in ["main", "reasoning"]) {
@@ -33,7 +32,7 @@ export def sessionFactsText(
       )
     }
   }
-  if (startedWith == "") {
+  if (flags == null) {
     return """
   Your Name: Agency agent
   Brain: ${brainName}
@@ -47,7 +46,7 @@ export def sessionFactsText(
 
   The flags you were started with:
   <flags>
-  ${startedWith}
+  ${JSON.stringify(flags, null, 2)}
   </flags>
   """
 }
@@ -78,11 +77,11 @@ export def grounding(): string {
   return _grounding
 }
 
-export def groundingText(brainName: string, startedWith: string): string {
+export def groundingText(brainName: string, flags: Record<string, any> | null): string {
   return """
 
   <session_facts>
-  ${sessionFactsText(brainName, getResolvedSlots(), startedWith)}
+  ${sessionFactsText(brainName, getResolvedSlots(), flags)}
   </session_facts>${factsRule(brainName)}
   ${projectContextText()}"""
 }

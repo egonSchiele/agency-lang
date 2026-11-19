@@ -251,8 +251,8 @@ export def startPresetQuiet(flag: string, settings: Settings): Result<string[]> 
   const table = readPresetTable(settings.presets)
   setPresetTable(table)
   const choice = choosePreset(flag, table)
-  if (choice is failure(reason)) {
-    return failure(reason)
+  if (isFailure(choice)) {
+    return choice
   }
   setActivePreset(choice.value.name)
   return success(choice.value.warnings)

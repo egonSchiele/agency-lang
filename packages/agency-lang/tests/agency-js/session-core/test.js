@@ -62,12 +62,11 @@ function startData(overrides = {}) {
     preset: "",
     models: { pin: "claude-sonnet-4-6", slots: {}, provider: "", local: null, effort: null },
     limits: { maxToolCallRounds: null, maxToolResultChars: null },
-    oneShot: false,
     session: {
       cwd: project,
       replyStyle: "",
       record: { id: "s1", cwd: project, brain: "", created: 1, lastActive: 1, turns: 0, title: "" },
-      startedWith: "",
+      flags: null,
     },
     ...overrides,
   };
@@ -185,7 +184,9 @@ const badBrain = await startSession({ brain: "no-such-brain" });
 result.unknownBrainEndsTheRun = badBrain.ended && errorText(badBrain.result).slice(0, 13);
 const badPreset = await startSession({ preset: "no-such-preset" });
 result.unusablePresetEndsTheRun = badPreset.ended && errorText(badPreset.result) !== "";
-result.processStillAliveAfterFailedSetups = true;
+// The process goes on: the next session starts and reaches its pause.
+const afterFailures = await startSession();
+result.sessionStartsAfterFailedSetups = !afterFailures.ended && afterFailures.pause[0].effect;
 
 // Starting sessions leaves the user's settings file alone. An app's
 // environment often lacks the search keys a terminal has, and a choice

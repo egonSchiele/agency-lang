@@ -207,9 +207,10 @@ export def compactionFailed(threadId: string) {
 }
 
 /** Summarize the older messages and say what happened, in notices. False
-  when the summary could not be made. */
-export def compactAndReport(threadId: string, instructions: string): boolean {
-  notice("Compacting the conversation. Press Esc to stop.")
+  when the summary could not be made. `stopHint` is added to the line
+  that says it started: a front-end with a way to stop it says how. */
+export def compactAndReport(threadId: string, instructions: string, stopHint: string = ""): boolean {
+  notice("Compacting the conversation.${stopHint}")
   const result = compactConversation(threadId, instructions)
   if (result is failure(reason)) {
     notice("Could not compact the conversation: ${reason}", "warning")
@@ -222,11 +223,11 @@ export def compactAndReport(threadId: string, instructions: string): boolean {
 /** Compact the conversation on `threadId` when it has grown enough.
   Call it after the turn is marked done, so a compaction the user stops
   does not keep the turn from being saved. */
-export def compactIfDue(threadId: string) {
+export def compactIfDue(threadId: string, stopHint: string = "") {
   if (!compactionDue(threadId) || !canCompact(threadId)) {
     return
   }
-  if (!compactAndReport(threadId, "")) {
+  if (!compactAndReport(threadId, "", stopHint)) {
     compactionFailed(threadId)
   }
 }

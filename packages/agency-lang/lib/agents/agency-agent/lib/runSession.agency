@@ -63,7 +63,7 @@ export def runSession(interactive: boolean, body: () -> void raises <*>) {
   }
   // Built before the policy handler exists, so reading the project's
   // AGENTS.md never prompts. Every turn adds this same string.
-  setGrounding(groundingText(brainName, JSON.stringify(parseAgentArgs().flags, null, 2)))
+  setGrounding(groundingText(brainName, parseAgentArgs().flags))
   const handler = policyHandlerFor(interactive)
   handle {
     const bundles = checkCliBundles()

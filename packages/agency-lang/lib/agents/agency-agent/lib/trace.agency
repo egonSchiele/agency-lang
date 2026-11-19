@@ -107,8 +107,8 @@ callback("onEmit") as data {
   } else if (isPlainObject(data) && data.type == "session.notice") {
     printNotice(data.text, data.level)
   } else if (isPlainObject(data) && data.type == "session.budgetStop" && _isInteractive) {
-    // Only with a person at the terminal, which is when this line was
-    // printed before it became an event.
+    // Only with a person at the terminal. A one-shot run's output is
+    // the reply and nothing else.
     print(color.yellow(
       "⏳ The ${data.dimension} budget for ${data.label} ran out; stopping that step with its best result so far.",
     ))

@@ -1,23 +1,21 @@
 # The session core
 
-`agency agent` in a terminal and an app such as Perry are meant to be two
-ways into the same sessions: start one in the terminal, carry on in the
-app. The session core is what makes that possible. It is the agent's
-conversation loop, written so that any front-end can run it.
-
-Design: `docs/superpowers/specs/2026-11-18-shared-session-core-design.md`.
+The agent's conversation loop as a program any front-end can run. It
+exists so a session can move between front-ends: start one with
+`agency agent` in a terminal, carry on in an app.
 
 **The terminal does not use it yet.** `agency agent` still runs its own
 loop (`agent.agency`, `lib/runSession.agency`, `lib/repl.agency`). Today
-the core is driven by tests. Perry moves onto it next, then the terminal.
+the core is driven by tests.
+
+Design: `docs/superpowers/specs/2026-11-18-shared-session-core-design.md`.
 
 ## Why a session can cross
 
 A saved session is a paused program. It can be resumed only by a process
 that has the same compiled code for every file with a frame on the saved
-stack (`docs/dev/runtime/checkpoint-code-fingerprints.md`).
-
-So both front-ends run one program, and load the same compiled files:
+stack (`docs/dev/runtime/checkpoint-code-fingerprints.md`). So every
+front-end runs one program and loads the same compiled files:
 
 - **`lib/agents/agency-agent/program.agency`** is the program. `main`
   sets the session up from the data it is given, then goes to the core
@@ -31,16 +29,13 @@ So both front-ends run one program, and load the same compiled files:
 The export is the one public thing. The modules behind it are the agent's
 own and can change.
 
-`tests/agency-js/session-core-handoff` pauses a turn on an approval in one
-process, and a second process that never ran `main` finishes it.
-
 ## The interface
 
 **Start.** `main(start: ProgramStart)`: the brain, a preset, the model
 flags, the tool limits, and a `SessionStart` (the working folder, a reply
-style line, the session's record, and what the session facts say it was
-started with). A setup that fails ends the run with the reason. Nothing
-is printed and the process is not ended.
+style line, the session's record, and the flags the session facts list).
+A setup that fails ends the run with the reason. The process is not
+ended.
 
 **The pause.** The core waits with one interrupt, `agent::sessionInput`.
 Its data is what a front-end shows and saves between turns: `thread`,
@@ -48,20 +43,19 @@ Its data is what a front-end shows and saves between turns: `thread`,
 
 **Answers.** A front-end answers the pause with an `Answer`:
 
-| Kind      | Fields                    | What the core does              |
-| --------- | ------------------------- | ------------------------------- |
-| `message` | `text`, `notes`, `target` | Runs a turn                     |
-| `model`   | `spec`                    | Switches models, as `/model`    |
+| Kind      | Fields                    | What the core does                                      |
+| --------- | ------------------------- | ------------------------------------------------------- |
+| `message` | `text`, `notes`, `target` | Runs a turn                                             |
+| `model`   | `spec`                    | Switches models, as `/model`                            |
 | `options` | `options`                 | Sets the session's LLM options, such as the temperature |
-| `budget`  | `maxCost`, `maxTime`      | Sets the limits of later turns  |
+| `budget`  | `maxCost`, `maxTime`      | Sets the limits of later turns                          |
 
-`target` is a start target such as `code`, or "" for the main agent. One
-the brain does not have is refused with a `session.error`, and is not a
-turn.
-
-`notes` are lines put above the message. A front-end sends an image as a
-note with its path, since the turn finds attachments by scanning the
-message for paths.
+- `notes` are lines put above the message. An image is sent as a note
+  with its path, since the turn finds attachments by scanning the message
+  for paths.
+- `target` is a start target such as `code`, or "" for the main agent.
+  One the brain does not have is refused with a `session.error`, and is
+  not a turn.
 
 **Events**, through `emit`: `session.reply`, `session.error`,
 `session.notice` (a line for the person, with a level), and
@@ -80,8 +74,6 @@ checkpoint, and the front-end answers it.
 - **An answer of nothing ends the session.** That is what a policy sends
   when it answers the pause. Raising again would get the same answer
   forever, without ever pausing, so the node returns.
-- **An answer of the wrong shape is refused,** with a `session.error`,
-  and the core pauses again. The answer is checked with `Answer!`.
 - **The `match` over an `Answer` has no `_` arm.** The type checker does
   not check an object union for a missing case yet (B2 in
   `docs/dev/compiler/typechecker/narrowing/README.md`). When it does, a
@@ -89,54 +81,42 @@ checkpoint, and the front-end answers it.
 - **`options` is `any` in the `Answer`.** Checking a value against a type
   fills each optional field it lacks with null, and a null LLM option
   means "remove it".
-- **No call inside the argument of a `try` call.** `try f(g(x))` runs `g`
-  again when a paused run is resumed, and `g` takes the saved frame of
-  `f` ("Resume desync"). This is a compiler bug. The core works the
-  turn's message out on its own line, then calls `try runTurn(...)`.
-  Reported as agency-lang #1506.
-  `lib/repl.agency` has the old shape, `try runTurn("", withPendingNotes(msg))`.
-  It is safe there only because the terminal never resumes in the middle
-  of a turn, and has to change when the terminal moves onto the core.
+- **No call inside the argument of a `try` call** (#1506). `try f(g(x))`
+  runs `g` again when a paused run is resumed, and `g` takes the saved
+  frame of `f`. The core and the REPL work the turn's message out on its
+  own line, then call `try runTurn(...)`.
 - **A model call that fails is a reply, not an error.** `answerTurn`
-  turns it into the text "The agent stopped before finishing: ...", and
-  the core emits it as `session.reply`. `session.error` is for a turn
-  that throws outside `agencyAgent`.
+  turns it into the text "The agent stopped before finishing: ...".
+  `session.error` is for a turn that throws outside `agencyAgent`.
 - **The turn budget covers the main agent only.** It is applied where
   `agencyAgent` is called. A turn sent straight to a start target is not
   limited by it, and the core says so in a warning notice.
-- **The effort has no answer yet.** It is not one of the `LlmOptions`
-  keys: in the terminal it comes from `--effort` or a preset. An app that
-  wants an effort picker needs a new kind of answer.
+- **The effort has no answer.** It is not one of the `LlmOptions` keys:
+  in the terminal it comes from `--effort` or a preset.
 - **Starting a session does not save the search backend.** `main` calls
-  `startModels(flags, false)`, so the backend picked for the session is
-  not written to `settings.json`. The terminal does save it. An app's
+  `startModels(flags, false)`. The terminal does save it. An app's
   environment often lacks the search keys a terminal has, and a choice
   saved from there would follow the user back.
 - **No job tools.** A background job belongs to the run and stops when
-  the run pauses, and this run pauses after every turn. The core turns
-  the job tools off.
+  the run pauses, and this run pauses after every turn.
 - **The reply style and the job tools default to the terminal's.**
-  `setReplyStyle` and `setJobToolsOn` start "on", and `setInteractive` in
-  `trace.agency` sets both. The core sets both itself.
+  `setInteractive` in `trace.agency` sets both, and the core sets both
+  itself.
 
 ## The program reaches no terminal code
 
 Loading a module runs its top-level code. `trace.agency` prints every
 tool call from a top-level callback, so an app's engine must never load
 it. `lib/stdlib/agentSessionImports.test.ts` walks the imports of
-`program.agency` and fails if they reach any of the terminal's modules:
-`agent.agency`, and in `lib/`: `repl`, `capabilitiesUi`, `mcpMenu`,
-`header`, `transcript`, `args`, `policy`, `trace`, `runSession`,
-`resume`, and `slashCommands/`.
+`program.agency` and fails if they reach:
 
-Three splits keep it true:
+- one of the terminal's modules: `agent.agency`, and in `lib/`: `repl`,
+  `capabilitiesUi`, `mcpMenu`, `header`, `transcript`, `args`, `policy`,
+  `trace`, `runSession`, `resume`, and `slashCommands/`;
+- any module with a top-level `callback(`.
 
-- `lib/record.agency` holds the session record. `lib/resume.agency` keeps
-  the terminal's picker and restore.
-- `lib/runSession.agency` holds the terminal's policy wrapper. It was in
-  `lib/turn.agency`.
-- A line for the person is a notice (`lib/notice.agency`), which
-  `trace.agency` prints.
+A line for the person is a notice (`lib/notice.agency`), which
+`trace.agency` prints.
 
 ## What can still print or end the process
 
@@ -144,11 +124,9 @@ Three splits keep it true:
 | --- | --- |
 | `session.agency`: `pickGuidedLocalModel`, `pickModelsForAgent`, `maybeEnableMemory`, `switchModel` | Terminal only. The core uses `startModels` and `applyModelSpec`. |
 | `presets.agency`: `startPreset` | Terminal only. The core uses `startPresetQuiet`. |
-| `shared.agency`: `configureLocalModel` | A local model that fails to load ends the process. Not handled yet. |
+| `shared.agency`: `configureLocalModel` | A local model that fails to load ends the process. |
 | `settings.agency`, `capabilities.agency`, `globalInstructions.agency`, and `configureSearch` in `search.agency` | Startup warnings that `print`. In an app they reach the engine's log and no client. |
 | `mcp.agency`: `maybeLoadMcp` | A front-end's own startup. The program does not call it. |
-
-The runtime also logs `Node main crashed` to stderr when a setup fails.
 
 ## Not solved yet
 
@@ -165,34 +143,11 @@ the modules load:
 In the terminal the two folders are the same. An engine that runs every
 session from one folder gives each session that folder's commands and
 skills. Each read has to become a function of the session's folder
-(`getAgentCwd()`). The handoff test runs both processes in one folder, so
-it does not catch this.
+(`getAgentCwd()`). `tests/agency-js/session-core-handoff` runs both
+processes in one folder, so it does not catch this.
 
 **Each process sets up its own MCP servers** before it resumes a session.
 Connections belong to the process.
-
-## The terminal: what the check found
-
-Run by hand on 2026-11-19, on a real terminal, with the program on the
-branch `spike/run-in-run` (`spike-run-in-run/shell.agency`). It runs
-`repl()` in a shell run, and each line goes to a driver that runs a small
-core as a second run.
-
-- **A line reaches the core and its reply is printed.** Works.
-- **The pinned approval prompt.** Works: the core paused on an approval,
-  the prompt was drawn by `interruptChoice` in the shell's run, and the
-  answer reached the core.
-- **Esc during a turn.** Works. The driver gives the core's leg the shell
-  run's abort signal, and Esc returned to the prompt.
-- **Ctrl+D.** Exits cleanly.
-- **The turn's footer.** Not tested. The check passed no `status`
-  callback, and `printFooter` in `lib/stdlib/cli.ts` prints nothing
-  without one. The footer's token counts are read from the shell's run,
-  so they would have shown none of the core's usage in any case. That
-  still has to change.
-
-So the terminal can keep `repl()` and its prompt code when it moves onto
-the core.
 
 ## Files
 

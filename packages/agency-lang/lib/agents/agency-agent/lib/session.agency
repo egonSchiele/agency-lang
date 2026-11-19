@@ -205,6 +205,20 @@ export def takePendingLlmOptions(): LlmOptions | null {
   return pending
 }
 
+/** Apply the block the useLlmOptions tool asked for during the turn, if
+  there is one, and say so in a notice. Call it after the turn, outside
+  the tool's branch. */
+export def applyPendingLlmOptions() {
+  const pending = takePendingLlmOptions()
+  if (pending == null) {
+    return
+  }
+  applyLlmOptionsAnswer(pending)
+  const fields = Object.keys(pending)
+  const listed = if fields.length == 0 then "none (back to the preset's)" else fields.join(", ")
+  notice("Options set for the next turn: ${listed}")
+}
+
 /** An empty block clears the session's own, so the preset's or
   settings.model's apply again. Takes effect from the next turn. */
 export def applySessionLlmOptions(prior: Session, options: LlmOptions): Session {
@@ -373,8 +387,8 @@ export def applyModelSpec(spec: string): Result<Record<string, Resolved>> {
     price: "standard"
   }
   const switched = trySwitchModel(_choices, spec, ctx, getResolvedSlots())
-  if (switched is failure(reason)) {
-    return failure(reason)
+  if (isFailure(switched)) {
+    return switched
   }
   _choices = switched.value.session
   for (change in switched.value.changes) {
@@ -565,8 +579,8 @@ export def startModels(flags: ModelFlags, saveSearchChoice: boolean = true): Res
   setStartupModelFlags(flags, getModelSettings(loadSettings()), defaultSlots())
   const request = currentModelRequest(noModelChoices())
   const applied = applyModelRequest(request, _startupModelSettings)
-  if (applied is failure(reason)) {
-    return failure(reason)
+  if (isFailure(applied)) {
+    return applied
   }
   configureSearch(requestIsLocal(request), saveSearchChoice)
   return success(true)

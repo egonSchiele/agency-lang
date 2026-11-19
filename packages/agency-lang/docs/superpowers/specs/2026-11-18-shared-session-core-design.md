@@ -94,7 +94,6 @@ type ProgramStart = {
   preset: string;      // a preset's name, or ""
   models: ModelFlags;  // the startup model flags
   limits: LimitFlags;  // the startup tool limits
-  oneShot: boolean;
   session: SessionStart
 }
 
@@ -102,7 +101,7 @@ type SessionStart = {
   cwd: string;                  // the folder the agent works in
   replyStyle: string;           // a line on how to format replies, or ""
   record: SessionRecord | null; // null for a session that is not saved
-  startedWith: string           // what the session facts say it was started with, or ""
+  flags: Record<string, any> | null  // the flags the session facts list, or null
 }
 ```
 
@@ -112,8 +111,10 @@ type SessionStart = {
   agent's startup does now.
 - **Memory is turned off in the run.** `disableMemory` changes the run's
   own stack, so `main` calls it.
-- **`startedWith` is text, not flags.** The terminal builds it from its
-  command line. The core knows nothing about flags.
+- **`flags` is a record, and the core turns it into text.** The terminal
+  passes its command-line flags and an app passes null. The session facts
+  sit above the user-message boundary, so a free string there would make
+  it easy to pass user text by mistake.
 
 ### The pause
 
@@ -335,6 +336,14 @@ Not carried:
 
 - **A pause in a shared node resumes in another program,** at a message
   and in the middle of a model's tool call (Perry's experiments, PR #5).
+- **`repl()` works over a session run on a real terminal.** Checked by
+  hand on 2026-11-19 with `spike-run-in-run/shell.agency` on the branch
+  `spike/run-in-run`: a line reached the core and its reply was printed,
+  the pinned approval prompt was drawn in the shell's run and its answer
+  reached the core, Esc during a turn returned to the prompt, and Ctrl+D
+  exited cleanly. The turn's footer was not tested: the check passed no
+  `status` callback, and the footer prints nothing without one. So the
+  terminal can keep `repl()` and its prompt code.
 - **One run can drive another** (the spike on `spike/run-in-run`). A
   front-end run drove a core run through a turn, an approval answered by
   the front-end's Agency code, and an abort mid-turn. The front-end's
@@ -346,10 +355,10 @@ Not carried:
 
 ## Not verified yet
 
-1. **`repl()` on a real terminal with a session run under it.** The
-   pinned approval prompt and the palette were not run against a second
-   run.
-2. **The size of the `cli.ts` change** for Esc and the footer.
+1. **The slash palette and the turn's footer over a session run.** The
+   footer's token counts are read from the shell's run, so they would
+   show none of the core's usage.
+2. **The size of the `cli.ts` change** for the footer.
 3. **Top-level `callback(...)` blocks.** `trace.agency` prints tool calls
    from them. Whether they fire for a session run that a fresh process
    only resumes is not known. If not, the driver passes the callbacks.

@@ -38,6 +38,6 @@
   "approveAllWithoutThePin": "ended",
   "unknownBrainEndsTheRun": "Unknown brain",
   "unusablePresetEndsTheRun": true,
-  "processStillAliveAfterFailedSetups": true,
+  "sessionStartsAfterFailedSetups": "agent::sessionInput",
   "settingsFileWritten": false
 }

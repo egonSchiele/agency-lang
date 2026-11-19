@@ -74,6 +74,15 @@ describe("the agent's session program reaches no terminal code", () => {
     expect(terminalModulesReachedFrom(["program.agency"])).toEqual([]);
   });
 
+  // The list above is kept by hand. This catches a new module that would
+  // run a callback in every front-end, whatever it is called.
+  it("the session program reaches no module with a top-level callback", () => {
+    const withCallbacks = importClosure(["program.agency"]).filter((file) =>
+      /^callback\("/m.test(readFileSync(path.join(AGENT_DIR, file), "utf8")),
+    );
+    expect(withCallbacks).toEqual([]);
+  });
+
   it("the session program does reach the turn and the record", () => {
     const reached = importClosure(["program.agency"]);
     expect(reached).toContain("core.agency");

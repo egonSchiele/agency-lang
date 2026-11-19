@@ -38,7 +38,7 @@ import {
   availableBackendItems,
  } from "./search.agency"
 import {
-  applyLlmOptionsAnswer,
+  applyPendingLlmOptions,
   applyModelSpec,
   modelChoices,
   setModelChoices,
@@ -50,7 +50,6 @@ import {
   parsePresetCommand,
   saveSessionPreset,
   switchPreset,
-  takePendingLlmOptions,
  } from "./session.agency"
 import { formatTurnFailure } from "./utils.agency"
 import { configureLocalModel, explicitRouterSpec, getResolvedSlots } from "../shared.agency"
@@ -365,13 +364,17 @@ def renameSlashCommand(title: string): boolean {
   return true
 }
 
+// Added to the line that says a compaction started. Esc is the terminal's
+// key, so the hint is the terminal's too.
+static const ESC_HINT = " Press Esc to stop."
+
 def compactSlashCommand(instructions: string): boolean {
   const threadId = conversationThread()
   if (!canCompact(threadId)) {
     pushMessage("Nothing to compact yet.")
     return true
   }
-  compactAndReport(threadId, instructions)
+  compactAndReport(threadId, instructions, ESC_HINT)
   return true
 }
 
@@ -397,25 +400,15 @@ def imageSlashCommand(message: string): boolean {
 }
 
 def renderUserTurn(trimmed: string, msg: string): boolean {
-  const result = try runTurn("", withPendingNotes(msg))
+  // The message is worked out on its own line: a call inside the argument
+  // of a `try` call breaks a resume in the middle of the turn (#1506).
+  const message = withPendingNotes(msg)
+  const result = try runTurn("", message)
   renderAgentResponse(result)
   applyPendingLlmOptions()
   markTurnDone()
-  compactIfDue(conversationThread())
+  compactIfDue(conversationThread(), ESC_HINT)
   return true
-}
-
-// The coordinator's useLlmOptions tool records a request during the turn;
-// it is applied here, outside the tool's branch.
-def applyPendingLlmOptions() {
-  const pending = takePendingLlmOptions()
-  if (pending == null) {
-    return
-  }
-  applyLlmOptionsAnswer(pending)
-  const fields = Object.keys(pending)
-  const listed = if fields.length == 0 then "none (back to the preset's)" else fields.join(", ")
-  pushMessage(color.dim("Options set for the next turn: ${listed}"))
 }
 
 export def buildStatus(): { left: string; right: string; context: string } {
@@ -436,7 +429,7 @@ export def runSeedTurn(target: string, msg: string) {
   renderAgentResponse(response)
   applyPendingLlmOptions()
   markTurnDone()
-  compactIfDue(conversationThread())
+  compactIfDue(conversationThread(), ESC_HINT)
   saveSeedTurn(msg)
 }
 

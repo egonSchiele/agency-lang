@@ -35,8 +35,8 @@ node budgetStopIsAnEvent(): string {
 }
 
 node bundledSkillsCheckReturnsItsResult(): boolean {
-  // The skills folder ships with the agent, so the check passes. It used
-  // to end the process when it failed; now its caller decides.
+  // The skills folder ships with the agent, so the check passes. A
+  // failure is returned, and the caller decides what to do with it.
   return isSuccess(checkCliBundles())
 }
 

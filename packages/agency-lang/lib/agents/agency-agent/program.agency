@@ -35,8 +35,6 @@ export type ProgramStart = {
   models: ModelFlags;
   // The startup tool limits.
   limits: LimitFlags;
-  // True for a run that takes one message and ends.
-  oneShot: boolean;
   session: SessionStart
 }
 
@@ -68,7 +66,9 @@ node main(start: ProgramStart) {
   }
 
   setStartupLimitFlags(start.limits)
-  applyToolLimits(activePreset(), start.oneShot)
+  // The limits of a session that goes on, not of a run that takes one
+  // message and ends: the core pauses again after every turn.
+  applyToolLimits(activePreset(), false)
   const capsMaxTokens = getCapabilities().maxTokens
   if (capsMaxTokens != null) {
     setLlmOptions({

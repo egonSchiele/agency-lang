@@ -30,7 +30,7 @@ import {
   recordTurn,
   setCurrentRecord,
  } from "./lib/record.agency"
-import { applyLlmOptionsAnswer, applyModelSpec, takePendingLlmOptions } from "./lib/session.agency"
+import { applyLlmOptionsAnswer, applyModelSpec, applyPendingLlmOptions } from "./lib/session.agency"
 import { SessionRecord } from "./lib/sessions.agency"
 import { currentBrainName, resolveStartTarget, runTurn, startTargetsFor } from "./lib/turn.agency"
 import { isPlainObject } from "./lib/utils.agency"
@@ -77,8 +77,10 @@ export type SessionStart = {
   replyStyle: string;
   // The session's record, or null for a session that is not saved.
   record: SessionRecord | null;
-  // What the session was started with, for the session facts, or "".
-  startedWith: string
+  // The flags the session was started with, which the session facts list,
+  // or null. Flags only, never anything a user typed as a message: the
+  // session facts sit above the user-message boundary.
+  flags: Record<string, any> | null
 }
 
 /** A message from the user. `notes` are lines put above it, such as the
@@ -131,19 +133,6 @@ def pauseData(budget: TurnBudget): PauseData {
   }
 }
 
-// The coordinator's useLlmOptions tool records a request during the turn.
-// It is applied here, outside the tool's branch.
-def applyPendingLlmOptions() {
-  const pending = takePendingLlmOptions()
-  if (pending == null) {
-    return
-  }
-  applyLlmOptionsAnswer(pending)
-  const fields = Object.keys(pending)
-  const listed = if fields.length == 0 then "none (back to the preset's)" else fields.join(", ")
-  notice("Options set for the next turn: ${listed}")
-}
-
 /** The record with the brain this run really has, which is what a
   front-end lists the session under. */
 def recordFor(record: SessionRecord | null): SessionRecord | null {
@@ -172,7 +161,7 @@ export node session(start: SessionStart) {
     return
   }
   // Built once. Each turn adds this same text to the conversation.
-  setGrounding(groundingText(currentBrainName(), start.startedWith))
+  setGrounding(groundingText(currentBrainName(), start.flags))
   let budget: TurnBudget = {
     maxCost: -1,
     maxTime: -1

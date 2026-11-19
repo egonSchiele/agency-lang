@@ -1,17 +1,38 @@
+import { _folderScan, _keepFolderScan } from "agency-lang/stdlib-lib/agentFolderScans.js"
 import { SkillCommand, commandsDir } from "std::skills"
-import { cwd } from "std::system"
 
 import { claudeSkillCommands } from "./claudeSkills.agency"
 import { instructionFolders } from "./projectContext.agency"
+import { sessionFolder } from "./sessionFolder.agency"
 
-export static const projectCommands = commandsDir("${cwd()}/.claude/commands") with approve
+/** The commands in the session folder's `.claude/commands`. Scanned the
+  first time this process asks and kept for the process, like the Claude
+  skills (see `skillSources`). */
+export def projectCommands(): SkillCommand[] {
+  const folder = sessionFolder()
+  const kept = _folderScan("commands", folder)
+  if (kept != null) {
+    return kept
+  }
+  // A scan that a rule rejects is no commands, as a missing folder is.
+  const scanned = try commandsDir("${folder}/.claude/commands") with approve
+  let commands: SkillCommand[] = []
+  if (scanned is success(found)) {
+    commands = found
+  }
+  _keepFolderScan("commands", folder, commands)
+  return commands
+}
 
 // A project's instructions belong at the repository root, where an agent
 // started in any folder of the project reads them.
-static const INIT_FILE = path.join(instructionFolders(cwd())[0], "AGENTS.md")
+def initFile(): string {
+  return path.join(instructionFolders(sessionFolder())[0], "AGENTS.md")
+}
 
-static const INIT_PROMPT = """
-Write an instruction file for this project at ${INIT_FILE}. A coding agent
+def initPrompt(): string {
+  return """
+Write an instruction file for this project at ${initFile()}. A coding agent
 reads this file at the start of every session, so it should hold what an
 agent cannot work out quickly by itself.
 
@@ -35,22 +56,25 @@ is still correct.
 
 $ARGUMENTS
 """
+}
 
 /** Commands that ship with the agent and expand to a prompt. */
-export static const promptCommands: SkillCommand[] = [
-  {
-    name: "init",
-    description: "Write an AGENTS.md for this project",
-    argHint: "[what to focus on]",
-    body: INIT_PROMPT
-  },
-]
+export def promptCommands(): SkillCommand[] {
+  return [
+    {
+      name: "init",
+      description: "Write an AGENTS.md for this project",
+      argHint: "[what to focus on]",
+      body: initPrompt()
+    },
+  ]
+}
 
 /** Every `/name` command a turn can expand, in precedence order: the
   user's Claude Code skills, then the project's `.claude/commands` files,
   then the prompt commands that ship with the agent. */
 export def slashCommands(): SkillCommand[] {
-  return [...claudeSkillCommands(), ...projectCommands, ...promptCommands]
+  return [...claudeSkillCommands(), ...projectCommands(), ...promptCommands()]
 }
 
 export def builtinPalette(): Record<string, string> {

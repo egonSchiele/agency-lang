@@ -9,9 +9,9 @@ import {
   _readCheckpointFile,
  } from "agency-lang/stdlib-lib/agentSessions.js"
 import { now } from "std::date"
-import { cwd } from "std::system"
 
 import { POLICY_DIR } from "./config.agency"
+import { sessionFolder } from "./sessionFolder.agency"
 
 /** What the picker shows for a session. `title` is the one-line summary;
   `turns` counts completed turns. */
@@ -38,8 +38,10 @@ export def cwdSlug(dir: string): string {
   return dir.replace(re/[^a-zA-Z0-9]/g, "-")
 }
 
+/** Where this session's files are kept: the folder for the directory the
+  session started in. */
 export def projectDir(): string {
-  return path.join(SESSIONS_DIR, cwdSlug(cwd()))
+  return path.join(SESSIONS_DIR, cwdSlug(sessionFolder()))
 }
 
 /** A fresh session id: the start time in milliseconds plus six random

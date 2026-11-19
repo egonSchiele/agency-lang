@@ -19,6 +19,15 @@
       "llmMocks": [{ "return": "ok" }]
     },
     {
+      "nodeName": "slashCommandExpandsWithNoOneToAsk",
+      "description": "Under the policy handler with no one to ask, the project's commands are still found.",
+      "input": "",
+      "expectedOutput": "\"false|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "ok" }]
+    },
+    {
       "nodeName": "mainTargetGetsAttachment",
       "description": "An image path in the message is read and attached for a model that takes images.",
       "input": "",

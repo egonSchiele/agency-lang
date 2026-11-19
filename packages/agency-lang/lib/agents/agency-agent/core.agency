@@ -31,6 +31,7 @@ import {
   setCurrentRecord,
  } from "./lib/record.agency"
 import { applyLlmOptionsAnswer, applyModelSpec, applyPendingLlmOptions } from "./lib/session.agency"
+import { setSessionFolder } from "./lib/sessionFolder.agency"
 import { SessionRecord } from "./lib/sessions.agency"
 import { currentBrainName, resolveStartTarget, runTurn, startTargetsFor } from "./lib/turn.agency"
 import { isPlainObject } from "./lib/utils.agency"
@@ -150,6 +151,7 @@ def recordFor(record: SessionRecord | null): SessionRecord | null {
 // session goes on, as the terminal's REPL does.
 export node session(start: SessionStart) {
   setAgentCwd(start.cwd)
+  setSessionFolder(start.cwd)
   setCurrentRecord(recordFor(start.record))
   setReplyStyle(start.replyStyle)
   // A job belongs to the run and stops when the run pauses, and this run

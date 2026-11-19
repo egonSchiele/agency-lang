@@ -1,0 +1,6 @@
+// The test runner compiles one Agency file per folder. This test drives
+// the agent's own session program, which test.js imports as compiled, so
+// there is nothing to compile here but this placeholder.
+node placeholder(): string {
+  return "see test.js"
+}

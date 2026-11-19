@@ -1,14 +1,16 @@
 /** @module
   @summary The user's Claude Code skills: `~/.claude/skills`, then
-  `.claude/skills` in the launch directory and each parent up to the
-  repository root. Each folder is scanned once at startup and offered to
+  `.claude/skills` in the session's folder and each parent up to the
+  repository root. Each folder is scanned once per process and offered to
   the coordinator as one `skill` tool, and its skills run as slash commands.
   See docs/dev/agents/claude-skills.md.
 */
 import { exists } from "std::shell"
-import { cwd } from "std::system"
 import { ClaudeSkillsScan, SkillCommand, SkillEntry, scanClaudeSkills, skillsToolFromEntries } from "std::skills"
+import { _folderScan, _keepFolderScan } from "agency-lang/stdlib-lib/agentFolderScans.js"
 import { _repositoryAncestors } from "agency-lang/stdlib-lib/gitignore.js"
+
+import { sessionFolder } from "./sessionFolder.agency"
 
 export type SkillLabel = "personal" | "project"
 
@@ -124,7 +126,7 @@ export def skillListing(sources: SkillSource[], budget: number): string {
 }
 
 /** The one `skill` tool over every folder, or none when no skill is listed.
-  `sources` decides the listing; the tool loads from `SKILL_SOURCES`. */
+  `sources` decides the listing; the tool loads from `skillSources()`. */
 export def skillToolFor(sources: SkillSource[]): any[] {
   const listed = [src for src in sources if src.scan.entries.length > 0]
   if (listed.length == 0) {
@@ -134,7 +136,7 @@ export def skillToolFor(sources: SkillSource[]): any[] {
   return [tool]
 }
 
-// The tool body reads SKILL_SOURCES itself and binds nothing, so a
+// The tool body reads skillSources() itself and binds nothing, so a
 // checkpoint taken while the tool is in a frame does not carry the skills.
 def loadSkill(name: string, file: string = "SKILL.md"): Result<string> {
   """
@@ -143,7 +145,7 @@ def loadSkill(name: string, file: string = "SKILL.md"): Result<string> {
   @param name - The skill's name, as listed
   @param file - A file in the skill's folder; SKILL.md by default
   """
-  return loadSkillFrom(SKILL_SOURCES, name, file)
+  return loadSkillFrom(skillSources(), name, file)
 }
 
 // The read raises std::read for the skill's folder, which the agent policy
@@ -191,12 +193,28 @@ def loadSkillSources(start: string, home: string): SkillSource[] {
   return mergeSkillSources(sources)
 }
 
-static const SKILL_SOURCES = loadSkillSources(cwd(), os.homedir())
+/** The skills of the session's folder. Scanned the first time this
+  process asks, and kept for the process (agentFolderScans.ts), so a turn
+  never scans again.
+
+  The terminal asks once before it installs its policy handler
+  (runSession). A scan made under that handler would be put to the user,
+  or rejected in a `-p` run, since every handler is asked. */
+export def skillSources(): SkillSource[] {
+  const folder = sessionFolder()
+  const kept = _folderScan("skills", folder)
+  if (kept != null) {
+    return kept
+  }
+  const sources = loadSkillSources(folder, os.homedir())
+  _keepFolderScan("skills", folder, sources)
+  return sources
+}
 
 export def claudeSkillTools(): any[] {
-  return skillToolFor(SKILL_SOURCES)
+  return skillToolFor(skillSources())
 }
 
 export def claudeSkillCommands(): SkillCommand[] {
-  return skillCommandsFor(SKILL_SOURCES)
+  return skillCommandsFor(skillSources())
 }

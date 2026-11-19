@@ -8,7 +8,8 @@
  *
  * `slashCommandExpands` depends on the working directory being
  * packages/agency-lang, whose .claude/commands/check-tests.md is the
- * fixture (projectCommands is a static read of ${cwd()}/.claude/commands).
+ * fixture (projectCommands reads the session folder's .claude/commands,
+ * which is the working directory when nothing sets it).
  */
 import { exists } from "std::shell"
 import { currentThreadId, getThread } from "std::thread"
@@ -81,6 +82,20 @@ node slashCommandExpands(): string {
   runTurn("", "/check-tests") with approve
   const text = promptText(prompts[0])
   return "${text.startsWith("/")}|${text.includes("Please review the tests you have written")}|${messageWasRewritten()}"
+}
+
+// The same under the terminal's policy handler in a run with no one to
+// ask, where an effect no rule decides is rejected. The stub policy has no
+// rule for the scan of `.claude/commands`, so a scan made under the handler
+// would lose the command. runSession scans before it installs the handler.
+node slashCommandExpandsWithNoOneToAsk(): string {
+  setBrainName("simple")
+  setPolicyArg("${__dirname}/stubPolicy.json")
+  runSession(false) {
+    runTurn("", "/check-tests")
+  }
+  const text = promptText(prompts[0])
+  return "${text.startsWith("/")}|${text.includes("Please review the tests you have written")}"
 }
 
 // An image path on the main target is detected, read, and attached by the

@@ -1,0 +1,29 @@
+/** @module
+  @summary The folder a session started in. The user's own files are read
+  from it: `.claude/commands`, the Claude skills, and the folder its saved
+  sessions are kept under.
+
+  It is not the process's folder. A terminal runs one session, in the
+  folder it was started from, so there the two are the same and nothing
+  sets this. An app's engine runs every session from one process, and the
+  session core sets each session's folder at its start.
+
+  It is not the agent's working folder either (`getAgentCwd`), which a
+  coder moves during a session. See docs/dev/agents/session-core.md.
+*/
+import { cwd } from "std::system"
+
+// A `let`, so it follows the session to whichever process resumes it.
+let _sessionFolder: string = ""
+
+export def setSessionFolder(dir: string) {
+  _sessionFolder = dir
+}
+
+export def sessionFolder(): string {
+  const folder = _sessionFolder ?? ""
+  if (folder == "") {
+    return cwd()
+  }
+  return folder
+}

@@ -6,7 +6,7 @@
 // This file is both processes: the second is started with RESUME set.
 // (Only test.js is kept in git under tests/, so there is no second file.)
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ToolCall } from "smoltalk";
@@ -21,6 +21,13 @@ const reply = (output, toolCalls = []) => ({
   value: { output, toolCalls, model: "test", usage: USAGE, cost: COST },
 });
 
+function lastUserText(config) {
+  const users = config.messages.filter((message) => message.role === "user");
+  if (users.length === 0) return "";
+  const content = users[users.length - 1].content;
+  return typeof content === "string" ? content : content.map((part) => part.text ?? "").join("");
+}
+
 // The test client. It answers by what the request holds, not by a call
 // count, so the process that resumes needs no state from the one that
 // paused.
@@ -34,6 +41,9 @@ function installClient(setClient, noteDir) {
         (message) => message.role === "tool" && JSON.stringify(message.content).includes("a note"),
       );
       const readTried = config.messages.some((message) => message.role === "tool");
+      // A slash command of the project's, expanded: say what the model was sent.
+      const said = lastUserText(config);
+      if (said.includes("hello from the project")) return reply(`saw: ${said}`);
       // The session title is asked for with no tools.
       if (!hasTools) return reply("A title");
       if (readDone) return reply("stub reply after the read");
@@ -61,6 +71,10 @@ async function startAndPause() {
   process.env.AGENCY_AGENT_HOME = mkdtempSync(path.join(os.tmpdir(), "handoff-home-"));
   process.env.ANTHROPIC_API_KEY = "test-key";
   const project = mkdtempSync(path.join(os.tmpdir(), "handoff-project-"));
+  // A command of the project's own. The first process never uses it: the
+  // second has to find it, in a folder that is not the one it runs in.
+  mkdirSync(path.join(project, ".claude", "commands"), { recursive: true });
+  writeFileSync(path.join(project, ".claude", "commands", "hello.md"), "hello from the project");
   // A folder outside the project, so the read is one no rule decides.
   const noteDir = mkdtempSync(path.join(os.tmpdir(), "handoff-notes-"));
   writeFileSync(path.join(noteDir, "note.txt"), "a note");
@@ -147,11 +161,25 @@ async function resume() {
   });
   const paused = program.hasInterrupts(next.data);
   const data = paused ? next.data[0].data : null;
+  // The project's own slash command, in a process that never ran `main`
+  // and was not started in the project's folder.
+  if (paused) {
+    await program.respondToInterrupts(
+      next.data,
+      [program.approve({ kind: "message", text: "/hello", notes: [], target: "" })],
+      {
+        metadata: { callbacks: { onEmit: (event) => void emitted.push(event) } },
+        invocation: { policy },
+      },
+    );
+  }
+  const replies = emitted.filter((event) => event.type === "session.reply").map((event) => event.text);
 
   writeFileSync(
     process.env.RESUMED_FILE,
     JSON.stringify({
-      reply: emitted.filter((event) => event.type === "session.reply").map((event) => event.text),
+      reply: replies.slice(0, 1),
+      projectCommandAfterResume: replies[1] ?? "no reply",
       nextPauseEffect: paused ? next.data[0].effect : "the run ended",
       turnsAfterResume: data?.record?.turns,
       brainAfterResume: data?.record?.brain,

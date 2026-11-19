@@ -128,29 +128,35 @@ A line for the person is a notice (`lib/notice.agency`), which
 | `settings.agency`, `capabilities.agency`, `globalInstructions.agency`, and `configureSearch` in `search.agency` | Startup warnings that `print`. In an app they reach the engine's log and no client. |
 | `mcp.agency`: `maybeLoadMcp` | A front-end's own startup. The program does not call it. |
 
-## Not solved yet
+## The session's folder
 
-**The program reads the process's folder where it should read the
-session's.** These use the process's `cwd()`, and the first two run when
-the modules load:
+The user's own files are read from the folder the session started in
+(`lib/sessionFolder.agency`): `.claude/commands`, the Claude skills, and
+the folder its saved sessions are kept under. The core sets it from
+`start.cwd`. It is not the process's folder, since an engine runs sessions
+from many folders in one process. It is not the agent's working folder
+either, which a coder moves.
 
-| File | What it reads |
-| --- | --- |
-| `lib/claudeSkills.agency` | The Claude skills under `cwd()` |
-| `lib/commandPalette.agency` | `${cwd()}/.claude/commands`, and the init file |
-| `lib/sessions.agency` | `projectDir()`, the folder a session is saved under |
+The scans of that folder are made the first time a process needs them and
+kept for the process, by folder (`lib/stdlib/agentFolderScans.ts`). They
+are not in a checkpoint. A process that resumes a session scans again, and
+sees a command added since.
 
-In the terminal the two folders are the same. An engine that runs every
-session from one folder gives each session that folder's commands and
-skills. Each read has to become a function of the session's folder
-(`getAgentCwd()`). `tests/agency-js/session-core-handoff` runs both
-processes in one folder, so it does not catch this.
+The terminal makes its scans in `runSession` before it installs its policy
+handler. Every handler is asked about an interrupt, so a scan made under
+that handler would be put to the user, or rejected in a `-p` run. In the
+core there is no such handler, and each scan's own `with approve` settles
+it.
 
-**Local models.** A program started with `localModels: false` refuses a
+## Local models
+
+A program started with `localModels: false` refuses a
 local request, at the start or from a later answer, with "Local models
 are not available here." An app whose one process holds every session
 sets this. Where they are allowed, a local model that cannot be set up is
 a failure too: nothing in the program ends the process.
+
+## Not solved yet
 
 **Each process sets up its own MCP servers** before it resumes a session.
 Connections belong to the process.
@@ -163,6 +169,9 @@ Connections belong to the process.
 | `lib/agents/agency-agent/program.agency` | The program: `main`, `ProgramStart`. |
 | `lib/agents/agency-agent/lib/record.agency` | The session record, the turn count, the title, the thread. |
 | `lib/agents/agency-agent/lib/notice.agency` | `notice`. |
+| `lib/agents/agency-agent/lib/sessionFolder.agency` | The folder a session started in. |
+| `lib/stdlib/agentFolderScans.ts` | The scans a process keeps, by folder. |
 | `lib/stdlib/agentSessionImports.test.ts` | The import rule. |
 | `tests/agency-js/session-core` | The core, driven as a front-end drives it. |
+| `tests/agency-js/session-core-folders` | Two sessions in two folders in one process. |
 | `tests/agency-js/session-core-handoff` | A second process finishes a paused turn. |

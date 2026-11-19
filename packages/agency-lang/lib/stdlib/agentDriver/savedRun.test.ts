@@ -15,12 +15,18 @@ import {
 import type { Settle } from "./approvals.js";
 import type { DriverPhase } from "./machine.js";
 import {
+  __resetModuleFingerprintRegistry,
+  registerModuleFingerprint,
+} from "../../runtime/moduleFingerprintRegistry.js";
+import {
   CANNOT_CONTINUE,
+  PROGRAM_NOT_LOADED,
   restoredPhase,
   saveRun,
   savedRun,
   stillHeld,
   takeHold,
+  thisProcessId,
 } from "./savedRun.js";
 
 async function withDir(fn: (dir: string) => Promise<void>): Promise<void> {
@@ -62,8 +68,8 @@ const RECORD: SessionRecord = {
   title: "a session",
 };
 
-const TERMINAL = { frontEnd: "terminal", pid: 10 };
-const PERRY = { frontEnd: "perry", pid: 20 };
+const TERMINAL = { frontEnd: "terminal", pid: 10, processId: "process-a" };
+const PERRY = { frontEnd: "perry", pid: 20, processId: "process-b" };
 
 describe("savedRun", () => {
   it("is null before the first pause and after the run ended", () => {
@@ -151,17 +157,46 @@ describe("restoredPhase", () => {
     ]);
   });
 
-  it("ends a session saved by code that is not loaded now", () => {
-    const fingerprints = { moduleFingerprints: { "gone.agency": { hash: "0000" } } };
-    const old: SavedRun = {
-      ...run(null),
-      pause: [waitingOn("agent::sessionInput", "p1", fingerprints)],
-    };
-    expect(restoredPhase(old)).toEqual({
-      phase: { kind: "ended", reason: CANNOT_CONTINUE },
+  const pausedIn = (moduleId: string, hash: string): SavedRun => ({
+    ...run(null),
+    pause: [
+      waitingOn("agent::sessionInput", "p1", { moduleFingerprints: { [moduleId]: { hash } } }),
+    ],
+  });
+
+  it("ends a session saved by code that differs from the code loaded now", () => {
+    registerModuleFingerprint("loaded.agency", "1111");
+    try {
+      expect(restoredPhase(pausedIn("loaded.agency", "0000"))).toEqual({
+        phase: { kind: "ended", reason: CANNOT_CONTINUE },
+        happened: [],
+      });
+    } finally {
+      __resetModuleFingerprintRegistry();
+    }
+  });
+
+  it("ends, saying to load the program first, when its module is not loaded", () => {
+    expect(restoredPhase(pausedIn("gone.agency", "0000"))).toEqual({
+      phase: { kind: "ended", reason: PROGRAM_NOT_LOADED },
       happened: [],
     });
   });
+
+  it("keeps the failed requests, through a save and a load", () =>
+    withDir(async (dir) => {
+      const phase: DriverPhase = {
+        kind: "waitingForUser",
+        pause: PAUSE,
+        cancelledTexts: ["earlier"],
+        failedTexts: ["broke"],
+      };
+      const saved = savedRun(phase);
+      expect(saved).toEqual({ ...run(null), failedTexts: ["broke"] });
+      await saveRun({ dir, record: RECORD, run: saved!, holder: TERMINAL });
+      const loaded = await readSavedRun(dir, "s1");
+      expect(restoredPhase(loaded!).phase).toEqual(phase);
+    }));
 });
 
 describe("saving and holding a session", () => {
@@ -229,11 +264,34 @@ describe("saving and holding a session", () => {
       expect(record).toEqual({ ...RECORD, runFormat: "savedRun", heldBy: PERRY });
     }));
 
-  it("counts the same front-end in another process as another holder", () =>
+  // A pid repeats on another machine, and after a crash.
+  it("counts the same front-end in another process as another holder, even with its pid", () =>
     withDir(async (dir) => {
       await saveRun({ dir, record: RECORD, run: run(null), holder: TERMINAL });
-      await takeHold({ dir, id: "s1", holder: { frontEnd: "terminal", pid: 11 } });
+      await takeHold({ dir, id: "s1", holder: { ...TERMINAL, processId: "process-c" } });
       expect(await stillHeld({ dir, id: "s1", holder: TERMINAL })).toBe(false);
+    }));
+
+  it("makes one process id for the process", () => {
+    expect(thisProcessId()).not.toBe("");
+    expect(thisProcessId()).toBe(thisProcessId());
+  });
+
+  // A save and a take started together: whichever the lock lets in first,
+  // the second front-end ends up holding the session, and the run file is
+  // the one the save's result says.
+  it("takes the record's lock, so a save and a take do not cross", () =>
+    withDir(async (dir) => {
+      await saveRun({ dir, record: RECORD, run: run(null), holder: TERMINAL });
+      const newer = run({ text: "terminal's turn", approvals: null });
+      const [saved, taken] = await Promise.all([
+        saveRun({ dir, record: RECORD, run: newer, holder: TERMINAL }),
+        takeHold({ dir, id: "s1", holder: PERRY }),
+      ]);
+      expect(taken).toEqual(success(null));
+      const [record] = await _listSessions(dir);
+      expect(record.heldBy).toEqual(PERRY);
+      expect(await readSavedRun(dir, "s1")).toEqual(saved.success ? newer : run(null));
     }));
 
   it("holds a session no one has taken hold of, or not yet saved", () =>

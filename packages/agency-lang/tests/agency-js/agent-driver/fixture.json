@@ -15,7 +15,7 @@
   "rejectAllReplies": ["echo: one", "echo: two"],
   "pausedOn": "driver::testApproval",
   "saved": true,
-  "loadedCanResume": true,
+  "loadedCanResume": "yes",
   "loadedPhase": "approving",
   "afterApproval": "waitingForUser",
   "replyAfterLoad": true

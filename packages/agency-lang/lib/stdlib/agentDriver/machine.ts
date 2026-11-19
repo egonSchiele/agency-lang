@@ -25,25 +25,24 @@ import { withCancelNote, type AgentStep } from "./run.js";
 /** One resume of the run: the interrupts it answers and the answers. */
 export type Leg = { interrupts: Interrupt[]; responses: InterruptResponse[] };
 
+/** The requests since the last turn that finished which the agent no
+ *  longer remembers: the ones cancelled, and the ones whose turn failed.
+ *  The next message carries a note that names them. `failedTexts` absent
+ *  is the same as empty. */
+export type DroppedTexts = { cancelledTexts: string[]; failedTexts?: string[] };
+
 /** Where the session is. `pause` is the pause the current turn started
  *  from, so a cancel or a failure can go back to it. `text` is the
- *  person's message for the turn, as typed. `cancelledTexts` are the
- *  requests cancelled since the last turn that finished.
+ *  person's message for the turn, as typed.
  *
  *  `answering` is a settings change on its way into the run. It is not a
  *  turn: the run applies it and pauses again, with no model call. */
 export type DriverPhase =
   | { kind: "starting" }
-  | { kind: "waitingForUser"; pause: Interrupt[]; cancelledTexts: string[] }
-  | { kind: "working"; pause: Interrupt[]; text: string; cancelledTexts: string[]; leg: Leg }
-  | {
-      kind: "approving";
-      pause: Interrupt[];
-      text: string;
-      cancelledTexts: string[];
-      queue: ApprovalQueue;
-    }
-  | { kind: "answering"; pause: Interrupt[]; cancelledTexts: string[]; answer: Answer; leg: Leg }
+  | ({ kind: "waitingForUser"; pause: Interrupt[] } & DroppedTexts)
+  | ({ kind: "working"; pause: Interrupt[]; text: string; leg: Leg } & DroppedTexts)
+  | ({ kind: "approving"; pause: Interrupt[]; text: string; queue: ApprovalQueue } & DroppedTexts)
+  | ({ kind: "answering"; pause: Interrupt[]; answer: Answer; leg: Leg } & DroppedTexts)
   | { kind: "ended"; reason: string };
 
 /** What a front-end shows for a step the machine took. */
@@ -91,12 +90,17 @@ type ApprovingPhase = Extract<DriverPhase, { kind: "approving" }>;
 type WaitingPhase = Extract<DriverPhase, { kind: "waitingForUser" }>;
 /** A turn in progress: running a leg, or paused at an approval. */
 type TurnPhase = WorkingPhase | ApprovingPhase;
-type Turn = Pick<TurnPhase, "pause" | "text" | "cancelledTexts">;
+type Turn = Pick<TurnPhase, "pause" | "text" | "cancelledTexts" | "failedTexts">;
 
 export const initialPhase: DriverPhase = { kind: "starting" };
 
 function unchanged(phase: DriverPhase): DriverStep {
   return { phase, happened: [] };
+}
+
+/** The dropped requests of a phase or a saved run, alone. */
+export function droppedOf(from: DroppedTexts): DroppedTexts {
+  return { cancelledTexts: from.cancelledTexts, failedTexts: from.failedTexts };
 }
 
 function settledHappened(step: QueueStep): Happened[] {
@@ -109,26 +113,26 @@ function settledHappened(step: QueueStep): Happened[] {
 }
 
 function submit(phase: WaitingPhase, text: string): DriverStep {
-  const message = withCancelNote({ message: text, cancelledTexts: phase.cancelledTexts });
+  const message = withCancelNote({ message: text, ...droppedOf(phase) });
   return {
     phase: {
       kind: "working",
       pause: phase.pause,
       text,
-      cancelledTexts: phase.cancelledTexts,
+      ...droppedOf(phase),
       leg: { interrupts: phase.pause, responses: [approve(messageAnswer(message))] },
     },
     happened: [{ type: "submitted", text }],
   };
 }
 
-/** Sends the change into the run. The requests cancelled so far are kept,
- *  so the next message still says they were cancelled. */
+/** Sends the change into the run. The requests cancelled or failed so far
+ *  are kept, so the next message still names them. */
 function answerWith(phase: WaitingPhase, answer: SettingsAnswer): DriverStep {
   return unchanged({
     kind: "answering",
     pause: phase.pause,
-    cancelledTexts: phase.cancelledTexts,
+    ...droppedOf(phase),
     answer,
     leg: { interrupts: phase.pause, responses: [approve(answer)] },
   });
@@ -143,15 +147,15 @@ function unexpected(result: Result<AgentStep>): string {
  *  changed. When the core refused the change it reports the same, and it
  *  has already said why in a notice of its own. */
 function answerFinished(phase: AnsweringPhase, result: Result<AgentStep>): DriverStep {
-  const { cancelledTexts } = phase;
+  const dropped = droppedOf(phase);
   if (result.success && result.value.kind === "waitingForUser") {
     const pause = result.value.interrupts;
     return {
-      phase: { kind: "waitingForUser", pause, cancelledTexts },
+      phase: { kind: "waitingForUser", pause, ...dropped },
       happened: [{ type: "answered", before: pauseData(phase.pause), after: pauseData(pause) }],
     };
   }
-  const waiting: WaitingPhase = { kind: "waitingForUser", pause: phase.pause, cancelledTexts };
+  const waiting: WaitingPhase = { kind: "waitingForUser", pause: phase.pause, ...dropped };
   if (result.success && result.value.kind === "cancelled") {
     return unchanged(waiting);
   }
@@ -170,7 +174,7 @@ function toApprovalOrWork(turn: Turn, step: QueueStep): DriverStep {
 }
 
 function turnOf(phase: TurnPhase): Turn {
-  return { pause: phase.pause, text: phase.text, cancelledTexts: phase.cancelledTexts };
+  return { pause: phase.pause, text: phase.text, ...droppedOf(phase) };
 }
 
 /** Drops the turn: the run goes back to the pause it started from, and the
@@ -178,7 +182,7 @@ function turnOf(phase: TurnPhase): Turn {
 function cancelTurn(phase: TurnPhase): DriverStep {
   const cancelledTexts = [...phase.cancelledTexts, phase.text];
   return {
-    phase: { kind: "waitingForUser", pause: phase.pause, cancelledTexts },
+    phase: { kind: "waitingForUser", pause: phase.pause, ...droppedOf(phase), cancelledTexts },
     happened: [{ type: "turnCancelled" }],
   };
 }
@@ -187,6 +191,8 @@ function legSucceeded(args: { phase: WorkingPhase; step: AgentStep; settle: Sett
   const { phase, step, settle } = args;
   switch (step.kind) {
     case "waitingForUser":
+      // The agent remembers this turn, so nothing dropped before it needs
+      // a note any more.
       return {
         phase: { kind: "waitingForUser", pause: step.interrupts, cancelledTexts: [] },
         happened: [{ type: "turnFinished" }],
@@ -198,7 +204,9 @@ function legSucceeded(args: { phase: WorkingPhase; step: AgentStep; settle: Sett
   }
 }
 
-/** A leg that failed goes back to the pause the turn started from. */
+/** A leg that failed goes back to the pause the turn started from, and the
+ *  next message says this request failed: it may have changed files before
+ *  it did. */
 function legFinished(args: {
   phase: WorkingPhase;
   result: Result<AgentStep>;
@@ -212,6 +220,7 @@ function legFinished(args: {
     kind: "waitingForUser",
     pause: phase.pause,
     cancelledTexts: phase.cancelledTexts,
+    failedTexts: [...(phase.failedTexts ?? []), phase.text],
   };
   return { phase: back, happened: [{ type: "legFailed", error: result.error }] };
 }

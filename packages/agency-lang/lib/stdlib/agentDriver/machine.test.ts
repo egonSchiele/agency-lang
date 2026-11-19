@@ -145,10 +145,43 @@ describe("a turn", () => {
     expect(legOf(twice.phase).responses).toEqual([approve(messageAnswer(note))]);
   });
 
-  it("that fails goes back to the same pause with the error", () => {
+  it("that fails goes back to the same pause with the error, and remembers the request", () => {
     const failed = run([{ type: "submitted", text: "hi" }, finished(failure("boom"))], waiting);
-    expect(failed.phase).toEqual({ kind: "waitingForUser", pause: PAUSE, cancelledTexts: [] });
+    expect(failed.phase).toEqual({
+      kind: "waitingForUser",
+      pause: PAUSE,
+      cancelledTexts: [],
+      failedTexts: ["hi"],
+    });
     expect(failed.happened.at(-1)).toEqual({ type: "legFailed", error: "boom" });
+  });
+
+  it("that fails gives the next message a note, which names a cancel too", () => {
+    const next = run(
+      [
+        { type: "submitted", text: "slow" },
+        step({ kind: "cancelled" }),
+        { type: "submitted", text: "hi" },
+        finished(failure("boom")),
+        { type: "submitted", text: "next" },
+      ],
+      waiting,
+    );
+    const note = withCancelNote({ message: "next", cancelledTexts: ["slow"], failedTexts: ["hi"] });
+    expect(legOf(next.phase).responses).toEqual([approve(messageAnswer(note))]);
+  });
+
+  it("that finishes after a failure drops the failure's note", () => {
+    const after = run(
+      [
+        { type: "submitted", text: "hi" },
+        finished(failure("boom")),
+        { type: "submitted", text: "again" },
+        step({ kind: "waitingForUser", interrupts: PAUSE }),
+      ],
+      waiting,
+    );
+    expect(after.phase).toEqual({ kind: "waitingForUser", pause: PAUSE, cancelledTexts: [] });
   });
 });
 

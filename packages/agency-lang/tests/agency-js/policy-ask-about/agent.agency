@@ -19,9 +19,28 @@ def deployInterrupt(): any {
   }
 }
 
+// A raise that wants a typed value, such as a question.
+def questionInterrupt(): any {
+  return {
+    type: "interrupt",
+    effect: "myapp::question",
+    message: "Which branch?",
+    data: {},
+    expectsValue: true
+  }
+}
+
+def rulesIn(file: string, effect: string): any {
+  const onDisk = parsePolicyFile(file)
+  if (onDisk is success(saved)) {
+    return saved[effect] ?? null
+  }
+  return "unreadable"
+}
+
 // Asked before `cliPolicyHandler` was called: rejected, and no prompt.
-node withoutHandler(args: { root: string }): any {
-  const response = askAbout(readInterrupt(args.root))
+node withoutHandler(args: { root: string, runFile: string }): any {
+  const response = askAbout(readInterrupt(args.root), {}, args.runFile)
   return { type: response.type, policy: currentPolicy() }
 }
 
@@ -33,44 +52,52 @@ node savedRulesFirst(args: { policyFile: string }): any {
 
 // A handler with no one at the terminal: an undecided interrupt is
 // rejected with the non-interactive reason, and no prompt is drawn.
-node nonInteractive(args: { policyFile: string, root: string }): any {
+node nonInteractive(args: { policyFile: string, root: string, runFile: string }): any {
   const handler = cliPolicyHandler(file: args.policyFile, interactive: false)
-  const response = askAbout(readInterrupt(args.root))
+  const response = askAbout(readInterrupt(args.root), {}, args.runFile)
   return { type: response.type, reason: response.value }
 }
 
-node main(args: { policyFile: string, root: string }): any {
+// The handler's file approves every read. The run's policy does not, so
+// the read is asked about, and the "always" answer goes to the run's file.
+node main(args: { policyFile: string, root: string, runFile: string }): any {
   const handler = cliPolicyHandler(file: args.policyFile)
+  const runPolicy = {
+    "std::bash": [{ action: "reject" }],
+    "myapp::question": [{ action: "reject" }]
+  }
 
   // Answered "always approve": the rule is in the policy and on disk
   // before askAbout returns.
-  const approved = askAbout(readInterrupt(args.root))
+  const approved = askAbout(readInterrupt(args.root), runPolicy, args.runFile)
   const afterApprove = currentPolicy()
-  const onDisk = parsePolicyFile(args.policyFile)
-  let savedRules: any = null
-  if (onDisk is success(saved)) {
-    savedRules = saved["std::read"]
-  }
 
-  // The program's own read of the same kind: the saved rule approves it,
-  // so no prompt.
+  // The program's own read of the same kind: the rule just saved
+  // approves it, so no prompt.
   let ownRead = "rejected"
   handle {
     interrupt std::read("Read another file", { dir: "${args.root}/x", filename: "g" })
     ownRead = "approved"
   } with handler
 
+  // A reject rule decides a raise that wants a value, with no prompt.
+  const question = askAbout(questionInterrupt(), currentPolicy(), args.runFile)
+
   // Answered "reject once", then a message at the follow-up: a reject
   // that carries the message, and no new rule.
   const before = JSON.stringify(currentPolicy())
-  const rejected = askAbout(deployInterrupt())
+  const rejected = askAbout(deployInterrupt(), currentPolicy(), args.runFile)
   const after = JSON.stringify(currentPolicy())
 
   return {
     approved: approved.type,
     policyRule: afterApprove["std::read"],
-    savedRules: savedRules,
+    runFileRead: rulesIn(args.runFile, "std::read"),
+    runFileBash: rulesIn(args.runFile, "std::bash"),
+    handlerFileRead: rulesIn(args.policyFile, "std::read"),
+    handlerFileWrite: rulesIn(args.policyFile, "std::write"),
     ownRead: ownRead,
+    question: question.type,
     rejected: rejected.type,
     rejectReason: rejected.value,
     policyUnchanged: before == after

@@ -18,12 +18,28 @@
       "action": "approve"
     }
   ],
-  "savedRules": [
+  "runFileRead": [
     {
       "action": "approve"
     }
   ],
+  "runFileBash": [
+    {
+      "action": "reject"
+    }
+  ],
+  "handlerFileRead": [
+    {
+      "action": "approve"
+    }
+  ],
+  "handlerFileWrite": [
+    {
+      "action": "reject"
+    }
+  ],
   "ownRead": "approved",
+  "question": "reject",
   "rejected": "reject",
   "rejectReason": "The user rejected this call and wrote you this message:\nuse staging",
   "policyUnchanged": true,

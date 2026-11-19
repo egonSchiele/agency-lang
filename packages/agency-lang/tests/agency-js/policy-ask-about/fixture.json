@@ -12,6 +12,7 @@
       "action": "reject"
     }
   ],
+  "approvedByPolicy": "approve",
   "approved": "approve",
   "policyRule": [
     {

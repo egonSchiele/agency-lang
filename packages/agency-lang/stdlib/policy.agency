@@ -1235,7 +1235,13 @@ def _handler(intr: any): any {
   if (_policy == null) {
     return rejectWithoutPolicy()
   }
+  return answerByPolicy(intr, _policy)
+}
 
+// The answer once a policy is in hand, for `_handler` and `askAbout`
+// alike: by a rule if one can decide, else the non-interactive reject when
+// no one is at a terminal, else the person's answer.
+def answerByPolicy(intr: any, policy: Policy): any {
   // A rule may reject anything. A rule may not approve a raise that
   // expects a value: `approve()` carries no value, so the raise site
   // reads it as a bare yes, and for `std::toolbox::review` that accepts a
@@ -1243,7 +1249,7 @@ def _handler(intr: any): any {
   // these for the same reason, and an effect-wide rule is reachable here
   // one round after a plain raise of the same effect was answered
   // "always approve". Such an interrupt goes on to ask.
-  const decision = checkPolicy(_policy, intr)
+  const decision = checkPolicy(policy, intr)
   if (decision.type == "reject") {
     return applyRule(intr, decision)
   }
@@ -1343,17 +1349,20 @@ def useRunPolicy(policy: Policy, file: string) {
 }
 
 /**
-Ask the user about an interrupt another run raised. `policy` is the policy
-that run uses, and `file` is where an "always" answer is saved. After one,
-`currentPolicy()` is that policy with the new rule: pass it the next time.
+Answer an interrupt another run raised, as the CLI handler answers its own:
+a rule in `policy` decides it if one can, and otherwise the user is asked
+(or, with no one at a terminal, it is rejected). Safe to call on any
+interrupt. `policy` is the policy that run uses, and `file` is where an
+"always" answer is saved. After one, `currentPolicy()` is that policy with
+the new rule: pass it the next time.
 */
 @hidden
 export def askAbout(intr: any, policy: Policy, file: string): any {
   """
-  Ask the user about an interrupt passed as data, with the CLI handler's
-  prompt, and return the response. Call `cliPolicyHandler` first. The
-  interrupt is checked against `policy`, and an "always" answer is added to
-  it and saved to `file` before this returns.
+  Answer an interrupt passed as data the way the CLI handler would, under
+  `policy`, and return the response. Call `cliPolicyHandler` first. An
+  "always" answer is added to `policy` and saved to `file` before this
+  returns.
   """
   if (globalCliPolicyOpts.file == "") {
     const message = "askAbout was called before cliPolicyHandler, so there is no policy to use. Rejecting by default. Call cliPolicyHandler first."
@@ -1361,22 +1370,7 @@ export def askAbout(intr: any, policy: Policy, file: string): any {
     return reject(message)
   }
   useRunPolicy(policy, file)
-  // A reject rule applies to any raise, one that expects a value included.
-  // An approve rule is left to the check `askUser` makes at the prompt.
-  const decision = checkPolicy(policy, intr)
-  if (decision.type == "reject") {
-    return applyRule(intr, decision)
-  }
-  // No one is at a terminal, and a prompt nobody answers starves the event
-  // loop. Decide as `_handler` does.
-  if (!_interactive) {
-    const ruleApproves = decision.type == "approve"
-    if (ruleApproves && intr.expectsValue != true) {
-      return applyRule(intr, decision)
-    }
-    return nonInteractiveReject(intr, ruleApproves)
-  }
-  const response = askPerson(intr)
+  const response = answerByPolicy(intr, policy)
   // The handler saves an "always" answer at its next interrupt. There may
   // be none here, so save it now.
   maybeFlush()

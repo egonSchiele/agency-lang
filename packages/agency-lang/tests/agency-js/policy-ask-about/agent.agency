@@ -58,6 +58,13 @@ node nonInteractive(args: { policyFile: string, root: string, runFile: string })
   return { type: response.type, reason: response.value }
 }
 
+// An interrupt the run's policy approves is approved with no prompt.
+node approvedByPolicy(args: { policyFile: string, root: string, runFile: string }): any {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  const response = askAbout(readInterrupt(args.root), { "std::read": [{ action: "approve" }] }, args.runFile)
+  return response.type
+}
+
 // The handler's file approves every read. The run's policy does not, so
 // the read is asked about, and the "always" answer goes to the run's file.
 node main(args: { policyFile: string, root: string, runFile: string }): any {

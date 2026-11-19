@@ -1,4 +1,4 @@
-import { main, nonInteractive, savedRulesFirst, withoutHandler } from "./agent.js";
+import { approvedByPolicy, main, nonInteractive, savedRulesFirst, withoutHandler } from "./agent.js";
 import { writeFileSync, mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -37,6 +37,10 @@ try {
   const savedPolicyFile = join(dir, "saved-policy.json");
   writeFileSync(savedPolicyFile, JSON.stringify({ "std::write": [{ action: "reject" }] }));
   const saved = await savedRulesFirst({ policyFile: savedPolicyFile }, { inputOverride: noInput });
+  const byPolicy = await approvedByPolicy(
+    { policyFile: join(dir, "other-policy.json"), root: dir, runFile: join(dir, "other-run.json") },
+    { inputOverride: noInput },
+  );
   const result = await main({ policyFile, root: dir, runFile }, { inputOverride });
   writeFileSync(
     "__result.json",
@@ -45,6 +49,7 @@ try {
         withoutHandler: unhandled.data,
         nonInteractive: headless.data,
         savedRulesFirst: saved.data,
+        approvedByPolicy: byPolicy.data,
         ...result.data,
         remainingAnswers: answers.length,
       },

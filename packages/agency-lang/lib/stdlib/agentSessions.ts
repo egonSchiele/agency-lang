@@ -2,6 +2,7 @@ import { currentRun, currentRunOrNone, type Run } from "../runtime/asyncContext.
 import type { MessageJSON } from "smoltalk";
 import type { Host, Root } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
+import { globalSlot } from "../runtime/globalSlot.js";
 import { __call } from "../runtime/call.js";
 import { hasInterrupts } from "../runtime/interrupts.js";
 import { checkpointFor, getCheckpointFor } from "../runtime/checkpoint.js";
@@ -189,13 +190,12 @@ async function saveSession(
 // The host a record's lock is taken on outside a run. A lock lives on its
 // host, and `currentHost()` with no run current builds a new host on every
 // call, so this one is kept for the process.
-let processLockHost: Host | null = null;
+const processLockHost = globalSlot<Host>("agency.sessionLockHost", () => currentHost());
 
 function lockHost(): Host {
   const run = currentRunOrNone();
   if (run !== undefined) return run.ctx.host;
-  processLockHost ??= currentHost();
-  return processLockHost;
+  return processLockHost.get();
 }
 
 /** Runs `work` holding the lock on session `id`'s record, so a read of the

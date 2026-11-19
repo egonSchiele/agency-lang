@@ -31,10 +31,10 @@ node expandUsesFirstMatch(): boolean {
 }
 
 node initExpandsWithItsArguments(): boolean {
-  const expanded = expandSlash("/init the test setup", promptCommands)
+  const expanded = expandSlash("/init the test setup", promptCommands())
   return expanded.includes("/AGENTS.md") && expanded.includes("the test setup") && !expanded.includes("$ARGUMENTS")
 }
 
 node userCommandHidesInit(): boolean {
-  return expandSlash("/init", [command("init", "mine"), ...promptCommands]) == "mine body"
+  return expandSlash("/init", [command("init", "mine"), ...promptCommands()]) == "mine body"
 }

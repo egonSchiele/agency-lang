@@ -1,6 +1,6 @@
 # Shared Session Core, Plan 3: The Terminal on the Core (draft)
 
-**This is a draft.** It fixes the decisions and the order of work. It is not yet a plan to execute: the steps have no tests and no exact signatures, because six facts it depends on are not known yet ("To find out first"), and one decision needs the owner ("Policy flags"). Tighten it after Plan 2 lands, since Plan 2 changes the core this builds on.
+**This is a draft.** It fixes the decisions and the order of work. It is not yet a plan to execute: the steps have no tests and no exact signatures, because seven facts it depends on are not known yet ("To find out first"), and one decision needs the owner ("Policy flags"). Tighten it after Plan 2 lands, since Plan 2 changes the core this builds on.
 
 **Goal:** `agency agent` runs its sessions through the session core, so a session started in the terminal can be continued in Perry and the other way round. The terminal keeps every command it has today.
 
@@ -44,7 +44,8 @@ Each of these changes a task below. Find them out before writing the steps.
 3. **How much of `cliPolicyHandler` is the prompt, and how much is the policy?** The run's own policy now answers what a rule decides. The terminal needs the other half: draw the prompt for one interrupt, and save an "always" answer to the policy file. Perry's engine does this in TypeScript with `promptOptions` and `resolvePromptOption`. Decide whether the terminal uses those too, or keeps the Agency code in `std::policy` behind a new exported function.
 4. **What the terminal approves without asking.** `runSession` wraps the policy handler in `approvingInstructionReads`, which approves a read of an `AGENTS.md`-style file unless a rule rejects it. That wrapper goes with `runSession`. Without an equal rule, the terminal starts asking about reads it never asked about, when a coder moves to another folder. Find every such automatic answer in `runSession.agency` and `projectContext.agency`, and decide for each whether the core does it for every front-end or the driver adds a rule to the policy it passes. Perry has the same question today and no answer to it.
 5. **Several approvals in one pause.** A turn with parallel tool calls pauses on more than one interrupt. `cliPolicyHandler` has tests for this case (`tests/agency-js/cli-policy-handler-parallel*`). The driver needs the same behaviour, in particular that a rule saved by the first answer settles the ones still waiting. For that, the policy the driver passes on each resume is a fresh read of the policy file, never one it read when the turn began.
-6. **Each process's own setup.** The shell does MCP configuration before it resumes a session. Check memory, local-model setup and anything else `main` does today that is not run state.
+6. **A terminal session resumed in an engine.** The session's folder (`lib/sessionFolder.agency`) is set only by the core. A session the old terminal loop started never set it, and falls back to the process's folder, which in an engine is the engine's. Once the terminal runs on the core this cannot happen for new sessions. Check that nothing else answers a question about the session from the process, or the other way round.
+7. **Each process's own setup.** The shell does MCP configuration before it resumes a session. Check memory, local-model setup and anything else `main` does today that is not run state.
 
 ## The work, in order
 

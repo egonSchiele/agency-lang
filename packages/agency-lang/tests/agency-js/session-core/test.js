@@ -1,9 +1,10 @@
 // Drives the agent's session program (lib/agents/agency-agent/program.agency)
 // the way a front-end does: start it, answer its pause, read its events.
 // No model is called: a test client answers every llm() call.
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { ToolCall } from "smoltalk";
 
 // The agent home is read when the modules load, so it is set first. A temp
 // home keeps the test out of the user's settings and sessions.
@@ -13,6 +14,11 @@ const project = mkdtempSync(path.join(os.tmpdir(), "session-core-project-"));
 
 const program = await import("../../../dist/lib/agents/agency-agent/program.js");
 const { main, respondToInterrupts, approve, hasInterrupts, __setLLMClient } = program;
+// Whether this process can host a local model: a front-end says so once.
+const { _setLocalModelsAllowed, _setManySessions } = await import(
+  "../../../dist/lib/stdlib/agentProcess.js"
+);
+_setManySessions(true);
 
 const PAUSE = "agent::sessionInput";
 const PIN = { [PAUSE]: [{ action: "propagate" }] };
@@ -24,13 +30,35 @@ function lastUserText(config) {
   return typeof content === "string" ? content : content.map((part) => part.text ?? "").join("");
 }
 
-// The temperature each model call was sent, keyed by the call's last user message.
+// The temperature and the effort each model call was sent, keyed by the
+// call's last user message.
 const temperatureSent = {};
+const effortSent = {};
 
 __setLLMClient({
   async text(config) {
     const said = lastUserText(config);
     temperatureSent[said] = config.temperature ?? "none";
+    effortSent[said] = config.reasoningEffort ?? "none";
+    if (said.includes("edit the note")) {
+      // One edit, then a reply once the tool's result is in the conversation.
+      const edited = config.messages.some((message) => message.role === "tool");
+      const edit = new ToolCall("call-edit", "edit", {
+        filename: "note.txt",
+        edits: [{ oldText: "old line", newText: "new line", replaceAll: false }],
+        dir: project,
+      });
+      return {
+        success: true,
+        value: {
+          output: edited ? "edited" : null,
+          toolCalls: edited ? [] : [edit],
+          model: "test",
+          usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 },
+          cost: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" },
+        },
+      };
+    }
     if (said.includes("fail this turn")) {
       throw new Error("the test client was told to fail");
     }
@@ -67,6 +95,7 @@ function startData(overrides = {}) {
       replyStyle: "",
       record: { id: "s1", cwd: project, brain: "", created: 1, lastActive: 1, turns: 0, title: "" },
       flags: null,
+      budget: { maxCost: -1, maxTime: -1 },
     },
     ...overrides,
   };
@@ -170,6 +199,30 @@ result.overBudgetTurn = {
   reply: eventsOf(chat, "session.reply").pop()?.text.slice(0, 60),
 };
 
+// The effort. It is its own answer, since it is not one of the LLM options.
+result.effortBeforeAnyChoice = pauseData(chat).effort;
+await chat.answer({ kind: "effort", effort: "low" });
+result.effortAfterLow = pauseData(chat).effort;
+await chat.answer(message("with low effort"));
+result.effortSentAfterLow = effortSent["with low effort"];
+// It outlasts a model switch, as --effort does.
+await chat.answer({ kind: "model", spec: "claude-sonnet-4-6" });
+result.effortAfterAModelSwitch = pauseData(chat).effort;
+await chat.answer({ kind: "effort", effort: "default" });
+await chat.answer(message("with the provider's own effort"));
+result.effortSentAfterDefault = effortSent["with the provider's own effort"];
+await chat.answer({ kind: "effort", effort: "extreme" });
+const effortNotice = eventsOf(chat, "session.notice").pop();
+result.badEffort = { level: effortNotice?.level, text: effortNotice?.text, kept: pauseData(chat).effort };
+
+// A preset that does not exist changes nothing.
+await chat.answer({ kind: "preset", name: "no-such-preset" });
+result.unknownPreset = {
+  level: eventsOf(chat, "session.notice").pop()?.level,
+  presetKept: pauseData(chat).preset,
+  mainModelKept: pauseData(chat).models.main?.model,
+};
+
 // An answer of nothing ends the session.
 await chat.answer(null);
 result.nullAnswerEndsTheRun = chat.ended;
@@ -184,6 +237,19 @@ const badBrain = await startSession({ brain: "no-such-brain" });
 result.unknownBrainEndsTheRun = badBrain.ended && errorText(badBrain.result).slice(0, 13);
 const badPreset = await startSession({ preset: "no-such-preset" });
 result.unusablePresetEndsTheRun = badPreset.ended && errorText(badPreset.result) !== "";
+// A local model, where the process cannot host one: refused before anything is loaded.
+_setLocalModelsAllowed(false);
+const localRefused = await startSession({
+  models: { pin: "", slots: {}, provider: "", local: "no-such-model", effort: null },
+});
+result.localModelWhereNoneCanRun = localRefused.ended && errorText(localRefused.result);
+_setLocalModelsAllowed(true);
+
+// A start that does not fit the program's type is refused by name. A
+// front-end built for another version of the program sends one.
+const { budget: _left, ...sessionWithoutABudget } = startData().session;
+const misfit = await startSession({ session: sessionWithoutABudget });
+result.startMissingAField = misfit.ended && errorText(misfit.result);
 // The process goes on: the next session starts and reaches its pause.
 const afterFailures = await startSession();
 result.sessionStartsAfterFailedSetups = !afterFailures.ended && afterFailures.pause[0].effect;
@@ -192,6 +258,109 @@ result.sessionStartsAfterFailedSetups = !afterFailures.ended && afterFailures.pa
 // environment often lacks the search keys a terminal has, and a choice
 // saved from there would follow the user back to the terminal.
 result.settingsFileWritten = existsSync(path.join(process.env.AGENCY_AGENT_HOME, "settings.json"));
+
+// An edit's diff is an event, for an edit the policy approves too: no one
+// is asked, and a front-end still has the diff to show on the edit's row.
+writeFileSync(path.join(project, "note.txt"), "first\nold line\nlast\n");
+// The minimal brain: the simple one has no tools.
+const editor = await startSession({ brain: "minimal" }, { ...PIN, "std::edit": [{ action: "approve" }] });
+await editor.answer(message("edit the note"));
+const diffs = eventsOf(editor, "session.editDiff");
+result.editDiff = {
+  events: diffs.length,
+  filename: diffs[0]?.filename,
+  edits: diffs[0]?.edits,
+  lines: (diffs[0]?.hunks ?? []).flatMap((hunk) =>
+    hunk.lines.map((line) => `${line.kind} ${line.tokens.map((token) => token.text).join("")}`),
+  ),
+  pausedOn: editor.pause[0].effect,
+  reply: eventsOf(editor, "session.reply").pop()?.text,
+  fileAfter: readFileSync(path.join(project, "note.txt"), "utf8"),
+};
+
+// An edit no rule decides leaves the run as an approval. It is reported
+// once: not again when the approved edit goes on.
+writeFileSync(path.join(project, "note.txt"), "first\nold line\nlast\n");
+const asker = await startSession({ brain: "minimal" });
+await asker.answer(message("edit the note"));
+result.editThatIsAsked = {
+  pausedOn: asker.pause[0].effect,
+  eventsAtTheApproval: eventsOf(asker, "session.editDiff").length,
+};
+await asker.answer(undefined);
+result.editThatIsAsked.eventsAfterApproving = eventsOf(asker, "session.editDiff").length;
+result.editThatIsAsked.fileAfter = readFileSync(path.join(project, "note.txt"), "utf8");
+
+// A session can start with a turn budget.
+const budgeted = await startSession({
+  session: { ...startData().session, budget: { maxCost: 3, maxTime: 1000 } },
+});
+result.startingBudget = pauseData(budgeted).budget;
+
+// Presets. These need a settings file, so they come after the check above
+// that starting sessions writes none. The session names no model, so the
+// preset's is the one in force.
+const settingsFile = path.join(process.env.AGENCY_AGENT_HOME, "settings.json");
+writeFileSync(
+  settingsFile,
+  JSON.stringify({
+    presets: {
+      big: { provider: "anthropic", pin: "claude-opus-4-8", effort: "high" },
+      mine: { local: "no-such-local-model" },
+    },
+  }),
+);
+const noModelFlags = { pin: "", slots: {}, provider: "", local: null, effort: null };
+_setLocalModelsAllowed(false);
+const preset = await startSession({ models: noModelFlags });
+await preset.answer({ kind: "effort", effort: "low" });
+await preset.answer({ kind: "preset", name: "big" });
+result.presetSwitch = {
+  preset: pauseData(preset).preset,
+  mainModel: pauseData(preset).models.main?.model,
+  // The preset is applied whole: its effort replaces the session's choice.
+  effort: pauseData(preset).effort,
+};
+// A local preset, where the process cannot host a local model.
+await preset.answer({ kind: "preset", name: "mine" });
+const localNotice = eventsOf(preset, "session.notice").pop();
+result.localPresetWhereNoneCanRun = {
+  level: localNotice?.level,
+  text: localNotice?.text,
+  presetKept: pauseData(preset).preset,
+  mainModelKept: pauseData(preset).models.main?.model,
+};
+
+// A model named with the provider a person sees. The agent runs every
+// OpenAI model through its `openai-responses` client, and reports that.
+process.env.OPENAI_API_KEY = "test-key";
+const plain = await startSession({ models: noModelFlags });
+result.fixedProviderWithNoPreset = pauseData(plain).fixedProvider;
+// A model spec that names a local provider is refused too.
+const mainBeforeLocalSpec = pauseData(plain).models.main?.model;
+await plain.answer({ kind: "model", spec: "mlx/some-local-model" });
+const localSpecNotice = eventsOf(plain, "session.notice").pop();
+result.localProviderInAModelSpec = {
+  level: localSpecNotice?.level,
+  text: localSpecNotice?.text,
+  mainModelKept: pauseData(plain).models.main?.model === mainBeforeLocalSpec,
+};
+
+await plain.answer({ kind: "model", spec: "openai/gpt-4o" });
+result.publicProviderName = {
+  model: pauseData(plain).models.main?.model,
+  provider: pauseData(plain).models.main?.provider,
+};
+// A preset that names a provider fixes it. The spec is then read whole, as
+// a model of that provider, which is how an OpenRouter model keeps its
+// slash. The pause says so, so a front-end knows which it will get.
+await preset.answer({ kind: "model", spec: "openai/gpt-4o" });
+result.specUnderAFixedProvider = {
+  fixedProvider: pauseData(preset).fixedProvider,
+  model: pauseData(preset).models.main?.model,
+  provider: pauseData(preset).models.main?.provider,
+};
+rmSync(settingsFile);
 
 writeFileSync("__result.json", JSON.stringify(result, null, 2));
 process.exit(0);

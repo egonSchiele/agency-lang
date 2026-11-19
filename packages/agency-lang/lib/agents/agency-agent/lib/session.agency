@@ -3,6 +3,7 @@
   ABOVE the resolution / slot / shared layers: it imports from them, and
   nothing they own imports back, so there is no import cycle. */
 
+import { _localModelsAllowed } from "agency-lang/stdlib-lib/agentProcess.js"
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import {
   printLocalCatalog,
@@ -16,7 +17,7 @@ import { isTTY } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui/cli"
 import { pushMessage } from "std::ui/cli"
 
-import { EffortModel, effortToSend, noDefaultWarning } from "./effort.agency"
+import { EFFORT_CHOICES, EffortChoice, EffortModel, effortToSend, noDefaultWarning } from "./effort.agency"
 import { LlmOptions, applyLlmOptions, mixedProviderWarning } from "./llmOptions.agency"
 import {
   filterHostedModels,
@@ -36,6 +37,7 @@ import {
   requestProvider,
  } from "./modelRequest.agency"
 import {
+  LOCAL_PROVIDERS,
   parseModelFlag,
   lacksProviderForm,
   missingProviderEnvVar,
@@ -124,11 +126,28 @@ export def currentModelRequest(choices: ModelChoices): ModelRequest {
   }
 }
 
+export static const LOCAL_MODELS_OFF = "Local models are not available here."
+
+// Where the process cannot host a local model, a slot on a local provider
+// is refused too. `mlx/some-model` as a model spec names one without
+// `--local` or a local preset.
+def refusesALocalSlot(resolved: Record<string, Resolved>): boolean {
+  if (_localModelsAllowed()) {
+    return false
+  }
+  for (slot, model in resolved) {
+    if (model != null && LOCAL_PROVIDERS.includes(model.provider)) {
+      return true
+    }
+  }
+  return false
+}
+
 export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Result<boolean> {
   """
-  Resolve and apply a request's models, local or hosted. A hosted
-  failure changes nothing and returns the message. A local model that
-  fails to load still ends the process (configureLocalModel). The
+  Resolve and apply a request's models, local or hosted. A failure
+  changes nothing and returns the message. A local request is a failure
+  in a process that cannot host one (agentProcess.ts). The
   web-search setup is the caller's job.
 
   @param request - What the run asked for
@@ -136,13 +155,19 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
   """
   const local = localModelOf(request)
   if (local != null) {
-    configureLocalModel(local.model, local.embedding, local.router)
+    if (!_localModelsAllowed()) {
+      return failure(LOCAL_MODELS_OFF)
+    }
+    configureLocalModel(local.model, local.embedding, local.router)?
     applyRequestOptions(request, settings)
     return success(true)
   }
   const resolved = resolveHostedModels(request, settings, startupDefaultSlots())
   if (isFailure(resolved)) {
     return resolved
+  }
+  if (refusesALocalSlot(resolved.value)) {
+    return failure(LOCAL_MODELS_OFF)
   }
   applyResolved(resolved.value)
   applyRequestOptions(request, settings)
@@ -354,6 +379,9 @@ export def trySwitchModel(
     return failure("Could not switch model: ${reason}")
   }
   const resolved = all.value
+  if (refusesALocalSlot(resolved)) {
+    return failure("Could not switch model: ${LOCAL_MODELS_OFF}")
+  }
   applyResolved(resolved)
   applyRequestOptions(request, settings)
   return success({
@@ -401,6 +429,50 @@ export def applyModelSpec(spec: string): Result<Record<string, Resolved>> {
   They take effect from the next turn. */
 export def applyLlmOptionsAnswer(options: LlmOptions) {
   _choices = applySessionLlmOptions(_choices, options)
+}
+
+/** The provider this session is fixed to, by the name a person sees, or
+  "" when none is. `--provider`, the preset or settings.model fixes one.
+  Then a model spec is read whole, as a model of that provider:
+  `openai/gpt-4o` under a fixed `anthropic` is a model by that name, not
+  a switch to OpenAI. A front-end reads this to know which it will get. */
+export def fixedProvider(): string {
+  return demoteProvider(requestProvider(currentModelRequest(_choices), _startupModelSettings))
+}
+
+/** The effort this session asks for, as `--effort` words it: a level,
+  "default" to send none, or "" when no one named one and the models'
+  own rule decides. */
+export def askedEffort(): string {
+  return requestEffort(currentModelRequest(_choices)) ?? ""
+}
+
+/** Set the session's own reasoning effort: a level, or "default" to send
+  none. It takes effect from the next turn and outlasts a model switch.
+  A value that is not an effort is a failure, and nothing changes. */
+export def applyEffortAnswer(effort: string): Result<boolean> {
+  if (!EFFORT_CHOICES.includes(effort)) {
+    return failure("The effort must be ${EFFORT_CHOICES.join(", ")}; got '${effort}'.")
+  }
+  _choices = { ..._choices, effort: effort as EffortChoice }
+  applyRequestOptions(currentModelRequest(_choices), _startupModelSettings)
+  return success(true)
+}
+
+/** Switch the session to a saved preset: its models, options, effort and
+  tool limits, with the session's own choices started again. A preset that
+  is unknown or cannot be used is a failure, and nothing changes. Returns
+  what the switch produced, for a caller that shows it. */
+export def applyPresetAnswer(name: string): Result<PresetSwitch> {
+  const switched = switchPreset(name)
+  if (isFailure(switched)) {
+    return switched
+  }
+  _choices = switched.value.session
+  for (change in switched.value.changes) {
+    reactToSlotChange(change)
+  }
+  return switched
 }
 
 /** React to one resolved-slot change. Phase 1: a `main`-slot provider change

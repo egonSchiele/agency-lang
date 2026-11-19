@@ -38,7 +38,9 @@ export type ProgramStart = {
   session: SessionStart
 }
 
-node main(start: ProgramStart) {
+// `start` is checked against its type. A front-end built for another
+// version of this program is refused with the field that does not fit.
+node main(start: ProgramStart!) {
   const settings = loadSettings()
   const brainName = resolveBrainName(start.brain, settings)
   const brainNames = map(agencyAgentBrains(), \entry -> entry.name)

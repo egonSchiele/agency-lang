@@ -17,10 +17,31 @@ import { printAgentTrace } from "./agentToolTrace.js";
  * `cli.ts`: it is harness bookkeeping, not a tool, so it raises no
  * interrupt and is never handed to a model.
  *
- * Each session is two files, `<id>.json` (the checkpoint) and
- * `<id>.meta.json` (the record). There is no shared index: two agents in
+ * Each session is two files, `<id>.json` (the run) and
+ * `<id>.meta.json` (the record). The record's `runFormat` says what the
+ * run file holds, so nobody has to open one to find out. There is no shared index: two agents in
  * the same directory would race on one, and a listing is cheap to derive.
  */
+
+/**
+ * What a session's run file holds.
+ *
+ * - `checkpoint`: one checkpoint, taken between turns. `agency agent`
+ *   writes this, and resumes it with `restore`.
+ * - `savedRun`: the interrupts a session core paused on, each with its
+ *   checkpoint, as a front-end that drives the core from outside saves it
+ *   (`{ version, pause, cancelledTexts, turn }`). Perry writes this.
+ *
+ * Both programs save into the same folders, and neither can resume the
+ * other's file yet.
+ */
+export type RunFormat = "checkpoint" | "savedRun";
+
+const RUN_FORMATS: string[] = ["checkpoint", "savedRun"];
+
+// The brain Perry gave its records before it ran the agent's own program.
+// They carry no `runFormat`, and their run files are saved runs.
+const OLD_PERRY_BRAIN = "perry";
 
 export type SessionRecord = {
   id: string;
@@ -34,7 +55,16 @@ export type SessionRecord = {
   forkedFrom?: string;
   /** The slug id of the thread the conversation runs on, such as "t3". */
   conversationThread?: string;
+  /** What the run file holds. A record without it is a checkpoint. */
+  runFormat?: RunFormat;
 };
+
+/** What a record's run file holds. A record that does not say is a
+ *  checkpoint: every record was, before the field existed. */
+export function _recordRunFormat(record: SessionRecord): RunFormat {
+  if (record.runFormat != null) return record.runFormat;
+  return record.brain === OLD_PERRY_BRAIN ? "savedRun" : "checkpoint";
+}
 
 const META_SUFFIX = ".meta.json";
 
@@ -65,9 +95,12 @@ function isRecord(value: unknown): value is SessionRecord {
   // Agency writes a field that was never set as null.
   const forkIsValid = r.forkedFrom == null || isText("forkedFrom");
   const threadIsValid = r.conversationThread == null || isText("conversationThread");
+  const formatIsValid =
+    r.runFormat == null || (typeof r.runFormat === "string" && RUN_FORMATS.includes(r.runFormat));
   return (
     forkIsValid &&
     threadIsValid &&
+    formatIsValid &&
     isText("id") &&
     isText("cwd") &&
     isText("brain") &&
@@ -78,8 +111,8 @@ function isRecord(value: unknown): value is SessionRecord {
   );
 }
 
-/** Every session in `dir`, most recently active first. A malformed
- *  record file is skipped. */
+/** Every session in `dir`, most recently active first, whatever its run
+ *  file holds. A malformed record file is skipped. */
 export async function _listSessions(dir: string): Promise<SessionRecord[]> {
   const host = currentHost();
   const sessions = await host.files.root(dir);
@@ -128,6 +161,11 @@ async function saveSession(
 export async function _readCheckpointFile(dir: string, id: string): Promise<unknown> {
   const host = currentHost();
   return readJson(host, await host.files.root(dir), checkpointFile(id));
+}
+
+/** Whether a run file's JSON is a checkpoint `restore` can read. */
+export function _isCheckpoint(runFile: unknown): boolean {
+  return Checkpoint.fromJSON(runFile) !== null;
 }
 
 export type TranscriptMessage = { role: "user" | "assistant"; content: string };
@@ -253,7 +291,7 @@ export async function _searchSessions(
       break;
     }
     const transcript = _readTranscript(
-      await _readCheckpointFile(dir, record.id),
+      checkpointIn(record, await _readCheckpointFile(dir, record.id)),
       record.conversationThread ?? "",
     );
     const matches = matchingMessages(transcript, words).slice(0, MAX_HITS_PER_SESSION);
@@ -268,6 +306,16 @@ export async function _searchSessions(
     );
   }
   return hits.slice(0, limit);
+}
+
+// The checkpoint to read a session's conversation from. A saved run holds
+// one in each interrupt it paused on, and they all carry the conversation.
+function checkpointIn(record: SessionRecord, runFile: unknown): unknown {
+  if (_recordRunFormat(record) === "checkpoint") return runFile;
+  if (typeof runFile !== "object" || runFile === null) return null;
+  const pause: unknown = (runFile as Record<string, unknown>).pause;
+  if (!Array.isArray(pause) || typeof pause[0] !== "object" || pause[0] === null) return null;
+  return (pause[0] as Record<string, unknown>).checkpoint ?? null;
 }
 
 type SaveTarget = { dir: string; record: SessionRecord } | null;

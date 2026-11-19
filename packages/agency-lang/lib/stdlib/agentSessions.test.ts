@@ -2,8 +2,11 @@ import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import {
+  _isCheckpoint,
   _listSessions,
+  _recordRunFormat,
   _saveSession,
+  _searchSessions,
   _readCheckpointFile,
   _readTranscript,
   matchingMessages,
@@ -56,6 +59,33 @@ describe("saved sessions", () => {
     }));
 });
 
+describe("what a record's run file holds", () => {
+  it("is what the record says", () => {
+    expect(_recordRunFormat({ ...record("a", 1), runFormat: "savedRun" })).toBe("savedRun");
+    expect(_recordRunFormat({ ...record("a", 1), runFormat: "checkpoint" })).toBe("checkpoint");
+  });
+
+  it("is a checkpoint when the record does not say", () => {
+    expect(_recordRunFormat(record("a", 1))).toBe("checkpoint");
+  });
+
+  // Perry's records from before it ran the agent's program.
+  it("is a saved run for an old Perry record", () => {
+    expect(_recordRunFormat({ ...record("a", 1), brain: "perry" })).toBe("savedRun");
+  });
+
+  it("skips a record whose format is not one of the two", () =>
+    withDir(async (base) => {
+      const dir = path.join(base, "sessions");
+      await _saveSession(dir, record("good", 10), {});
+      fs.writeFileSync(
+        path.join(dir, "bad.meta.json"),
+        JSON.stringify({ ...record("bad", 20), runFormat: "something else" }),
+      );
+      expect((await _listSessions(dir)).map((r) => r.id)).toEqual(["good"]);
+    }));
+});
+
 describe("reading a saved conversation", () => {
   // The smallest checkpoint the schema accepts, whose one frame holds
   // thread "3".
@@ -98,10 +128,38 @@ describe("reading a saved conversation", () => {
     ]);
   });
 
+  // The check the terminal makes before it restores a file.
+  it("tells a checkpoint from another front-end's saved run", () => {
+    expect(_isCheckpoint(saved)).toBe(true);
+    expect(_isCheckpoint({ version: 1, pause: [{ checkpoint: saved }] })).toBe(false);
+    expect(_isCheckpoint(null)).toBe(false);
+  });
+
   it("returns nothing for an unknown id or an empty one", () => {
     expect(_readTranscript(saved, "t9")).toEqual([]);
     expect(_readTranscript(saved, "")).toEqual([]);
   });
+
+  // A search covers the sessions of both front-ends, since both save into
+  // one folder. A saved run holds its checkpoint inside its pause.
+  it("searches a saved run as well as a checkpoint", () =>
+    withDir(async (base) => {
+      const dir = path.join(base, "sessions");
+      await _saveSession(dir, { ...record("terminal", 10), conversationThread: "t3" }, saved);
+      await _saveSession(
+        dir,
+        { ...record("app", 20), conversationThread: "t3", runFormat: "savedRun" as const },
+        { version: 1, pause: [{ checkpoint: saved }], cancelledTexts: [], turn: null },
+      );
+      // A saved run with nothing readable in it gives no hits and no error.
+      await _saveSession(
+        dir,
+        { ...record("empty", 30), conversationThread: "t3", runFormat: "savedRun" as const },
+        { version: 1, pause: [] },
+      );
+      const hits = await _searchSessions(dir, "hello", "", 10);
+      expect(hits.map((hit) => hit.sessionId).sort()).toEqual(["app", "terminal"]);
+    }));
 });
 
 describe("session search", () => {

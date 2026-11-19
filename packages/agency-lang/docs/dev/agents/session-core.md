@@ -33,13 +33,22 @@ own and can change.
 
 **Start.** `main(start: ProgramStart)`: the brain, a preset, the model
 flags, the tool limits, and a `SessionStart` (the working folder, a reply
-style line, the session's record, and the flags the session facts list).
-A setup that fails ends the run with the reason. The process is not
-ended.
+style line, the session's record, the flags the session facts list, and
+the starting turn budget). `start` is checked against its type, so a
+front-end built for another version is refused with the field that does
+not fit. A setup that fails ends the run with the reason. The process is
+not ended.
 
 **The pause.** The core waits with one interrupt, `agent::sessionInput`.
 Its data is what a front-end shows and saves between turns: `thread`,
-`cwd`, `record`, `models`, `preset`, `budget`, `context`.
+`cwd`, `record`, `models`, `preset`, `fixedProvider`, `effort`, `budget`,
+`context`.
+
+- `effort` is what the session asks for: a level, `default` to send none,
+  or "" when no one named one and the models' own rule decides.
+- `fixedProvider` is the provider the session is fixed to, by the name a
+  person sees, or "". `--provider`, a preset that names a provider, or
+  `settings.model` fixes one.
 
 **Answers.** A front-end answers the pause with an `Answer`:
 
@@ -49,6 +58,18 @@ Its data is what a front-end shows and saves between turns: `thread`,
 | `model`   | `spec`                    | Switches models, as `/model`                            |
 | `options` | `options`                 | Sets the session's LLM options, such as the temperature |
 | `budget`  | `maxCost`, `maxTime`      | Sets the limits of later turns                          |
+| `effort`  | `effort`                  | Sets the reasoning effort. It outlasts a model switch   |
+| `preset`  | `name`                    | Switches to a saved preset, whole, as `/preset`         |
+
+A `model`, `effort` or `preset` answer the core cannot apply changes
+nothing and sends a `session.notice` at level `error` with the reason.
+
+- **A model's provider.** With no provider fixed, `openai/gpt-4o` switches
+  to OpenAI. With one fixed, the spec is read whole, as a model of that
+  provider, which is how an OpenRouter model keeps its slash. A front-end
+  reads `fixedProvider` to know which it will get.
+- **A preset replaces the session's own choices:** its models and its
+  effort. The preset's effort is then the one in force.
 
 - `notes` are lines put above the message. An image is sent as a note
   with its path, since the turn finds attachments by scanning the message
@@ -58,13 +79,21 @@ Its data is what a front-end shows and saves between turns: `thread`,
   not a turn.
 
 **Events**, through `emit`: `session.reply`, `session.error`,
-`session.notice` (a line for the person, with a level), and
-`session.budgetStop`.
+`session.notice` (a line for the person, with a level),
+`session.budgetStop`, and `session.editDiff` (one file edit's `filename`,
+`edits` and `hunks`).
 
 **Approvals.** The core installs no policy handler and asks no one. The
 policy is the run's own, passed as the `policy` option on `main` and on
 every resume. What no rule decides leaves the run as an interrupt with a
 checkpoint, and the front-end answers it.
+
+**Edit diffs.** The core's one handler around a turn reports every
+`std::edit` as a `session.editDiff` event and then passes. It never
+approves and never rejects. A handler sees an edit even when the run's
+policy answers it, so an edit a rule approves has a diff too. A front-end
+makes the diff on an approval with the same function
+(`agency-lang/stdlib-lib/editDiff.js`), so the two cannot differ.
 
 ## Things that are easy to get wrong
 
@@ -91,8 +120,8 @@ checkpoint, and the front-end answers it.
 - **The turn budget covers the main agent only.** It is applied where
   `agencyAgent` is called. A turn sent straight to a start target is not
   limited by it, and the core says so in a warning notice.
-- **The effort has no answer.** It is not one of the `LlmOptions` keys:
-  in the terminal it comes from `--effort` or a preset.
+- **The effort is not an LLM option.** It is not one of the `LlmOptions`
+  keys, so an `options` answer cannot set it. It has its own answer.
 - **Starting a session does not save the search backend.** `main` calls
   `startModels(flags, false)`. The terminal does save it. An app's
   environment often lacks the search keys a terminal has, and a choice
@@ -124,27 +153,46 @@ A line for the person is a notice (`lib/notice.agency`), which
 | --- | --- |
 | `session.agency`: `pickGuidedLocalModel`, `pickModelsForAgent`, `maybeEnableMemory`, `switchModel` | Terminal only. The core uses `startModels` and `applyModelSpec`. |
 | `presets.agency`: `startPreset` | Terminal only. The core uses `startPresetQuiet`. |
-| `shared.agency`: `configureLocalModel` | A local model that fails to load ends the process. |
 | `settings.agency`, `capabilities.agency`, `globalInstructions.agency`, and `configureSearch` in `search.agency` | Startup warnings that `print`. In an app they reach the engine's log and no client. |
 | `mcp.agency`: `maybeLoadMcp` | A front-end's own startup. The program does not call it. |
 
+## The session's folder
+
+The user's own files are read from the folder the session started in
+(`lib/sessionFolder.agency`): `.claude/commands`, the Claude skills, and
+the folder its saved sessions are kept under. The core sets it from
+`start.cwd`. The agent's working folder (`getAgentCwd`) starts there too,
+but a coder moves it, and these reads do not follow it.
+
+A terminal scans once in `runSession`, before it installs its policy
+handler, and keeps the result for the process
+(`lib/stdlib/agentFolderScans.ts`). A scan made under that handler would
+be put to the user, or rejected in a `-p` run.
+
+## What an engine sets for its process
+
+A process that holds many sessions calls two setters once, when it
+starts, before any session runs (`agency-lang/stdlib-lib/agentProcess.js`).
+They describe the process, so they are not saved with a session.
+
+- `_setManySessions(true)`: nothing is kept in the process for one session
+  that another could read. Each read of a folder's commands and skills is
+  a scan, with its own `with approve`, that the run's policy is asked
+  about.
+- `_setLocalModelsAllowed(false)`: see below.
+
+Both default to the terminal's answer. An engine that forgets one gets no
+error, so its own tests should check both: a command added while it runs
+is seen, and a local preset is refused.
+
+## Local models
+
+Whether a process can host a local model is a fact about the process, not
+the session. After `_setLocalModelsAllowed(false)`, a local request is then refused with "Local models are
+not available here.": `--local`, a local preset, or a model spec that
+names a local provider such as `mlx/…`.
+
 ## Not solved yet
-
-**The program reads the process's folder where it should read the
-session's.** These use the process's `cwd()`, and the first two run when
-the modules load:
-
-| File | What it reads |
-| --- | --- |
-| `lib/claudeSkills.agency` | The Claude skills under `cwd()` |
-| `lib/commandPalette.agency` | `${cwd()}/.claude/commands`, and the init file |
-| `lib/sessions.agency` | `projectDir()`, the folder a session is saved under |
-
-In the terminal the two folders are the same. An engine that runs every
-session from one folder gives each session that folder's commands and
-skills. Each read has to become a function of the session's folder
-(`getAgentCwd()`). `tests/agency-js/session-core-handoff` runs both
-processes in one folder, so it does not catch this.
 
 **Each process sets up its own MCP servers** before it resumes a session.
 Connections belong to the process.
@@ -157,6 +205,11 @@ Connections belong to the process.
 | `lib/agents/agency-agent/program.agency` | The program: `main`, `ProgramStart`. |
 | `lib/agents/agency-agent/lib/record.agency` | The session record, the turn count, the title, the thread. |
 | `lib/agents/agency-agent/lib/notice.agency` | `notice`. |
+| `lib/agents/agency-agent/lib/sessionFolder.agency` | The folder a session started in. |
+| `lib/stdlib/agentFolderScans.ts` | The scans a terminal keeps. |
+| `lib/stdlib/agentProcess.ts` | What an engine sets for its process. |
+| `lib/stdlib/editDiff.ts` | An edit's hunks, for the core and for a front-end. |
 | `lib/stdlib/agentSessionImports.test.ts` | The import rule. |
 | `tests/agency-js/session-core` | The core, driven as a front-end drives it. |
+| `tests/agency-js/session-core-folders` | Two sessions in two folders in one process. |
 | `tests/agency-js/session-core-handoff` | A second process finishes a paused turn. |

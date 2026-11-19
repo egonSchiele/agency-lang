@@ -1,0 +1,7 @@
+{
+  "firstSessionSawItsOwnCommand": true,
+  "secondSessionSawItsOwnCommand": true,
+  "firstSessionStillSeesItsOwn": true,
+  "commandAddedLaterIsSeen": true,
+  "approvalsAsked": 0
+}

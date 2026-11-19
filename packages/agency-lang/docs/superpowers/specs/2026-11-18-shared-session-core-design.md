@@ -190,8 +190,8 @@ checker does not cover object unions (B2 in
 
 Perry's one `settings` answer goes away. Its panel sends `model`,
 `options` and `budget`. The effort is not an LLM option in the agent (it
-comes from `--effort` or a preset), so Perry's effort picker needs one
-more kind of answer, `effort`. That is part of Perry's plan.
+comes from `--effort` or a preset), so it has its own answer, `effort`,
+and a preset has `preset`. Both were added with Perry's plan.
 
 ### Events
 

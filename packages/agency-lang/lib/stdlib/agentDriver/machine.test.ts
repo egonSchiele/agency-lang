@@ -98,14 +98,19 @@ describe("a turn", () => {
     expectNothingFrom(initialPhase, { type: "submitted", text: "x" });
   });
 
-  it("that finishes waits for the next message", () => {
+  it("that finishes waits for the next message, and says the turn finished", () => {
     const next = pauseWith("sonnet", "pause-2");
     const { phase, happened } = run(
       [{ type: "submitted", text: "hi" }, step({ kind: "waitingForUser", interrupts: next })],
       waiting,
     );
     expect(phase).toEqual({ kind: "waitingForUser", pause: next, cancelledTexts: [] });
-    expect(happened).toEqual([{ type: "submitted", text: "hi" }]);
+    expect(happened).toEqual([{ type: "submitted", text: "hi" }, { type: "turnFinished" }]);
+  });
+
+  it("does not say a turn finished when the run first pauses", () => {
+    const started = reduceDriver(initialPhase, step({ kind: "waitingForUser", interrupts: PAUSE }));
+    expect(started.happened).toEqual([]);
   });
 
   it("cancelled goes back to the same pause, and the next message carries the note", () => {

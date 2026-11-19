@@ -11,6 +11,7 @@ import { _contentToString } from "./threads.js";
 import { printAgentTrace } from "./agentToolTrace.js";
 import type { Interrupt } from "../runtime/interrupts.js";
 import { getModuleFingerprint } from "../runtime/moduleFingerprintRegistry.js";
+import { isPlainObject } from "../utils/isPlainObject.js";
 
 /**
  * File I/O for the agency agent's saved sessions
@@ -45,6 +46,10 @@ const RUN_FORMATS: string[] = ["checkpoint", "savedRun"];
 // They carry no `runFormat`, and their run files are saved runs.
 const OLD_PERRY_BRAIN = "perry";
 
+/** The front-end that has a session open: its name, such as `terminal`,
+ *  and its process id. */
+export type SessionHolder = { frontEnd: string; pid: number };
+
 export type SessionRecord = {
   id: string;
   cwd: string;
@@ -60,7 +65,7 @@ export type SessionRecord = {
   /** What the run file holds. A record without it is a checkpoint. */
   runFormat?: RunFormat;
   /** The front-end that has this session open now, and its process id. */
-  heldBy?: { frontEnd: string; pid: number };
+  heldBy?: SessionHolder;
 };
 
 /** What a record's run file holds. A record that does not say is a
@@ -91,20 +96,25 @@ async function readJson(host: Host, dir: Root, name: string): Promise<unknown> {
   }
 }
 
-function isRecord(value: unknown): value is SessionRecord {
-  if (typeof value !== "object" || value === null) return false;
-  const r = value as Record<string, unknown>;
-  const isText = (k: string) => typeof r[k] === "string";
-  const isCount = (k: string) => typeof r[k] === "number" && Number.isFinite(r[k]) && r[k] >= 0;
+function isSessionHolder(value: unknown): value is SessionHolder {
+  return isPlainObject(value) && typeof value.frontEnd === "string" && Number.isInteger(value.pid);
+}
+
+/** True for a session record, such as one read back from its file. */
+export function isSessionRecord(value: unknown): value is SessionRecord {
+  if (!isPlainObject(value)) return false;
+  const isText = (key: string): boolean => typeof value[key] === "string";
+  const isCount = (key: string): boolean => {
+    const field: unknown = value[key];
+    return typeof field === "number" && Number.isFinite(field) && field >= 0;
+  };
   // Agency writes a field that was never set as null.
-  const forkIsValid = r.forkedFrom == null || isText("forkedFrom");
-  const threadIsValid = r.conversationThread == null || isText("conversationThread");
+  const forkIsValid = value.forkedFrom == null || isText("forkedFrom");
+  const threadIsValid = value.conversationThread == null || isText("conversationThread");
   const formatIsValid =
-    r.runFormat == null || (typeof r.runFormat === "string" && RUN_FORMATS.includes(r.runFormat));
-  const h = r.heldBy as Record<string, unknown> | null | undefined;
-  const heldByIsValid =
-    h == null ||
-    (typeof h === "object" && typeof h.frontEnd === "string" && typeof h.pid === "number");
+    value.runFormat == null ||
+    (typeof value.runFormat === "string" && RUN_FORMATS.includes(value.runFormat));
+  const heldByIsValid = value.heldBy == null || isSessionHolder(value.heldBy);
   return (
     forkIsValid &&
     threadIsValid &&
@@ -130,10 +140,18 @@ export async function _listSessions(dir: string): Promise<SessionRecord[]> {
   for (const entry of await host.files.list(sessions, ".")) {
     if (entry.type !== "file" || !entry.name.endsWith(META_SUFFIX)) continue;
     const parsed = await readJson(host, sessions, entry.name);
-    if (isRecord(parsed)) records.push(parsed);
+    if (isSessionRecord(parsed)) records.push(parsed);
   }
   records.sort((a, b) => b.lastActive - a.lastActive);
   return records;
+}
+
+/** The record of session `id` in `dir`, or null when it has none or its
+ *  file is malformed. Reads that one file. */
+export async function _readSessionRecord(dir: string, id: string): Promise<SessionRecord | null> {
+  const host = currentHost();
+  const parsed = await readJson(host, await host.files.root(dir), metaFile(id));
+  return isSessionRecord(parsed) ? parsed : null;
 }
 
 /** Write the checkpoint, then the record. Returns "" on success, else the
@@ -153,27 +171,34 @@ async function saveSession(
   record: SessionRecord,
   checkpoint: unknown,
 ): Promise<string> {
-  try {
-    const sessions = await host.files.root(dir);
-    await host.files.mkdir(sessions, ".");
-    // writeText renames a finished sibling over the target, so a crash
-    // mid-write never leaves a half-written file.
+  return writeInSessions(host, dir, async (sessions) => {
     await host.files.writeText(sessions, checkpointFile(record.id), JSON.stringify(checkpoint));
     await host.files.writeText(sessions, metaFile(record.id), JSON.stringify(record));
-    return "";
-  } catch (err) {
-    return err instanceof Error ? err.message : String(err);
-  }
+  });
 }
 
 /** Write the record alone, leaving the run file as it is. Returns "" on
  *  success, else the error message. */
 export async function _saveSessionRecord(dir: string, record: SessionRecord): Promise<string> {
   const host = currentHost();
+  return writeInSessions(host, dir, async (sessions) => {
+    await host.files.writeText(sessions, metaFile(record.id), JSON.stringify(record));
+  });
+}
+
+/** Runs `write` in `dir`, made first if it is missing. Returns "" on
+ *  success, else the error message. */
+async function writeInSessions(
+  host: Host,
+  dir: string,
+  write: (sessions: Root) => Promise<void>,
+): Promise<string> {
   try {
     const sessions = await host.files.root(dir);
     await host.files.mkdir(sessions, ".");
-    await host.files.writeText(sessions, metaFile(record.id), JSON.stringify(record));
+    // writeText renames a finished sibling over the target, so a crash
+    // mid-write never leaves a half-written file.
+    await write(sessions);
     return "";
   } catch (err) {
     return err instanceof Error ? err.message : String(err);
@@ -360,16 +385,12 @@ export type SavedRun = {
   turn: SavedTurn | null;
 };
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isSavedInterrupt(value: unknown): boolean {
   return (
-    isObject(value) &&
+    isPlainObject(value) &&
     typeof value.interruptId === "string" &&
     typeof value.effect === "string" &&
-    isObject(value.checkpoint)
+    isPlainObject(value.checkpoint)
   );
 }
 
@@ -379,7 +400,7 @@ function isSavedInterrupts(value: unknown): boolean {
 
 function isSavedTurn(value: unknown): boolean {
   return (
-    isObject(value) &&
+    isPlainObject(value) &&
     typeof value.text === "string" &&
     (value.approvals === null || isSavedInterrupts(value.approvals))
   );
@@ -387,7 +408,7 @@ function isSavedTurn(value: unknown): boolean {
 
 export function isSavedRun(value: unknown): value is SavedRun {
   return (
-    isObject(value) &&
+    isPlainObject(value) &&
     value.version === 1 &&
     isSavedInterrupts(value.pause) &&
     Array.isArray(value.cancelledTexts) &&

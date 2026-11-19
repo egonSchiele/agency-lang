@@ -2,6 +2,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
 import type { Interrupt } from "../../runtime/interrupts.js";
+import { reject } from "../../runtime/interruptResponse.js";
+import { failure, success } from "../../types/result.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
 import {
   _listSessions,
@@ -10,6 +12,7 @@ import {
   type SavedRun,
   type SessionRecord,
 } from "../agentSessions.js";
+import type { Settle } from "./approvals.js";
 import type { DriverPhase } from "./machine.js";
 import {
   CANNOT_CONTINUE,
@@ -127,6 +130,27 @@ describe("restoredPhase", () => {
     expect(happened).toEqual([]);
   });
 
+  // Perry declines a raise that wants a typed value: it can't ask for one.
+  it("passes a paused turn's approvals through the settle it is given", () => {
+    const question: Interrupt = { ...waitingOn("std::question", "q1"), expectsValue: true };
+    const declinesQuestions: Settle = (interrupt) =>
+      interrupt.expectsValue === true ? { response: reject("can't answer"), by: "rule" } : null;
+    const { phase, happened } = restoredPhase(
+      run({ text: "do it", approvals: [question, BASH] }),
+      declinesQuestions,
+    );
+    expect(phase).toEqual({
+      kind: "approving",
+      pause: PAUSE,
+      text: "do it",
+      cancelledTexts: ["earlier"],
+      queue: { interrupts: [question, BASH], responses: [reject("can't answer")] },
+    });
+    expect(happened).toEqual([
+      { type: "settled", interrupt: question, response: reject("can't answer"), by: "rule" },
+    ]);
+  });
+
   it("ends a session saved by code that is not loaded now", () => {
     const fingerprints = { moduleFingerprints: { "gone.agency": { hash: "0000" } } };
     const old: SavedRun = {
@@ -165,9 +189,35 @@ describe("saving and holding a session", () => {
     withDir(async (dir) => {
       await saveRun({ dir, record: RECORD, run: run(null), holder: TERMINAL });
       expect(await stillHeld({ dir, id: "s1", holder: TERMINAL })).toBe(true);
-      await takeHold({ dir, id: "s1", holder: PERRY });
+      expect(await takeHold({ dir, id: "s1", holder: PERRY })).toEqual(success(null));
       expect(await stillHeld({ dir, id: "s1", holder: TERMINAL })).toBe(false);
       expect(await stillHeld({ dir, id: "s1", holder: PERRY })).toBe(true);
+    }));
+
+  it("refuses to save over a session another front-end has taken", () =>
+    withDir(async (dir) => {
+      await saveRun({ dir, record: RECORD, run: run(null), holder: TERMINAL });
+      await takeHold({ dir, id: "s1", holder: PERRY });
+      const newer = run({ text: "perry's turn", approvals: null });
+      await saveRun({ dir, record: RECORD, run: newer, holder: PERRY });
+      const saved = await saveRun({ dir, record: RECORD, run: run(null), holder: TERMINAL });
+      expect(saved).toEqual(failure("Could not save session s1: held by perry (process 20)."));
+      expect(await readSavedRun(dir, "s1")).toEqual(newer);
+      const [record] = await _listSessions(dir);
+      expect(record.heldBy).toEqual(PERRY);
+    }));
+
+  it("saves over a session it holds, or one no one holds", () =>
+    withDir(async (dir) => {
+      expect(await _saveSession(dir, RECORD, run(null))).toBe("");
+      const later = run({ text: "next", approvals: null });
+      expect(await saveRun({ dir, record: RECORD, run: later, holder: TERMINAL })).toEqual(
+        success(null),
+      );
+      expect(await saveRun({ dir, record: RECORD, run: run(null), holder: TERMINAL })).toEqual(
+        success(null),
+      );
+      expect(await readSavedRun(dir, "s1")).toEqual(run(null));
     }));
 
   it("takes hold on the record alone", () =>
@@ -195,8 +245,8 @@ describe("saving and holding a session", () => {
 
   it("refuses to take hold of a session with no record", () =>
     withDir(async (dir) => {
-      await expect(takeHold({ dir, id: "missing", holder: PERRY })).rejects.toThrow(
-        "Could not take hold of session missing",
-      );
+      const taken = await takeHold({ dir, id: "missing", holder: PERRY });
+      expect(taken.success).toBe(false);
+      expect(taken.success ? "" : taken.error).toContain("Could not take hold of session missing");
     }));
 });

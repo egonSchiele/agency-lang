@@ -29,3 +29,27 @@ export function _setManySessions(many: boolean): void {
 export function _holdsManySessions(): boolean {
   return manySessions;
 }
+
+/** What the process shows of the agent's work, and whether a person is at
+ *  it. A front-end sets these once. The shell run and the session run each
+ *  have their own copy of a module's globals, so these live here, where
+ *  both runs read the same values. */
+export type TraceOptions = {
+  debug: boolean;
+  verbose: boolean;
+  interactive: boolean;
+};
+
+let traceOptions: TraceOptions = {
+  debug: false,
+  verbose: false,
+  interactive: true,
+};
+
+export function _setTraceOptions({ debug, verbose, interactive }: TraceOptions): void {
+  traceOptions = { debug, verbose, interactive };
+}
+
+export function _traceOptions(): TraceOptions {
+  return { ...traceOptions };
+}

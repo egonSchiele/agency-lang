@@ -21,18 +21,16 @@ import {
 import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
 import {
   canCompact,
-  compactConversation,
-  compactionDue,
-  compactionFailed,
+  compactAndReport,
+  compactIfDue,
   contextStatus,
  } from "./compaction.agency"
 import { HISTORY_PATH } from "./config.agency"
 import { mcpSlashCommand } from "./mcpMenu.agency"
 import { filterHostedModels } from "./modelFilters.agency"
-import { noModelChoices } from "./modelRequest.agency"
 import { Resolved } from "./models.agency"
 import { activePresetName, presetListLines, presetTable } from "./presets.agency"
-import { diffResolved, Ctx } from "./resolution.agency"
+import { diffResolved } from "./resolution.agency"
 import {
   configureSearch,
   setSearchBackend,
@@ -40,8 +38,10 @@ import {
   availableBackendItems,
  } from "./search.agency"
 import {
-  Session,
-  switchModel,
+  applyPendingLlmOptions,
+  applyModelSpec,
+  modelChoices,
+  setModelChoices,
   reactToSlotChange,
   establishedProvider,
   modelChoiceItems,
@@ -50,11 +50,9 @@ import {
   parsePresetCommand,
   saveSessionPreset,
   switchPreset,
-  applySessionLlmOptions,
-  takePendingLlmOptions,
  } from "./session.agency"
 import { formatTurnFailure } from "./utils.agency"
-import { configureLocalModel, explicitRouterSpec, getResolvedSlots, currentProvider } from "../shared.agency"
+import { configureLocalModel, explicitRouterSpec, getResolvedSlots } from "../shared.agency"
 
 
 import { _installSessionHooks, _sessionOnSubmit } from "agency-lang/stdlib-lib/agentSessions.js"
@@ -65,9 +63,9 @@ import {
   markTurnDone,
   recordTurn,
   renameSession,
-  saveSeedTurn,
   sessionTitle,
- } from "./resume.agency"
+ } from "./record.agency"
+import { saveSeedTurn } from "./resume.agency"
 import { renderReply, renderUserLine } from "./transcript.agency"
 import { withPendingNotes } from "./pendingNotes.agency"
 import { attachClipboardImage } from "./slashCommands/image.agency"
@@ -77,7 +75,6 @@ import { jobsSlashCommand } from "./slashCommands/jobs.agency"
 import { runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
-let _session: Session = noModelChoices()
 
 
 def searchSlashCommand(): boolean {
@@ -165,7 +162,7 @@ def modelSlashCommand(command: string): boolean {
         pushMessage("  ${slot}: ${resolved.model} (${resolved.via})")
       }
     }
-    const established = establishedProvider(_session)
+    const established = establishedProvider(modelChoices())
     const items = modelChoiceItems({}, established)
     for (line in scopedPickerNotes(established, items.length)) {
       pushMessage(color.dim(line))
@@ -182,16 +179,12 @@ def modelSlashCommand(command: string): boolean {
     }
     spec = choice
   }
-  const ctx: Ctx = {
-    provider: currentProvider(),
-    price: "standard"
+  const switched = applyModelSpec(spec)
+  if (switched is failure(reason)) {
+    pushMessage(color.red(reason))
+    return true
   }
-  const out = switchModel(_session, spec, ctx, getResolvedSlots())
-  _session = out.session
-  for (change in out.changes) {
-    reactToSlotChange(change)
-  }
-  pushResolvedSlots("Model set:", out.resolved)
+  pushResolvedSlots("Model set:", switched.value)
   return true
 }
 
@@ -214,7 +207,7 @@ def presetSlashCommand(command: string): boolean {
     return true
   }
   if (parsed.kind == "save") {
-    for (line in saveSessionPreset(parsed.name, _session)) {
+    for (line in saveSessionPreset(parsed.name, modelChoices())) {
       pushMessage(line)
     }
     return true
@@ -225,7 +218,7 @@ def presetSlashCommand(command: string): boolean {
     pushMessage(color.red("Could not switch preset: ${reason}"))
     return true
   }
-  _session = switched.value.session
+  setModelChoices(switched.value.session)
   for (change in switched.value.changes) {
     reactToSlotChange(change)
   }
@@ -371,18 +364,9 @@ def renameSlashCommand(title: string): boolean {
   return true
 }
 
-// Summarize the older messages and say what happened. False when the
-// summary could not be made.
-def compactAndReport(threadId: string, instructions: string): boolean {
-  pushMessage(color.dim("Compacting the conversation. Press Esc to stop."))
-  const result = compactConversation(threadId, instructions)
-  if (result is failure(reason)) {
-    pushMessage(color.yellow("Could not compact the conversation: ${reason}"))
-    return false
-  }
-  pushMessage(color.dim("Compacted: a summary replaced ${result.value} earlier messages."))
-  return true
-}
+// Added to the line that says a compaction started. Esc is the terminal's
+// key, so the hint is the terminal's too.
+static const ESC_HINT = " Press Esc to stop."
 
 def compactSlashCommand(instructions: string): boolean {
   const threadId = conversationThread()
@@ -390,20 +374,8 @@ def compactSlashCommand(instructions: string): boolean {
     pushMessage("Nothing to compact yet.")
     return true
   }
-  compactAndReport(threadId, instructions)
+  compactAndReport(threadId, instructions, ESC_HINT)
   return true
-}
-
-// Runs after the turn is marked done, so a compaction the user stops with
-// Escape does not keep the turn from being saved.
-def compactIfDue() {
-  const threadId = conversationThread()
-  if (!compactionDue(threadId) || !canCompact(threadId)) {
-    return
-  }
-  if (!compactAndReport(threadId, "")) {
-    compactionFailed(threadId)
-  }
 }
 
 // A `!` line is a shell command only when the user typed it and pressed
@@ -428,25 +400,15 @@ def imageSlashCommand(message: string): boolean {
 }
 
 def renderUserTurn(trimmed: string, msg: string): boolean {
-  const result = try runTurn("", withPendingNotes(msg))
+  // The message is worked out on its own line: a call inside the argument
+  // of a `try` call breaks a resume in the middle of the turn (#1506).
+  const message = withPendingNotes(msg)
+  const result = try runTurn("", message)
   renderAgentResponse(result)
   applyPendingLlmOptions()
   markTurnDone()
-  compactIfDue()
+  compactIfDue(conversationThread(), ESC_HINT)
   return true
-}
-
-// The coordinator's useLlmOptions tool records a request during the turn;
-// it is applied here, outside the tool's branch.
-def applyPendingLlmOptions() {
-  const pending = takePendingLlmOptions()
-  if (pending == null) {
-    return
-  }
-  _session = applySessionLlmOptions(_session, pending)
-  const fields = Object.keys(pending)
-  const listed = if fields.length == 0 then "none (back to the preset's)" else fields.join(", ")
-  pushMessage(color.dim("Options set for the next turn: ${listed}"))
 }
 
 export def buildStatus(): { left: string; right: string; context: string } {
@@ -467,7 +429,7 @@ export def runSeedTurn(target: string, msg: string) {
   renderAgentResponse(response)
   applyPendingLlmOptions()
   markTurnDone()
-  compactIfDue()
+  compactIfDue(conversationThread(), ESC_HINT)
   saveSeedTurn(msg)
 }
 

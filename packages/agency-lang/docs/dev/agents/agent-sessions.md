@@ -44,8 +44,11 @@ tool, so it raises no interrupt and the user's policy is not asked about it.
   every `TITLE_EVERY` turns after. One LLM call in its own thread; fails
   open to "".
 - `lib/agents/agency-agent/lib/resume.agency` — which session this run is
-  (`chooseSession`, `startSession`), the restore, the per-turn record
-  (`recordTurn`), and the footer text (`sessionTitle`).
+  (`chooseSession`, `startSession`) and the restore.
+- `lib/agents/agency-agent/lib/record.agency` — the session's record: the
+  per-turn record (`recordTurn`), the footer text (`sessionTitle`),
+  `/rename` and `/fork`. It is apart from `resume.agency` so the session
+  core can use it (`docs/dev/agents/session-core.md`).
 - `lib/stdlib/agentSessions.ts` — the files, and `_sessionOnSubmit`, the
   REPL callback that checkpoints between turns.
 
@@ -102,7 +105,7 @@ point and runs nothing placed after it.
 The conversation is the run's active thread: a brain opens no `thread`
 block of its own, so every turn's `llm()` calls land on it. Before and after each
 turn, `runTurn` in `lib/turn.agency` records that thread's id with
-`setConversationThread` (`lib/resume.agency`). `recordTurn` copies the id
+`setConversationThread` (`lib/record.agency`). `recordTurn` copies the id
 into the session record as `conversationThread`, before its early return
 for a save with no turn behind it, so a save after `/fork` or `/rename`
 carries it too. The resume transcript is read from the thread that id
@@ -129,7 +132,7 @@ file is read back (see `docs/dev/runtime/checkpointing.md`).
 ## `/fork`
 
 `/fork` makes the running session a copy of itself. `forkSession` in
-`resume.agency` gives `_current` a new record: a new id, the same turn
+`record.agency` gives `_current` a new record: a new id, the same turn
 count and title, and `forkedFrom` set to the original's id. It marks the
 record changed,
 so the save that follows the REPL line writes the checkpoint under the new

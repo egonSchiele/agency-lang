@@ -14,8 +14,8 @@ import test {
   markTurnDone,
   recordTurn,
   renameSession,
-  startSession,
- } from "../../lib/agents/agency-agent/lib/resume.agency"
+ } from "../../lib/agents/agency-agent/lib/record.agency"
+import test { startSession } from "../../lib/agents/agency-agent/lib/resume.agency"
 
 // A rename with no turn still produces a save (the record carries the new
 // title, and the turn count is untouched); the save after it is a no-op.

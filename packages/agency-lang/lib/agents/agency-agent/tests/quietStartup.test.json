@@ -1,0 +1,29 @@
+{
+  "sourceFile": "quietStartup.agency",
+  "tests": [
+    {
+      "nodeName": "unusablePresetIsAFailure",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "mainSlotIsSetAfterStartup",
+      "input": "",
+      "expectedOutput": "\"true|claude-sonnet-4-6\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "specChangesTheMainSlot",
+      "input": "",
+      "expectedOutput": "\"true|claude-opus-4-8|claude-opus-4-8\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "badSpecChangesNothing",
+      "input": "",
+      "expectedOutput": "\"true|claude-sonnet-4-6|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

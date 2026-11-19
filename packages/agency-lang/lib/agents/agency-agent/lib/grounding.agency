@@ -5,14 +5,13 @@
 */
 
 import { demoteProvider, getResolvedSlots } from "../shared.agency"
-import { parseAgentArgs } from "./args.agency"
 import { Resolved } from "./models.agency"
 import { projectContextText } from "./projectContext.agency"
 
 export def sessionFactsText(
   brainName: string,
   slots: Record<string, Resolved>,
-  flags: Record<string, any>,
+  flags: Record<string, any> | null,
 ): string {
   """
   The identity block: what the agent is, which brain answers turns, and
@@ -21,7 +20,8 @@ export def sessionFactsText(
   feed the splash header, so the model names here always match what the
   user saw at startup. Takes only the CLI flags, never the positional
   prompt: this block sits above the user-message boundary, and user
-  text serialized into it would be a prompt-injection vector.
+  text serialized into it would be a prompt-injection vector. A
+  front-end with no flags passes null, which leaves the block out.
   """
   let modelLines = []
   for (slot in ["main", "reasoning"]) {
@@ -31,6 +31,13 @@ export def sessionFactsText(
         "${slot} model: ${resolved.model} (provider: ${demoteProvider(resolved.provider)})",
       )
     }
+  }
+  if (flags == null) {
+    return """
+  Your Name: Agency agent
+  Brain: ${brainName}
+  Models: ${modelLines.join("\n  ")}
+  """
   }
   return """
   Your Name: Agency agent
@@ -70,13 +77,11 @@ export def grounding(): string {
   return _grounding
 }
 
-export def groundingText(brainName: string): string {
-  const args = parseAgentArgs()
-
+export def groundingText(brainName: string, flags: Record<string, any> | null): string {
   return """
 
   <session_facts>
-  ${sessionFactsText(brainName, getResolvedSlots(), args.flags)}
+  ${sessionFactsText(brainName, getResolvedSlots(), flags)}
   </session_facts>${factsRule(brainName)}
   ${projectContextText()}"""
 }

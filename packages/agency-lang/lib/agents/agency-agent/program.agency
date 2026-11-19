@@ -1,0 +1,84 @@
+/** @module
+  @summary The agent's session program: the one program every front-end
+  runs. `main` sets the session up from the data it is given and goes to
+  the session core, which runs the conversation. It is exported from the
+  package as `agency-lang/agent-session`.
+
+  Nothing here, or in anything it imports, may draw at a terminal or end
+  the process: an app's engine runs many sessions in one process. A setup
+  that fails ends the run with the reason.
+  lib/stdlib/agentSessionImports.test.ts holds the import rule.
+  See docs/dev/agents/session-core.md.
+*/
+import { agencyAgentBrains } from "std::agents/agency"
+import { map } from "std::array"
+import { setLlmOptions } from "std::llm"
+import { disableMemory } from "std::memory"
+
+import node { session } from "./core.agency"
+import { SessionStart } from "./core.agency"
+import { ModelFlags } from "./lib/modelRequest.agency"
+import { notice } from "./lib/notice.agency"
+import { activePreset, startPresetQuiet } from "./lib/presets.agency"
+import { startModels } from "./lib/session.agency"
+import { loadSettings } from "./lib/settings.agency"
+import { LimitFlags, applyToolLimits, setStartupLimitFlags } from "./lib/toolLimits.agency"
+import { resolveBrainName, setBrainName } from "./lib/turn.agency"
+import { getCapabilities } from "./shared.agency"
+
+export type ProgramStart = {
+  // A brain's name, or "" for the user's default.
+  brain: string;
+  // A saved preset's name, or "".
+  preset: string;
+  // The startup model flags.
+  models: ModelFlags;
+  // The startup tool limits.
+  limits: LimitFlags;
+  session: SessionStart
+}
+
+node main(start: ProgramStart) {
+  const settings = loadSettings()
+  const brainName = resolveBrainName(start.brain, settings)
+  const brainNames = map(agencyAgentBrains(), \entry -> entry.name)
+  if (!brainNames.includes(brainName)) {
+    throw("Unknown brain: ${brainName}. Valid: ${brainNames.join(", ")}")
+    return
+  }
+  setBrainName(brainName)
+
+  // The preset comes before the models: it is one of their layers.
+  const preset = startPresetQuiet(start.preset, settings)
+  if (preset is failure(presetProblem)) {
+    throw(presetProblem)
+    return
+  }
+  for (warning in preset.value) {
+    notice(warning, "warning")
+  }
+  // The search backend is chosen for this session and not saved: the
+  // settings file is the user's, and this may not be their terminal.
+  const models = startModels(start.models, false)
+  if (models is failure(modelProblem)) {
+    throw(modelProblem)
+    return
+  }
+
+  setStartupLimitFlags(start.limits)
+  // The limits of a session that goes on, not of a run that takes one
+  // message and ends: the core pauses again after every turn.
+  applyToolLimits(activePreset(), false)
+  const capsMaxTokens = getCapabilities().maxTokens
+  if (capsMaxTokens != null) {
+    setLlmOptions({
+      maxTokens: capsMaxTokens
+    })
+  }
+
+  // Memory stays off for the agent, as in the terminal. It is the run's
+  // own state, so it is turned off here and not by the front-end.
+  disableMemory() with approve
+
+  goto session(start.session)
+}

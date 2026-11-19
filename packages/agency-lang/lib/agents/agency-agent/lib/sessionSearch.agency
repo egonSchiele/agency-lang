@@ -5,7 +5,7 @@
 */
 import { formatDate, now } from "std::date"
 
-import { currentSessionId } from "./resume.agency"
+import { currentSessionId } from "./record.agency"
 import { projectDir, relativeAge } from "./sessions.agency"
 import { _searchSessions } from "agency-lang/stdlib-lib/agentSessions.js"
 import { _realDir } from "agency-lang/stdlib-lib/fs.js"

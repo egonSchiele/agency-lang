@@ -331,7 +331,7 @@ export def availableBackendItems(): ChoiceItem[] {
   but each branch is a single statement ending in one call to
   `setActiveBackend(backend, persist)` so the shape is uniform.
 */
-export def configureSearch(isLocal: boolean) {
+export def configureSearch(isLocal: boolean, persist: boolean = true) {
   """
   Resolve, apply, and persist the web-search backend at startup.
   Without a saved choice, client search uses Brave when its key is set,
@@ -339,6 +339,7 @@ export def configureSearch(isLocal: boolean) {
   and local models show a message. Saved backend choices are preserved.
 
   @param isLocal - True when the agent is running against a local model (e.g. llama-cpp).
+  @param persist - False to choose a backend for this session only and leave settings.json alone
   """
   // Set the session's isLocal field as the FIRST statement so any
   // downstream code that reads `session` sees a coherent record.
@@ -361,10 +362,10 @@ export def configureSearch(isLocal: boolean) {
   const p = planSearchSetup(ctx)
 
   if (p.kind == "use") {
-    setActiveBackend(p.backend, true)
+    setActiveBackend(p.backend, persist)
   } else if (p.kind == "useWithNote") {
     print(p.note)
-    setActiveBackend(p.backend, true)
+    setActiveBackend(p.backend, persist)
   } else if (p.kind == "warnDisabled") {
     // Session-only off: do NOT overwrite the saved preference, so
     // re-adding the key (or running on a cloud provider) restores it
@@ -373,6 +374,6 @@ export def configureSearch(isLocal: boolean) {
     setActiveBackend("off", false)
   } else if (p.kind == "promptMissing") {
     print("No web-search key found. Set TAVILY_API_KEY or BRAVE_API_KEY and run /search to enable web search.")
-    setActiveBackend("off", true)
+    setActiveBackend("off", persist)
   }
 }

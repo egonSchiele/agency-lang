@@ -55,6 +55,7 @@ import {
   getModelSettings,
   loadSettings,
  } from "./settings.agency"
+import { notice } from "./notice.agency"
 import { chatSlots, providerFormExample, providerFormTitle, SLOTS } from "./slots.agency"
 import { ToolLimits, applyToolLimits, startupLimitFlags } from "./toolLimits.agency"
 import {
@@ -66,6 +67,7 @@ import {
   getResolvedSlots,
   getCapabilities,
   getCapabilitiesResolved,
+  currentProvider,
   markMemoryEnabledByOverride,
   embeddingKeyStatus,
   memoryEnablePlan,
@@ -169,7 +171,7 @@ def applyRequestOptions(request: ModelRequest, settings: ModelSettings) {
   const warnings = [mixedProviderWarning(options, [model.provider for model in models]), noDefaultWarning(asked, models)]
   for (warning in warnings) {
     if (warning != "") {
-      pushMessage(color.yellow("Warning: ${warning}"))
+      notice("Warning: ${warning}", "warning")
     }
   }
 }
@@ -201,6 +203,20 @@ export def takePendingLlmOptions(): LlmOptions | null {
   const pending = _pendingLlmOptions
   _pendingLlmOptions = null
   return pending
+}
+
+/** Apply the block the useLlmOptions tool asked for during the turn, if
+  there is one, and say so in a notice. Call it after the turn, outside
+  the tool's branch. */
+export def applyPendingLlmOptions() {
+  const pending = takePendingLlmOptions()
+  if (pending == null) {
+    return
+  }
+  applyLlmOptionsAnswer(pending)
+  const fields = Object.keys(pending)
+  const listed = if fields.length == 0 then "none (back to the preset's)" else fields.join(", ")
+  notice("Options set for the next turn: ${listed}")
 }
 
 /** An empty block clears the session's own, so the preset's or
@@ -264,14 +280,44 @@ export def maybeEnableMemory() {
   }
 }
 
+/** What a model switch produced: the new choices, every resolved slot,
+  and the slots that changed. */
+export type ModelSwitch = {
+  session: Session;
+  resolved: Record<string, Resolved>;
+  changes: SlotChange[]
+}
+
 /** Apply an in-session model selection. Takes effect on
-  the NEXT turn; no in-flight call is mutated. */
+  the NEXT turn; no in-flight call is mutated. A switch that cannot be
+  made prints why and returns the session as it was. A caller that needs
+  to know it failed uses trySwitchModel. */
 export def switchModel(
   prior: Session,
   spec: string,
   ctx: Ctx,
   before: Record<string, Resolved>,
-): { session: Session; resolved: Record<string, Resolved>; changes: SlotChange[] } {
+): ModelSwitch {
+  const switched = trySwitchModel(prior, spec, ctx, before)
+  if (switched is failure(reason)) {
+    pushMessage(color.red(reason))
+    return {
+      session: prior,
+      resolved: before,
+      changes: []
+    }
+  }
+  return switched.value
+}
+
+/** switchModel, with a switch that cannot be made returned as a failure.
+  It prints nothing and changes nothing when it fails. */
+export def trySwitchModel(
+  prior: Session,
+  spec: string,
+  ctx: Ctx,
+  before: Record<string, Resolved>,
+): Result<ModelSwitch> {
   // The caller builds ctx from currentProvider(), which returns the
   // PROMOTED name on openai sessions. priceDefault and the built-in
   // tables key by public provider names, so demote before resolving —
@@ -284,30 +330,14 @@ export def switchModel(
   let next: Session = JSON.parse(JSON.stringify(prior))
   const parsed = parseModelFlag(spec)
   if (parsed.slot != "" && !SLOTS.includes(parsed.slot)) {
-    pushMessage(
-      color.red(
-      "Unknown model slot '${parsed.slot}'. Valid slots: ${SLOTS.join(", ")}.",
-    ),
-    )
-    return {
-      session: prior,
-      resolved: before,
-      changes: []
-    }
+    return failure("Unknown model slot '${parsed.slot}'. Valid slots: ${SLOTS.join(", ")}.")
   }
   if (lacksProviderForm(parsed.slot, parsed.model)) {
     // A derived slot exists to point AWAY from the chat provider, so the
     // provider can never be inferred. Require the explicit form.
-    pushMessage(
-      color.red(
+    return failure(
       "${providerFormTitle(parsed.slot)} models need the provider/model form, e.g. ${parsed.slot}=${providerFormExample(parsed.slot)}.",
-    ),
     )
-    return {
-      session: prior,
-      resolved: before,
-      changes: []
-    }
   }
   if (parsed.slot == "") {
     next.pin = parsed.model
@@ -321,21 +351,56 @@ export def switchModel(
   const established = requestProvider(request, settings) != ""
   const all = resolveRequestAgainst(request, settings, ctx2, established, startupDefaultSlots())
   if (all is failure(reason)) {
-    pushMessage(color.red("Could not switch model: ${reason}"))
-    return {
-      session: prior,
-      resolved: before,
-      changes: []
-    }
+    return failure("Could not switch model: ${reason}")
   }
   const resolved = all.value
   applyResolved(resolved)
   applyRequestOptions(request, settings)
-  return {
+  return success({
     session: next,
     resolved: resolved,
     changes: diffResolved(before, resolved)
+  })
+}
+
+// The session's own model choices: what /model and the useLlmOptions tool
+// have set since startup. Session state, so it is kept here with the
+// startup flags and not in the terminal's REPL: a front-end that resumes
+// the session must find it.
+let _choices: ModelChoices = noModelChoices()
+
+/** The model choices this session has made since it started. */
+export def modelChoices(): ModelChoices {
+  return _choices
+}
+
+export def setModelChoices(choices: ModelChoices) {
+  _choices = choices
+}
+
+/** Switch models from a spec such as `opus` or `reasoning=claude-opus-4-8`,
+  for the session's own choices. Returns every resolved slot. A switch
+  that cannot be made is a failure, and nothing changes. */
+export def applyModelSpec(spec: string): Result<Record<string, Resolved>> {
+  const ctx: Ctx = {
+    provider: currentProvider(),
+    price: "standard"
   }
+  const switched = trySwitchModel(_choices, spec, ctx, getResolvedSlots())
+  if (isFailure(switched)) {
+    return switched
+  }
+  _choices = switched.value.session
+  for (change in switched.value.changes) {
+    reactToSlotChange(change)
+  }
+  return success(switched.value.resolved)
+}
+
+/** Set the session's own LLM options, as the useLlmOptions tool asks.
+  They take effect from the next turn. */
+export def applyLlmOptionsAnswer(options: LlmOptions) {
+  _choices = applySessionLlmOptions(_choices, options)
 }
 
 /** React to one resolved-slot change. Phase 1: a `main`-slot provider change
@@ -351,11 +416,7 @@ export def reactToSlotChange(change: SlotChange): boolean {
     if (_memoryEmbeddingsPinned) {
       return false
     }
-    pushMessage(
-      color.dim(
-      "Warning: provider changed - memory is paused until restart (recall would be unreliable).",
-    ),
-    )
+    notice("Warning: provider changed - memory is paused until restart (recall would be unreliable).")
     // `with approve`: the agent is deliberately auto-pausing memory on a
     // provider switch, not asking the user — so don't surface an approval prompt.
     disableMemory() with approve
@@ -366,19 +427,16 @@ export def reactToSlotChange(change: SlotChange): boolean {
     if (override != null) {
       const missing = missingProviderEnvVar(override.provider)
       if (missing != "") {
-        pushMessage(
-          color.yellow(
+        notice(
           "Warning: the embedding slot needs ${missing}, which is not set. The assignment takes effect at next agent start, and memory falls back to the default embedding behavior until it is exported.",
-        ),
+          "warning",
         )
         return true
       }
       // The healthy path must not be silent: enableMemory already ran,
       // so the user would otherwise believe embeddings switched now.
-      pushMessage(
-        color.dim(
+      notice(
         "Embedding slot set: memory embeddings use ${override.provider}/${override.model} at next agent start.",
-      ),
       )
       return true
     }
@@ -497,17 +555,35 @@ export def pickModelsForAgent(args: Record<string, any>) {
     _exit(1)
     return
   }
-  // A one-shot run gets the default slots too: this runs before the
-  // agent branches on one-shot.
-  setStartupModelFlags(withGuidedLocal(parsed.value), getModelSettings(loadSettings()), defaultSlots())
-  const request = currentModelRequest(noModelChoices())
-  const applied = applyModelRequest(request, _startupModelSettings)
-  if (applied is failure(reason)) {
+  const started = startModels(withGuidedLocal(parsed.value))
+  if (started is failure(reason)) {
     print(reason)
     _exit(1)
     return
   }
-  configureSearch(requestIsLocal(request))
+}
+
+/** Resolve and apply a session's models at startup from the model flags,
+  the active preset, and settings.model. A request that cannot be
+  resolved is a failure. It asks nothing and never ends the process, so
+  a front-end with no terminal can call it. It can still print a line
+  about the web search backend.
+
+  `saveSearchChoice` is whether the search backend picked for this
+  session is also saved to settings.json. The terminal saves it. An app
+  does not: its environment often lacks the search keys a terminal has,
+  and a choice saved from there would follow the user back. */
+export def startModels(flags: ModelFlags, saveSearchChoice: boolean = true): Result<boolean> {
+  // A one-shot run gets the default slots too: this runs before the
+  // agent branches on one-shot.
+  setStartupModelFlags(flags, getModelSettings(loadSettings()), defaultSlots())
+  const request = currentModelRequest(noModelChoices())
+  const applied = applyModelRequest(request, _startupModelSettings)
+  if (isFailure(applied)) {
+    return applied
+  }
+  configureSearch(requestIsLocal(request), saveSearchChoice)
+  return success(true)
 }
 
 /** What a switch produced. The first three fields have the meaning they

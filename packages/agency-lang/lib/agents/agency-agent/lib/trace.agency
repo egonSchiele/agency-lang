@@ -11,6 +11,8 @@ import { searchProviderName } from "std::agents/lib/search"
 import { env } from "std::system"
 import { pushMessage } from "std::ui/cli"
 
+import { REPL_STYLE, setReplyStyle } from "./answer.agency"
+import { setJobToolsOn } from "./cliTools.agency"
 import {
   isPlainObject,
   retryReasonLabel,
@@ -83,13 +85,33 @@ callback("onLLMCallEnd") as data {
   }
 }
 
-// std::agents/agency reports a subagent's start and a failed router call
-// with emit. Any other event is not the agent's and prints nothing.
+// The color for each notice level (lib/notice.agency).
+def printNotice(text: string, level: string) {
+  if (level == "error") {
+    pushMessage(color.red(text))
+  } else if (level == "warning") {
+    pushMessage(color.yellow(text))
+  } else {
+    pushMessage(color.dim(text))
+  }
+}
+
+// Prints the events this terminal shows: a subagent's start and a failed
+// router call from std::agents/agency, and the session's notices and
+// budget stops. Any other event prints nothing.
 callback("onEmit") as data {
   if (isPlainObject(data) && data.type == "agencyAgent.subagentStart" && isTraceEnabled()) {
     _printAgentTrace({ kind: "agentStart", toolName: data.agent, message: data.message })
   } else if (isPlainObject(data) && data.type == "agencyAgent.routerFailed") {
     print(color.dim(data.error))
+  } else if (isPlainObject(data) && data.type == "session.notice") {
+    printNotice(data.text, data.level)
+  } else if (isPlainObject(data) && data.type == "session.budgetStop" && _isInteractive) {
+    // Only with a person at the terminal. A one-shot run's output is
+    // the reply and nothing else.
+    print(color.yellow(
+      "⏳ The ${data.dimension} budget for ${data.label} ran out; stopping that step with its best result so far.",
+    ))
   }
 }
 
@@ -140,9 +162,18 @@ export def setInteractive(on: boolean) {
   Record whether a user is at a terminal, which decides whether tool traces
   are shown by default.
 
+  A one-shot run also gets no reply style and no background job tools,
+  so both follow this flag.
+
   @param on - Whether the run is interactive
   """
   _isInteractive = on
+  if (on) {
+    setReplyStyle(REPL_STYLE)
+  } else {
+    setReplyStyle("")
+  }
+  setJobToolsOn(on)
 }
 
 export def isInteractive(): boolean {

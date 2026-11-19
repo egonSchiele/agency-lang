@@ -1,0 +1,29 @@
+{
+  "sourceFile": "notices.agency",
+  "tests": [
+    {
+      "nodeName": "noticeIsAnEvent",
+      "input": "",
+      "expectedOutput": "\"[{\\\"type\\\":\\\"session.notice\\\",\\\"text\\\":\\\"Models changed.\\\",\\\"level\\\":\\\"info\\\"},{\\\"type\\\":\\\"session.notice\\\",\\\"text\\\":\\\"Check your key.\\\",\\\"level\\\":\\\"warning\\\"}]\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "budgetStopIsAnEvent",
+      "input": "",
+      "expectedOutput": "\"[{\\\"type\\\":\\\"session.budgetStop\\\",\\\"label\\\":\\\"the coder\\\",\\\"dimension\\\":\\\"cost\\\"}]\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "bundledSkillsCheckReturnsItsResult",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "nothingToCompactSaysNothing",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

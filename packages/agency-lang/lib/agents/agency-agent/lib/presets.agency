@@ -228,18 +228,34 @@ export def startPreset(flag: string, settings: Settings) {
   @param flag - The --preset value, or ""
   @param settings - settings.json as loaded at startup
   """
-  const table = readPresetTable(settings.presets)
-  setPresetTable(table)
-  const choice = choosePreset(flag, table)
-  if (choice is failure(reason)) {
+  const started = startPresetQuiet(flag, settings)
+  if (started is failure(reason)) {
     print(color.red(reason))
     _exit(1)
     return
   }
-  for (warning in choice.value.warnings) {
+  for (warning in started.value) {
     print(color.yellow(warning))
   }
+}
+
+export def startPresetQuiet(flag: string, settings: Settings): Result<string[]> {
+  """
+  Load the saved presets and pick the one this run starts with. Returns
+  the warnings to show. A preset that cannot be used is a failure. It
+  prints nothing, so a front-end with no terminal can call it.
+
+  @param flag - The preset's name, or ""
+  @param settings - settings.json as loaded at startup
+  """
+  const table = readPresetTable(settings.presets)
+  setPresetTable(table)
+  const choice = choosePreset(flag, table)
+  if (isFailure(choice)) {
+    return choice
+  }
   setActivePreset(choice.value.name)
+  return success(choice.value.warnings)
 }
 
 export def serverNotice(table: PresetTable, active: string): string {

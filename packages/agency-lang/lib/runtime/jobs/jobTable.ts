@@ -1,5 +1,13 @@
-import type { Host, RunResult, RunningProcess } from "../../host/host.js";
+import type { Host, RunningProcess } from "../../host/host.js";
 import type { Clock } from "../clock.js";
+import {
+  JOB_OUTPUT_CAP_BYTES,
+  endingOf,
+  type Ending,
+  type JobStart,
+  type JobState,
+  type ReadPositions,
+} from "./jobRecord.js";
 import { collapseCarriageReturns } from "./progressText.js";
 
 /**
@@ -12,9 +20,6 @@ import { collapseCarriageReturns } from "./progressText.js";
 
 export const MAX_RUNNING_JOBS = 8;
 export const MAX_FINISHED_JOBS = 20;
-export const JOB_OUTPUT_CAP_BYTES = 10 * 1024 * 1024;
-
-export type JobState = "running" | "ended" | "stopped" | "timedOut";
 
 export type JobSummary = {
   /** "job-" and six random hex digits, such as "job-3fa9c1". Random, so a
@@ -37,19 +42,6 @@ export type JobReport = JobSummary & {
   stderr: string;
   note: string;
 };
-
-export type JobStart = {
-  /** The text that runs. */
-  command: string;
-  /** The text the summary shows as `command`. */
-  label: string;
-  /** The working directory; the host's own when empty. */
-  cwd: string;
-  maxMs: number;
-};
-
-/** Characters of each stream already returned by `readJob`. */
-type ReadPositions = { stdout: number; stderr: number };
 
 type Job = {
   summary: JobSummary;
@@ -248,25 +240,6 @@ export function onJobEnd(table: JobTable, listener: (job: JobSummary) => void): 
   };
 }
 
-type Ending = { state: JobState; exitCode: number | null; note: string };
-
-function endingOf(result: RunResult, capBytes: number): Ending {
-  if (result.truncated !== null) {
-    return {
-      state: "ended",
-      exitCode: result.exitCode,
-      note: `Stopped: ${result.truncated} passed the ${describeBytes(capBytes)} cap.`,
-    };
-  }
-  if (result.timedOut) {
-    return { state: "timedOut", exitCode: result.exitCode, note: "" };
-  }
-  if (result.aborted) {
-    return { state: "stopped", exitCode: result.exitCode, note: "" };
-  }
-  return { state: "ended", exitCode: result.exitCode, note: "" };
-}
-
 function finishJob(table: JobTable, job: Job, ending: Ending): void {
   job.summary.state = ending.state;
   job.summary.exitCode = ending.exitCode;
@@ -322,9 +295,4 @@ function tooManyJobsMessage(table: JobTable): string {
     `${MAX_RUNNING_JOBS} background jobs are already running, which is the limit. ` +
     `Stop one before starting another. Running: ${running}.`
   );
-}
-
-function describeBytes(bytes: number): string {
-  const mebibyte = 1024 * 1024;
-  return bytes % mebibyte === 0 ? `${bytes / mebibyte} MiB` : `${bytes}-byte`;
 }

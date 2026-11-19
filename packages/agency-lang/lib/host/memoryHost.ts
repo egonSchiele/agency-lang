@@ -65,6 +65,8 @@ export type MemoryHostOptions = {
    *  error that names the program. */
   subprocess?: HostSubprocess;
   cwd?: string;
+  /** What `system.processId` answers; 1 without. */
+  processId?: number;
   homeDir?: string;
   /** What `system.installDir` answers; null without. */
   installDir?: string;
@@ -616,7 +618,7 @@ function memorySystem(options: MemoryHostOptions, cwd: string): HostSystem {
     homeDir: () => options.homeDir ?? "/home/agency",
     tempDir: () => "/tmp",
     args: () => [],
-    processId: () => 1,
+    processId: () => options.processId ?? 1,
     userId: () => "0",
     moduleDir: (moduleUrl) => parentOf(moduleUrl.replace(/^file:\/\//, "")),
     isMainModule: () => false,

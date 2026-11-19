@@ -313,7 +313,9 @@ system message, which expires when the turn's first `llm()` call returns,
 listing each job that is running or ended and unread.
 
 **The finish line.** The REPL calls `watchHeldJobs`, which reads the run's
-held jobs every second and reports each one that ends since the watch
+held jobs every second (or, once `setReplJobsSource` in `lib/stdlib/cli.ts`
+names a source, the jobs it returns: the agent's terminal points it at the
+session run's jobs, since its turns run in another run) and reports each one that ends since the watch
 began, including a job that started and ended between two polls, by its
 `endedAt`. A read that fails is tried again on the next poll. The terminal starts and stops the watch; the standard library never
 does, for the reason under "What stops a job". The watch reads the list on

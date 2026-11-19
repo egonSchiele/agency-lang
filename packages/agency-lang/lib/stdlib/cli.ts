@@ -12,14 +12,15 @@ import { footerDivider, optionRows, type InterruptItem } from "./interruptRows.j
 import { visualWidth, wrapText } from "./layout/ansi.js";
 import { escapedTurnText, hasInterrupts } from "../runtime/interrupts.js";
 import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/errors.js";
-import { normalizeModelUsage } from "../runtime/utils.js";
 import { exitProcessNow } from "../runtime/exitProcess.js";
 import { herdrReporter, type HerdrReporter } from "./herdr.js";
 import { buildCompleter, listDirUnder } from "./cliCompleter.js";
 import { editInEditor, installEditorKey, type EditorKey } from "./cliEditor.js";
 import { watchTypedLine, type TypedLine } from "./cliTypedLine.js";
 import { watchHeldJobs } from "../runtime/jobs/jobEndWatcher.js";
-import { jobEndLines, type JobEndLines } from "./cliJobLine.js";
+import { jobEndLines, watchedJobs, type JobEndLines } from "./cliJobLine.js";
+import { tokenSnapshot, type TokenSnapshot } from "./cliTokens.js";
+export { setReplJobsSource } from "./cliJobLine.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::ui/cli` — the line-mode REPL.
 //
@@ -1146,54 +1147,6 @@ type TurnStats = {
   models: string[];
 };
 
-/** Cumulative per-model token+cost totals, keyed by model name. */
-type ModelTotals = Record<string, { tokens: number; cost: number }>;
-
-type TokenSnapshot = {
-  inputTokens: number;
-  outputTokens: number;
-  models: ModelTotals;
-};
-
-/** Read the cumulative input/output token counts (and per-model
- *  breakdown) from the REPL's RuntimeContext's GlobalStore. Returns
- *  zeros when the token-stats slot is missing (defensive — a test's
- *  context sometimes has none). */
-function readTokenSnapshot(ctx: Run["ctx"]): TokenSnapshot {
-  const empty: TokenSnapshot = { inputTokens: 0, outputTokens: 0, models: {} };
-  try {
-    const stats = ctx?.globals?.getTokenStats?.();
-    if (!stats || typeof stats !== "object") return empty;
-    // Per-model breakdown (updateTokenStats). Snapshotted so the footer
-    // can diff before/after and list the models used *this turn*. Shares
-    // the defensive field-narrowing in `normalizeModelUsage`.
-    const models: ModelTotals = {};
-    for (const m of normalizeModelUsage((stats as { models?: unknown }).models)) {
-      models[m.model] = {
-        tokens: m.inputTokens + m.outputTokens + m.cachedInputTokens + m.cacheCreationInputTokens,
-        cost: m.cost,
-      };
-    }
-    const usage = (stats as { usage?: Record<string, unknown> }).usage;
-    if (!usage || typeof usage !== "object") {
-      return { inputTokens: 0, outputTokens: 0, models };
-    }
-    const num = (v: unknown) => (typeof v === "number" ? v : 0);
-    return {
-      // The footer's `↑` is "how much went up the wire this turn", so cache
-      // reads and writes belong in it: both are input the provider billed
-      // for. Counting only uncached input reports a small fraction of a
-      // cached conversation — on a long agent turn, a few percent of it.
-      inputTokens:
-        num(usage.inputTokens) + num(usage.cachedInputTokens) + num(usage.cacheCreationInputTokens),
-      outputTokens: num(usage.outputTokens),
-      models,
-    };
-  } catch {
-    return empty;
-  }
-}
-
 /** Distinct models whose token count grew between two snapshots, ordered
  *  by cost spent during the turn (descending), name as tiebreak. This is
  *  what the footer lists after the per-turn token/time stats. */
@@ -1401,6 +1354,7 @@ export async function _runLineRepl(
   historyMax: number,
   paletteCommands: unknown,
   herdrName: string,
+  tokens: unknown = null,
 ): Promise<void> {
   const run = currentRun();
   const { entries: initialHistory, expansions } = loadHistory(historyFile, historyMax);
@@ -1484,11 +1438,12 @@ export async function _runLineRepl(
   const editorKey = installEditorKey(rl, useTTY);
   // Text the next prompt opens with: a command filled in from the palette.
   let prefill = "";
-  // The context's list is read on every poll, so a job started in any
-  // branch, or one that came back from a checkpoint, gets its line.
+  // The list is read on every poll, so a job started in any branch, or one
+  // that came back from a checkpoint, gets its line. A REPL whose turns run
+  // in another run reads that run's jobs (`setReplJobsSource`).
   const stopWatchingJobs = watchHeldJobs({
     host: replCtx.host,
-    held: () => replCtx.heldJobs,
+    held: () => watchedJobs(replCtx.heldJobs),
     ended: jobLines.jobEnded,
   });
   try {
@@ -1565,7 +1520,7 @@ export async function _runLineRepl(
       // it returns zeros if the runtime context or token-stats slot
       // is missing, so the footer never breaks a working turn.
       const turnStartMs = Date.now();
-      const tokensBefore = readTokenSnapshot(replCtx);
+      const tokensBefore = await tokenSnapshot(run, tokens);
       activeStopSpinner = startSpinner(useTTY);
       herdr.report("working");
       jobLines.setOwner("turn");
@@ -1591,7 +1546,7 @@ export async function _runLineRepl(
         reply = await callBridgeFn(run, onSubmit, line);
       } catch (err: any) {
         stopActiveSpinner();
-        const tokensAfter = readTokenSnapshot(replCtx);
+        const tokensAfter = await tokenSnapshot(run, tokens);
         if (isAbortError(err)) {
           // User pressed Esc: the turn was cancelled, not a real failure.
           // The thread was already repaired in runPrompt; the abort
@@ -1620,7 +1575,7 @@ export async function _runLineRepl(
       if (reply === false) break;
       const shown = replyOutput(reply);
       if (shown !== undefined) process.stdout.write(shown + "\n");
-      const tokensAfter = readTokenSnapshot(replCtx);
+      const tokensAfter = await tokenSnapshot(run, tokens);
       // Per-turn footer (WL2). Reads the same `status` callback the
       // TUI's status bar uses, plus our locally-tracked turn stats
       // (elapsed + tokens up/down), so a future "the agent stopped

@@ -11,7 +11,6 @@ import {
   MAX_RUNNING_JOBS,
   addJob,
   closeJobTable,
-  describeJobState,
   endJob,
   listJobs,
   newJobTable,
@@ -21,6 +20,7 @@ import {
   type JobSummary,
   type JobTable,
 } from "./jobTable.js";
+import { describeJobState } from "./jobRecord.js";
 
 const host = nodeHost();
 let tables: JobTable[] = [];

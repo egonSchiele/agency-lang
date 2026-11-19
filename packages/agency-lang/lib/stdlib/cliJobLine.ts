@@ -1,7 +1,8 @@
 // The line the REPL prints when a background job ends, and how it prints
 // it without breaking whatever owns the terminal. See docs/dev/stdlib/jobs.md.
 import * as readline from "readline";
-import { describeJobState, type JobSummary } from "../runtime/jobs/jobTable.js";
+import { describeJobState } from "../runtime/jobs/jobRecord.js";
+import type { JobSummary } from "../runtime/jobs/jobTable.js";
 import { formatElapsed } from "../utils/formatElapsed.js";
 import { RESET, styles } from "../utils/termcolors.js";
 

@@ -138,21 +138,6 @@ export async function addJob(
   return { ...summary };
 }
 
-/** The job's state in words: "running", "exit 0", "stopped", "timed out".
- *  The one place a state becomes text. */
-export function describeJobState(job: JobSummary): string {
-  switch (job.state) {
-    case "running":
-      return "running";
-    case "ended":
-      return job.exitCode === null ? "ended" : `exit ${job.exitCode}`;
-    case "stopped":
-      return "stopped";
-    case "timedOut":
-      return "timed out";
-  }
-}
-
 /** The job's state and its output since the last read, or null for an
  *  unknown id. Moves the read position. Once it returns a finished job's
  *  last output, the job lets go of its output, so a finished job holds no

@@ -6,7 +6,6 @@ import { readCause } from "../runtime/errors.js";
 import {
   MAX_RUNNING_JOBS,
   addJob,
-  describeJobState,
   endJob,
   listJobs,
   readJob,
@@ -16,7 +15,7 @@ import {
 import { clockSleep } from "../runtime/jobs/clockSleep.js";
 import { jobOutputSince, jobStatus, launchJob, requestStop } from "../runtime/jobs/detachedJobs.js";
 import type { HeldJob, JobHandle } from "../runtime/jobs/heldJobs.js";
-import type { JobRecord } from "../runtime/jobs/jobRecord.js";
+import { describeJobState, type JobRecord } from "../runtime/jobs/jobRecord.js";
 import { formatElapsed } from "../utils/formatElapsed.js";
 import { leafCancel } from "./abortable.js";
 import { resolveSpawnCwd } from "./shell.js";

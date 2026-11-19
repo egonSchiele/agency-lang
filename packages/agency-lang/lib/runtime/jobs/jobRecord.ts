@@ -158,6 +158,21 @@ function recordText(record: JobRecord): string {
 
 export type Ending = { state: JobState; exitCode: number | null; note: string };
 
+/** The job's state in words: "running", "exit 0", "stopped", "timed out".
+ *  The one place a state becomes text. */
+export function describeJobState(job: { state: JobState; exitCode: number | null }): string {
+  switch (job.state) {
+    case "running":
+      return "running";
+    case "ended":
+      return job.exitCode === null ? "ended" : `exit ${job.exitCode}`;
+    case "stopped":
+      return "stopped";
+    case "timedOut":
+      return "timed out";
+  }
+}
+
 /** How a command that finished ended, from what the host reported. */
 export function endingOf(result: RunResult, capBytes: number): Ending {
   if (result.truncated !== null) {

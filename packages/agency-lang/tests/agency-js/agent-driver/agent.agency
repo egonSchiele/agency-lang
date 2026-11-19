@@ -1,0 +1,68 @@
+// A small stand-in for the agent's session program, for the driver's
+// tests (lib/stdlib/agentDriver). The same pause and answers as the core
+// (lib/agents/agency-agent/core.agency), but no model: it echoes the
+// message back. Messages that start with a keyword make it behave as a
+// real turn might:
+//
+// - "slow" sleeps long enough for a test to abort it.
+// - "approve:<x>" raises driver::testApproval.
+// - "fail" throws.
+import { emit } from "std::statelog"
+import { assistantMessage, currentThreadId, userMessage } from "std::thread"
+
+type Message = { kind: "message"; text: string; notes: string[]; target: string }
+type ModelChange = { kind: "model"; spec: string }
+type Answer = Message | ModelChange
+
+let turns: number = 0
+
+node conversation(start: any) {
+  let main: any = { model: "echo-model", provider: "anthropic", via: "" }
+  while (true) {
+    const raw: any = raise agent::sessionInput("Waiting for the user", {
+      thread: currentThreadId(),
+      cwd: start.cwd,
+      record: start.record,
+      models: { main: main },
+      preset: "",
+      fixedProvider: "",
+      effort: "",
+      budget: start.budget,
+      context: ""
+    })
+    // A policy that answers the pause sends nothing, as the core's does.
+    if (raw == null) {
+      return
+    }
+    const answer: Answer! = raw
+    if (answer is failure(problem)) {
+      emit({ type: "session.error", message: "The run was sent an answer it can't read: ${problem}" })
+    } else if (answer is success(next)) {
+      match (next) {
+        { kind: "model", spec } => {
+          main = { model: spec, provider: "anthropic", via: "" }
+        }
+        { kind: "message", text as message } => {
+          turns = turns + 1
+          userMessage(message)
+          if (message == "slow") {
+            sleep(2000ms)
+          }
+          if (message.startsWith("approve:")) {
+            raise driver::testApproval("Allow the test action?", { what: message.slice(8) })
+          }
+          if (message == "fail") {
+            throw("fixture failure")
+          }
+          const reply = "echo: ${message}"
+          assistantMessage(reply)
+          emit({ type: "session.reply", text: reply, turns: turns })
+        }
+      }
+    }
+  }
+}
+
+node main(start: any) {
+  goto conversation(start.session)
+}

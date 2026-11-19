@@ -99,7 +99,8 @@ makes the diff on an approval with the same function
 
 - **A front-end must pin the pause.** Its policy has to leave
   `agent::sessionInput` to `propagate`. Otherwise a `*` approve rule
-  answers the pause with nothing.
+  answers the pause with nothing. The session driver
+  (`session-driver.md`) pins it in every policy it gives a run.
 - **An answer of nothing ends the session.** That is what a policy sends
   when it answers the pause. Raising again would get the same answer
   forever, without ever pausing, so the node returns.

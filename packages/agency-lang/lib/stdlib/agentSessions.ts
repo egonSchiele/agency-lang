@@ -166,6 +166,20 @@ async function saveSession(
   }
 }
 
+/** Write the record alone, leaving the run file as it is. Returns "" on
+ *  success, else the error message. */
+export async function _saveSessionRecord(dir: string, record: SessionRecord): Promise<string> {
+  const host = currentHost();
+  try {
+    const sessions = await host.files.root(dir);
+    await host.files.mkdir(sessions, ".");
+    await host.files.writeText(sessions, metaFile(record.id), JSON.stringify(record));
+    return "";
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
 /** The parsed checkpoint, or null when the file is missing or malformed. */
 export async function _readCheckpointFile(dir: string, id: string): Promise<unknown> {
   const host = currentHost();

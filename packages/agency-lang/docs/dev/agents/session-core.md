@@ -198,11 +198,12 @@ makes the diff on an approval with the same function
   `startModels(flags, false)`. The terminal does save it. An app's
   environment often lacks the search keys a terminal has, and a choice
   saved from there would follow the user back.
-- **No job tools.** A background job belongs to the run and stops when
-  the run pauses, and this run pauses after every turn.
-- **The reply style and the job tools default to the terminal's.**
-  `setInteractive` in `trace.agency` sets both, and the core sets both
-  itself.
+- **The job tools are offered.** A background job is a process of its
+  own and outlives the turn, and the pause, that started it. The run's
+  list of held jobs is saved in every checkpoint, so the next turn reads
+  them (`docs/dev/stdlib/jobs.md`).
+- **The reply style defaults to the terminal's.** `setInteractive` in
+  `trace.agency` sets it, and the core sets it itself.
 
 ## The program reaches no terminal code
 

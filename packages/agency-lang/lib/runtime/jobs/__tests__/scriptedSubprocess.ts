@@ -144,6 +144,6 @@ export function scriptedSubprocess(): ScriptedSubprocess {
  *  with no real waiting, so this settles all of them. */
 export async function settle(rounds = 5): Promise<void> {
   for (let i = 0; i < rounds; i++) {
-    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }

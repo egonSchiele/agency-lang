@@ -264,8 +264,8 @@ def countNamed(names: string[], name: string): number {
 }
 
 // An interactive session offers the job tools to the main agent and the
-// coders, once each. A one-shot run exits when its turn ends, which would
-// stop its jobs, so it offers them to neither.
+// coders, once each. A one-shot run's turn is the whole run, so its model
+// could never read a job it started, and it offers them to neither.
 node jobToolsOnlyInInteractiveSessions(): any[] {
   // The main agent also gets the saved-output readers, for a long job read.
   const jobNames = ["startJob", "jobOutput", "stopJob", "readSpill", "grepSpill"]

@@ -84,6 +84,10 @@ export const NODE_ONLY = {
     "encrypts stored tokens with createCipheriv; no portable cipher yet",
   "lib/stdlib/spawn.ts":
     "starts an Agency program as a process of its own, through the agency command line (std::agency)",
+  "lib/runtime/jobs/detachedJobs.ts":
+    "starts a background job's runner as a process of its own, through the agency command line, as spawn.ts does",
+  "lib/stdlib/jobs.ts":
+    "std::jobs and startJob start and read background jobs through lib/runtime/jobs/detachedJobs.ts",
   "lib/stdlib/speech.ts": "std::speech records from a raw-mode terminal and probes ffmpeg",
   "lib/stdlib/statelog.ts":
     "std::statelog reads a statelog file through lib/eval/statelogParser.ts, which uses fs",

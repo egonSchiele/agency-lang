@@ -17,7 +17,7 @@ import { editDiff } from "agency-lang/stdlib-lib/editDiff.js"
 import { emit } from "std::statelog"
 
 import { setReplyStyle, setTurnBudget } from "./lib/answer.agency"
-import { checkCliBundles, setJobToolsOn } from "./lib/cliTools.agency"
+import { checkCliBundles } from "./lib/cliTools.agency"
 import { canCompact, compactAndReport, compactIfDue, contextStatus } from "./lib/compaction.agency"
 import { groundingText, setGrounding } from "./lib/grounding.agency"
 import { Resolved } from "./lib/models.agency"
@@ -297,9 +297,6 @@ export node session(start: SessionStart) {
   setSessionFolder(start.cwd)
   setCurrentRecord(recordFor(start.record))
   setReplyStyle(start.replyStyle)
-  // A job belongs to the run and stops when the run pauses, and this run
-  // pauses after every turn.
-  setJobToolsOn(false)
   const bundles = checkCliBundles()
   if (bundles is failure(reason)) {
     throw(reason)

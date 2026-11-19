@@ -599,7 +599,7 @@ def policyToSave(answers: PendingAnswer[]): Result<Policy | null> {
   let saved: Policy = {}
   if (loaded is failure(why)) {
     if (loaded.data.status != "doesnt-exist") {
-      return failure(why)
+      return loaded
     }
   } else {
     saved = loaded.value

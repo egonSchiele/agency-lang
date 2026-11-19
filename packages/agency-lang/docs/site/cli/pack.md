@@ -49,6 +49,12 @@ You can override the defaults from `agency.json`:
 ### Limitations
 
 - Programs that read `.agency` stdlib files at runtime (e.g. anything dynamic) will hit `Could not find package root`. Most user programs do not — the stdlib is consumed at compile time. If you need it inlined for runtime use, file an issue.
+- Code that finds a file next to its own module can't find it once packed. Every module is inlined into the one output file, so "next to this module" now means "next to the packed file", and the file isn't there. Some examples:
+  - `__dirname` in your own code, as in `loadTemplate(__dirname, "summarize.agency")`;
+  - `run` and `runFile` from `std::agency`, which start a subprocess from a script that ships beside Agency's runtime;
+  - stdlib functions that call a helper script, such as the OCR and image tools.
+
+  If your program does any of these, ship the real files instead of packing: your compiled `.js` files and a `node_modules` folder, run with `node`.
 - API keys (`OPENAI_API_KEY`, etc.) still need to be present in the environment of the machine running the packed script.
 
 ### See also

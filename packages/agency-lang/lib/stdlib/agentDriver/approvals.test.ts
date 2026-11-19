@@ -67,8 +67,8 @@ describe("the approval queue", () => {
     ]);
   });
 
-  // Review Focus 4: the first of three is answered "always", and the rule
-  // it saved answers the other two.
+  // The first of three is answered "always", and the rule it saved answers
+  // the other two.
   it("answering the first of three settles the other two", () => {
     const three = [bash("1", "ls"), bash("2", "ls"), bash("3", "ls")];
     const start = startQueue({ interrupts: three, settle: asksAll });

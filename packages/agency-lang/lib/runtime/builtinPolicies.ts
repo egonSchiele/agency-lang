@@ -226,6 +226,16 @@ function ownPolicyFileRules(): PolicyRule[] {
   ];
 }
 
+// The same files for the effects that name a whole path: a remove's
+// `target`, a copy's `dest`, a move's `src` and `dest`. The home itself is
+// listed too, since a remove or a move of it takes the files with it, and a
+// copy of a folder onto it can replace them.
+const OWN_POLICY_PATHS = `{${AGENT_HOME},${AGENT_HOME}/policy.json,${AGENT_HOME}/session-policy.json,${AGENT_HOME}/session-policies,${AGENT_HOME}/session-policies/**}`;
+
+function ownPolicyPathRules(fields: string[]): PolicyRule[] {
+  return fields.map((field): PolicyRule => ({ match: { [field]: OWN_POLICY_PATHS }, action: "propagate" }));
+}
+
 // `recommended` plus mutating file-system and git-write effects, each
 // scoped to `baseDir` and its children. Matched on each effect's path
 // field: `dir` (write/edit/mkdir), `target` (remove), `src`+`dest`
@@ -247,9 +257,18 @@ export function withWritesPolicy(baseDir: string): Policy {
       { match: { dir: AGENT_HOME }, action: "approve" },
       { match: { dir: scope }, action: "approve" },
     ],
-    "std::remove": [{ match: { target: scope }, action: "approve" }],
-    "std::copy": [{ match: { src: scope, dest: scope }, action: "approve" }],
-    "std::move": [{ match: { src: scope, dest: scope }, action: "approve" }],
+    "std::remove": [
+      ...ownPolicyPathRules(["target"]),
+      { match: { target: scope }, action: "approve" },
+    ],
+    "std::copy": [
+      ...ownPolicyPathRules(["dest"]),
+      { match: { src: scope, dest: scope }, action: "approve" },
+    ],
+    "std::move": [
+      ...ownPolicyPathRules(["src", "dest"]),
+      { match: { src: scope, dest: scope }, action: "approve" },
+    ],
     "std::git::add": cwdRule,
     "std::git::commit": cwdRule,
     "std::git::checkout": cwdRule,

@@ -803,9 +803,15 @@ no `dir` rule covers the home either:
   saved session's own policy). They *are* this policy. An agent that can
   rewrite them can grant itself anything it likes, and the approval
   prompt stops meaning what it says. `with-writes` puts a `propagate`
-  rule for them ahead of its write scope (`ownPolicyFileRules`), since
-  that scope reaches the home when the home is inside the launch
-  directory.
+  rule for them ahead of its scope, since that scope reaches the home
+  when the home is inside the launch directory: on `dir` for a write,
+  an edit and a mkdir (`ownPolicyFileRules`), and on `target`, `src` and
+  `dest` for a remove, a copy onto one and a move of or onto one
+  (`ownPolicyPathRules`). Removing a session's file changes its policy
+  too: with no file the session runs under `policy.json`. Those path
+  rules also cover the home folder itself. A remove or move of a folder
+  that holds the home, such as the launch directory itself, is still
+  approved by the scope.
 - `skills/**`. A skill gets there through `designSkill`'s review; a plain
   write would put one there without it.
 - `tools/**`. The same, through the toolbox's review and save gates.
@@ -831,8 +837,10 @@ in (`AGENCY_INSTALL_DIR_PLACEHOLDER`, `substituteInstallDir`,
 `~/.agency-agent` (`AGENT_HOME_PLACEHOLDER`, `substituteAgentHome`,
 `agentHomeDir` in `lib/runtime/agentHome.ts`), and `<home>` to the user's
 home directory (`HOME_PLACEHOLDER`, `substituteHome`). `substitutePlaceholders`
-in `lib/runtime/policy.ts` applies the three named placeholders; `.` is
-handled apart, by `substituteDot`. The directories are
+in `lib/runtime/policy.ts` applies the three named placeholders, in the
+fields that hold a path: `dir`, and a remove's `target` and a copy's or
+move's `src` and `dest`. `.` is handled apart, by `substituteDot`, and in
+`dir` only. The directories are
 resolved once, when a run's context is built (`resolvePolicyDirs` in
 `lib/runtime/policyDirs.ts`, kept as `ctx.policyDirs`), and the matcher
 takes them as plain strings, so answering an interrupt reads no file. An

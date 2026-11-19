@@ -195,6 +195,12 @@ export function substitutePlaceholders(pattern: string, dirs: PolicyDirs): strin
   return substituteHome(withAgentHome, dirs.home);
 }
 
+/** The data fields that hold a path, where the named placeholders
+ *  (`<agent-home>`, `<home>`, `<agency>`) are resolved: `dir` for the
+ *  single-file effects, `target` for a remove, `src` and `dest` for a copy
+ *  or a move. `.` is resolved in `dir` alone. */
+const PLACEHOLDER_FIELDS = ["dir", "target", "src", "dest"];
+
 function matchesGlob(value: string, pattern: string, dot: boolean): boolean {
   return pattern === "" ? value === "" : picomatch.isMatch(value, pattern, { dot });
 }
@@ -233,7 +239,7 @@ function matchesRule(
     const viaPlaceholders =
       !raw &&
       !viaDot &&
-      key === "dir" &&
+      PLACEHOLDER_FIELDS.includes(key) &&
       matchesGlob(stripDotSlash(value), substitutePlaceholders(pattern, dirs), dot);
     if (!raw && !viaDot && !viaPlaceholders) {
       return false;

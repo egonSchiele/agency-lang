@@ -220,9 +220,11 @@ describe("builtinPolicy", () => {
     const write = p!["std::write"];
     expect(write[write.length - 1]).toEqual({ match: { dir: scope }, action: "approve" });
     // target field (remove) — a fat-fingered "dir" here would silently disable scoping
-    expect(p!["std::remove"]).toEqual([{ match: { target: scope }, action: "approve" }]);
+    const remove = p!["std::remove"];
+    expect(remove[remove.length - 1]).toEqual({ match: { target: scope }, action: "approve" });
     // src + dest fields (copy/move)
-    expect(p!["std::copy"]).toEqual([{ match: { src: scope, dest: scope }, action: "approve" }]);
+    const copy = p!["std::copy"];
+    expect(copy[copy.length - 1]).toEqual({ match: { src: scope, dest: scope }, action: "approve" });
     // cwd field (git)
     expect(p!["std::git::commit"]).toEqual([{ match: { cwd: scope }, action: "approve" }]);
   });
@@ -275,6 +277,56 @@ describe("builtinPolicy", () => {
     expect(checkPolicyExplicit(builtinPolicy("with-writes", "/work")!, other, dirs)).toEqual({
       type: "approve",
     });
+  });
+
+  // A remove, a copy onto, or a move of a policy file changes it as surely
+  // as a write: with no session file the run falls back to policy.json.
+  it("leaves a remove, copy or move of the agent's policy files to the prompt under with-writes", () => {
+    const dirs: PolicyDirs = {
+      cwd: "/work",
+      agentHome: "/work/agent-home",
+      home: "/home/me",
+      agencyInstallDir: null,
+    };
+    const raised = (effect: string, data: Record<string, string>) => ({
+      effect,
+      message: "",
+      data,
+      origin: "test",
+    });
+    const p = builtinPolicy("with-writes", "/work")!;
+    const ordinary = "/work/p.json";
+    for (const file of [
+      "/work/agent-home/session-policies/s1.json",
+      "/work/agent-home/session-policies",
+      "/work/agent-home/policy.json",
+      "/work/agent-home/session-policy.json",
+      "/work/agent-home",
+    ]) {
+      for (const changed of [
+        raised("std::remove", { target: file }),
+        raised("std::copy", { src: ordinary, dest: file }),
+        raised("std::move", { src: file, dest: "/work/elsewhere.json" }),
+        raised("std::move", { src: ordinary, dest: file }),
+      ]) {
+        expect(
+          checkPolicyExplicit(p, changed, dirs),
+          `${changed.effect} ${JSON.stringify(changed.data)}`,
+        ).toEqual({ type: "propagate" });
+      }
+    }
+    // Ordinary files in scope are still approved, the agent home's others included.
+    for (const changed of [
+      raised("std::remove", { target: ordinary }),
+      raised("std::remove", { target: "/work/agent-home/notes/a.md" }),
+      raised("std::copy", { src: "/work/agent-home/policy.json", dest: ordinary }),
+      raised("std::move", { src: ordinary, dest: "/work/q.json" }),
+    ]) {
+      expect(
+        checkPolicyExplicit(p, changed, dirs),
+        `${changed.effect} ${JSON.stringify(changed.data)}`,
+      ).toEqual({ type: "approve" });
+    }
   });
 
   it("resolves 'approve-all' to a single wildcard approve", () => {

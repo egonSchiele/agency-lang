@@ -134,8 +134,11 @@ to, wherever it is resumed. That policy is a file of the session's own,
 The core never holds the policy. If it did, it would be in the
 checkpoint and in the pause's interrupt data, and an edit to either
 would change what the session is allowed to do. The file is guarded as
-`policy.json` is: no built-in policy approves a write under
-`session-policies/` (`lib/runtime/builtinPolicies.ts`).
+`policy.json` is: no built-in policy but `approve-all` approves a write,
+an edit, a remove, a copy onto, or a move of or onto a file under
+`session-policies/` (`lib/runtime/builtinPolicies.ts`). Under
+`with-writes`, a remove of a folder that holds the agent home is not
+caught; see `approval-policies.md`.
 
 `sessionRunPolicy` picks the policy to give the run:
 

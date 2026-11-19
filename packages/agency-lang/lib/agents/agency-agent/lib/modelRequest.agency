@@ -25,12 +25,14 @@ export type ModelFlags = {
   effort: EffortChoice | null
 }
 
-/** The /model choices of this session, and the llm() options it set
-  from chat. */
+/** The /model choices of this session, the llm() options it set from
+  chat, and the effort it chose. The effort outlasts a model switch, as
+  `--effort` does. A preset switch starts the choices again. */
 export type ModelChoices = {
   pin: string;
   slots: Record<string, string>;
-  llmOptions?: LlmOptions
+  llmOptions?: LlmOptions;
+  effort?: EffortChoice
 }
 
 export type ModelRequest = {
@@ -244,13 +246,13 @@ def presetEffort(request: ModelRequest): EffortChoice | null {
 
 export def requestEffort(request: ModelRequest): EffortChoice | null {
   """
-  The reasoning effort the request asks for: --effort, then the
-  preset's. A model flag or a /model choice of a chat model drops the
-  preset's. null means neither named one.
+  The reasoning effort the request asks for: the session's own choice,
+  then --effort, then the preset's. A model flag or a /model choice of a
+  chat model drops the preset's. null means none of them named one.
 
   @param request - The model request
   """
-  return request.flags.effort ?? presetEffort(request)
+  return request.choices.effort ?? request.flags.effort ?? presetEffort(request)
 }
 
 export def requestProvider(request: ModelRequest, settings: ModelSettings): string {

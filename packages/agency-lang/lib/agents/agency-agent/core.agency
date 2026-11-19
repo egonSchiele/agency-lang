@@ -30,7 +30,15 @@ import {
   recordTurn,
   setCurrentRecord,
  } from "./lib/record.agency"
-import { applyLlmOptionsAnswer, applyModelSpec, applyPendingLlmOptions } from "./lib/session.agency"
+import {
+  applyEffortAnswer,
+  applyLlmOptionsAnswer,
+  applyModelSpec,
+  applyPendingLlmOptions,
+  applyPresetAnswer,
+  askedEffort,
+  fixedProvider,
+ } from "./lib/session.agency"
 import { setSessionFolder } from "./lib/sessionFolder.agency"
 import { SessionRecord } from "./lib/sessions.agency"
 import { currentBrainName, resolveStartTarget, runTurn, startTargetsFor } from "./lib/turn.agency"
@@ -56,6 +64,12 @@ export type PauseData = {
   models: Record<string, Resolved>;
   // The active preset's name, or "".
   preset: string;
+  // The provider the session is fixed to, or "". When one is fixed, a
+  // `model` answer's spec is read whole, as a model of that provider.
+  fixedProvider: string;
+  // The effort the session asks for: a level, "default" to send none, or
+  // "" when no one named one and the models' own rule decides.
+  effort: string;
   budget: TurnBudget;
   // How full the conversation's context window is, as the footer says it.
   context: string
@@ -67,6 +81,8 @@ effect agent::sessionInput {
   record: any;
   models: any;
   preset: string;
+  fixedProvider: string;
+  effort: string;
   budget: any;
   context: string
 }
@@ -81,7 +97,10 @@ export type SessionStart = {
   // The flags the session was started with, which the session facts list,
   // or null. Flags only, never anything a user typed as a message: the
   // session facts sit above the user-message boundary.
-  flags: Record<string, any> | null
+  flags: Record<string, any> | null;
+  // The limits of each turn until a `budget` answer changes them. A
+  // negative value is no limit.
+  budget: TurnBudget
 }
 
 /** A message from the user. `notes` are lines put above it, such as the
@@ -102,7 +121,7 @@ export type ModelChange = {
 
 /** Set the session's own LLM options, such as the temperature or the
   routing (the keys of `LlmOptions`). The effort is not one of them: it
-  has no answer yet. `options` is
+  has its own answer. `options` is
   `any` and not `LlmOptions` on purpose: checking a value against a type
   fills each optional field it lacks with null, and a null there means
   "remove this option". */
@@ -118,8 +137,22 @@ export type BudgetChange = {
   maxTime: number
 }
 
+/** Set the reasoning effort: "low", "medium", "high", or "default" to
+  send none. It outlasts a model switch. */
+export type EffortChange = {
+  kind: "effort";
+  effort: string
+}
+
+/** Switch to a saved preset, whole: its models, options, effort and tool
+  limits. The session's own model and effort choices are dropped. */
+export type PresetChange = {
+  kind: "preset";
+  name: string
+}
+
 /** Everything the pause accepts. */
-export type Answer = Message | ModelChange | OptionsChange | BudgetChange
+export type Answer = Message | ModelChange | OptionsChange | BudgetChange | EffortChange | PresetChange
 
 def pauseData(budget: TurnBudget): PauseData {
   const threadId = conversationThread()
@@ -129,6 +162,8 @@ def pauseData(budget: TurnBudget): PauseData {
     record: currentRecord(),
     models: getResolvedSlots(),
     preset: activePresetName(),
+    fixedProvider: fixedProvider(),
+    effort: askedEffort(),
     budget: budget,
     context: contextStatus(threadId)
   }
@@ -164,10 +199,7 @@ export node session(start: SessionStart) {
   }
   // Built once. Each turn adds this same text to the conversation.
   setGrounding(groundingText(currentBrainName(), start.flags))
-  let budget: TurnBudget = {
-    maxCost: -1,
-    maxTime: -1
-  }
+  let budget: TurnBudget = start.budget
   while (true) {
     const raw: any = raise agent::sessionInput("Waiting for the user", pauseData(budget))
     // A run policy that answers this pause sends nothing. Raising again
@@ -234,6 +266,18 @@ export node session(start: SessionStart) {
               type: "session.error",
               message: "The run was sent LLM options it can't read: they must be an object."
             })
+          }
+        }
+        { kind: "effort", effort } => {
+          const applied = applyEffortAnswer(effort)
+          if (applied is failure(reason)) {
+            notice(reason, "error")
+          }
+        }
+        { kind: "preset", name } => {
+          const presetSwitch = applyPresetAnswer(name)
+          if (presetSwitch is failure(reason)) {
+            notice("Could not switch preset: ${reason}", "error")
           }
         }
         { kind: "budget", maxCost, maxTime } => {

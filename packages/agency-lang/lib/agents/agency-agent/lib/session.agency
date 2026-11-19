@@ -16,7 +16,7 @@ import { isTTY } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui/cli"
 import { pushMessage } from "std::ui/cli"
 
-import { EffortModel, effortToSend, noDefaultWarning } from "./effort.agency"
+import { EFFORT_CHOICES, EffortChoice, EffortModel, effortToSend, noDefaultWarning } from "./effort.agency"
 import { LlmOptions, applyLlmOptions, mixedProviderWarning } from "./llmOptions.agency"
 import {
   filterHostedModels,
@@ -425,6 +425,50 @@ export def applyModelSpec(spec: string): Result<Record<string, Resolved>> {
   They take effect from the next turn. */
 export def applyLlmOptionsAnswer(options: LlmOptions) {
   _choices = applySessionLlmOptions(_choices, options)
+}
+
+/** The provider this session is fixed to, by the name a person sees, or
+  "" when none is. `--provider`, the preset or settings.model fixes one.
+  Then a model spec is read whole, as a model of that provider:
+  `openai/gpt-4o` under a fixed `anthropic` is a model by that name, not
+  a switch to OpenAI. A front-end reads this to know which it will get. */
+export def fixedProvider(): string {
+  return demoteProvider(requestProvider(currentModelRequest(_choices), _startupModelSettings))
+}
+
+/** The effort this session asks for, as `--effort` words it: a level,
+  "default" to send none, or "" when no one named one and the models'
+  own rule decides. */
+export def askedEffort(): string {
+  return requestEffort(currentModelRequest(_choices)) ?? ""
+}
+
+/** Set the session's own reasoning effort: a level, or "default" to send
+  none. It takes effect from the next turn and outlasts a model switch.
+  A value that is not an effort is a failure, and nothing changes. */
+export def applyEffortAnswer(effort: string): Result<boolean> {
+  if (!EFFORT_CHOICES.includes(effort)) {
+    return failure("The effort must be ${EFFORT_CHOICES.join(", ")}; got '${effort}'.")
+  }
+  _choices = { ..._choices, effort: effort as EffortChoice }
+  applyRequestOptions(currentModelRequest(_choices), _startupModelSettings)
+  return success(true)
+}
+
+/** Switch the session to a saved preset: its models, options, effort and
+  tool limits, with the session's own choices started again. A preset that
+  is unknown or cannot be used is a failure, and nothing changes. Returns
+  what the switch produced, for a caller that shows it. */
+export def applyPresetAnswer(name: string): Result<PresetSwitch> {
+  const switched = switchPreset(name)
+  if (isFailure(switched)) {
+    return switched
+  }
+  _choices = switched.value.session
+  for (change in switched.value.changes) {
+    reactToSlotChange(change)
+  }
+  return switched
 }
 
 /** React to one resolved-slot change. Phase 1: a `main`-slot provider change

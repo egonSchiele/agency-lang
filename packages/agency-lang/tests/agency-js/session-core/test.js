@@ -1,7 +1,7 @@
 // Drives the agent's session program (lib/agents/agency-agent/program.agency)
 // the way a front-end does: start it, answer its pause, read its events.
 // No model is called: a test client answers every llm() call.
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -24,13 +24,16 @@ function lastUserText(config) {
   return typeof content === "string" ? content : content.map((part) => part.text ?? "").join("");
 }
 
-// The temperature each model call was sent, keyed by the call's last user message.
+// The temperature and the effort each model call was sent, keyed by the
+// call's last user message.
 const temperatureSent = {};
+const effortSent = {};
 
 __setLLMClient({
   async text(config) {
     const said = lastUserText(config);
     temperatureSent[said] = config.temperature ?? "none";
+    effortSent[said] = config.reasoningEffort ?? "none";
     if (said.includes("fail this turn")) {
       throw new Error("the test client was told to fail");
     }
@@ -68,6 +71,7 @@ function startData(overrides = {}) {
       replyStyle: "",
       record: { id: "s1", cwd: project, brain: "", created: 1, lastActive: 1, turns: 0, title: "" },
       flags: null,
+      budget: { maxCost: -1, maxTime: -1 },
     },
     ...overrides,
   };
@@ -171,6 +175,30 @@ result.overBudgetTurn = {
   reply: eventsOf(chat, "session.reply").pop()?.text.slice(0, 60),
 };
 
+// The effort. It is its own answer, since it is not one of the LLM options.
+result.effortBeforeAnyChoice = pauseData(chat).effort;
+await chat.answer({ kind: "effort", effort: "low" });
+result.effortAfterLow = pauseData(chat).effort;
+await chat.answer(message("with low effort"));
+result.effortSentAfterLow = effortSent["with low effort"];
+// It outlasts a model switch, as --effort does.
+await chat.answer({ kind: "model", spec: "claude-sonnet-4-6" });
+result.effortAfterAModelSwitch = pauseData(chat).effort;
+await chat.answer({ kind: "effort", effort: "default" });
+await chat.answer(message("with the provider's own effort"));
+result.effortSentAfterDefault = effortSent["with the provider's own effort"];
+await chat.answer({ kind: "effort", effort: "extreme" });
+const effortNotice = eventsOf(chat, "session.notice").pop();
+result.badEffort = { level: effortNotice?.level, text: effortNotice?.text, kept: pauseData(chat).effort };
+
+// A preset that does not exist changes nothing.
+await chat.answer({ kind: "preset", name: "no-such-preset" });
+result.unknownPreset = {
+  level: eventsOf(chat, "session.notice").pop()?.level,
+  presetKept: pauseData(chat).preset,
+  mainModelKept: pauseData(chat).models.main?.model,
+};
+
 // An answer of nothing ends the session.
 await chat.answer(null);
 result.nullAnswerEndsTheRun = chat.ended;
@@ -199,6 +227,66 @@ result.sessionStartsAfterFailedSetups = !afterFailures.ended && afterFailures.pa
 // environment often lacks the search keys a terminal has, and a choice
 // saved from there would follow the user back to the terminal.
 result.settingsFileWritten = existsSync(path.join(process.env.AGENCY_AGENT_HOME, "settings.json"));
+
+// A session can start with a turn budget.
+const budgeted = await startSession({
+  session: { ...startData().session, budget: { maxCost: 3, maxTime: 1000 } },
+});
+result.startingBudget = pauseData(budgeted).budget;
+
+// Presets. These need a settings file, so they come after the check above
+// that starting sessions writes none. The session names no model, so the
+// preset's is the one in force.
+const settingsFile = path.join(process.env.AGENCY_AGENT_HOME, "settings.json");
+writeFileSync(
+  settingsFile,
+  JSON.stringify({
+    presets: {
+      big: { provider: "anthropic", pin: "claude-opus-4-8", effort: "high" },
+      mine: { local: "no-such-local-model" },
+    },
+  }),
+);
+const noModelFlags = { pin: "", slots: {}, provider: "", local: null, effort: null };
+const preset = await startSession({ models: noModelFlags, localModels: false });
+await preset.answer({ kind: "effort", effort: "low" });
+await preset.answer({ kind: "preset", name: "big" });
+result.presetSwitch = {
+  preset: pauseData(preset).preset,
+  mainModel: pauseData(preset).models.main?.model,
+  // The preset is applied whole: its effort replaces the session's choice.
+  effort: pauseData(preset).effort,
+};
+// A local preset, where the process cannot host a local model.
+await preset.answer({ kind: "preset", name: "mine" });
+const localNotice = eventsOf(preset, "session.notice").pop();
+result.localPresetWhereNoneCanRun = {
+  level: localNotice?.level,
+  text: localNotice?.text,
+  presetKept: pauseData(preset).preset,
+  mainModelKept: pauseData(preset).models.main?.model,
+};
+
+// A model named with the provider a person sees. The agent runs every
+// OpenAI model through its `openai-responses` client, and reports that.
+process.env.OPENAI_API_KEY = "test-key";
+const plain = await startSession({ models: noModelFlags });
+result.fixedProviderWithNoPreset = pauseData(plain).fixedProvider;
+await plain.answer({ kind: "model", spec: "openai/gpt-4o" });
+result.publicProviderName = {
+  model: pauseData(plain).models.main?.model,
+  provider: pauseData(plain).models.main?.provider,
+};
+// A preset that names a provider fixes it. The spec is then read whole, as
+// a model of that provider, which is how an OpenRouter model keeps its
+// slash. The pause says so, so a front-end knows which it will get.
+await preset.answer({ kind: "model", spec: "openai/gpt-4o" });
+result.specUnderAFixedProvider = {
+  fixedProvider: pauseData(preset).fixedProvider,
+  model: pauseData(preset).models.main?.model,
+  provider: pauseData(preset).models.main?.provider,
+};
+rmSync(settingsFile);
 
 writeFileSync("__result.json", JSON.stringify(result, null, 2));
 process.exit(0);

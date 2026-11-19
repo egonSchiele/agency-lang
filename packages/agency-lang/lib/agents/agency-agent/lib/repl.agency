@@ -41,6 +41,7 @@ import {
   applyPendingLlmOptions,
   applyModelSpec,
   modelChoices,
+  applyPresetAnswer,
   setModelChoices,
   reactToSlotChange,
   establishedProvider,
@@ -213,14 +214,10 @@ def presetSlashCommand(command: string): boolean {
     return true
   }
   const name = parsed.name
-  const switched = switchPreset(name)
+  const switched = applyPresetAnswer(name)
   if (switched is failure(reason)) {
     pushMessage(color.red("Could not switch preset: ${reason}"))
     return true
-  }
-  setModelChoices(switched.value.session)
-  for (change in switched.value.changes) {
-    reactToSlotChange(change)
   }
   pushResolvedSlots("Preset set: ${name}", switched.value.resolved)
   return true

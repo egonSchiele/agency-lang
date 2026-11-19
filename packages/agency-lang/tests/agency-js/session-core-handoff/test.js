@@ -102,6 +102,7 @@ async function startAndPause() {
           title: "",
         },
         flags: null,
+        budget: { maxCost: -1, maxTime: -1 },
       },
     },
     { policy },

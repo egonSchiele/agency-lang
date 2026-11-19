@@ -32,14 +32,22 @@ own and can change.
 ## The interface
 
 **Start.** `main(start: ProgramStart)`: the brain, a preset, the model
-flags, the tool limits, and a `SessionStart` (the working folder, a reply
-style line, the session's record, and the flags the session facts list).
-A setup that fails ends the run with the reason. The process is not
-ended.
+flags, the tool limits, whether local models may run, and a `SessionStart`
+(the working folder, a reply style line, the session's record, the flags
+the session facts list, and the starting turn budget). A setup that fails
+ends the run with the reason, such as "No LLM API key found. Set one of:
+…" when no provider has a key. The process is not ended.
 
 **The pause.** The core waits with one interrupt, `agent::sessionInput`.
 Its data is what a front-end shows and saves between turns: `thread`,
-`cwd`, `record`, `models`, `preset`, `budget`, `context`.
+`cwd`, `record`, `models`, `preset`, `fixedProvider`, `effort`, `budget`,
+`context`.
+
+- `effort` is what the session asks for: a level, `default` to send none,
+  or "" when no one named one and the models' own rule decides.
+- `fixedProvider` is the provider the session is fixed to, by the name a
+  person sees, or "". `--provider`, a preset that names a provider, or
+  `settings.model` fixes one.
 
 **Answers.** A front-end answers the pause with an `Answer`:
 
@@ -49,6 +57,22 @@ Its data is what a front-end shows and saves between turns: `thread`,
 | `model`   | `spec`                    | Switches models, as `/model`                            |
 | `options` | `options`                 | Sets the session's LLM options, such as the temperature |
 | `budget`  | `maxCost`, `maxTime`      | Sets the limits of later turns                          |
+| `effort`  | `effort`                  | Sets the reasoning effort. It outlasts a model switch   |
+| `preset`  | `name`                    | Switches to a saved preset, whole, as `/preset`         |
+
+A `model`, `effort` or `preset` answer the core cannot apply changes
+nothing and sends a `session.notice` at level `error` with the reason.
+
+- **A model's provider.** With no provider fixed, `openai/gpt-4o` switches
+  to OpenAI, and the pause then reports the provider as `openai-responses`,
+  the client the agent runs every OpenAI model through. With one fixed, the
+  spec is read whole, as a model of that provider: that is how an
+  OpenRouter model keeps its slash. So under a fixed `anthropic`,
+  `openai/gpt-4o` is a model by that name, and the next turn fails. A
+  front-end reads `fixedProvider` to know which it will get. Only a preset
+  switch changes a fixed provider.
+- **A preset replaces the session's own choices:** its models and its
+  effort. The preset's effort is then the one in force.
 
 - `notes` are lines put above the message. An image is sent as a note
   with its path, since the turn finds attachments by scanning the message

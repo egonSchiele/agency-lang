@@ -34,11 +34,51 @@
     "budgetStops": [],
     "reply": "The agent stopped before finishing: its cost budget of $2 ra"
   },
+  "effortBeforeAnyChoice": "",
+  "effortAfterLow": "low",
+  "effortSentAfterLow": "low",
+  "effortAfterAModelSwitch": "low",
+  "effortSentAfterDefault": "none",
+  "badEffort": {
+    "level": "error",
+    "text": "The effort must be low, medium, high, default; got 'extreme'.",
+    "kept": "default"
+  },
+  "unknownPreset": {
+    "level": "error",
+    "presetKept": "",
+    "mainModelKept": "claude-sonnet-4-6"
+  },
   "nullAnswerEndsTheRun": true,
   "approveAllWithoutThePin": "ended",
   "unknownBrainEndsTheRun": "Unknown brain",
   "unusablePresetEndsTheRun": true,
   "localModelWhereNoneCanRun": "Local models are not available here.",
   "sessionStartsAfterFailedSetups": "agent::sessionInput",
-  "settingsFileWritten": false
+  "settingsFileWritten": false,
+  "startingBudget": {
+    "maxCost": 3,
+    "maxTime": 1000
+  },
+  "presetSwitch": {
+    "preset": "big",
+    "mainModel": "claude-opus-4-8",
+    "effort": "high"
+  },
+  "localPresetWhereNoneCanRun": {
+    "level": "error",
+    "text": "Could not switch preset: Local models are not available here.",
+    "presetKept": "big",
+    "mainModelKept": "claude-opus-4-8"
+  },
+  "fixedProviderWithNoPreset": "",
+  "publicProviderName": {
+    "model": "gpt-4o",
+    "provider": "openai-responses"
+  },
+  "specUnderAFixedProvider": {
+    "fixedProvider": "anthropic",
+    "model": "openai/gpt-4o",
+    "provider": "anthropic"
+  }
 }

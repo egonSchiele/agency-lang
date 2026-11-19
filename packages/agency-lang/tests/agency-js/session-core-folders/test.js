@@ -76,6 +76,7 @@ async function startIn(project, id) {
         replyStyle: "",
         record: { id, cwd: project, brain: "", created: 1, lastActive: 1, turns: 0, title: "" },
         flags: null,
+        budget: { maxCost: -1, maxTime: -1 },
       },
     },
     { callbacks, policy },

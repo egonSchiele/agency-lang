@@ -1,0 +1,49 @@
+{
+  "sourceFile": "main.agency",
+  "tests": [
+    {
+      "nodeName": "dedentFarFromAnyChangeShows",
+      "description": "An un-indented line far from any other change shows in an edit's diff",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "reindentedLineShowsAsChanged",
+      "description": "A re-indented line next to a real change shows as removed and added",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "spacesInsideALineShow",
+      "description": "Spaces changed inside a line show in an edit's diff",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "toolReviewShowsSpacesInsideALine",
+      "description": "Spaces changed inside a line show in a tool review's diff",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

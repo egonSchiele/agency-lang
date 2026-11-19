@@ -1,0 +1,52 @@
+// Approval diffs show every change, whitespace included. In Python and
+// YAML, and inside strings, spacing changes what the code does, so a
+// person must see it before approving. The diff is colored, so each check
+// reads it with the color codes stripped.
+import test { renderInterruptDiff } from "std::policy"
+import { stripAnsi } from "agency-lang/stdlib-lib/layout/ansi.js"
+
+// Lines no edit below touches, so a change sits more than 3 lines from
+// any other.
+def unchanged(): string {
+  return "a = 1\nb = 2\nc = 3\nd = 4\ne = 5\nf = 6\n"
+}
+
+def editShown(before: string, after: string): string {
+  return stripAnsi(renderInterruptDiff({ effect: "std::edit", data: { filename: "a.py", before: before, after: after } }))
+}
+
+def loop(saveLine: string, next: string): string {
+  return "for user in users:\n    check(user)\n${saveLine}\n${next}\n${unchanged()}"
+}
+
+// The only change un-indents a line, so `save` runs once instead of once
+// per user.
+node dedentFarFromAnyChangeShows(): boolean {
+  const out = editShown(loop("    save(user)", "done = True"), loop("save(user)", "done = True"))
+  return out.includes("save(user)")
+}
+
+// Next to a real change, the re-indented line shows as removed and added,
+// not as an unchanged line with its new spacing.
+node reindentedLineShowsAsChanged(): boolean {
+  const out = editShown(loop("    save(user)", "done = True"), loop("save(user)", "done = False"))
+  return out.includes("-     save(user)") && out.includes("+ save(user)")
+}
+
+def opener(name: string): string {
+  return "${unchanged()}open(\"${name}\")\n${unchanged()}"
+}
+
+// Two spaces squeezed into one inside a string name a different file.
+node spacesInsideALineShow(): boolean {
+  const out = editShown(opener("annual  report.txt"), opener("annual report.txt"))
+  return out.includes("annual report.txt")
+}
+
+// A tool review's diff goes through the same function, and tool source is
+// full of strings.
+node toolReviewShowsSpacesInsideALine(): boolean {
+  const data = { name: "t", previous: opener("annual  report.txt"), source: opener("annual report.txt") }
+  const out = stripAnsi(renderInterruptDiff({ effect: "std::toolbox::review", data: data }))
+  return out.includes("annual report.txt")
+}

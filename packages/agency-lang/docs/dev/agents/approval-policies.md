@@ -352,6 +352,8 @@ source to compare. For both, the change is the thing being judged, and six
 rows of a footer cannot hold it. So the handler prints the whole change
 above the prompt, as a syntax-highlighted unified diff, and the prompt's
 own body drops the source and keeps the metadata that names the change.
+The diff shows every change, whitespace included, because spacing
+matters in Python, YAML and strings (`renderSourceDiff` never ignores it).
 
 A skill review (`std::skills::review`) works the same way, without a
 diff: its interrupt carries no earlier draft, so the handler prints the

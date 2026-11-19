@@ -197,6 +197,9 @@ export class RuntimeContext<T> {
    *  it through `InvocationOptions.inputOverride` on the node call and on
    *  every resume and rewind it makes. */
   inputOverride?: (prompt: string) => Promise<string>;
+  /** Told of each job this execution starts (`_launchJob`). Set from
+   *  `InvocationOptions.onJobStarted`, per execution, and never saved. */
+  onJobStarted?: (job: HeldJob) => void;
   private traceWriter: TraceWriter | null;
 
   // we need a single statelog client instance that can be used across the entire execution of the graph,
@@ -575,6 +578,7 @@ export class RuntimeContext<T> {
     // A host given for this one invocation wins over the global one.
     execCtx.host = invocation.host ?? this.host;
     if (invocation.inputOverride) execCtx.inputOverride = invocation.inputOverride;
+    if (invocation.onJobStarted) execCtx.onJobStarted = invocation.onJobStarted;
     // Resolved again for this run: the agent home may have been created, or
     // the variable that names it changed, since the global context was built.
     execCtx.policyDirs = resolvePolicyDirs(execCtx.host);

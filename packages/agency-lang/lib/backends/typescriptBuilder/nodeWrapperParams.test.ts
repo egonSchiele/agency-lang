@@ -19,7 +19,7 @@ describe("node wrapper per-invocation options", () => {
 
   it("destructures the options into hidden aliases", () => {
     expect(ts).toContain(
-      "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride, logFile: __invocationLogFile }",
+      "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride, logFile: __invocationLogFile, onJobStarted: __invocationOnJobStarted }",
     );
   });
 
@@ -40,6 +40,10 @@ describe("node wrapper per-invocation options", () => {
 
   it("forwards the log file as part of the runNode invocation", () => {
     expect(ts).toMatch(/invocation: \{[^}]*logFile: __invocationLogFile/);
+  });
+
+  it("forwards the job-start listener as part of the runNode invocation", () => {
+    expect(ts).toMatch(/invocation: \{[^}]*onJobStarted: __invocationOnJobStarted/);
   });
 
   it("types the options object with InvocationOptions", () => {

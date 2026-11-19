@@ -18,5 +18,9 @@
   "loadedCanResume": "yes",
   "loadedPhase": "approving",
   "afterApproval": "waitingForUser",
-  "replyAfterLoad": true
+  "replyAfterLoad": true,
+  "abortedLeg": "cancelled",
+  "startedJobs": 1,
+  "jobBeforeStop": "running",
+  "jobAfterStop": "stopped"
 }

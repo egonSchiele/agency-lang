@@ -264,7 +264,14 @@ with a note). A command that fails after it started ends as `ended` with
 the error in the note.
 
 A pause, the end of a turn, the end of the run, and the end of the program
-do not stop a job. `cleanup()` stops nothing. A program that starts a job
+do not stop a job. `cleanup()` stops nothing.
+
+One caller does stop jobs: the agent's session driver. Each of its legs
+is a new run, so a turn that is cancelled or fails goes back to a
+checkpoint taken before the turn's jobs started, and nothing would hold
+them. The driver learns of each job as it starts, through
+`InvocationOptions.onJobStarted`, and stops the jobs of a dropped turn.
+See "Background jobs" in `docs/dev/agents/session-driver.md`. A program that starts a job
 and returns exits at once and leaves the job running, so nothing in the
 standard library may start a timer that outlives its call: the host
 clock's timer keeps a process alive.

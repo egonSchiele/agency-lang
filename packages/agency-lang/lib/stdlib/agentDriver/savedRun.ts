@@ -16,6 +16,7 @@ import {
   type SessionRecord,
 } from "../agentSessions.js";
 import type { Settle } from "./approvals.js";
+import { jobsStartedBetween } from "./jobs.js";
 import { droppedOf, reduceDriver, type DriverPhase, type DriverStep } from "./machine.js";
 import type { AgentStep } from "./run.js";
 
@@ -116,12 +117,17 @@ function restoredStep(run: SavedRun, settle: Settle): DriverStep {
   if (turn === null) {
     return { phase: { kind: "waitingForUser", pause, ...dropped }, happened: [] };
   }
+  // A turn waiting on approvals holds, in their checkpoints, the jobs it
+  // started, so a cancel after the load can still stop them. A turn that
+  // was running when the process stopped has no checkpoint past its
+  // start: its jobs run to their time limit (session-driver.md).
   const running: DriverPhase = {
     kind: "working",
     pause,
     text: turn.text,
     ...dropped,
     leg: { interrupts: pause, responses: [] },
+    turnJobs: [],
   };
   const step: AgentStep =
     turn.approvals === null
@@ -131,6 +137,7 @@ function restoredStep(run: SavedRun, settle: Settle): DriverStep {
     type: "legFinished",
     result: success(step),
     settle,
+    startedJobs: jobsStartedBetween(pause, turn.approvals ?? []),
   });
 }
 

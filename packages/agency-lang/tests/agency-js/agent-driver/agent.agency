@@ -7,7 +7,9 @@
 // - "slow" sleeps long enough for a test to abort it.
 // - "approve:<x>" raises driver::testApproval.
 // - "fail" throws.
+// - "job" starts a background job, then sleeps long enough to be aborted.
 import { emit } from "std::statelog"
+import { startJob } from "std::safeBash"
 import { assistantMessage, currentThreadId, userMessage } from "std::thread"
 
 type Message = { kind: "message"; text: string; notes: string[]; target: string }
@@ -46,6 +48,10 @@ node conversation(start: any) {
           turns = turns + 1
           userMessage(message)
           if (message == "slow") {
+            sleep(2000ms)
+          }
+          if (message == "job") {
+            startJob("sleep 30", maxMinutes: 1) with approve
             sleep(2000ms)
           }
           if (message.startsWith("approve:")) {

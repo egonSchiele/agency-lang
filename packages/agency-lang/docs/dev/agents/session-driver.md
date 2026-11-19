@@ -70,6 +70,43 @@ from there, with the conversation as it was before the turn.
   shows what changed. When the core refused the change, the two are the
   same, and the core has already sent a notice that says why.
 
+## Background jobs
+
+A job the model starts is a process outside the run (`docs/dev/stdlib/jobs.md`).
+The run holds it on its context, and every checkpoint saves the list. But
+under the driver each leg is a new run, and its list comes only from the
+checkpoint it resumes. A cancel or a failure goes back to the pause the
+turn started from, which was taken before the turn's jobs existed. Without
+more, a job started in a dropped turn would keep running with nothing in
+the session holding it: no `/jobs` line, no note to the model, and no way
+to stop it.
+
+So the driver keeps the jobs a turn starts:
+
+- `startRun` and `resumeRun` pass the run an `onJobStarted` listener
+  (`InvocationOptions.onJobStarted`). `_launchJob` calls it with each job
+  as it starts. The leg's `LegOutcome.startedJobs` lists them, for every
+  outcome, an abort and a failure included. The listener is TypeScript:
+  a held job carries its token, which Agency code never sees.
+- The front-end passes them on as `legFinished`'s `startedJobs`.
+  `working` and `approving` keep them in `turnJobs`.
+- A turn that finishes forgets the list: the pause it ends on holds those
+  jobs.
+- A turn that is cancelled or fails reports `turnJobsDropped` right after
+  `turnCancelled` or `legFailed`. The front-end stops each job with
+  `stopDroppedJobs(host, jobs)`. Esc means "stop what the agent is doing",
+  and the next message already says the turn's changes may be half made.
+- A loaded turn that waits on approvals gets its `turnJobs` from the
+  approvals' checkpoints (`jobsStartedBetween`), so a cancel after the
+  load stops them too.
+- **A process that dies in the middle of a turn** cannot stop anything,
+  and its turn's jobs are in no checkpoint. They run to their time limit.
+  `agency jobs` lists and stops them. This is accepted.
+
+`heldJobsOf(interrupts)` reads the jobs the interrupts' checkpoints hold.
+It merges all of them: two parallel tool calls can pause at different
+times, and an earlier checkpoint can lack a job the other started.
+
 ## Approvals
 
 When a leg comes back paused on approvals, the driver puts them in a
@@ -304,4 +341,5 @@ reuses a pid after a crash. The pid is kept for messages.
 | `lib/stdlib/agentDriver/approvals.ts`    | The approval queue.                                         |
 | `lib/stdlib/agentDriver/machine.ts`      | `reduceDriver`, the phases, `Happened`.                     |
 | `lib/stdlib/agentDriver/savedRun.ts`     | Saving, loading, and the holder.                            |
+| `lib/stdlib/agentDriver/jobs.ts`         | The jobs a pause holds, and stopping a dropped turn's jobs. |
 | `tests/agency-js/agent-driver`           | A real run driven through the driver, with a small fixture. |

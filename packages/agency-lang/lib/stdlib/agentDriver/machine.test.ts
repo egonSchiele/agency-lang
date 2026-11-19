@@ -15,6 +15,7 @@ import {
 } from "./machine.js";
 import { withCancelNote, type AgentStep } from "./run.js";
 import type { SessionRecord } from "../agentSessions.js";
+import type { HeldJob } from "../../runtime/jobs/heldJobs.js";
 
 function interrupt(effect: string, id: string): Interrupt {
   return {
@@ -455,5 +456,94 @@ describe("approvals", () => {
       responses: [reject("no one to ask")],
     });
     expectNothingFrom(waiting, action);
+  });
+});
+
+describe("the jobs a turn started", () => {
+  function job(id: string): HeldJob {
+    return {
+      handle: { id, kind: "shell", label: `sleep ${id}`, startedAt: 1 },
+      read: { stdout: 0, stderr: 0 },
+      finalRead: false,
+      token: `token-${id}`,
+    };
+  }
+
+  /** A leg that came back with `value`, having started `jobs`. */
+  function stepWithJobs(value: AgentStep, jobs: HeldJob[]): DriverAction {
+    return { type: "legFinished", result: success(value), settle: asksAll, startedJobs: jobs };
+  }
+
+  const tool = interrupt("std::bash", "tool-1");
+
+  it("are dropped with a cancelled turn", () => {
+    const { happened } = run(
+      [
+        { type: "submitted", text: "serve" },
+        stepWithJobs({ kind: "cancelled" }, [job("job-aaaaaa")]),
+      ],
+      waiting,
+    );
+    expect(happened.slice(-2)).toEqual([
+      { type: "turnCancelled" },
+      { type: "turnJobsDropped", jobs: [job("job-aaaaaa")] },
+    ]);
+  });
+
+  it("are dropped with a failed turn, across legs", () => {
+    const { happened } = run(
+      [
+        { type: "submitted", text: "serve" },
+        stepWithJobs({ kind: "needsApproval", interrupts: [tool] }, [job("job-aaaaaa")]),
+        { type: "decided", response: approve(), interruptId: "tool-1", settle: asksAll },
+        {
+          type: "legFinished",
+          result: failure("boom"),
+          settle: asksAll,
+          startedJobs: [job("job-bbbbbb")],
+        },
+      ],
+      waiting,
+    );
+    expect(happened.slice(-2)).toEqual([
+      { type: "legFailed", error: "boom" },
+      { type: "turnJobsDropped", jobs: [job("job-aaaaaa"), job("job-bbbbbb")] },
+    ]);
+  });
+
+  it("are dropped when an approval prompt is cancelled", () => {
+    const asking = run(
+      [
+        { type: "submitted", text: "serve" },
+        stepWithJobs({ kind: "needsApproval", interrupts: [tool] }, [job("job-aaaaaa")]),
+      ],
+      waiting,
+    ).phase;
+    expect(reduceDriver(asking, { type: "approvalCancelled" }).happened).toEqual([
+      { type: "turnCancelled" },
+      { type: "turnJobsDropped", jobs: [job("job-aaaaaa")] },
+    ]);
+  });
+
+  it("are kept by a turn that finishes", () => {
+    const { phase, happened } = run(
+      [
+        { type: "submitted", text: "serve" },
+        stepWithJobs({ kind: "needsApproval", interrupts: [tool] }, [job("job-aaaaaa")]),
+        { type: "decided", response: approve(), interruptId: "tool-1", settle: asksAll },
+        stepWithJobs({ kind: "waitingForUser", interrupts: PAUSE }, []),
+      ],
+      waiting,
+    );
+    expect(happened.at(-1)).toEqual({ type: "turnFinished" });
+    expect(phase.kind).toBe("waitingForUser");
+  });
+
+  it("are not reported for a cancelled turn that started none", () => {
+    const { happened } = run(
+      [{ type: "submitted", text: "slow" }, step({ kind: "cancelled" })],
+      waiting,
+    );
+    expect(happened.at(-1)).toEqual({ type: "turnCancelled" });
   });
 });

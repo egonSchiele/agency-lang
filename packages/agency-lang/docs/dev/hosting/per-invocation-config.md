@@ -111,6 +111,21 @@ await respondToInterrupts(interrupts, responses, { invocation: options });
   `logTraces()` and a subprocess (through `getStatelogSink`) then open the
   same file, also when the run's host has its own `cwd`.
 
+## Being told of each job a run starts
+
+`InvocationOptions.onJobStarted` is a function the run calls with each
+background job it starts (`_launchJob` in `lib/stdlib/jobs.ts`), right after
+it adds the job to its held jobs. The agent's session driver uses it, since a
+leg that is aborted gives back nothing else (see "Background jobs" in
+`docs/dev/agents/session-driver.md`).
+
+- **It is TypeScript, never an Agency callback.** The job it is given
+  carries the job's token, which Agency code never sees.
+- **A resume does not remember it.** The caller passes it again on every
+  leg, like the policy and the host.
+- **A listener that throws does not fail the start.** The job is running by
+  then; the error is logged.
+
 ## Host responsibilities (not enforced here)
 
 - **Budget is a request.** A host clamps a caller's budget to its platform cap

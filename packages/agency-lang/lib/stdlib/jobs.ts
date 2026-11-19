@@ -12,7 +12,7 @@ import {
   launchJob,
   requestStop,
 } from "../runtime/jobs/detachedJobs.js";
-import type { HeldJob, JobHandle } from "../runtime/jobs/heldJobs.js";
+import { copyHeldJob, type HeldJob, type JobHandle } from "../runtime/jobs/heldJobs.js";
 import {
   MAX_RUNNING_JOBS,
   describeJobState,
@@ -114,13 +114,29 @@ export async function _launchJob(
     label: record.label,
     startedAt: record.startedAt,
   };
-  ctx.heldJobs.push({
+  const held: HeldJob = {
     handle,
     read: { stdout: 0, stderr: 0 },
     finalRead: false,
     token: record.token,
-  });
+  };
+  ctx.heldJobs.push(held);
+  tellJobStarted(ctx.onJobStarted, held);
   return handle;
+}
+
+/** Tells the caller that ran this leg of a job it started
+ *  (`InvocationOptions.onJobStarted`). The job is running by now, so a
+ *  listener that throws must not fail the start. */
+function tellJobStarted(listener: ((job: HeldJob) => void) | undefined, held: HeldJob): void {
+  if (listener === undefined) {
+    return;
+  }
+  try {
+    listener(copyHeldJob(held));
+  } catch (error) {
+    console.warn(`[jobs] onJobStarted failed for ${held.handle.id}: ${(error as Error).message}`);
+  }
 }
 
 /** One summary for each job the run holds, in the order they started. */

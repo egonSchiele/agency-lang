@@ -9,6 +9,8 @@ import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { stripSlug } from "../runtime/runner.js";
 import { _contentToString } from "./threads.js";
 import { printAgentTrace } from "./agentToolTrace.js";
+import type { Interrupt } from "../runtime/interrupts.js";
+import { getModuleFingerprint } from "../runtime/moduleFingerprintRegistry.js";
 
 /**
  * File I/O for the agency agent's saved sessions
@@ -57,6 +59,8 @@ export type SessionRecord = {
   conversationThread?: string;
   /** What the run file holds. A record without it is a checkpoint. */
   runFormat?: RunFormat;
+  /** The front-end that has this session open now, and its process id. */
+  heldBy?: { frontEnd: string; pid: number };
 };
 
 /** What a record's run file holds. A record that does not say is a
@@ -97,9 +101,14 @@ function isRecord(value: unknown): value is SessionRecord {
   const threadIsValid = r.conversationThread == null || isText("conversationThread");
   const formatIsValid =
     r.runFormat == null || (typeof r.runFormat === "string" && RUN_FORMATS.includes(r.runFormat));
+  const h = r.heldBy as Record<string, unknown> | null | undefined;
+  const heldByIsValid =
+    h == null ||
+    (typeof h === "object" && typeof h.frontEnd === "string" && typeof h.pid === "number");
   return (
     forkIsValid &&
     threadIsValid &&
+    heldByIsValid &&
     formatIsValid &&
     isText("id") &&
     isText("cwd") &&
@@ -291,7 +300,7 @@ export async function _searchSessions(
       break;
     }
     const transcript = _readTranscript(
-      checkpointIn(record, await _readCheckpointFile(dir, record.id)),
+      checkpointOfRecord(record, await _readCheckpointFile(dir, record.id)),
       record.conversationThread ?? "",
     );
     const matches = matchingMessages(transcript, words).slice(0, MAX_HITS_PER_SESSION);
@@ -308,14 +317,91 @@ export async function _searchSessions(
   return hits.slice(0, limit);
 }
 
-// The checkpoint to read a session's conversation from. A saved run holds
-// one in each interrupt it paused on, and they all carry the conversation.
-function checkpointIn(record: SessionRecord, runFile: unknown): unknown {
+function checkpointOfRecord(record: SessionRecord, runFile: unknown): unknown {
   if (_recordRunFormat(record) === "checkpoint") return runFile;
+  return checkpointIn(runFile);
+}
+
+/** The checkpoint to read a saved run's conversation from. A saved run
+ *  holds one in each interrupt it paused on, and they all carry the
+ *  conversation. */
+export function checkpointIn(runFile: unknown): unknown {
   if (typeof runFile !== "object" || runFile === null) return null;
   const pause: unknown = (runFile as Record<string, unknown>).pause;
   if (!Array.isArray(pause) || typeof pause[0] !== "object" || pause[0] === null) return null;
   return (pause[0] as Record<string, unknown>).checkpoint ?? null;
+}
+
+/** The turn a session was in when it was saved. `approvals` is null while
+ *  the turn was running, and the approvals it waits on once it paused. */
+export type SavedTurn = { text: string; approvals: Interrupt[] | null };
+
+/** What `<id>.json` holds for a `savedRun` record: everything needed to go
+ *  on with the run. Every interrupt carries its checkpoint. `pause` is where
+ *  the session waits for a message, or where the current turn started. */
+export type SavedRun = {
+  version: 1;
+  pause: Interrupt[];
+  cancelledTexts: string[];
+  turn: SavedTurn | null;
+};
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isSavedInterrupt(value: unknown): boolean {
+  return (
+    isObject(value) &&
+    typeof value.interruptId === "string" &&
+    typeof value.effect === "string" &&
+    isObject(value.checkpoint)
+  );
+}
+
+function isSavedInterrupts(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0 && value.every(isSavedInterrupt);
+}
+
+function isSavedTurn(value: unknown): boolean {
+  return (
+    isObject(value) &&
+    typeof value.text === "string" &&
+    (value.approvals === null || isSavedInterrupts(value.approvals))
+  );
+}
+
+export function isSavedRun(value: unknown): value is SavedRun {
+  return (
+    isObject(value) &&
+    value.version === 1 &&
+    isSavedInterrupts(value.pause) &&
+    Array.isArray(value.cancelledTexts) &&
+    value.cancelledTexts.every((text) => typeof text === "string") &&
+    (value.turn === null || isSavedTurn(value.turn))
+  );
+}
+
+/** The saved run in `<dir>/<id>.json`, or null when the file is missing or
+ *  is not a saved run. */
+export async function readSavedRun(dir: string, id: string): Promise<SavedRun | null> {
+  const run: unknown = await _readCheckpointFile(dir, id);
+  return isSavedRun(run) ? run : null;
+}
+
+/** True when the run can still be resumed by the code loaded now. A
+ *  checkpoint records a hash of the generated code of each module it is
+ *  paused in, and the runtime refuses to resume when one differs. The
+ *  generated code changes with the agency-lang version. This is the
+ *  comparison the runtime makes on resume, made when the session loads, so
+ *  it is found then and not on the next message. */
+export function canResume(run: SavedRun): boolean {
+  const waiting = [...run.pause, ...(run.turn?.approvals ?? [])];
+  return waiting.every((interrupt) =>
+    Object.entries(interrupt.checkpoint?.moduleFingerprints ?? {}).every(
+      ([moduleId, saved]) => getModuleFingerprint(moduleId)?.hash === saved.hash,
+    ),
+  );
 }
 
 type SaveTarget = { dir: string; record: SessionRecord } | null;

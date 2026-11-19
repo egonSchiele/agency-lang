@@ -3,6 +3,10 @@ import * as fs from "fs";
 import * as path from "path";
 import {
   _isCheckpoint,
+  canResume,
+  checkpointIn,
+  isSavedRun,
+  readSavedRun,
   _listSessions,
   _recordRunFormat,
   _saveSession,
@@ -197,4 +201,70 @@ describe("session search", () => {
     expect(match.content).toContain(" needle ");
     expect(match.content.length).toBeLessThan(420);
   });
+});
+
+describe("saved run format", () => {
+  const pause = {
+    type: "interrupt",
+    effect: "agent::sessionInput",
+    interruptId: "p1",
+    data: { thread: "t1" },
+    checkpoint: {},
+  };
+
+  it.each([
+    ["another version", { version: 2, pause: [pause], cancelledTexts: [], turn: null }],
+    ["no pause", { version: 1, pause: [], cancelledTexts: [], turn: null }],
+    [
+      "an interrupt with no checkpoint",
+      { version: 1, pause: [{ ...pause, checkpoint: undefined }], cancelledTexts: [], turn: null },
+    ],
+    [
+      "a turn with an empty approval list",
+      { version: 1, pause: [pause], cancelledTexts: [], turn: { text: "x", approvals: [] } },
+    ],
+  ])("a run file with %s is not accepted", (_name, run) => {
+    expect(isSavedRun(run)).toBe(false);
+  });
+
+  it("accepts a good saved run, and checkpointIn finds its checkpoint", () => {
+    const run = { version: 1, pause: [pause], cancelledTexts: [], turn: null };
+    expect(isSavedRun(run)).toBe(true);
+    expect(checkpointIn(run)).toEqual({});
+    expect(checkpointIn(null)).toBeNull();
+  });
+
+  const pausedIn = (moduleId: string, hash: string) =>
+    ({
+      version: 1,
+      pause: [{ ...pause, checkpoint: { moduleFingerprints: { [moduleId]: { hash } } } }],
+      cancelledTexts: [],
+      turn: null,
+    }) as never;
+
+  it("canResume is false for a module that is not loaded or has another hash", () => {
+    expect(canResume(pausedIn("src/agency/gone.agency", "0000"))).toBe(false);
+    expect(canResume({ version: 1, pause: [pause], cancelledTexts: [], turn: null } as never)).toBe(
+      true,
+    );
+  });
+
+  it("readSavedRun reads a saved run and returns null for anything else", () =>
+    withDir(async (dir) => {
+      const rec = { ...record("a", 1), runFormat: "savedRun" as const };
+      const run = { version: 1, pause: [pause], cancelledTexts: [], turn: null };
+      await _saveSession(dir, rec, run);
+      expect(await readSavedRun(dir, "a")).toEqual(run);
+      await _saveSession(dir, record("b", 1), { version: 2 });
+      expect(await readSavedRun(dir, "b")).toBeNull();
+      expect(await readSavedRun(dir, "missing")).toBeNull();
+    }));
+
+  it("a record's heldBy round-trips, and a malformed one is skipped", () =>
+    withDir(async (dir) => {
+      const held = { ...record("h", 1), heldBy: { frontEnd: "terminal", pid: 42 } };
+      await _saveSession(dir, held, {});
+      await _saveSession(dir, { ...record("bad", 2), heldBy: { frontEnd: 1 } } as never, {});
+      expect(await _listSessions(dir)).toEqual([held]);
+    }));
 });

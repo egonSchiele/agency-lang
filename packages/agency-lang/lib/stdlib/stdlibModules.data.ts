@@ -479,7 +479,12 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   "std::jobs": [
     "jobOutput",
     "stopJob",
-    "listJobs"
+    "listJobs",
+    "shellJob",
+    "start",
+    "status",
+    "output",
+    "stop"
   ],
   "std::llm": [
     "setLlmOptions",
@@ -607,7 +612,8 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "bashParser",
     "resolveCwd",
     "safeBash",
-    "startJob"
+    "startJob",
+    "startShellJob"
   ],
   "std::safeBash/actions": [
     "writeEffect",

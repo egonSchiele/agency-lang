@@ -15,6 +15,7 @@ import type { BranchStateJSON, StateJSON, StateStackJSON } from "./stateStack.js
 import type { MessageThreadJSON, QueuedMessage } from "./messageThread.js";
 import type { StateStack } from "./stateStack.js";
 import type { RunUsage } from "../invocationUsage.js";
+import { copyHeldJob, type HeldJob } from "../jobs/heldJobs.js";
 
 /** Label used for pinned checkpoints created at function entry for Result error handling. */
 export const RESULT_ENTRY_LABEL = "result-entry";
@@ -181,6 +182,7 @@ export type CheckpointArgs = {
   usage?: unknown;
   traceId?: string;
   spawnCount?: number;
+  heldJobs?: HeldJob[];
   signature?: string;
 };
 
@@ -206,6 +208,8 @@ export type CheckpointJSON = {
   /** Present only when the run had started a program with `spawn`, so a
    *  checkpoint of a run that never spawned keeps the bytes it had. */
   spawnCount?: number;
+  /** Present only when the run held a detached job, for the same reason. */
+  heldJobs?: HeldJob[];
   signature?: string;
 };
 
@@ -314,6 +318,9 @@ export class Checkpoint implements SourceLocation {
   /** How many programs the run had started with `spawn` when this
    *  checkpoint was taken. Absent when it had started none. */
   public spawnCount?: number;
+  /** The detached jobs the run held, with what it had read of each.
+   *  Absent when it held none. See docs/dev/stdlib/jobs.md. */
+  public heldJobs?: HeldJob[];
   /** HMAC checksum embedded at creation when a signing key is configured.
    *  Absent on unsigned checkpoints. See lib/runtime/checkpointChecksum.ts. */
   public signature?: string;
@@ -334,6 +341,7 @@ export class Checkpoint implements SourceLocation {
     this.usage = args.usage;
     this.traceId = args.traceId;
     this.spawnCount = args.spawnCount;
+    this.heldJobs = args.heldJobs;
     this.signature = args.signature;
   }
 
@@ -792,6 +800,9 @@ export class Checkpoint implements SourceLocation {
     if (this.spawnCount !== undefined) {
       json.spawnCount = this.spawnCount;
     }
+    if (this.heldJobs !== undefined) {
+      json.heldJobs = this.heldJobs;
+    }
     if (this.signature !== undefined) {
       json.signature = this.signature;
     }
@@ -848,6 +859,9 @@ export class Checkpoint implements SourceLocation {
     }
     if (ctx.spawnCount > 0) {
       args.spawnCount = ctx.spawnCount;
+    }
+    if (ctx.heldJobs.length > 0) {
+      args.heldJobs = ctx.heldJobs.map(copyHeldJob);
     }
     const checkpoint = new Checkpoint(args);
     // Keep this the last statement: the signature must cover every field,

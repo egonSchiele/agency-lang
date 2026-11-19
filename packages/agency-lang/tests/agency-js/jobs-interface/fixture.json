@@ -1,0 +1,7 @@
+{
+  "startReadStop": { "seen": "one\n", "running": "running", "stopped": "stopped" },
+  "foregroundRefused": "This command runs in the foreground, so it cannot be a job.",
+  "limitHolds": { "started": 8, "failed": 1, "saysLimit": true },
+  "forkBranchesHeld": ["running", "running"],
+  "refusedInRunSubprocess": "startJob cannot be called inside a run() subprocess."
+}

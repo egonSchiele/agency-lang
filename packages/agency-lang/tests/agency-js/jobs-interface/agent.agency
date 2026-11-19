@@ -1,0 +1,138 @@
+// std::jobs with real detached jobs. Every job here ends by itself within a
+// minute, and every node stops the jobs it started.
+import { shellJob, start, status, output, stop, JobHandle, JobSummary, JobReport } from "std::jobs"
+import { compile, run } from "std::agency"
+
+const LONG = "sleep 30"
+
+// Reads the job's output until it has `text`, for at most ten seconds.
+def readUntil(handle: JobHandle, text: string): string {
+  let seen = ""
+  let tries = 0
+  while (tries < 100 && !seen.includes(text)) {
+    const report = output(handle)
+    if (report is success(read)) {
+      seen = seen + read.stdout
+    }
+    if (!seen.includes(text)) {
+      sleep(100)
+    }
+    tries = tries + 1
+  }
+  return seen
+}
+
+def summaryState(summary: Result<JobSummary>): string {
+  if (summary is success(value)) {
+    return value.state
+  }
+  return "failure"
+}
+
+def reportState(report: Result<JobReport>): string {
+  if (report is success(value)) {
+    return value.state
+  }
+  if (report is failure(err)) {
+    return "failure: ${err}"
+  }
+  return "failure"
+}
+
+def stopAll(handles: JobHandle[]) {
+  for (handle in handles) {
+    stop(handle)
+  }
+}
+
+export node startReadStop(): any {
+  const started = start(shellJob("echo one; ${LONG}", maxMinutes: 1)) with approve
+  if (started is failure(err)) {
+    return "start failed: ${err}"
+  }
+  const handle = started.value
+  const seen = readUntil(handle, "one")
+  const running = summaryState(status(handle))
+  const stopped = reportState(stop(handle))
+  return { seen: seen, running: running, stopped: stopped }
+}
+
+export node foregroundRefused(): string {
+  const started = start(shellJob("echo hi", maxMinutes: 1)) with approve
+  if (started is failure(err)) {
+    return err
+  }
+  stop(started.value)
+  return "started"
+}
+
+// Seven running, then two starts at once: one fits under the limit of
+// eight and the other is refused.
+export node limitHolds(): any {
+  let handles: JobHandle[] = []
+  for (i in range(7)) {
+    const started = start(shellJob(LONG, maxMinutes: 1)) with approve
+    if (started is success(handle)) {
+      handles.push(handle)
+    }
+  }
+  const results = fork([1, 2]) as n {
+    return start(shellJob(LONG, maxMinutes: 1)) with approve
+  }
+  let failed = 0
+  let saysLimit = false
+  for (result in results) {
+    if (result is success(handle)) {
+      handles.push(handle)
+    }
+    if (result is failure(err)) {
+      failed = failed + 1
+      saysLimit = err.includes("which is the limit")
+    }
+  }
+  const count = handles.length
+  stopAll(handles)
+  return { started: count, failed: failed, saysLimit: saysLimit }
+}
+
+// A job started in a branch is held by the run once the branch is over.
+export node forkBranchesHeld(): string[] {
+  const results = fork([1, 2]) as n {
+    return start(shellJob(LONG, maxMinutes: 1)) with approve
+  }
+  let handles: JobHandle[] = []
+  for (result in results) {
+    if (result is success(handle)) {
+      handles.push(handle)
+    }
+  }
+  const states = map(handles, \handle -> summaryState(status(handle)))
+  stopAll(handles)
+  return states
+}
+
+// A job outlives the run() subprocess that would start it, so the start is
+// refused there, as spawn is.
+export node refusedInRunSubprocess(): string {
+  const childSource = """
+import { startShellJob } from "std::safeBash"
+node main() {
+  const started = startShellJob("sleep 1", "sleep")
+  if (isFailure(started)) {
+    return started.error
+  }
+  return "started"
+}
+"""
+  const compiled = compile(childSource)
+  if (isFailure(compiled)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compiled.value, node: "main")
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "run failed"
+  } with approve
+}

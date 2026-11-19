@@ -1,10 +1,14 @@
 import { keepOutput } from "std::spill"
+import { startShellJob, SafeBashEffects } from "std::safeBash"
 
 import {
   _waitForJob,
   _readJob,
   _stopJob,
   _listJobs,
+  _heldSummary,
+  _readHeldJob,
+  _stopHeldJob,
  } from "agency-lang/stdlib-lib/jobs.js"
 
 /** @module
@@ -51,6 +55,8 @@ import {
   returns the job's state at that moment, and the guard's trip is raised as
   `std::guard` right after, so every handler sees it. The job keeps running.
 */
+
+export { JobHandle } from "std::safeBash"
 
 export type JobReport = {
   id: string;
@@ -117,4 +123,101 @@ export def listJobs(): JobSummary[] {
   List the background jobs of this run: each one's id, command, state, and running time.
   """
   return _listJobs()
+}
+
+/** What to run as a job. Plain data, built before anything starts. */
+export type JobDescription = {
+  kind: "shell";
+  label: string;
+  maxMinutes: number
+}
+
+/** A shell command to run as a job. */
+export type ShellJob = JobDescription & {
+  command: string;
+  cwd: string
+}
+
+/** Describes a shell command to run as a job. Starts nothing: pass the
+  description to `start`.
+
+  ```agency
+  const handle = start(shellJob("./fetch-models.sh", label: "Model downloads"))?
+  ```
+*/
+export def shellJob(
+  command: string,
+  label: string = "",
+  cwd: string = "",
+  maxMinutes: number = 60,
+): ShellJob {
+  """
+  Describe a shell command to run as a background job. Starts nothing.
+
+  @param command - One or more bash commands.
+  @param label - What a list of jobs shows for this one. The command when empty.
+  @param cwd - Working directory, defaulting to the agent directory or the process directory.
+  @param maxMinutes - Minutes the job may run before it is stopped, at most 720.
+  """
+  const listedAs = if label == "" then command else label
+  return {
+    kind: "shell",
+    label: listedAs,
+    maxMinutes: maxMinutes,
+    command: command,
+    cwd: cwd
+  }
+}
+
+@capabilities(fileRead, fileWrite, subprocess)
+export def start(description: ShellJob): Result<JobHandle> raises <SafeBashEffects> {
+  """
+  Start a background job and return its handle. It asks the approvals running the command in the foreground would ask. The job keeps running after this program ends, until it exits, reaches its time limit, or is stopped. A command that cannot be a job, such as a file read, is refused and runs nothing.
+
+  @param description - What to run, from shellJob.
+  """
+  const started = startShellJob(
+    description.command,
+    description.label,
+    description.cwd,
+    description.maxMinutes,
+    foreground: false,
+  )?
+  if (started is { ran: "job", handle }) {
+    return success(handle)
+  }
+  return failure("This command runs in the foreground, so it cannot be a job.")
+}
+
+@capabilities(fileRead, fileWrite, subprocess)
+export def status(handle: JobHandle): Result<JobSummary> {
+  """
+  The state of a job this program started: running, ended, stopped, or timed out, with its running time.
+
+  @param handle - The handle start returned.
+  """
+  const summary = try _heldSummary(handle.id)?
+  return success(summary)
+}
+
+@capabilities(fileRead, fileWrite, subprocess)
+export def output(handle: JobHandle): Result<JobReport> {
+  """
+  What a job this program started has printed since the last read, and its state.
+
+  @param handle - The handle start returned.
+  """
+  const report = try _readHeldJob(handle.id)?
+  return success(shown(report))
+}
+
+@capabilities(fileRead, fileWrite, subprocess)
+export def stop(handle: JobHandle): Result<JobReport> {
+  """
+  Stop a job this program started, and everything it started, and return its last output.
+
+  @param handle - The handle start returned.
+  """
+  const report = try _stopHeldJob(handle.id)?
+  return success(shown(report))
 }

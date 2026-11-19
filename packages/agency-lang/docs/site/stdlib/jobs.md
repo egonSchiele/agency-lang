@@ -64,7 +64,7 @@ export type JobReport = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L61))
 
 ### JobSummary
 
@@ -80,7 +80,33 @@ export type JobSummary = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L67))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L73))
+
+### JobDescription
+
+What to run as a job. Plain data, built before anything starts.
+
+```ts
+/** What to run as a job. Plain data, built before anything starts. */
+export type JobDescription = {
+  kind: "shell";
+  label: string;
+  maxMinutes: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L129))
+
+### ShellJob
+
+A shell command to run as a job.
+
+```ts
+/** A shell command to run as a job. */
+export type ShellJob = JobDescription & { command: string; cwd: string }
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L136))
 
 ## Functions
 
@@ -101,7 +127,7 @@ Read what a background job has printed since you last read it, and its state. Ea
 
 **Returns:** `Result<JobReport>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L93))
 
 ### stopJob
 
@@ -121,7 +147,7 @@ Stop a background job and everything it started, and return its last output.
 
 **Needs:** `subprocess`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L111))
 
 ### listJobs
 
@@ -133,4 +159,119 @@ List the background jobs of this run: each one's id, command, state, and running
 
 **Returns:** `JobSummary[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L115))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L121))
+
+### shellJob
+
+```ts
+shellJob(
+  command: string,
+  label: string = "",
+  cwd: string = "",
+  maxMinutes: number = 60,
+): ShellJob
+```
+
+Describe a shell command to run as a background job. Starts nothing.
+
+Describes a shell command to run as a job. Starts nothing: pass the
+  description to `start`.
+
+  ```agency
+  const handle = start(shellJob("./fetch-models.sh", label: "Model downloads"))?
+  ```
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| command | `string` |  | One or more bash commands. |
+| label | `string` | "" | What a list of jobs shows for this one. The command when empty. |
+| cwd | `string` | "" | Working directory, defaulting to the agent directory or the process directory. |
+| maxMinutes | `number` | 60 | Minutes the job may run before it is stopped, at most 720. |
+
+**Returns:** [ShellJob](#shelljob)
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L148))
+
+### start
+
+```ts
+start(description: ShellJob): Result<JobHandle> raises <SafeBashEffects>
+```
+
+Start a background job and return its handle. It asks the approvals running the command in the foreground would ask. The job keeps running after this program ends, until it exits, reaches its time limit, or is stopped. A command that cannot be a job, such as a file read, is refused and runs nothing.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| description | [ShellJob](#shelljob) |  | What to run, from shellJob. |
+
+**Returns:** `Result<JobHandle>`
+
+**Throws:** `std::read`, `std::guard`, `std::run`, `std::bash`, `std::write`, `std::grep`, `std::ls`, `std::glob`, `std::exec`, `std::remove`, `std::git::status`, `std::git::log`, `std::git::diff`, `std::git::show`, `std::git::blame`, `std::git::branchList`, `std::git::remoteList`, `std::git::stashList`, `std::git::add`, `std::git::commit`, `std::git::checkout`, `std::git::switch`, `std::git::branchCreate`, `std::git::branchDelete`, `std::git::stashPush`, `std::git::stashPop`, `std::git::restore`, `std::github::prGet`, `std::github::prDiff`, `std::github::issueGet`, `std::github::prFiles`, `std::github::prReviewList`, `std::github::prReviewCommentList`, `std::github::prChecks`, `std::github::issueCommentList`, `std::github::prList`, `std::github::issueList`, `std::github::issueSearch`
+
+**Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L173))
+
+### status
+
+```ts
+status(handle: JobHandle): Result<JobSummary>
+```
+
+The state of a job this program started: running, ended, stopped, or timed out, with its running time.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| handle | [JobHandle](safeBash.md#jobhandle) |  | The handle start returned. |
+
+**Returns:** `Result<JobSummary>`
+
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L193))
+
+### output
+
+```ts
+output(handle: JobHandle): Result<JobReport>
+```
+
+What a job this program started has printed since the last read, and its state.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| handle | [JobHandle](safeBash.md#jobhandle) |  | The handle start returned. |
+
+**Returns:** `Result<JobReport>`
+
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L204))
+
+### stop
+
+```ts
+stop(handle: JobHandle): Result<JobReport>
+```
+
+Stop a job this program started, and everything it started, and return its last output.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| handle | [JobHandle](safeBash.md#jobhandle) |  | The handle start returned. |
+
+**Returns:** `Result<JobReport>`
+
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/jobs.agency#L215))

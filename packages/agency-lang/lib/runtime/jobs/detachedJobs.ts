@@ -15,6 +15,7 @@ import {
   STDOUT_FILE,
   STOP_FILE,
   changeRecord,
+  claimJob,
   isJobId,
   jobDir,
   jobsDir,
@@ -39,6 +40,8 @@ export const START_TIME_TOLERANCE_MS = 2000;
  *  `agency jobs clean`, so an id may already be taken. */
 const ID_ATTEMPTS = 100;
 const ID_BYTES = 3;
+/** A token too long to guess: 128 bits. */
+const TOKEN_BYTES = 16;
 
 export const RUNNER_DIED_STOPPED = "The job's runner died, so its command was stopped.";
 const RUNNER_DIED = "The job's runner died.";
@@ -48,8 +51,11 @@ export type JobOutput = { stdout: string; stderr: string; positions: ReadPositio
 
 /** Makes a new folder under a new id, writes the first record, starts the
  *  runner, and resolves once the runner has written its pid. When it has
- *  not within START_WAIT_MS: writes the stop file, then a record that
- *  reads `ended`, and rejects. `start.cwd` must be absolute. */
+ *  not within START_WAIT_MS, it tries to take the job's claim. With the
+ *  claim, it writes a record that reads `ended` and rejects, and a runner
+ *  that starts late runs nothing. Without it, the runner took the claim
+ *  first and will run the job, so the start succeeded. `start.cwd` must be
+ *  absolute. `start.maxMs` is rounded to a whole number. */
 export async function launchJob(host: Host, start: JobStart): Promise<JobRecord> {
   if (!path.isAbsolute(start.cwd)) {
     throw new Error(`A job's working folder must be absolute, and "${start.cwd}" is not.`);
@@ -64,7 +70,9 @@ export async function launchJob(host: Host, start: JobStart): Promise<JobRecord>
     label: start.label,
     command: start.command,
     cwd: start.cwd,
-    maxMs: start.maxMs,
+    // A limit in minutes times 60000 is often a hair off a whole number
+    // (4.1 minutes is 245999.99999999997 ms).
+    maxMs: Math.round(start.maxMs),
     state: "running",
     exitCode: null,
     note: "",
@@ -74,6 +82,7 @@ export async function launchJob(host: Host, start: JobStart): Promise<JobRecord>
     runnerStartedAt: null,
     commandPid: null,
     commandStartedAt: null,
+    token: hexOf(host.random.bytes(TOKEN_BYTES)),
   });
   try {
     await host.subprocess.startDetached({
@@ -83,7 +92,7 @@ export async function launchJob(host: Host, start: JobStart): Promise<JobRecord>
       args: [agencyCliPath(), "job-runner", dir],
     });
   } catch (error) {
-    await giveUp(host, dir);
+    await giveUp(host, dir, RUNNER_NEVER_STARTED);
     throw error;
   }
   const deadline = host.clock.now() + START_WAIT_MS;
@@ -97,8 +106,15 @@ export async function launchJob(host: Host, start: JobStart): Promise<JobRecord>
     }
     await clockSleep(host.clock, RECORD_POLL_MS).done;
   }
-  await giveUp(host, dir);
-  throw new Error(`The job's runner did not start within ${START_WAIT_MS / 1000} seconds.`);
+  if (await giveUp(host, dir, RUNNER_NEVER_STARTED)) {
+    throw new Error(`The job's runner did not start within ${START_WAIT_MS / 1000} seconds.`);
+  }
+  // The runner took the claim first, so it runs the job.
+  const claimed = await readRecord(host, dir);
+  if (claimed === null) {
+    throw new Error(`The record of job ${id} is gone.`);
+  }
+  return claimed;
 }
 
 /** The record, with a dead runner handled: when a record says `running`
@@ -118,6 +134,24 @@ export async function jobStatus(host: Host, id: string): Promise<JobRecord | nul
     return record;
   }
   return endForDeadRunner(host, dir, record);
+}
+
+/** `jobStatus` for a job a run holds: null when there is no record, or
+ *  when the record's token is not the one the run was given at the start.
+ *  An id added to an edited checkpoint then reads as no job, and nothing
+ *  is done to the job it names: no read, no stop, not even the rule for a
+ *  dead runner. */
+export async function heldJobStatus(
+  host: Host,
+  held: { id: string; token: string },
+): Promise<JobRecord | null> {
+  const dir = jobDir(host, held.id);
+  await openJobsDir(host);
+  const record = await readRecord(host, dir);
+  if (record === null || record.token !== held.token) {
+    return null;
+  }
+  return jobStatus(host, held.id);
 }
 
 /** Output after `from` on each stream, carriage returns collapsed, and
@@ -203,10 +237,7 @@ async function openJobsDir(host: Host): Promise<Root> {
  *  in an old job's folder would write into its files and obey its stop. */
 async function newJobFolder(host: Host, jobsRoot: Root): Promise<string> {
   for (let attempt = 0; attempt < ID_ATTEMPTS; attempt++) {
-    const digits = Array.from(host.random.bytes(ID_BYTES), (byte) =>
-      byte.toString(16).padStart(2, "0"),
-    );
-    const id = `job-${digits.join("")}`;
+    const id = `job-${hexOf(host.random.bytes(ID_BYTES))}`;
     try {
       await host.files.privateDir(jobsRoot, id, { mustBeNew: true });
       return id;
@@ -219,25 +250,39 @@ async function newJobFolder(host: Host, jobsRoot: Root): Promise<string> {
   throw new Error(`Could not find a free job id in ${ID_ATTEMPTS} tries.`);
 }
 
-/** Ends a job whose runner never wrote its pid. The stop file goes first,
- *  so a runner that starts late runs nothing. */
-async function giveUp(host: Host, dir: string): Promise<void> {
-  await host.files.writeText(await host.files.root(dir), STOP_FILE, "");
+function hexOf(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/** Ends a job whose runner has not started it, if this call can take the
+ *  claim. A runner that starts later finds the claim taken and runs
+ *  nothing. False when the runner took the claim first. */
+async function giveUp(host: Host, dir: string, note: string): Promise<boolean> {
+  if (!(await claimJob(host, dir, "starter"))) {
+    return false;
+  }
   await changeRecord(host, dir, (current) =>
-    current.state === "running" && current.runnerPid === null
-      ? ended(host, current, RUNNER_NEVER_STARTED)
-      : null,
+    current.state === "running" ? ended(host, current, note) : null,
   );
+  return true;
 }
 
 /** A record with no runner pid is a launch in progress, until it is older
- *  than a launch can take. Then the starter has died while it waited, and
- *  the job is ended as `launchJob` would have ended it. */
+ *  than two launch waits. Then either the starter died while it waited,
+ *  or the runner died after it took the claim and before it wrote its
+ *  pid. Either way the command never started, since the runner writes its
+ *  pid before it starts the command, so the job is ended. */
 async function neverStarted(host: Host, dir: string, record: JobRecord): Promise<JobRecord> {
   if (host.clock.wallTime() - record.startedAt <= 2 * START_WAIT_MS) {
     return record;
   }
-  await giveUp(host, dir);
+  if (!(await giveUp(host, dir, RUNNER_NEVER_STARTED))) {
+    await changeRecord(host, dir, (current) =>
+      current.state === "running" && current.runnerPid === null
+        ? ended(host, current, RUNNER_DIED)
+        : null,
+    );
+  }
   return (await readRecord(host, dir)) ?? record;
 }
 

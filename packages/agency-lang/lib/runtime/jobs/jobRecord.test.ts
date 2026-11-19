@@ -31,6 +31,7 @@ function record(overrides: Partial<JobRecord> = {}): JobRecord {
     runnerStartedAt: null,
     commandPid: null,
     commandStartedAt: null,
+    token: "token-1",
     ...overrides,
   };
 }
@@ -99,6 +100,14 @@ describe("readRecord", () => {
   it("is null for a pid that would name every process", async () => {
     const text = JSON.stringify(record({ commandPid: 1 }));
     expect(await readRecord(hostWith({ [`${DIR}/${RECORD_FILE}`]: text }), DIR)).toBeNull();
+  });
+});
+
+describe("writeRecord", () => {
+  it("refuses a record the schema would refuse to read back", async () => {
+    const host = hostWith({ [`${DIR}/.keep`]: "" });
+    await expect(writeRecord(host, DIR, record({ maxMs: 245_999.99999999997 }))).rejects.toThrow();
+    expect(host.state.files[`${DIR}/${RECORD_FILE}`]).toBeUndefined();
   });
 });
 

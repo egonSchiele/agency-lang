@@ -13,6 +13,7 @@ import {
   STDOUT_FILE,
   STOP_FILE,
   changeRecord,
+  claimJob,
   endingOf,
   readRecord,
   type Ending,
@@ -27,8 +28,8 @@ const OUTPUT_FILE_MODE = 0o600;
 /** Runs the job in `dir` and resolves once its ending is written. Runs
  *  nothing, and resolves at once, when the folder has no record, the
  *  record no longer says `running`, a `stop` file is there, or another
- *  runner has already claimed the job. A starter that gave up waiting for
- *  a slow runner leaves both a stop file and an ended record. */
+ *  process holds the claim: a starter that gave up waiting for a slow
+ *  runner takes the claim before it reports the start failed. */
 export async function runJob(
   host: Host,
   dir: string,
@@ -37,6 +38,9 @@ export async function runJob(
   const root = await host.files.root(dir);
   const first = await readRecord(host, dir);
   if (first === null || first.state !== "running" || (await stopRequested(host, root))) {
+    return;
+  }
+  if (!(await claimJob(host, dir, "runner"))) {
     return;
   }
   const job = await claim(host, dir);

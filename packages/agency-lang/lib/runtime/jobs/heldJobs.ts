@@ -15,6 +15,9 @@ export type HeldJob = {
   read: ReadPositions;
   /** A read has returned the job's ending. */
   finalRead: boolean;
+  /** The job record's token, which only the run that started the job was
+   *  given. Kept here and not on the handle, which Agency code sees. */
+  token: string;
 };
 
 const position = z.number().int().nonnegative();
@@ -31,19 +34,27 @@ export const heldJobSchema = z.object({
   }),
   read: z.object({ stdout: position, stderr: position }),
   finalRead: z.boolean(),
+  token: z.string(),
 });
 
 /** The jobs a run holds after it applies a checkpoint: every job it held
- *  already, and every job the checkpoint names that it did not. A job is
- *  real work outside the run, so applying an older checkpoint never
- *  forgets one. An entry whose id is not a job id is dropped, since a
- *  checkpoint is a file a person can edit and an id becomes a path. */
+ *  already, and every job the checkpoint names. A job is real work outside
+ *  the run, so applying an older checkpoint never forgets one. For a job in
+ *  both, the checkpoint's read positions win: they are run state, like the
+ *  conversation, and a rewind replays the reads made after it. An entry
+ *  whose id is not a job id is dropped, since a checkpoint is a file a
+ *  person can edit and an id becomes a path. */
 export function mergeHeldJobs(current: HeldJob[], saved: HeldJob[] | undefined): HeldJob[] {
-  const merged = [...current];
+  const merged = current.map(copyHeldJob);
   for (const job of saved ?? []) {
-    const known = merged.some((each) => each.handle.id === job.handle.id);
-    if (!known && isJobId(job.handle.id)) {
+    if (!isJobId(job.handle.id)) {
+      continue;
+    }
+    const index = merged.findIndex((each) => each.handle.id === job.handle.id);
+    if (index === -1) {
       merged.push(copyHeldJob(job));
+    } else {
+      merged[index] = { ...merged[index], read: { ...job.read }, finalRead: job.finalRead };
     }
   }
   return merged;
@@ -52,5 +63,10 @@ export function mergeHeldJobs(current: HeldJob[], saved: HeldJob[] | undefined):
 /** A copy that shares nothing with `job`, for a checkpoint taken now that
  *  a later read must not change. */
 export function copyHeldJob(job: HeldJob): HeldJob {
-  return { handle: { ...job.handle }, read: { ...job.read }, finalRead: job.finalRead };
+  return {
+    handle: { ...job.handle },
+    read: { ...job.read },
+    finalRead: job.finalRead,
+    token: job.token,
+  };
 }

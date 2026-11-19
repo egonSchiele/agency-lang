@@ -17,6 +17,7 @@ function held(id: string, read = 0): HeldJob {
     handle: { id, kind: "shell", label: `job ${id}`, startedAt: 1000 },
     read: { stdout: read, stderr: 0 },
     finalRead: false,
+    token: `token-${id}`,
   };
 }
 
@@ -61,9 +62,16 @@ describe("held jobs in a checkpoint", () => {
 describe("adoptHeldJobs", () => {
   it("adds the checkpoint's jobs and keeps the ones the context holds", async () => {
     const ctx = await makeContext().createExecutionContext({ runId: "run-1" });
-    ctx.heldJobs = [held("job-000001", 7)];
-    ctx.adoptHeldJobs([held("job-000001", 2), held("job-000002")]);
-    expect(ctx.heldJobs).toEqual([held("job-000001", 7), held("job-000002")]);
+    ctx.heldJobs = [held("job-000001"), held("job-000003", 5)];
+    ctx.adoptHeldJobs([held("job-000001"), held("job-000002")]);
+    expect(ctx.heldJobs).toEqual([held("job-000001"), held("job-000003", 5), held("job-000002")]);
+  });
+
+  it("takes the checkpoint's read positions for a job in both, as a rewind replays the reads", async () => {
+    const ctx = await makeContext().createExecutionContext({ runId: "run-1" });
+    ctx.heldJobs = [{ ...held("job-000001", 7), finalRead: true }];
+    ctx.adoptHeldJobs([held("job-000001", 2)]);
+    expect(ctx.heldJobs).toEqual([held("job-000001", 2)]);
   });
 
   it("drops an entry whose id is not a job id", async () => {

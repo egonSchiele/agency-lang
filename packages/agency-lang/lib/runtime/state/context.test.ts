@@ -105,6 +105,7 @@ describe("RuntimeContext", () => {
         handle: { id: "job-000001", kind: "shell", label: "x", startedAt: 0 },
         read: { stdout: 0, stderr: 0 },
         finalRead: false,
+        token: "token-1",
       });
       const execCtx = await ctx.createExecutionContext({ runId: "foo" });
       expect(execCtx.heldJobs).toEqual([]);

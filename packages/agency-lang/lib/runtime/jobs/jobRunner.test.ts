@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { memoryHost } from "../../host/memoryHost.js";
 import { FakeClock } from "../clock.js";
 import {
+  CLAIM_FILE,
   JOB_OUTPUT_CAP_BYTES,
   RECORD_FILE,
   STDERR_FILE,
@@ -37,6 +38,7 @@ function record(overrides: Partial<JobRecord> = {}): JobRecord {
     runnerStartedAt: null,
     commandPid: null,
     commandStartedAt: null,
+    token: "token-1",
     ...overrides,
   };
 }
@@ -138,6 +140,22 @@ describe("runJob", () => {
     await runJob(job.host, DIR, POLL_MS);
     expect(job.scripted.children).toEqual([]);
     expect(await job.read()).toMatchObject({ state: "running", runnerPid: null });
+  });
+
+  it("a claim another process took first runs nothing", async () => {
+    const job = await setUp({}, { [`${DIR}/${CLAIM_FILE}`]: "starter" });
+    await runJob(job.host, DIR, POLL_MS);
+    expect(job.scripted.children).toEqual([]);
+    expect(await job.read()).toMatchObject({ state: "running", runnerPid: null });
+  });
+
+  it("takes the claim before it writes its pid", async () => {
+    const job = await setUp();
+    const done = runJob(job.host, DIR, POLL_MS);
+    await settle();
+    expect(job.text(CLAIM_FILE)).toBe("runner");
+    job.scripted.children[0].finish();
+    await done;
   });
 
   it("a record that already reads ended runs nothing", async () => {

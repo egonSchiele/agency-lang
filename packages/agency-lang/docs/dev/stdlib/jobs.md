@@ -43,9 +43,11 @@ Each job has a folder, `<agency home>/jobs/<id>/`, which is
 `~/.agency/jobs/<id>/` unless `AGENCY_HOME` says otherwise. It holds:
 
 - `record.json`: the command, its label and folder, its time limit, its
-  state, how it ended, and the pid and start time of the runner and of
-  the command.
+  state, how it ended, the pid and start time of the runner and of the
+  command, and the job's token.
 - `stdout.log` and `stderr.log`: everything the command printed.
+- `claim`: made once, by the runner or by a starter that gave up waiting
+  for it (see "The runner").
 - `stop`: present when someone asked the job to stop.
 
 The jobs folder and each job's folder are made with `privateDir`, mode
@@ -87,9 +89,10 @@ vitest. A test that starts a real runner needs a build first.
 runner to write its pid. The runner:
 
 1. Runs nothing when the record no longer says `running`, a `stop` file is
-   there, or another runner has already written its pid.
+   there, or it cannot take the claim.
 2. Writes its pid and start time, starts the command through the host, and
-   writes the command's pid and start time.
+   writes the command's pid and start time. The pid is written before the
+   command starts.
 3. Every quarter second, appends what the command printed to the two
    files, and aborts the command when a `stop` file appears. The host then
    sends `SIGTERM` to the command's process group, and `SIGKILL` two
@@ -98,14 +101,26 @@ runner to write its pid. The runner:
    `ended` with the exit code, `stopped`, `timedOut` at the job's limit, or
    `ended` with a note naming the stream that passed 10 MiB.
 
-When the runner does not start in time, `launchJob` writes the `stop` file
-first and an `ended` record second, then fails. A runner that starts late
-finds both and runs nothing, so a start the model was told had failed
-never runs.
+**The claim decides who owns a slow start.** When the runner has not
+written its pid in time, `launchJob` tries to take the claim. The claim is
+a file created only if it is not there, which the platform does in one
+step, so exactly one of the runner and the starter ever holds it. A
+starter with the claim writes an `ended` record and reports the start
+failed, and a runner that starts later finds the claim taken and runs
+nothing. A starter without the claim learns that the runner got there
+first, so the start succeeded. A read and a write of the record cannot
+decide this, because another process can write between them, which is
+why the claim is a file of its own. So a start the model was told had
+failed never runs.
 
-The record is written by the starter once, by the runner when it starts,
-and by the runner at the ending. There is no heartbeat, so a runner that is
-alive but stuck reads as `running` until the job's time limit.
+The record has one writer at a time: the starter until the runner holds
+the claim, then the runner, and a reader only once the runner is gone.
+There is no heartbeat, so a runner that is alive but stuck reads as
+`running` until the job's time limit.
+
+A limit in minutes times 60000 is often a hair off a whole number (4.1
+minutes is 245999.99999999997 ms), so `launchJob` rounds it, and
+`writeRecord` refuses a record the schema would refuse to read back.
 
 ## When the runner dies
 
@@ -134,16 +149,28 @@ purpose (`lib/host/node/processStartTime.ts`). A pid whose state cannot be
 read is taken as alive.
 
 A record that says `running` with no runner pid is a launch in progress,
-until it is older than two launch waits. Then the starter died while it
-waited, and a reader ends the job the way `launchJob` would have.
+until it is older than two launch waits. Then either the starter died
+while it waited, or the runner died after it took the claim and before it
+wrote its pid. Either way the command never started, so a reader ends the
+job.
 
 ## The jobs a run holds
 
 A run keeps the jobs it started on its context, `heldJobs`: each job's
-handle, how many characters of each stream this run has read, and whether
-a read has returned the job's ending. Reads move only this run's
-positions, never anything on disk, so `agency jobs` or another session can
-read the same job without moving this run's place.
+handle, how many characters of each stream this run has read, whether a
+read has returned the job's ending, and the job's token. Reads move only
+this run's positions, never anything on disk, so `agency jobs` or another
+session can read the same job without moving this run's place.
+
+**The token.** `launchJob` writes 128 random bits into the record, and the
+run that started the job keeps them beside the id. It is kept off the
+handle, which Agency code sees. Every read, wait, and stop goes through
+`heldJobStatus`, which treats a job whose token is not the run's as a job
+that does not exist, and does nothing to it. A checkpoint is a file a
+person can edit, and a server that does not sign checkpoints hands them to
+its clients. Without the token, adding another session's job id to a
+checkpoint would let a run read that job's output and stop it with no
+interrupt.
 
 The list is on the context, not in an Agency global, because each branch
 of a `fork`, and each parallel tool call, gets its own copy of a module's
@@ -156,8 +183,11 @@ another process gets the list back, and `jobOutput` carries on from the
 saved positions. On a restore, `adoptHeldJobs` keeps every job the run
 already holds and adds the checkpoint's, as a restore never lowers
 `spawnCount`: a job is real work outside the run, and a list that forgot
-it would leave it running with nothing to stop it. An entry whose id is
-not a job id is dropped, since a checkpoint is a file a person can edit.
+it would leave it running with nothing to stop it. For a job in both, the
+checkpoint's read positions win. They are run state, like the
+conversation, so a rewind replays the reads made after it and returns the
+same output again. An entry whose id is not a job id is dropped, since a
+checkpoint is a file a person can edit.
 
 The list never shrinks. A long session's list grows with every job, and so
 does `listJobs()`.
@@ -192,7 +222,8 @@ rule saved for a command in the foreground also approves it as a job.
 nothing. A job exists only because its command was approved, its output is
 what `safeBash` would have returned under the same approval, and stopping
 it can only undo what that approval allowed. Each acts only on a job the
-run holds, so a call never reaches a process the run did not start.
+run holds, checked by the job's token, so a call never reaches a process
+the run did not start, even from an edited checkpoint.
 Stopping a job the run does not hold is a person's action, at a terminal
 with `agency jobs stop`.
 
@@ -252,7 +283,8 @@ listing each job that is running or ended and unread.
 
 **The finish line.** The REPL calls `watchHeldJobs`, which reads the run's
 held jobs every second and reports each one that ends since the watch
-began. The terminal starts and stops the watch; the standard library never
+began, including a job that started and ended between two polls, by its
+`endedAt`. A read that fails is tried again on the next poll. The terminal starts and stops the watch; the standard library never
 does, for the reason under "What stops a job". The watch reads the list on
 every poll, so a job started in any branch, or one that came back from a
 checkpoint, gets its line. What `_runLineRepl` does with the line depends

@@ -27,6 +27,7 @@ function record(id: string, overrides: Partial<JobRecord> = {}): JobRecord {
     runnerStartedAt: 1_000_000,
     commandPid: 501,
     commandStartedAt: 1_000_000,
+    token: "token-1",
     ...overrides,
   };
 }

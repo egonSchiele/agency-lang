@@ -4,6 +4,7 @@ import { FakeClock } from "../clock.js";
 import {
   RUNNER_DIED_STOPPED,
   START_WAIT_MS,
+  heldJobStatus,
   jobOutputSince,
   jobStatus,
   launchJob,
@@ -12,6 +13,7 @@ import {
   requestStop,
 } from "./detachedJobs.js";
 import {
+  CLAIM_FILE,
   RECORD_FILE,
   STDOUT_FILE,
   STOP_FILE,
@@ -97,6 +99,7 @@ function record(id: string, overrides: Partial<JobRecord> = {}): JobRecord {
     runnerStartedAt: 1_000_000,
     commandPid: 501,
     commandStartedAt: 1_000_000,
+    token: "token-1",
     ...overrides,
   };
 }
@@ -152,14 +155,43 @@ describe("launchJob", () => {
     );
   });
 
-  it("that times out writes the stop file and a record that reads ended, and rejects", async () => {
+  it("that times out takes the claim, writes a record that reads ended, and rejects", async () => {
     const { host, clock, scripted } = setUp([[0x3f, 0xa9, 0xc1]]);
     scripted.onDetached = async () => {};
     await expect(drive(clock, launchJob(host, START))).rejects.toThrow(/did not start/);
     const dir = jobDir(host, "job-3fa9c1");
-    expect(fileText(host, `${dir}/${STOP_FILE}`)).toBe("");
+    expect(fileText(host, `${dir}/${CLAIM_FILE}`)).toBe("starter");
+    expect(fileText(host, `${dir}/${STOP_FILE}`)).toBeUndefined();
     expect(await readRecord(host, dir)).toMatchObject({ state: "ended", runnerPid: null });
     expect(clock.now()).toBeGreaterThanOrEqual(START_WAIT_MS);
+  });
+
+  it("whose runner claimed the job as the wait ran out succeeds, and ends nothing", async () => {
+    const { host, clock, scripted } = setUp([[0x3f, 0xa9, 0xc1]]);
+    // The runner has taken the claim and not yet written its pid.
+    scripted.onDetached = async () => {
+      const dir = runnerDir(scripted);
+      await host.files.writeText(await host.files.root(dir), CLAIM_FILE, "runner");
+    };
+    const launched = await drive(clock, launchJob(host, START));
+    expect(launched.state).toBe("running");
+    const dir = jobDir(host, "job-3fa9c1");
+    expect(fileText(host, `${dir}/${CLAIM_FILE}`)).toBe("runner");
+    expect(await readRecord(host, dir)).toMatchObject({ state: "running" });
+  });
+
+  it("gives each job a token of its own", async () => {
+    const { host, clock } = setUp();
+    const first = await drive(clock, launchJob(host, START));
+    const second = await drive(clock, launchJob(host, START));
+    expect(first.token).toMatch(/^[0-9a-f]{32}$/);
+    expect(second.token).not.toBe(first.token);
+  });
+
+  it("rounds a time limit that is not a whole number of milliseconds", async () => {
+    const { host, clock } = setUp();
+    const launched = await drive(clock, launchJob(host, { ...START, maxMs: 4.1 * 60_000 }));
+    expect(launched.maxMs).toBe(246_000);
   });
 });
 
@@ -234,6 +266,25 @@ describe("jobStatus", () => {
   it("is null for a job with no folder", async () => {
     const { host } = setUp();
     expect(await jobStatus(host, "job-0000ff")).toBeNull();
+  });
+});
+
+describe("heldJobStatus", () => {
+  it("reads a held job whose token matches", async () => {
+    const { host } = setUp();
+    await place(host, record("job-000001"));
+    const status = await heldJobStatus(host, { id: "job-000001", token: "token-1" });
+    expect(status?.state).toBe("running");
+  });
+
+  it("reaches nothing for an id whose token does not match", async () => {
+    const { host, scripted } = setUp();
+    await place(host, record("job-000001"));
+    scripted.states[500] = "gone";
+    const status = await heldJobStatus(host, { id: "job-000001", token: "forged" });
+    expect(status).toBeNull();
+    expect(scripted.stopped).toEqual([]);
+    expect((await readRecord(host, jobDir(host, "job-000001")))?.state).toBe("running");
   });
 });
 

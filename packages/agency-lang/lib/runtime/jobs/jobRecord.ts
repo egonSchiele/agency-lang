@@ -14,6 +14,9 @@ export const RECORD_FILE = "record.json";
 export const STDOUT_FILE = "stdout.log";
 export const STDERR_FILE = "stderr.log";
 export const STOP_FILE = "stop";
+/** Made once, by whichever of the runner or a starter that gave up
+ *  waiting gets there first. See `claimJob`. */
+export const CLAIM_FILE = "claim";
 /** The folder under the Agency home that holds every job's folder. */
 export const JOBS_DIR = "jobs";
 export const JOB_ID = /^job-[0-9a-f]{6}$/;
@@ -86,6 +89,10 @@ export const JobRecordSchema = z
     /** The command's pid, which is its process group. Null until it starts. */
     commandPid: pid.nullable(),
     commandStartedAt: z.number().nullable(),
+    /** Random, made at the start, and kept by the run that started the job
+     *  beside its id. A run acts on a job only when the two match, so an id
+     *  added to an edited checkpoint reaches no one else's job. */
+    token: z.string(),
   })
   .strict();
 
@@ -141,16 +148,44 @@ export async function readRecord(host: Host, dir: string): Promise<JobRecord | n
   }
 }
 
+/** Writes the record. Throws for one `readRecord` would refuse, so a bad
+ *  record fails here, with the reason, and is never written to be read
+ *  back as missing. */
 export async function writeRecord(host: Host, dir: string, record: JobRecord): Promise<void> {
+  JobRecordSchema.parse(record);
   await host.files.writeText(await host.files.root(dir), RECORD_FILE, recordText(record));
+}
+
+/** Takes the job's claim for `who`, or learns that another process took it
+ *  first. The claim file is created only if it is not there, and the
+ *  platform makes that one step, so exactly one of the runner and a
+ *  starter that gave up waiting ever holds it. The runner runs the command
+ *  only with the claim; the starter reports a failed start only with it.
+ *  A read and write of the record cannot decide this, because nothing
+ *  stops another process writing between them. */
+export async function claimJob(host: Host, dir: string, who: string): Promise<boolean> {
+  const root = await host.files.root(dir);
+  try {
+    await host.files.writeText(root, CLAIM_FILE, who, { mode: "create-only" });
+    return true;
+  } catch (error) {
+    if ((await host.files.stat(root, CLAIM_FILE)) !== null) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 /** Thrown inside `updateText` to leave the file as it is. */
 class NoChange extends Error {}
 
 /** Reads the record, applies `change`, and writes the result, with nothing
- *  able to run in between. `change` returns null to leave the record as it
- *  is. Returns the record as it now stands, or null when there is none. */
+ *  in this process able to run in between. Another process can write
+ *  between the read and the write, so the protocol keeps one writer at a
+ *  time: the starter until the runner holds the claim, then the runner,
+ *  and a reader only once the runner is gone. `change` returns null to
+ *  leave the record as it is. Returns the record as it now stands, or null
+ *  when there is none. */
 export async function changeRecord(
   host: Host,
   dir: string,

@@ -26,6 +26,7 @@ function record(id: string, overrides: Partial<JobRecord> = {}): JobRecord {
     runnerStartedAt: 1_000_000,
     commandPid: 501,
     commandStartedAt: 1_000_000,
+    token: "token-1",
     ...overrides,
   };
 }
@@ -35,6 +36,7 @@ function held(id: string): HeldJob {
     handle: { id, kind: "shell", label: "sleep 30", startedAt: 0 },
     read: { stdout: 0, stderr: 0 },
     finalRead: false,
+    token: "token-1",
   };
 }
 
@@ -90,6 +92,40 @@ describe("watchHeldJobs", () => {
     await end(host, dir);
     await poll();
     expect(ended.map((job) => job.id)).toEqual(["job-000002"]);
+    stop();
+  });
+
+  it("reports a job that started and ended between two polls", async () => {
+    const { host, clock, jobs, ended, poll } = setUp();
+    const stop = watchHeldJobs({ host, held: () => jobs, ended: (job) => ended.push(job) });
+    await settle();
+    const endedAt = clock.wallTime() + 500;
+    await place(host, record("job-000004", { state: "ended", exitCode: 2, endedAt }));
+    jobs.push(held("job-000004"));
+    await poll();
+    expect(ended.map((job) => job.id)).toEqual(["job-000004"]);
+    stop();
+  });
+
+  it("tries a read that failed again on the next poll", async () => {
+    const { host, jobs, ended, poll } = setUp();
+    const dir = await place(host, record("job-000005"));
+    jobs.push(held("job-000005"));
+    const readText = host.files.readText;
+    let failing = true;
+    host.files.readText = async (root, target) => {
+      if (failing) {
+        throw new Error("busy");
+      }
+      return readText(root, target);
+    };
+    const stop = watchHeldJobs({ host, held: () => jobs, ended: (job) => ended.push(job) });
+    await settle();
+    failing = false;
+    await poll();
+    await end(host, dir);
+    await poll();
+    expect(ended.map((job) => job.id)).toEqual(["job-000005"]);
     stop();
   });
 

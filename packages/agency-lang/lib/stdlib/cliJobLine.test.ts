@@ -23,6 +23,7 @@ const job: JobRecord = {
   runnerStartedAt: null,
   commandPid: 501,
   commandStartedAt: null,
+  token: "token-1",
 };
 
 /** A terminal screen, for the escape sequences readline and the finish

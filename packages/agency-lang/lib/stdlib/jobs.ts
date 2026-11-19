@@ -6,7 +6,12 @@
 import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { readCause } from "../runtime/errors.js";
 import { clockSleep } from "../runtime/jobs/clockSleep.js";
-import { jobOutputSince, jobStatus, launchJob, requestStop } from "../runtime/jobs/detachedJobs.js";
+import {
+  heldJobStatus,
+  jobOutputSince,
+  launchJob,
+  requestStop,
+} from "../runtime/jobs/detachedJobs.js";
 import type { HeldJob, JobHandle } from "../runtime/jobs/heldJobs.js";
 import {
   MAX_RUNNING_JOBS,
@@ -109,7 +114,12 @@ export async function _launchJob(
     label: record.label,
     startedAt: record.startedAt,
   };
-  ctx.heldJobs.push({ handle, read: { stdout: 0, stderr: 0 }, finalRead: false });
+  ctx.heldJobs.push({
+    handle,
+    read: { stdout: 0, stderr: 0 },
+    finalRead: false,
+    token: record.token,
+  });
   return handle;
 }
 
@@ -141,8 +151,11 @@ async function readHeldJob(run: Run, id: string): Promise<JobReportForAgency> {
   const host = run.ctx.host;
   // The state first: a read that sees the job ended then gets all of the
   // output, since the runner wrote the last of it before the ending.
-  const record = await jobStatus(host, id);
-  const output = await jobOutputSince(host, id, held.read);
+  const record = await statusOf(run, held);
+  const output =
+    record === null
+      ? { stdout: "", stderr: "", positions: held.read }
+      : await jobOutputSince(host, id, held.read);
   held.read = output.positions;
   const summary = summaryOf(run, held, record);
   if (summary.state !== "running") {
@@ -160,8 +173,9 @@ async function readHeldJob(run: Run, id: string): Promise<JobReportForAgency> {
  *  Throws for an id the run does not hold. */
 export async function _stopHeldJob(id: string): Promise<JobReportForAgency> {
   const run = currentRun();
-  heldOrThrow(run, id);
-  await requestStop(run.ctx.host, id);
+  if ((await statusOf(run, heldOrThrow(run, id))) !== null) {
+    await requestStop(run.ctx.host, id);
+  }
   return readHeldJob(run, id);
 }
 
@@ -169,25 +183,30 @@ export async function _stopHeldJob(id: string): Promise<JobReportForAgency> {
  *  Throws for an id the run does not hold. */
 export async function _waitForJobEnd(id: string, waitSeconds: number): Promise<void> {
   const run = currentRun();
-  heldOrThrow(run, id);
+  const held = heldOrThrow(run, id);
   const host = run.ctx.host;
   const seconds = Math.min(Math.max(waitSeconds, 0), MAX_WAIT_SECONDS);
   const signal = run.ctx.getAbortSignal(run.stack);
   const deadline = host.clock.now() + seconds * 1000;
+  // The signal can outlive many waits, so the listener goes when the wait
+  // does.
+  let onAbort = (): void => {};
   const aborted = new Promise<void>((resolve) => {
-    if (signal.aborted) {
-      resolve();
-    }
-    signal.addEventListener("abort", () => resolve(), { once: true });
+    onAbort = resolve;
   });
-  while (!signal.aborted && host.clock.now() < deadline) {
-    const record = await jobStatus(host, id);
-    if (record === null || record.state !== "running") {
-      break;
+  signal.addEventListener("abort", onAbort, { once: true });
+  try {
+    while (!signal.aborted && host.clock.now() < deadline) {
+      const record = await statusOf(run, held);
+      if (record === null || record.state !== "running") {
+        break;
+      }
+      const pause = clockSleep(host.clock, Math.min(WAIT_POLL_MS, deadline - host.clock.now()));
+      await Promise.race([pause.done, aborted]);
+      pause.cancel();
     }
-    const pause = clockSleep(host.clock, Math.min(WAIT_POLL_MS, deadline - host.clock.now()));
-    await Promise.race([pause.done, aborted]);
-    pause.cancel();
+  } finally {
+    signal.removeEventListener("abort", onAbort);
   }
   // A guard trip returns, and the next step raises it as std::guard, so
   // every handler sees it. Any other cancel keeps its cause, which tells
@@ -215,8 +234,14 @@ function noSuchHeldJobMessage(id: string, run: Run): string {
 }
 
 async function heldSummary(run: Run, held: HeldJob): Promise<JobSummaryForAgency> {
-  const record = await jobStatus(run.ctx.host, held.handle.id);
+  const record = await statusOf(run, held);
   return forAgency(summaryOf(run, held, record), run.ctx.host.clock.wallTime());
+}
+
+/** The record of a job the run holds, or null when it is gone or its
+ *  token is not the run's, as for an id added to an edited checkpoint. */
+function statusOf(run: Run, held: HeldJob): Promise<JobRecord | null> {
+  return heldJobStatus(run.ctx.host, { id: held.handle.id, token: held.token });
 }
 
 /** A held job as a summary. A job whose record is gone reads as ended. */
@@ -237,7 +262,7 @@ function summaryOf(run: Run, held: HeldJob, record: JobRecord | null): JobSummar
 async function runningHeldJobs(run: Run): Promise<JobRecord[]> {
   const running: JobRecord[] = [];
   for (const held of run.ctx.heldJobs) {
-    const record = await jobStatus(run.ctx.host, held.handle.id);
+    const record = await statusOf(run, held);
     if (record !== null && record.state === "running") {
       running.push(record);
     }

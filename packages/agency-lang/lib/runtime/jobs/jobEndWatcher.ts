@@ -5,7 +5,7 @@
 // docs/dev/stdlib/jobs.md.
 import type { Host } from "../../host/host.js";
 import type { TimerHandle } from "../clock.js";
-import { jobStatus } from "./detachedJobs.js";
+import { heldJobStatus } from "./detachedJobs.js";
 import type { HeldJob } from "./heldJobs.js";
 import type { JobRecord } from "./jobRecord.js";
 
@@ -17,11 +17,12 @@ export const WATCH_POLL_MS = 1000;
 type Seen = "running" | "settled";
 
 /** Every WATCH_POLL_MS, reads the state of each job `held()` returns and
- *  calls `ended` once for each job that has ended since the watch began.
- *  A job that had already ended when it was first seen is not reported.
- *  `held` is read on every poll, so a job started in any branch, or one
- *  that came back from a checkpoint, is seen. Returns a function that
- *  stops the watch and clears its timer. */
+ *  calls `ended` once for each job that has ended since the watch began,
+ *  including one that started and ended between two polls. A job that had
+ *  ended before the watch began is not reported. A read that fails is
+ *  tried again on the next poll. `held` is read on every poll, so a job
+ *  started in any branch, or one that came back from a checkpoint, is
+ *  seen. Returns a function that stops the watch and clears its timer. */
 export function watchHeldJobs(args: {
   host: Host;
   held: () => HeldJob[];
@@ -29,15 +30,18 @@ export function watchHeldJobs(args: {
 }): () => void {
   const { host, held, ended } = args;
   const seen: Record<string, Seen> = {};
+  const watchBegan = host.clock.wallTime();
   let stopped = false;
   let timer: TimerHandle | null = null;
 
-  const look = async (id: string): Promise<void> => {
+  const look = async (job: HeldJob): Promise<void> => {
+    const id = job.handle.id;
     let record: JobRecord | null;
     try {
-      record = await jobStatus(host, id);
+      record = await heldJobStatus(host, { id, token: job.token });
     } catch {
-      record = null;
+      // Left unsettled, so the next poll reads it again.
+      return;
     }
     if (record === null) {
       seen[id] = "settled";
@@ -47,9 +51,10 @@ export function watchHeldJobs(args: {
       seen[id] = "running";
       return;
     }
-    const wasRunning = seen[id] === "running";
+    const endedSinceTheWatchBegan =
+      seen[id] === "running" || (record.endedAt !== null && record.endedAt >= watchBegan);
     seen[id] = "settled";
-    if (!wasRunning || stopped) {
+    if (!endedSinceTheWatchBegan || stopped) {
       return;
     }
     // A listener that throws must not stop the watch or the other
@@ -67,7 +72,7 @@ export function watchHeldJobs(args: {
     }
     for (const job of held()) {
       if (seen[job.handle.id] !== "settled") {
-        await look(job.handle.id);
+        await look(job);
       }
     }
     if (!stopped) {

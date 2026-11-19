@@ -1,6 +1,26 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { joinEffectFlags, policyOverlayFromFlags, splitEffects } from "./policyFlags.js";
+import {
+  joinEffectFlags,
+  layerPolicy,
+  policyOverlayFromFlags,
+  splitEffects,
+} from "./policyFlags.js";
 import type { Policy } from "./policy.js";
+
+describe("layerPolicy", () => {
+  it("puts the top policy's rules ahead of the base's, effect by effect", () => {
+    const top: Policy = { "std::bash": [{ action: "approve" }] };
+    const base: Policy = {
+      "std::bash": [{ action: "reject" }],
+      "std::read": [{ action: "approve" }],
+    };
+    expect({ ...layerPolicy({ top, base }) }).toEqual({
+      "std::bash": [{ action: "approve" }, { action: "reject" }],
+      "std::read": [{ action: "approve" }],
+    });
+    expect(base["std::bash"]).toEqual([{ action: "reject" }]);
+  });
+});
 
 describe("joinEffectFlags", () => {
   it("keeps every value of a flag given more than once", () => {

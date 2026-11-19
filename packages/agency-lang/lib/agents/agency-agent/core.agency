@@ -76,7 +76,9 @@ export type PauseData = {
   context: string;
   // The brain that runs the session, by its name. Unlike `record.brain`,
   // it is there when the session is not saved.
-  brain: string
+  brain: string;
+  // The policy the session was started under, or null. See SessionStart.
+  policy: any
 }
 
 effect agent::sessionInput {
@@ -89,7 +91,8 @@ effect agent::sessionInput {
   effort: string;
   budget: any;
   context: string;
-  brain: string
+  brain: string;
+  policy: any
 }
 
 export type SessionStart = {
@@ -105,7 +108,14 @@ export type SessionStart = {
   flags: Record<string, any> | null;
   // The limits of each turn until a `budget` answer changes them. A
   // negative value is no limit.
-  budget: TurnBudget
+  budget: TurnBudget;
+  // The policy the session's policy flags resolved to, such as
+  // `--policy minimal`, or null when it was started with none. The core
+  // only carries it and reports it at every pause. A front-end that
+  // resumes the session runs it under this policy in place of its own
+  // saved one. It is `any` for the reason `options` is: checking a value
+  // against a type fills each optional field it lacks with null.
+  policy: any
 }
 
 /** A message from the user. `notes` are lines put above it, such as the
@@ -159,7 +169,7 @@ export type PresetChange = {
 /** Everything the pause accepts. */
 export type Answer = Message | ModelChange | OptionsChange | BudgetChange | EffortChange | PresetChange
 
-def pauseData(budget: TurnBudget): PauseData {
+def pauseData(budget: TurnBudget, policy: any): PauseData {
   const threadId = conversationThread()
   return {
     thread: threadId,
@@ -171,7 +181,8 @@ def pauseData(budget: TurnBudget): PauseData {
     effort: askedEffort(),
     budget: budget,
     context: contextStatus(threadId),
-    brain: currentBrainName()
+    brain: currentBrainName(),
+    policy: policy
   }
 }
 
@@ -222,8 +233,12 @@ export node session(start: SessionStart) {
   // Built once. Each turn adds this same text to the conversation.
   setGrounding(groundingText(currentBrainName(), start.flags))
   let budget: TurnBudget = start.budget
+  // The session's own policy. Kept in this frame, so every checkpoint
+  // holds it and every pause reports it. A start from a front-end that
+  // sends no policy carries none.
+  let policy: any = start.policy ?? null
   while (true) {
-    const raw: any = raise agent::sessionInput("Waiting for the user", pauseData(budget))
+    const raw: any = raise agent::sessionInput("Waiting for the user", pauseData(budget, policy))
     // A run policy that answers this pause sends nothing. Raising again
     // would get the same answer, forever, without ever pausing.
     if (raw == null) {

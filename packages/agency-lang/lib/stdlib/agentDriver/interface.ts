@@ -6,21 +6,31 @@
 // This file does not import the program, so a test that runs a small
 // fixture program never loads the agent.
 import type { Interrupt } from "../../runtime/interrupts.js";
+import { validatePolicy, type Policy } from "../../runtime/policy.js";
+import { failure, success, type Result } from "../../types/result.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { isSessionRecord, type SessionRecord } from "../agentSessions.js";
 
 /** The effect of the pause the core waits for an answer at. */
 export const SESSION_INPUT_EFFECT = "agent::sessionInput";
 
+/** Why a session whose own policy is not a valid policy is not resumed. */
+export const POLICY_UNREADABLE =
+  "This session's own policy can't be read, so it can't be continued here.";
+
 /** One turn's limits: US dollars and milliseconds. */
 export type TurnBudget = { maxCost: number; maxTime: number };
 
+/** `policy` is the policy the session's policy flags resolved to, or null
+ *  when it was started with none. The session carries it, and a front-end
+ *  that resumes the session runs it under that policy (`sessionRunPolicy`). */
 export type SessionStart = {
   cwd: string;
   replyStyle: string;
   record: SessionRecord | null;
   flags: Record<string, unknown> | null;
   budget: TurnBudget;
+  policy: Policy | null;
 };
 
 /** The startup model flags. */
@@ -50,7 +60,8 @@ export type ResolvedModel = { model: string; provider: string; via: string };
 
 /** What the core reports at its pause. `effort` is "" when no one named
  *  one. `fixedProvider` is "" or the provider the session is fixed to, by
- *  the name a person sees. */
+ *  the name a person sees. `policy` is the session's own policy, or null
+ *  when it carries none. */
 export type PauseData = {
   thread: string;
   cwd: string;
@@ -62,6 +73,7 @@ export type PauseData = {
   budget: TurnBudget;
   context: string;
   brain: string;
+  policy: Policy | null;
 };
 
 export type MessageAnswer = { kind: "message"; text: string; notes: string[]; target: string };
@@ -104,13 +116,40 @@ function text(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function isPolicy(value: unknown): value is Policy {
+  return validatePolicy(value).success;
+}
+
+function pauseFields(pause: Interrupt[]): unknown {
+  return pause.find((interrupt) => interrupt.effect === SESSION_INPUT_EFFECT)?.data;
+}
+
+/** The policy the session carries, from its pause: null when it carries
+ *  none (it was started with no policy flag, or by a version of the core
+ *  that did not report one). Fails when the policy is there but is not a
+ *  valid policy. Such a session is not resumed: run under a front-end's
+ *  own policy instead, it could be approved what its own policy asks
+ *  about. */
+export function carriedPolicy(pause: Interrupt[]): Result<Policy | null> {
+  const data = pauseFields(pause);
+  const policy: unknown = isPlainObject(data) ? data.policy : undefined;
+  if (policy === undefined || policy === null) {
+    return success(null);
+  }
+  return isPolicy(policy) ? success(policy) : failure(POLICY_UNREADABLE);
+}
+
 /** What the core reported at this pause, or null when the interrupts are
  *  not its pause. The data comes out of a checkpoint, so each field is
- *  checked. */
+ *  checked. A pause whose policy is not valid is null too: `carriedPolicy`
+ *  says why, and `restoredPhase` ends such a session. */
 export function pauseData(pause: Interrupt[]): PauseData | null {
-  const waiting = pause.find((interrupt) => interrupt.effect === SESSION_INPUT_EFFECT);
-  const data: unknown = waiting?.data;
+  const data = pauseFields(pause);
   if (!isPlainObject(data) || !isBudget(data.budget) || !isModels(data.models)) {
+    return null;
+  }
+  const policy = carriedPolicy(pause);
+  if (!policy.success) {
     return null;
   }
   return {
@@ -124,5 +163,6 @@ export function pauseData(pause: Interrupt[]): PauseData | null {
     budget: data.budget,
     context: text(data.context),
     brain: text(data.brain),
+    policy: policy.value,
   };
 }

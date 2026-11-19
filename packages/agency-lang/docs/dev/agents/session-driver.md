@@ -108,6 +108,41 @@ The callbacks and the policy go in again on every resume. The runtime
 does not keep the ones given to `main`. `startRun` and `resumeRun` do
 this. Nothing else should call `main` or `respondToInterrupts`.
 
+### Which policy a session runs under
+
+A session started with policy flags carries the policy they resolved to.
+Its pause reports it as `policy` (`pauseData`), and a front-end that
+resumes the session runs it under that policy. `sessionRunPolicy` picks
+the policy to give the run:
+
+```ts
+const carried = pauseData(pause)?.policy ?? null;
+const policy = sessionRunPolicy({ carried, saved: savedPolicyFile, extra: null });
+await resumeRun({ agent, callbacks, policy, interrupts: pause, responses });
+```
+
+- With `carried`, the run gets `carried`. `saved` is not used at all.
+- With no `carried`, the run gets `saved`.
+- `extra` is what the front-end adds for this sitting: flags given at
+  resume, and "always" answers given in a session that carries a policy.
+  Its rules go ahead of the others for the same effect, as `--approve`
+  and `--reject` do (`layerPolicy` in `lib/runtime/policyFlags.ts`).
+
+The session's policy replaces the saved one. It does not sit beside it.
+Every handler is consulted, and a policy with no rule for an effect says
+nothing. Say the saved policy is `recommended` and the session was
+started with `--policy minimal`. `minimal` has no rule for `std::read`.
+Beside `recommended`, the read would be approved, and only `minimal`'s
+rejects would carry over.
+
+`sessionRunPolicy` does not pin the pause. `startRun` and `resumeRun` pin
+whatever policy they are given.
+
+A policy that is there but is not valid stops the session from being
+resumed. `carriedPolicy` fails with "This session's own policy can't be
+read, so it can't be continued here." `pauseData` is null for such a
+pause, and `restoredPhase` ends the session with that reason.
+
 Each call returns `{ result, usage }`. `usage` is the run's total spend so
 far, or null when the call threw.
 
@@ -151,6 +186,9 @@ did. Perry makes its folder private itself.
   (`canResume`), so this is found when the session loads, not on the
   next message. No event is reported (`happened` is empty). The
   front-end reads `phase.reason` and shows it.
+- **Carrying a policy that is not valid:** `ended`, with the reason, in
+  the same way. Run under a front-end's own policy instead, it could be
+  approved what its own policy asks about.
 
 The two turn cases go through `reduceDriver`, so they behave as the live
 ones do.
@@ -197,9 +235,9 @@ one user on one machine.
 | File                                     | Job                                                         |
 | ---------------------------------------- | ----------------------------------------------------------- |
 | `lib/stdlib/agentDriver/index.ts`        | The entry point.                                            |
-| `lib/stdlib/agentDriver/interface.ts`    | The core's interface: `ProgramStart`, `PauseData`, `Answer`. |
+| `lib/stdlib/agentDriver/interface.ts`    | The core's interface: `ProgramStart`, `PauseData`, `Answer`, `carriedPolicy`. |
 | `lib/stdlib/agentDriver/run.ts`          | `startRun`, `resumeRun`, `toStep`, `withCancelNote`.        |
-| `lib/stdlib/agentDriver/policy.ts`       | `withPauseLeftAlone`.                                       |
+| `lib/stdlib/agentDriver/policy.ts`       | `withPauseLeftAlone`, `sessionRunPolicy`.                   |
 | `lib/stdlib/agentDriver/approvals.ts`    | The approval queue.                                         |
 | `lib/stdlib/agentDriver/machine.ts`      | `reduceDriver`, the phases, `Happened`.                     |
 | `lib/stdlib/agentDriver/savedRun.ts`     | Saving, loading, and the holder.                            |

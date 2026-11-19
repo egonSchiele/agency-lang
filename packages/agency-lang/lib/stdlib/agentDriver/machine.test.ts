@@ -39,6 +39,7 @@ function reported(model: string): PauseData {
     budget: { maxCost: 1, maxTime: 1 },
     context: "",
     brain: "simple",
+    policy: null,
   };
 }
 

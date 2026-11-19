@@ -3,6 +3,11 @@
 // finishes the turn. Both load the program through the package export,
 // as two front-ends would.
 //
+// The first process also starts a session under `minimal`'s rules, as
+// `--policy minimal` would, and saves its first pause. The second resumes
+// it through the session driver with a saved policy that approves every
+// read, and the session's own policy is the one that holds.
+//
 // This file is both processes: the second is started with RESUME set.
 // (Only test.js is kept in git under tests/, so there is no second file.)
 import { execFileSync } from "node:child_process";
@@ -10,9 +15,12 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ToolCall } from "smoltalk";
+import { minimalAutoApprovePolicy } from "../../../dist/lib/runtime/builtinPolicies.js";
 
 const PAUSE = "agent::sessionInput";
 const policy = { [PAUSE]: [{ action: "propagate" }] };
+// A front-end's saved policy that approves every read.
+const APPROVES_EVERY_READ = { "std::read": [{ action: "approve" }] };
 const USAGE = { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 };
 const COST = { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" };
 
@@ -77,6 +85,25 @@ function installClient(setClient, noteDir, projectDir) {
 const TERMINAL =
   /agency-agent\/(agent|lib\/(repl|capabilitiesUi|mcpMenu|header|transcript|args|policy|trace|runSession|resume|slashCommands\/[^.]+))\.agency$/;
 
+/** What a front-end starts a session in `project` with. `sessionPolicy` is
+ *  what its policy flags resolved to, or null. */
+function startData({ project, id, sessionPolicy }) {
+  return {
+    brain: "minimal",
+    preset: "",
+    models: { pin: "claude-sonnet-4-6", slots: {}, provider: "", local: null, effort: null },
+    limits: { maxToolCallRounds: null, maxToolResultChars: null },
+    session: {
+      cwd: project,
+      replyStyle: "",
+      record: { id, cwd: project, brain: "", created: 1, lastActive: 1, turns: 0, title: "" },
+      flags: null,
+      budget: { maxCost: -1, maxTime: -1 },
+      policy: sessionPolicy,
+    },
+  };
+}
+
 /** The first process: start a session and pause on the read's approval. */
 async function startAndPause() {
   // The agent home is read when the modules load, so it is set first.
@@ -97,30 +124,9 @@ async function startAndPause() {
   const program = await import("agency-lang/agent-session");
   installClient(program.__setLLMClient, noteDir, project);
 
-  const started = await program.main(
-    {
-      brain: "minimal",
-      preset: "",
-      models: { pin: "claude-sonnet-4-6", slots: {}, provider: "", local: null, effort: null },
-      limits: { maxToolCallRounds: null, maxToolResultChars: null },
-      session: {
-        cwd: project,
-        replyStyle: "",
-        record: {
-          id: "s1",
-          cwd: project,
-          brain: "",
-          created: 1,
-          lastActive: 1,
-          turns: 0,
-          title: "",
-        },
-        flags: null,
-        budget: { maxCost: -1, maxTime: -1 },
-      },
-    },
-    { policy },
-  );
+  const started = await program.main(startData({ project, id: "s1", sessionPolicy: null }), {
+    policy,
+  });
   const paused = await program.respondToInterrupts(
     started.data,
     [program.approve({ kind: "message", text: "read the note", notes: [], target: "" })],
@@ -131,10 +137,18 @@ async function startAndPause() {
     Object.keys(interrupt.checkpoint?.moduleFingerprints ?? {}),
   );
 
+  // A session started under `minimal`'s rules, saved at its first pause.
+  const minimal = await program.main(
+    startData({ project, id: "s2", sessionPolicy: minimalAutoApprovePolicy }),
+    { policy },
+  );
+
   // What a front-end saves: the interrupts, each with its checkpoint.
   const pauseFile = path.join(scratch, "pause.json");
+  const minimalPauseFile = path.join(scratch, "minimal-pause.json");
   const resumedFile = path.join(scratch, "resumed.json");
   writeFileSync(pauseFile, JSON.stringify(approval));
+  writeFileSync(minimalPauseFile, JSON.stringify(minimal.data));
   execFileSync(process.execPath, ["./test.js"], {
     stdio: "inherit",
     env: {
@@ -143,6 +157,7 @@ async function startAndPause() {
       NOTE_DIR: noteDir,
       PROJECT_DIR: project,
       PAUSE_FILE: pauseFile,
+      MINIMAL_PAUSE_FILE: minimalPauseFile,
       RESUMED_FILE: resumedFile,
     },
   });
@@ -194,6 +209,7 @@ async function resume() {
     );
   }
   const replies = emitted.filter((event) => event.type === "session.reply").map((event) => event.text);
+  const minimalSession = await resumeMinimalSession(program);
 
   writeFileSync(
     process.env.RESUMED_FILE,
@@ -207,8 +223,32 @@ async function resume() {
       turnsAfterResume: data?.record?.turns,
       brainAfterResume: data?.record?.brain,
       mainModelAfterResume: data?.models?.main?.model,
+      minimalSession,
     }),
   );
+}
+
+/** The session started under `minimal`'s rules, resumed through the driver
+ *  by a front-end whose saved policy approves every read. The session's
+ *  own policy replaces the saved one, and says nothing about reads, so the
+ *  read the turn makes is asked about. */
+async function resumeMinimalSession(program) {
+  const driver = await import("agency-lang/stdlib-lib/agentDriver/index.js");
+  const pause = JSON.parse(readFileSync(process.env.MINIMAL_PAUSE_FILE, "utf8"));
+  const carried = driver.pauseData(pause)?.policy ?? null;
+  const outcome = await driver.resumeRun({
+    agent: program,
+    callbacks: {},
+    policy: driver.sessionRunPolicy({ carried, saved: APPROVES_EVERY_READ, extra: null }),
+    interrupts: pause,
+    responses: [program.approve(driver.messageAnswer("read the note"))],
+  });
+  const step = outcome.result;
+  return {
+    carriesMinimal: JSON.stringify(carried) === JSON.stringify(minimalAutoApprovePolicy),
+    step: step.success ? step.value.kind : step.error,
+    pausedOn: step.success ? (step.value.interrupts ?? []).map((interrupt) => interrupt.effect) : [],
+  };
 }
 
 if (process.env.RESUME) {

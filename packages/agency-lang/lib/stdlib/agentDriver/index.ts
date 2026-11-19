@@ -3,7 +3,9 @@
 // Reached as `agency-lang/stdlib-lib/agentDriver/index.js`. See
 // docs/dev/agents/session-driver.md.
 export {
+  POLICY_UNREADABLE,
   SESSION_INPUT_EFFECT,
+  carriedPolicy,
   messageAnswer,
   pauseData,
   type Answer,
@@ -17,7 +19,7 @@ export {
   type SettingsAnswer,
   type TurnBudget,
 } from "./interface.js";
-export { withPauseLeftAlone } from "./policy.js";
+export { sessionRunPolicy, withPauseLeftAlone } from "./policy.js";
 export {
   RUN_ENDED_ERROR,
   resumeRun,

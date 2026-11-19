@@ -193,7 +193,9 @@ did. Perry makes its folder private itself.
 - **Waiting on approvals:** each goes through `settle`, as a new
   pause's approvals do. The front-end chooses it. Perry passes the one
   that declines a raise wanting a typed value. With no `settle`, every
-  approval is asked again.
+  approval is asked again. When `settle` answers all of them, the phase
+  is `working` with a leg still to run, and the front-end runs it as it
+  would after a person answered the last one.
 - **A turn that was running** (the process stopped mid-turn): back to the
   turn's start, as if the person had cancelled it. It reports
   `turnCancelled`, and the next message carries the note.

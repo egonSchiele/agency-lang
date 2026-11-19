@@ -387,10 +387,13 @@ Each step leaves both programs working, and each is its own plan.
    (`docs/superpowers/plans/2026-11-18-shared-session-core-1-core.md`)
 2. **Perry on the core.** Perry already has a driver, so this is the
    cheap way to give the core a real user.
-3. **The terminal on the core:** the shell run, the driver, approvals out
-   of the run, the session file format, saving at every pause. This is the
-   first real handoff.
-4. **The remaining commands,** one answer kind at a time.
+   (`docs/superpowers/plans/2026-11-19-shared-session-core-2-perry.md`)
+3. **The terminal on the core,** with the remaining commands as answers
+   first, so no command is unavailable in between: the shell run, the
+   driver, approvals out of the run, the session file format, saving at
+   every pause. This is the first real handoff.
+   (`docs/superpowers/plans/2026-11-19-shared-session-core-3-terminal-draft.md`,
+   a draft)
 
 ## Decided
 

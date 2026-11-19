@@ -29,9 +29,8 @@ import {
   checkedRecord,
   finishedLine,
   formatListing,
-  liveStartTime,
-  parseStartTime,
 } from "./attach.js";
+import { liveStartTime, parseStartTime } from "@/host/node/processStartTime.js";
 
 describe("the --attach flag", () => {
   it("is debug mode when absent, a listing when bare, and a pid otherwise", () => {

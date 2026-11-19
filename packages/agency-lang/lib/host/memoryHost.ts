@@ -65,6 +65,8 @@ export type MemoryHostOptions = {
    *  error that names the program. */
   subprocess?: HostSubprocess;
   cwd?: string;
+  /** What `system.processId` answers; 1 without. */
+  processId?: number;
   homeDir?: string;
   /** What `system.installDir` answers; null without. */
   installDir?: string;
@@ -472,8 +474,14 @@ function memoryFiles(state: MemoryHostState, cwd: string): HostFiles {
       makeFolders(state, resolve(root, target), "mkdir");
     },
     // One user and no modes in memory, so a folder is always private.
-    privateDir: async (root, target) => {
-      makeFolders(state, resolve(root, target), "mkdir");
+    privateDir: async (root, target, options) => {
+      const full = resolve(root, target);
+      if (options?.mustBeNew && store.kindOf(full) !== null) {
+        throw Object.assign(new Error(`EEXIST: folder already exists, mkdir '${full}'`), {
+          code: "EEXIST",
+        });
+      }
+      makeFolders(state, full, "mkdir");
     },
     remove: async (root, target) => store.removeTree(resolve(root, target)),
     copy: async (from: Located, to: Located) => {
@@ -544,7 +552,23 @@ function memorySubprocess(options: MemoryHostOptions): HostSubprocess {
       }
       return options.subprocess.locate(program);
     },
+    startDetached: async (command, detachedOptions) => {
+      if (options.subprocess === undefined) {
+        throw refuse(command);
+      }
+      return options.subprocess.startDetached(command, detachedOptions);
+    },
+    processState: (pid) => given(pid).processState(pid),
+    processStartedAt: (pid) => given(pid).processStartedAt(pid),
+    stopGroup: async (pid) => given(pid).stopGroup(pid),
   };
+
+  function given(pid: number): HostSubprocess {
+    if (options.subprocess === undefined) {
+      throw new Error(`The memory host has no subprocesses, so it knows no process ${pid}.`);
+    }
+    return options.subprocess;
+  }
 }
 
 function memoryEnv(state: MemoryHostState): HostEnv {
@@ -600,7 +624,7 @@ function memorySystem(options: MemoryHostOptions, cwd: string): HostSystem {
     homeDir: () => options.homeDir ?? "/home/agency",
     tempDir: () => "/tmp",
     args: () => [],
-    processId: () => 1,
+    processId: () => options.processId ?? 1,
     userId: () => "0",
     moduleDir: (moduleUrl) => parentOf(moduleUrl.replace(/^file:\/\//, "")),
     isMainModule: () => false,

@@ -1,0 +1,8 @@
+{
+  "first": "one\n",
+  "second": "two\n",
+  "stopped": "stopped",
+  "stateWhilePaused": "running",
+  "sameRunner": true,
+  "stateAtEnd": "stopped"
+}

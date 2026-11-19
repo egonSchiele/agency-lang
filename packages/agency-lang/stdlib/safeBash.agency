@@ -80,7 +80,7 @@ import { _addLine, _write, _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
 import { _searchTargetIn, _bash, _grep } from "agency-lang/stdlib-lib/shell.js"
-import { _startJob } from "agency-lang/stdlib-lib/jobs.js"
+import { _launchJob, _jobStartRefusal } from "agency-lang/stdlib-lib/jobs.js"
 import { basename as lastSegment, dirname as parentOf } from "std::path"
 import { _grepPatternToRegex, _renderGrepOutput, _skippedDirsNote } from "agency-lang/stdlib-lib/grepDialect.js"
 import { _renderReadView } from "agency-lang/stdlib-lib/readDialect.js"
@@ -4827,12 +4827,59 @@ export def startJob(
   maxMinutes: number = 60,
 ): Result<string> raises <SafeBashEffects> {
   """
-  Start a shell command in the background and return its job id at once, while the command keeps running. Use it for a command expected to run for minutes or longer, such as a download, a server, a watch, or a long script. It asks the same approvals as running the command in the foreground. Only a plain shell command becomes a job. A file read, an echo, or an agency command runs in the foreground instead, however long it takes. A command that prints more than 10 MiB on one stream is stopped, so redirect such output to a file.
+  Start a shell command in the background and return its job id at once, while the command keeps running. Use it for a command expected to run for minutes or longer, such as a download, a server, a watch, or a long script. It asks the same approvals as running the command in the foreground. The job keeps running until it exits, reaches maxMinutes, or is stopped with stopJob, even after this program ends. Only a plain shell command becomes a job. A file read, an echo, or an agency command runs in the foreground instead, however long it takes. A command that prints more than 10 MiB on one stream is stopped, so redirect such output to a file.
 
   @param command - One or more bash commands.
   @param cwd - Working directory, defaulting to the agent directory or the process directory.
   @param maxMinutes - Minutes the job may run before it is stopped, at most 720.
   """
+  const started = startShellJob(command, command, cwd, maxMinutes)?
+  return match(started) {
+    { ran: "job", handle } => success(startedMessage(handle.id))
+    { ran: "foreground", output } => success("${FOREGROUND_LINE}\n${output}")
+  }
+}
+
+/** Which running job: what `startShellJob` returns, and what `std::jobs`
+  takes to read, stop, or list one. Plain data, saved with the run. It is
+  defined here and re-exported by `std::jobs`, which imports this module:
+  a type in `std::jobs` would make the two modules import each other. */
+export type JobHandle = {
+  id: string;
+  kind: string;
+  label: string;
+  startedAt: number
+}
+
+/** How `startShellJob` ran a command: as a job, or in the foreground
+  because only a plain shell command can be a job. */
+export type ShellStart = { ran: "job"; handle: JobHandle } | { ran: "foreground"; output: string }
+
+static const FOREGROUND_REFUSAL = "This command runs in the foreground, so it cannot be a job."
+
+@capabilities(fileRead, fileWrite, subprocess)
+export def startShellJob(
+  command: string,
+  label: string,
+  cwd: string = "",
+  maxMinutes: number = 60,
+  foreground: boolean = true,
+): Result<ShellStart> raises <SafeBashEffects> {
+  """
+  Start a shell command as a detached job, after asking the approvals running it in the foreground would ask. The job keeps running after this program ends, until it exits, reaches maxMinutes, or is stopped. Only a plain shell command becomes a job; any other command runs in the foreground, or is refused when foreground is false.
+
+  @param command - One or more bash commands.
+  @param label - What a list of jobs shows for this one.
+  @param cwd - Working directory, defaulting to the agent directory or the process directory.
+  @param maxMinutes - Minutes the job may run before it is stopped, at most 720.
+  @param foreground - Whether a command that cannot be a job runs in the foreground.
+  """
+  // A run() subprocess is sandboxed, and a job would outlive it with nobody
+  // holding it. Refused before any approval is asked, as spawn is.
+  const refusal = _jobStartRefusal()
+  if (refusal != "") {
+    return failure(refusal)
+  }
   const minutes = jobMinutes(maxMinutes)
   const dir = resolveCwd(cwd)
   const approved = approvedPlan(command, dir, FOREGROUND_TIMEOUT_SECONDS * 1000, minutes * 60000)
@@ -4843,7 +4890,7 @@ export def startJob(
   const plan = approved.value
   const exec = plan.execution
   if (exec is { kind: "bash", command as text }) {
-    // `_startJob` runs a command with no interrupt of its own, as `_bash`
+    // `_launchJob` runs a command with no interrupt of its own, as `_bash`
     // does in runBash, and it is safe for the reason runBash's comment
     // gives: the only path here runs through an approvedPlan that raised
     // every effect in the plan and returned success. Do not add a caller
@@ -4853,17 +4900,20 @@ export def startJob(
     if (copied is failure(why)) {
       return failure("`${command}` was not run: ${why}")
     }
-    const started = try _startJob(text, command, dir, minutes * 60000)
+    const started = try _launchJob(text, label, dir, minutes * 60000)
     if (started is failure(why)) {
       return failure("`${command}` was not run: ${why}")
     }
-    return success(startedMessage(started.value))
+    return success({ ran: "job", handle: started.value })
+  }
+  if (!foreground) {
+    return failure(FOREGROUND_REFUSAL)
   }
   const ran = runPlanned(plan, dir, command, FOREGROUND_TIMEOUT_SECONDS)
   if (isFailure(ran)) {
     return ran
   }
-  return success("${FOREGROUND_LINE}\n${ran.value}")
+  return success({ ran: "foreground", output: ran.value })
 }
 
 /** The sentence the model reads for each reason a plan went broad. */

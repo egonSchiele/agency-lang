@@ -108,7 +108,7 @@ export function nodeFilesPart(options: NodeFilesOptions = {}, cwd?: string): Hos
       };
     },
     mkdir: async (root, target) => files.mkdir(root, target),
-    privateDir: async (root, target) => files.privateDir(root, target),
+    privateDir: async (root, target, options) => files.privateDir(root, target, options),
     remove: async (root, target) => files.remove(root, target),
     copy: async (from, to) => files.copy(from, to),
     move: async (from, to) => files.move(from, to),

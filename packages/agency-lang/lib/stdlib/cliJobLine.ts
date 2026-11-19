@@ -1,14 +1,14 @@
 // The line the REPL prints when a background job ends, and how it prints
 // it without breaking whatever owns the terminal. See docs/dev/stdlib/jobs.md.
 import * as readline from "readline";
-import { describeJobState, type JobSummary } from "../runtime/jobs/jobTable.js";
+import { describeJobState, type JobRecord } from "../runtime/jobs/jobRecord.js";
 import { formatElapsed } from "../utils/formatElapsed.js";
 import { RESET, styles } from "../utils/termcolors.js";
 
 /** "job-3fa9c1 finished after 41m 8s (exit 0): ./run-comparison.sh" */
-export function jobEndedLine(job: JobSummary): string {
+export function jobEndedLine(job: JobRecord): string {
   const ranFor = formatElapsed((job.endedAt ?? job.startedAt) - job.startedAt);
-  return `${job.id} finished after ${ranFor} (${describeJobState(job)}): ${job.command}`;
+  return `${job.id} finished after ${ranFor} (${describeJobState(job)}): ${job.label}`;
 }
 
 /** What owns the terminal: the plain prompt waiting for a line, a turn,
@@ -23,8 +23,8 @@ export type JobEndLines = {
    *  prompt is drawn. Moving to the prompt or a turn prints the lines held
    *  while something else owned the terminal. */
   setOwner(owner: TerminalOwner): void;
-  /** The job table's end listener. */
-  jobEnded(job: JobSummary): void;
+  /** The listener `watchHeldJobs` calls when a held job ends. */
+  jobEnded(job: JobRecord): void;
   /** Run a question asked through readline, such as a nested `input()`.
    *  The question is a prompt while it waits for its answer, and the
    *  terminal goes back to its owner after. */

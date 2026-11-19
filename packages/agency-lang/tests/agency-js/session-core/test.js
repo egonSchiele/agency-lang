@@ -40,6 +40,8 @@ const LONG_MARK = "LONGMARK";
 const longTextSent = {};
 // The prompts of the summary calls compactions made.
 const summaryPrompts = [];
+// The names of the tools model calls were offered, keyed the same way.
+const toolsSent = {};
 
 function messageText(message) {
   const content = message.content;
@@ -81,6 +83,7 @@ function roundsReply(config) {
 __setLLMClient({
   async text(config) {
     const said = lastUserText(config);
+    toolsSent[said] = [...(toolsSent[said] ?? []), ...(config.tools ?? []).map((tool) => tool.name)];
     temperatureSent[said] = config.temperature ?? "none";
     effortSent[said] = config.reasoningEffort ?? "none";
     longTextSent[said] = config.messages.some((message) => messageText(message).includes(LONG_MARK));
@@ -361,6 +364,15 @@ result.learnedScansAskNothing = {
   pausedOn: scanner.pause[0].effect,
   reply: eventsOf(scanner, "session.reply").pop()?.text,
 };
+
+// The core offers the background job tools. A job outlives the turn, and
+// the pause after it, that started it.
+const JOBS_TURN = "a turn that could start a job";
+const jobber = await startSession({ brain: "coordinator" });
+await jobber.answer(message(JOBS_TURN));
+result.jobToolsOffered = ["startJob", "jobOutput", "stopJob"].map((name) =>
+  (toolsSent[JOBS_TURN] ?? []).includes(name),
+);
 
 // A session can start with a turn budget.
 const budgeted = await startSession({

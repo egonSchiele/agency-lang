@@ -463,6 +463,43 @@ export effectSet SafeBashEffects = <std::bash, std::write, std::remove, std::gre
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4679))
 
+### JobHandle
+
+Which running job: what `startShellJob` returns, and what `std::jobs`
+  takes to read, stop, or list one. Plain data, saved with the run. It is
+  defined here and re-exported by `std::jobs`, which imports this module:
+  a type in `std::jobs` would make the two modules import each other.
+
+```ts
+/** Which running job: what `startShellJob` returns, and what `std::jobs`
+  takes to read, stop, or list one. Plain data, saved with the run. It is
+  defined here and re-exported by `std::jobs`, which imports this module:
+  a type in `std::jobs` would make the two modules import each other. */
+export type JobHandle = {
+  id: string;
+  kind: string;
+  label: string;
+  startedAt: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4847))
+
+### ShellStart
+
+How `startShellJob` ran a command: as a job, or in the foreground
+  because only a plain shell command can be a job.
+
+```ts
+/** How `startShellJob` ran a command: as a job, or in the foreground
+  because only a plain shell command can be a job. */
+export type ShellStart =
+  | { ran: "job"; handle: JobHandle }
+  | { ran: "foreground"; output: string }
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4856))
+
 ## Constants
 
 ### GREP_FLAGS
@@ -937,7 +974,7 @@ startJob(
 ): Result<string> raises <SafeBashEffects>
 ```
 
-Start a shell command in the background and return its job id at once, while the command keeps running. Use it for a command expected to run for minutes or longer, such as a download, a server, a watch, or a long script. It asks the same approvals as running the command in the foreground. Only a plain shell command becomes a job. A file read, an echo, or an agency command runs in the foreground instead, however long it takes. A command that prints more than 10 MiB on one stream is stopped, so redirect such output to a file.
+Start a shell command in the background and return its job id at once, while the command keeps running. Use it for a command expected to run for minutes or longer, such as a download, a server, a watch, or a long script. It asks the same approvals as running the command in the foreground. The job keeps running until it exits, reaches maxMinutes, or is stopped with stopJob, even after this program ends. Only a plain shell command becomes a job. A file read, an echo, or an agency command runs in the foreground instead, however long it takes. A command that prints more than 10 MiB on one stream is stopped, so redirect such output to a file.
 
 **Parameters:**
 
@@ -954,3 +991,35 @@ Start a shell command in the background and return its job id at once, while the
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4824))
+
+### startShellJob
+
+```ts
+startShellJob(
+  command: string,
+  label: string,
+  cwd: string = "",
+  maxMinutes: number = 60,
+  foreground: boolean = true,
+): Result<ShellStart> raises <SafeBashEffects>
+```
+
+Start a shell command as a detached job, after asking the approvals running it in the foreground would ask. The job keeps running after this program ends, until it exits, reaches maxMinutes, or is stopped. Only a plain shell command becomes a job; any other command runs in the foreground, or is refused when foreground is false.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| command | `string` |  | One or more bash commands. |
+| label | `string` |  | What a list of jobs shows for this one. |
+| cwd | `string` | "" | Working directory, defaulting to the agent directory or the process directory. |
+| maxMinutes | `number` | 60 | Minutes the job may run before it is stopped, at most 720. |
+| foreground | `boolean` | true | Whether a command that cannot be a job runs in the foreground. |
+
+**Returns:** `Result<ShellStart>`
+
+**Throws:** `std::bash`, `std::write`, `std::grep`, `std::read`, `std::ls`, `std::glob`, `std::exec`, `std::remove`, `std::git::status`, `std::git::log`, `std::git::diff`, `std::git::show`, `std::git::blame`, `std::git::branchList`, `std::git::remoteList`, `std::git::stashList`, `std::git::add`, `std::git::commit`, `std::git::checkout`, `std::git::switch`, `std::git::branchCreate`, `std::git::branchDelete`, `std::git::stashPush`, `std::git::stashPop`, `std::git::restore`, `std::github::prGet`, `std::github::prDiff`, `std::github::issueGet`, `std::github::prFiles`, `std::github::prReviewList`, `std::github::prReviewCommentList`, `std::github::prChecks`, `std::github::issueCommentList`, `std::github::prList`, `std::github::issueList`, `std::github::issueSearch`, `std::guard`, `std::run`
+
+**Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4861))

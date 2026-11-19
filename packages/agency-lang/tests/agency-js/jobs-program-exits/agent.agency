@@ -1,0 +1,9 @@
+// A program that starts a job and returns exits at once, and leaves the job
+// running. program.js runs this in a child process; test.js times it.
+import { startJob } from "std::safeBash"
+import { listJobs } from "std::jobs"
+
+node main(): string {
+  startJob("sleep 30", maxMinutes: 1) with approve
+  return listJobs()[0].id
+}

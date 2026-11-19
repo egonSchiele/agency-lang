@@ -147,6 +147,8 @@ import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { attachTarget, invocationFromRunFlags, type DebugRunFlags } from "@/cli/debugFlags.js";
 import { attachCommand } from "@/cli/attach.js";
+import { nodeHost } from "@/host/node/nodeHost.js";
+import { cleanJobsCommand, listJobsCommand, printJobsResult, stopJobCommand } from "@/cli/jobs.js";
 import { attachWatchCommand } from "@/cli/attachWatch.js";
 import { runLaunchFrom } from "@/cli/runLaunch.js";
 import { EXIT_CODE_USAGE_ERROR } from "@/constants.js";
@@ -2191,6 +2193,26 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .action(async (pid: number | undefined) => {
       process.exit(await attachWatchCommand({ pid }));
+    });
+
+  const jobsCmd = program
+    .command("jobs")
+    .description("List the background jobs on this machine")
+    .action(async () => {
+      printJobsResult(await listJobsCommand(nodeHost()));
+    });
+  jobsCmd
+    .command("stop")
+    .description("Stop a background job and everything it started")
+    .argument("<id>", "The job's id, such as job-3fa9c1")
+    .action(async (id: string) => {
+      printJobsResult(await stopJobCommand(nodeHost(), id));
+    });
+  jobsCmd
+    .command("clean")
+    .description("Remove the folders of the jobs that have ended, with their output")
+    .action(async () => {
+      printJobsResult(await cleanJobsCommand(nodeHost()));
     });
 
   const debugCmd = program

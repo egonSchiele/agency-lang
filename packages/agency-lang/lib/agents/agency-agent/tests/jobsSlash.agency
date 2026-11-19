@@ -8,7 +8,7 @@ import { jobsSlashCommand } from "../lib/slashCommands/jobs.agency"
 // told they did.
 node stopAfterTheJobEndedLeavesNoNote(): string {
   handle {
-    startJob("true")
+    startJob("true", maxMinutes: 1)
   } with approve
   const id = listJobs()[0].id
   jobOutput(id, wait: 10)
@@ -18,7 +18,7 @@ node stopAfterTheJobEndedLeavesNoNote(): string {
 
 node stopOfARunningJobTellsTheModel(): boolean {
   handle {
-    startJob("sleep 30")
+    startJob("sleep 30", maxMinutes: 1)
   } with approve
   const id = listJobs()[0].id
   jobsSlashCommand("stop ${id}")
@@ -29,7 +29,7 @@ node stopOfARunningJobTellsTheModel(): boolean {
 // printf form keeps the expected text, A1, out of the command.
 node stopKeepsTheUnreadOutput(): boolean {
   handle {
-    startJob("printf 'A%s\\n' 1; sleep 30")
+    startJob("printf 'A%s\\n' 1; sleep 30", maxMinutes: 1)
   } with approve
   const id = listJobs()[0].id
   sleep(1s)

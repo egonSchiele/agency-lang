@@ -11,16 +11,27 @@ import { spawn, type ChildProcess } from "child_process";
 import fs from "fs";
 import path from "path";
 import { GIT_CODE_ENV, GIT_RETARGET_ENV, namedBy } from "../gitEnvironment.js";
-import type { Command, HostSubprocess, RunOptions, RunResult, RunningProcess } from "../host.js";
+import type {
+  Command,
+  DetachedOptions,
+  HostSubprocess,
+  RunOptions,
+  RunResult,
+  RunningProcess,
+} from "../host.js";
+import { processState } from "../../runDirectory/lock.js";
 import {
   OWN_GROUP,
   PIPE_GRACE_MS,
   TERM_GRACE_MS,
+  groupAlive,
   killGroup,
   signalGroup,
+  signalGroupById,
   trackChild,
   untrackChild,
 } from "./processGroups.js";
+import { liveStartTime } from "./processStartTime.js";
 
 /**
  * Stream teardown error codes that are safe to swallow. They mean the pipe
@@ -140,6 +151,26 @@ export function locateProgramSync(program: string, searchPath: string): string |
   return null;
 }
 
+/** The program, arguments, and environment a command spawns with. A shell
+ *  script runs under the bash found on the search path, with the
+ *  variables `shellEnvironment` removes taken out. */
+function spawnTarget(
+  command: Command,
+  env: Record<string, string> | undefined,
+): { file: string; args: string[]; env: Record<string, string> | undefined } {
+  if (command.kind === "program") {
+    return { file: command.program, args: command.args, env };
+  }
+  const variables = env ?? definedVariables(process.env);
+  const bash = locateProgramSync("bash", variables.PATH ?? "");
+  if (bash === null) {
+    throw new Error(
+      "bash was not found on the PATH. safeBash and the bash tool run their commands with bash.",
+    );
+  }
+  return { file: bash, args: ["-c", command.script], env: shellEnvironment(variables) };
+}
+
 function spawnCommand(command: Command, options: RunOptions): ChildProcess {
   const collect = options.collect ?? { stdout: true, stderr: true };
   const stdio = [
@@ -147,27 +178,100 @@ function spawnCommand(command: Command, options: RunOptions): ChildProcess {
     collect.stdout ? "pipe" : "ignore",
     collect.stderr ? "pipe" : "ignore",
   ] as ("pipe" | "ignore")[];
-  if (command.kind === "shell") {
-    const env = options.env ?? definedVariables(process.env);
-    const bash = locateProgramSync("bash", env.PATH ?? "");
-    if (bash === null) {
-      throw new Error(
-        "bash was not found on the PATH. safeBash and the bash tool run their commands with bash.",
-      );
-    }
-    return spawn(bash, ["-c", command.script], {
-      cwd: options.cwd,
-      env: shellEnvironment(env),
-      stdio,
-      detached: OWN_GROUP,
-    });
-  }
-  return spawn(command.program, command.args, {
+  const target = spawnTarget(command, options.env);
+  return spawn(target.file, target.args, {
     cwd: options.cwd,
-    env: options.env,
+    env: target.env,
     stdio,
     detached: OWN_GROUP,
   });
+}
+
+/** See `HostSubprocess.startDetached`. Not tracked, so this process's end
+ *  does not stop it. */
+// `async`, so a refused output file or a missing bash is a rejection.
+async function startDetached(
+  command: Command,
+  options: DetachedOptions = {},
+): Promise<{ pid: number }> {
+  const target = spawnTarget(command, options.env);
+  const output = options.outputFile === undefined ? null : openForOutput(options.outputFile);
+  let child: ChildProcess;
+  try {
+    child = spawn(target.file, target.args, {
+      cwd: options.cwd,
+      env: target.env,
+      stdio: output === null ? "ignore" : ["ignore", output, output],
+      detached: true,
+      shell: false,
+    });
+  } finally {
+    // The child has its own copy of the descriptor once spawn returns.
+    if (output !== null) {
+      fs.closeSync(output);
+    }
+  }
+  return new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("spawn", () => {
+      child.unref();
+      if (child.pid === undefined) {
+        reject(new Error(`${target.file} started with no pid.`));
+        return;
+      }
+      resolve({ pid: child.pid });
+    });
+  });
+}
+
+/** Only this user reads a detached process's output. The mode applies
+ *  when the file is created. */
+const OUTPUT_FILE_MODE = 0o600;
+
+/** `file` opened for appending, created when missing. A symbolic link at
+ *  the path is refused, not followed, as `agency run --detach` refuses one
+ *  (lib/cli/detached.ts). */
+function openForOutput(file: string): number {
+  const { O_WRONLY, O_APPEND, O_CREAT, O_NOFOLLOW } = fs.constants;
+  return fs.openSync(file, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW, OUTPUT_FILE_MODE);
+}
+
+/** How often `stopGroup` looks for the group to be gone. */
+const GROUP_POLL_MS = 50;
+/** How long `stopGroup` waits for a killed group before it gives up. A
+ *  group that SIGKILL did not end is stuck in the kernel, and waiting
+ *  longer changes nothing. */
+const KILLED_GROUP_WAIT_MS = 2000;
+
+/** Resolves when the group is gone, or after `ms`. True when it is gone. */
+async function groupGone(pid: number, ms: number): Promise<boolean> {
+  const deadline = Date.now() + ms;
+  while (groupAlive(pid)) {
+    if (Date.now() >= deadline) {
+      return false;
+    }
+    await new Promise((resolve) => setTimeout(resolve, GROUP_POLL_MS));
+  }
+  return true;
+}
+
+/** See `HostSubprocess.stopGroup`. */
+async function stopGroup(pid: number): Promise<void> {
+  signalGroupById(pid, "SIGTERM");
+  if (await groupGone(pid, TERM_GRACE_MS)) {
+    return;
+  }
+  if (OWN_GROUP) {
+    signalGroupById(pid, "SIGSTOP");
+  }
+  signalGroupById(pid, "SIGKILL");
+  await groupGone(pid, KILLED_GROUP_WAIT_MS);
+}
+
+/** See `HostSubprocess.processStartedAt`. */
+function processStartedAt(pid: number): number | null {
+  const time = liveStartTime(pid);
+  return "started" in time ? time.started : null;
 }
 
 /** Collect a stream's text, keeping at most `limit` bytes when `limit`
@@ -351,10 +455,14 @@ export const nodeSubprocess: HostSubprocess = {
   run: async (command, options = {}) => startChild(command, options).ended,
   locate: async (program) => locateProgramSync(program, process.env.PATH ?? ""),
   start: async (command, options = {}) => {
-    const { ended, kill, output } = startChild(command, options);
+    const { child, ended, kill, output } = startChild(command, options);
     // A rejection with nobody waiting yet must not be unhandled; `wait`
     // hands it to the caller.
     ended.catch(() => undefined);
-    return { kill, wait: () => ended, output };
+    return { pid: child.pid ?? null, kill, wait: () => ended, output };
   },
+  startDetached,
+  processState,
+  processStartedAt,
+  stopGroup,
 };

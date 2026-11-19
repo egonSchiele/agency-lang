@@ -94,6 +94,7 @@
     "pausedOn": "agent::sessionInput",
     "reply": "stub reply"
   },
+  "jobToolsOffered": [true, true, true],
   "startingBudget": {
     "maxCost": 3,
     "maxTime": 1000

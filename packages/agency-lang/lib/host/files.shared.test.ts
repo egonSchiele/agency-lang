@@ -41,6 +41,16 @@ function registerFileTests(name: string, open: () => Workspace): void {
         expect(chunks).toBe("hello");
       }));
 
+    it("privateDir takes an existing folder, unless it must be new", () =>
+      withWorkspace(async ({ host, dir }) => {
+        const root = await host.files.root(dir);
+        await host.files.privateDir(root, "p");
+        await host.files.privateDir(root, "p");
+        await host.files.privateDir(root, "q", { mustBeNew: true });
+        const again = host.files.privateDir(root, "q", { mustBeNew: true });
+        await expect(again).rejects.toMatchObject({ code: "EEXIST" });
+      }));
+
     it("honours every write mode", () =>
       withWorkspace(async ({ host, dir }) => {
         const root = await host.files.root(dir);

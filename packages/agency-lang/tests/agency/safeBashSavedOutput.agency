@@ -1,4 +1,5 @@
 import { mkdir, remove } from "std::fs"
+import { listJobs, stopJob } from "std::jobs"
 import { planFor, outcomeOf, safeBash, startJob } from "std::safeBash"
 import { bash, grep } from "std::shell"
 import { keepOutput } from "std::spill"
@@ -184,9 +185,13 @@ node copiesBeforeEveryShell() {
   safeBash(unparsed) with approve
   const afterUnparsed = copyExists(path)
   bash("rm -f '${path}'") with approve
-  // A background job gets its copy before it starts.
-  startJob("wc -l ${path}") with approve
+  // A background job gets its copy before it starts. A job outlives the
+  // run, so the test stops it.
+  startJob("wc -l ${path}", maxMinutes: 1) with approve
   const afterJob = copyExists(path)
+  for (job in listJobs()) {
+    stopJob(job.id)
+  }
   restoreTemp(old)
   remove(FIXTURE) with approve
   return [kind, afterUnparsed, afterJob, afterNested]

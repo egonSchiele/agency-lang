@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { heldJobSchema } from "../jobs/heldJobs.js";
 
 // MessageThreadJSON
 // Every field MessageThread.toJSON writes. zod strips keys a schema does
@@ -120,6 +121,7 @@ export const checkpointSchema = z.object({
   usage: z.unknown().optional(),
   traceId: z.string().optional(),
   spawnCount: z.number().int().nonnegative().optional(),
+  heldJobs: z.array(heldJobSchema).optional(),
   signature: z.string().optional(),
 });
 

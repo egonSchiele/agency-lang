@@ -2,18 +2,28 @@ import { describe, it, expect } from "vitest";
 import * as readline from "readline";
 import { PassThrough, Writable } from "stream";
 import { jobEndLines, jobEndedLine } from "./cliJobLine.js";
-import type { JobSummary } from "../runtime/jobs/jobTable.js";
+import type { JobRecord } from "../runtime/jobs/jobRecord.js";
 
 const COLUMNS = 60;
 
-const job: JobSummary = {
+const job: JobRecord = {
+  version: 1,
   id: "job-3fa9c1",
+  kind: "shell",
+  label: "./x.sh",
   command: "./x.sh",
+  cwd: "/work",
+  maxMs: 60 * 60_000,
   state: "ended",
   exitCode: 0,
+  note: "",
   startedAt: 1000,
   endedAt: 1000 + 41 * 60_000 + 8000,
-  unread: true,
+  runnerPid: 500,
+  runnerStartedAt: null,
+  commandPid: 501,
+  commandStartedAt: null,
+  token: "token-1",
 };
 
 /** A terminal screen, for the escape sequences readline and the finish

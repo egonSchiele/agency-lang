@@ -49,7 +49,7 @@ A Node process that waits on a promise with no open handle exits. `holdForAnswer
 
 A time budget is paused while a run is halted on an interrupt (`lib/runtime/rootBudget.ts`), so time spent holding is not counted.
 
-A run that surfaces an interrupt has paused, and a pause stops its shell jobs (`docs/dev/stdlib/jobs.md`). A program that holds a question has therefore lost its jobs.
+A pause does not stop a shell job: each job is a process of its own and outlives the run (`docs/dev/stdlib/jobs.md`). A program that holds a question keeps its jobs running, and a resume reads them from where the run left off.
 
 ## What the program prints
 

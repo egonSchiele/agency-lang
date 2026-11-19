@@ -166,6 +166,8 @@ export function makeMockCtx(
       }
     },
     _toolCallDepth: 0,
+    heldJobs: [],
+    startingJobs: 0,
     runId: null,
     traceConfig: {},
     // As on the real context: a handler from TypeScript takes only the

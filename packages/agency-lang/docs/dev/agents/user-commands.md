@@ -108,8 +108,9 @@ this?` sends that text now, with the image.
 
 ## `/jobs`
 
-`/jobs` (`lib/slashCommands/jobs.agency`) lists the background jobs: id,
-status, running time, and command. `/jobs stop <id>` stops one with
+`/jobs` (`lib/slashCommands/jobs.agency`) lists the background jobs this
+session started: id, status, running time, and command. `agency jobs`, at
+any terminal, lists every job on the machine. `/jobs stop <id>` stops one with
 `stopJob`. Like `!command`, it raises no interrupt, because the user typed
 it. On success it prints nothing, since the REPL prints the job's finish
 line, and it leaves a pending note saying the user stopped the job. The

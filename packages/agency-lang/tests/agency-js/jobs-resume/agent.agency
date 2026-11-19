@@ -1,0 +1,44 @@
+// A job keeps running while its run is paused on an interrupt, and the run
+// keeps its place in the job's output across a resume in a new process.
+// test.js pauses the run; resume-stage.js resumes it in another process.
+import { shellJob, start, output, stop, JobHandle, JobReport } from "std::jobs"
+
+effect test::pause { id: string }
+
+// Reads the job's output until it has `text`, for at most ten seconds.
+def readUntil(handle: JobHandle, text: string): string {
+  let seen = ""
+  let tries = 0
+  while (tries < 100 && !seen.includes(text)) {
+    const report = output(handle)
+    if (report is success(read)) {
+      seen = seen + read.stdout
+    }
+    if (!seen.includes(text)) {
+      sleep(100)
+    }
+    tries = tries + 1
+  }
+  return seen
+}
+
+def reportState(report: Result<JobReport>): string {
+  if (report is success(value)) {
+    return value.state
+  }
+  return "failure"
+}
+
+node main(): any {
+  const command = "echo one; sleep 2; echo two; sleep 20"
+  const started = start(shellJob(command, maxMinutes: 1)) with approve
+  if (started is failure(err)) {
+    return "start failed: ${err}"
+  }
+  const handle = started.value
+  const first = readUntil(handle, "one")
+  interrupt test::pause("Paused with a job running.", { id: handle.id })
+  const second = readUntil(handle, "two")
+  const stopped = reportState(stop(handle))
+  return { first: first, second: second, stopped: stopped }
+}

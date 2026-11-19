@@ -32,7 +32,7 @@ import type { MemoryConfig } from "../memory/types.js";
 import { GlobalStore } from "../state/globalStore.js";
 import { StateStack } from "../state/stateStack.js";
 import { TraceWriter } from "../trace/traceWriter.js";
-import { closeJobTable, newJobTable, type JobTable } from "../jobs/jobTable.js";
+import { mergeHeldJobs, type HeldJob } from "../jobs/heldJobs.js";
 import type { TraceConfig } from "../trace/types.js";
 import type { HandlerEntry, HandlerFn, RunHandlerFn } from "../types.js";
 import { callPlain } from "../asyncContext.js";
@@ -141,13 +141,20 @@ export class RuntimeContext<T> {
   lockOwners: Record<string, string>;
   lockWaiters: Record<string, string[]>;
   lockReleasers: Record<string, () => void>;
-  /** The run's background jobs. Not serialized: a process is not data.
-   *  `cleanup()` stops them. See docs/dev/stdlib/jobs.md. */
-  jobs: JobTable;
   /** How many programs this run has started with `spawn`. Saved in every
    *  checkpoint, and shared by every branch of the run. See
    *  docs/dev/runtime/spawn.md. */
   spawnCount: number;
+  /** The detached jobs this run holds, with what it has read of each.
+   *  Saved in every checkpoint, and shared by every branch of the run: a
+   *  module global is copied per branch, so a job started in a parallel
+   *  tool call would be forgotten when the branch ended. See
+   *  docs/dev/stdlib/jobs.md. */
+  heldJobs: HeldJob[];
+  /** Job starts that passed the limit check and have not finished, so two
+   *  parallel starts cannot both pass it. Not saved: a start in progress
+   *  does not survive a pause. */
+  startingJobs: number;
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
   /** Called before any checkpoint is built, from whichever stack. An
@@ -407,8 +414,9 @@ export class RuntimeContext<T> {
     this.lockOwners = {};
     this.lockWaiters = {};
     this.lockReleasers = {};
-    this.jobs = newJobTable();
     this.spawnCount = 0;
+    this.heldJobs = [];
+    this.startingJobs = 0;
     // After a debugger rewind, the first debug step would write a duplicate
     // checkpoint to the trace (the user already saw the rewound checkpoint).
     // rewindFrom sets this flag so the first debugStep trace-write is skipped.
@@ -578,8 +586,9 @@ export class RuntimeContext<T> {
     execCtx.lockOwners = {};
     execCtx.lockWaiters = {};
     execCtx.lockReleasers = {};
-    execCtx.jobs = newJobTable();
     execCtx.spawnCount = 0;
+    execCtx.heldJobs = [];
+    execCtx.startingJobs = 0;
     execCtx._skipNextCheckpoint = false;
     execCtx.beforeCheckpoint = [];
     execCtx.pauseRequested = false;
@@ -862,9 +871,8 @@ export class RuntimeContext<T> {
 
   /** Sever references held by an execution context so GC can reclaim them. */
   cleanup(): void {
-    // A job listens on its own signal, not on this context's, so the
-    // abort below does not reach it.
-    closeJobTable(this.jobs);
+    // A background job is a process of its own and outlives the run, so
+    // nothing here stops one (docs/dev/stdlib/jobs.md).
     if (!this.abortController.signal.aborted) {
       this.abortController.abort(
         new AgencyCancelledError("cleanup", makeAbortCause({ kind: "cleanup" })),
@@ -906,6 +914,14 @@ export class RuntimeContext<T> {
     // and getTokens() agree after a restore as well as before one.
     this.invocationUsage.resumeFrom(checkpoint.usage);
     this.adoptSpawnCount(checkpoint.spawnCount);
+    this.adoptHeldJobs(checkpoint.heldJobs);
+  }
+
+  /** Take the held jobs a checkpoint saved. Like the spawn count, this is
+   *  never lowered: the run keeps every job it holds and adds the
+   *  checkpoint's, because a restore does not stop a job. */
+  adoptHeldJobs(saved: HeldJob[] | undefined): void {
+    this.heldJobs = mergeHeldJobs(this.heldJobs, saved);
   }
 
   /** Take the count of started programs a checkpoint saved. The count is

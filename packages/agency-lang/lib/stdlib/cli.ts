@@ -18,7 +18,7 @@ import { herdrReporter, type HerdrReporter } from "./herdr.js";
 import { buildCompleter, listDirUnder } from "./cliCompleter.js";
 import { editInEditor, installEditorKey, type EditorKey } from "./cliEditor.js";
 import { watchTypedLine, type TypedLine } from "./cliTypedLine.js";
-import { onJobEnd } from "../runtime/jobs/jobTable.js";
+import { watchHeldJobs } from "../runtime/jobs/jobEndWatcher.js";
 import { jobEndLines, type JobEndLines } from "./cliJobLine.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::ui/cli` — the line-mode REPL.
@@ -1484,7 +1484,13 @@ export async function _runLineRepl(
   const editorKey = installEditorKey(rl, useTTY);
   // Text the next prompt opens with: a command filled in from the palette.
   let prefill = "";
-  const stopWatchingJobs = onJobEnd(replCtx.jobs, jobLines.jobEnded);
+  // The context's list is read on every poll, so a job started in any
+  // branch, or one that came back from a checkpoint, gets its line.
+  const stopWatchingJobs = watchHeldJobs({
+    host: replCtx.host,
+    held: () => replCtx.heldJobs,
+    ended: jobLines.jobEnded,
+  });
   try {
     while (true) {
       let line: string;

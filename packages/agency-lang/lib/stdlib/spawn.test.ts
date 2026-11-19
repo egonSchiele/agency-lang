@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { inFrameOf, makeMockCtx } from "../runtime/__tests__/testHelpers.js";
 import type { Command, HostSubprocess, RunOptions, RunResult } from "../host/host.js";
 import { memoryHost, type MemoryHost } from "../host/memoryHost.js";
+import { noDetachedProcesses } from "./__tests__/fakeSubprocess.js";
 import { builtinEffectSets } from "../runtime/effectSets.js";
 import {
   _spawn,
@@ -65,6 +66,7 @@ function hostThatLaunches(
       throw new Error("spawn does not use start");
     },
     locate: async () => null,
+    ...noDetachedProcesses,
   };
   const host = memoryHost({
     variables: { AGENCY_HOME: HOME, ...variables },

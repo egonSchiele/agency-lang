@@ -85,10 +85,7 @@ callback("onLLMCallEnd") as data {
   }
 }
 
-// std::agents/agency reports a subagent's start and a failed router call
-// with emit. Any other event is not the agent's and prints nothing.
-// A notice is a line the agent used to print itself (lib/notice.agency).
-// The colors are the ones those lines had.
+// The color for each notice level (lib/notice.agency).
 def printNotice(text: string, level: string) {
   if (level == "error") {
     pushMessage(color.red(text))
@@ -99,6 +96,9 @@ def printNotice(text: string, level: string) {
   }
 }
 
+// Prints the events this terminal shows: a subagent's start and a failed
+// router call from std::agents/agency, and the session's notices and
+// budget stops. Any other event prints nothing.
 callback("onEmit") as data {
   if (isPlainObject(data) && data.type == "agencyAgent.subagentStart" && isTraceEnabled()) {
     _printAgentTrace({ kind: "agentStart", toolName: data.agent, message: data.message })

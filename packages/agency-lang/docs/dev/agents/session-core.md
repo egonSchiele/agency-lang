@@ -33,14 +33,14 @@ own and can change.
 
 **Start.** `main(start: ProgramStart)`: the brain, a preset, the model
 flags, the tool limits, and a `SessionStart` (the working folder, a reply
-style line, the session's record, the flags the session facts list, the
-starting turn budget, and the session's policy). `start` is checked against its type, so a
+style line, the session's record, the flags the session facts list, and
+the starting turn budget). `start` is checked against its type, so a
 front-end built for another version is refused with the field that does
 not fit. A setup that fails ends the run with the reason. The process is
 not ended.
 
-Two fields of `ProgramStart` are optional, so a start that sends neither
-is not refused:
+Three fields of `ProgramStart` are optional, so a start that sends none
+of them is not refused:
 
 - `agentName` is the name the run's statelog groups it under, such as
   `agency-agent/coordinator` (what the terminal sets). `main` calls
@@ -49,25 +49,20 @@ is not refused:
 - `oneShot` is true for a run that takes one message and ends, as
   `agency agent -p`. `main` gives it to `applyToolLimits`, so such a run
   gets 100 tool rounds by default and a session 50. Left out, it is false.
+- `trace` is `{ debug, verbose, interactive }`, what the run shows of its
+  work. Only a process that loaded the terminal's `trace.agency` prints
+  anything: its callbacks fire in every run and read these flags from
+  the run they fire in (`lib/traceSettings.agency`). Each run has its own,
+  so two sessions in one process can differ. Left out: debug from
+  `AGENT_DEBUG`, not verbose, and interactive.
 
 **The pause.** The core waits with one interrupt, `agent::sessionInput`.
 Its data is what a front-end shows and saves between turns: `thread`,
 `cwd`, `record`, `models`, `preset`, `fixedProvider`, `effort`, `budget`,
-`context`, `brain`, `policy`, `search`.
+`context`, `brain`, `search`.
 
 - `search` is the web search backend in force: `hosted`, `tavily`,
   `brave` or `off`. The driver reads it as "" from a pause that lacks it.
-
-- `policy` is the policy the session was started under: what its policy
-  flags resolved to, such as `--policy minimal`. It is null for a session
-  started with no policy flag. `SessionStart.policy` is optional, so a
-  start from a front-end that sends no `policy` field is not refused, and
-  the session carries none. The core does not check it, so a front-end
-  must send a valid policy. The core does nothing with it but keep it
-  and report it, so every checkpoint holds it. A front-end that resumes
-  the session runs it under this policy, in place of its own saved one
-  (`sessionRunPolicy` in `session-driver.md`). It is `any`, like
-  `options`, so that checking `start` against its type fills nothing in.
 - `brain` is the name of the brain that runs the session. `record.brain`
   holds it too, but a session that is not saved has no record. A front-end
   reads the brain from this field only.
@@ -112,7 +107,9 @@ did is a notice at level `info`, except a `model`, `options`, `budget`,
   has the new id and `forkedFrom`. A front-end saves the session under the
   new id, and the original stays as it was last saved. The hold moves too:
   every later `stillHeld` and `takeHold` uses the new id, and a front-end
-  that keeps sessions by id (Perry's engine) keys this one by it.
+  that keeps sessions by id (Perry's engine) keys this one by it. A
+  session with a policy file of its own keeps that policy: the front-end
+  saves it for the new id (`saveCarriedPolicy`).
 - **`search`** refuses a name that is no backend, and a backend this
   session cannot use: `hosted` on a local model, `tavily` or `brave`
   without its key. The choice is saved to `settings.json`, as `/search`
@@ -157,9 +154,10 @@ did is a notice at level `info`, except a `model`, `options`, `budget`,
 **Approvals.** The core installs no policy handler and asks no one. The
 policy is the run's own, passed as the `policy` option on `main` and on
 every resume. What no rule decides leaves the run as an interrupt with a
-checkpoint, and the front-end answers it. The session's own `policy` is
-not applied by the core either: the front-end passes it as the run's
-policy.
+checkpoint, and the front-end answers it. The core never holds a
+session's own policy, so neither a checkpoint nor an interrupt's data
+can change it: a front-end reads it from the session's policy file and
+builds the run's policy from it (`session-driver.md`).
 
 **Edit diffs.** The core's one handler around a turn reports every
 `std::edit` as a `session.editDiff` event and then passes. It never
@@ -292,4 +290,4 @@ Connections belong to the process.
 | `lib/stdlib/agentSessionImports.test.ts` | The import rule. |
 | `tests/agency-js/session-core` | The core, driven as a front-end drives it. |
 | `tests/agency-js/session-core-folders` | Two sessions in two folders in one process. |
-| `tests/agency-js/session-core-handoff` | A second process finishes a paused turn, and runs a session under the policy it carries. |
+| `tests/agency-js/session-core-handoff` | A second process finishes a paused turn, and runs a session under its own policy file. |

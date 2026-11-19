@@ -599,38 +599,37 @@ give and the policy to carry on with.
 ## Asking about another run's interrupt in the terminal
 
 A terminal program that runs a second Agency run gets that run's
-interrupts back as data. It asks about them with the prompt
-`cliPolicyHandler` draws, through two hidden functions in `std::policy`:
+interrupts back as data. It answers them as `cliPolicyHandler` answers
+its own, through two hidden functions in `std::policy`:
 
 ```
 const handler = cliPolicyHandler(file: policyFile)
-const response = askAbout(intr)   // approve(...) or reject(...)
+const response = askAbout(intr, runPolicy, runPolicyFile)   // approve(...) or reject(...)
 const rules = currentPolicy()
 ```
 
-- **One prompt.** `_handler` and `askAbout` both end in `askPerson`:
-  `askUser`, then the answer as a response (a rule saved while it waited,
-  reject always, approve, a typed value, a typed reason, or the "What
-  should the agent do instead?" follow-up).
-- **One policy and one writer.** `askAbout` uses the handler's `_policy`
-  and file. An "always" answer is recorded by `recordAnswer` and written
-  by `maybeFlush` before `askAbout` returns. The handler would otherwise
-  write it at its next interrupt, and there may be none.
+- **The run's policy, not the handler's file.** `runPolicy` is the policy
+  the other run uses, and `runPolicyFile` is where its "always" answers
+  belong: for a session with a policy of its own, that session's policy
+  file (`session-driver.md`). `askAbout` makes them the handler's state
+  first (`useRunPolicy`), after saving any answer still pending to the
+  old file. So the check, the prompt's re-check, the new rule and its
+  save all use them, and so does the handler at its own next interrupt.
+  After an "always" answer, `currentPolicy()` is `runPolicy` with the new
+  rule. Pass that the next time, or the rule is lost from memory.
+- **One decision.** `_handler` and `askAbout` both go through
+  `answerByPolicy`: a reject rule decides any raise, an approve rule
+  decides a raise that wants no value, and otherwise the person is asked
+  (`askPerson`), or, with `cliPolicyHandler(..., interactive: false)`,
+  the raise gets the non-interactive reject. So `askAbout` is safe to
+  call on any interrupt.
+- **One writer.** An "always" answer is recorded by `recordAnswer` and
+  written by `maybeFlush` before `askAbout` returns. The handler would
+  otherwise write it at its next interrupt, and there may be none.
 - **The handler comes first.** Before `cliPolicyHandler` is called there is
-  no file, so `askAbout` prints an error and rejects.
+  no handler state, so `askAbout` prints an error and rejects.
 - **Esc is not caught.** The cancellation the prompt raises leaves
   `askAbout` unchanged.
-- **A non-interactive handler draws no prompt.** With
-  `cliPolicyHandler(..., interactive: false)`, `askAbout` decides as
-  `_handler` does: by a rule if one can, and otherwise with the reject
-  reason a non-interactive run gives (`nonInteractiveReject`). A prompt
-  nobody answers would starve the event loop.
-- **Check the policy before calling `askAbout`.** When a rule decides the
-  interrupt inside `askAbout`, the terminal prints "Approved … by the rule
-  just saved", which is true only for a rule a sibling saved while this
-  one waited. The caller's check must apply a reject rule even to a raise
-  that expects a value, as `_handler` does. Only an approve rule is
-  withheld from such a raise.
 - **`intr` must be the host's own copy**, as for `resolvePromptOption`
   above: an "always" answer saves a rule built from `intr.data`.
 
@@ -800,9 +799,13 @@ out is one prompt when you change your model.
 Three more things in that same directory are the same kind of hole, so
 no `dir` rule covers the home either:
 
-- `policy.json` and `session-policy.json`. They *are* this policy. An
-  agent that can rewrite them can grant itself anything it likes, and the
-  approval prompt stops meaning what it says.
+- `policy.json`, `session-policy.json` and `session-policies/**` (each
+  saved session's own policy). They *are* this policy. An agent that can
+  rewrite them can grant itself anything it likes, and the approval
+  prompt stops meaning what it says. `with-writes` puts a `propagate`
+  rule for them ahead of its write scope (`ownPolicyFileRules`), since
+  that scope reaches the home when the home is inside the launch
+  directory.
 - `skills/**`. A skill gets there through `designSkill`'s review; a plain
   write would put one there without it.
 - `tools/**`. The same, through the toolbox's review and save gates.

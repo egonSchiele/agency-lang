@@ -68,6 +68,17 @@ describe("the agent's session program reaches no terminal code", () => {
     }
   });
 
+  it("the session program reaches none", () => {
+    expect(terminalModulesReachedFrom(["program.agency"])).toEqual([]);
+  });
+
+  it("the session program does reach the turn and the record", () => {
+    const reached = importClosure(["program.agency"]);
+    expect(reached).toContain("core.agency");
+    expect(reached).toContain("lib/turn.agency");
+    expect(reached).toContain("lib/record.agency");
+  });
+
   it("the turn, the record and the session search reach none", () => {
     expect(
       terminalModulesReachedFrom(["lib/turn.agency", "lib/record.agency", "lib/sessionSearch.agency"]),

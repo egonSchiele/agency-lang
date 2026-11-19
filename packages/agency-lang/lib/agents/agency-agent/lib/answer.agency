@@ -53,6 +53,18 @@ export def addReplStyle() {
   }
 }
 
+// The budget of one turn. No limit unless the session core sets one: the
+// terminal's whole-agent limit is the root budget from its flags.
+let _turnMaxCost: number = NO_LIMIT
+let _turnMaxTime: number = NO_LIMIT
+
+/** Set the budget of each later turn: a cost in dollars and a time in
+  milliseconds. A negative value is no limit. */
+export def setTurnBudget(maxCost: number, maxTime: number) {
+  _turnMaxCost = maxCost
+  _turnMaxTime = maxTime
+}
+
 /** The settings a turn runs with. The main model is the ambient one, which
   pickModelsForAgent set at startup, so it is left empty here. */
 export def cliSettings(): AgentSettings {
@@ -127,8 +139,8 @@ export def answerTurn(
     task: message,
     context: settings.context,
     brain: brainName as AgencyAgentBrain,
-    maxCost: NO_LIMIT,
-    maxTime: NO_LIMIT,
+    maxCost: _turnMaxCost,
+    maxTime: _turnMaxTime,
     model: main.model,
     provider: main.provider,
     reasoningModel: settings.reasoningModel,

@@ -1,0 +1,33 @@
+{
+  "firstPauseEffect": "agent::sessionInput",
+  "firstPauseModules": [
+    "dist/lib/agents/agency-agent/core.agency"
+  ],
+  "mainSlotIsSet": true,
+  "recordHasTheRealBrain": "simple",
+  "reply": [
+    "stub reply"
+  ],
+  "turnsAfterOneMessage": 1,
+  "badAnswer": "The run was sent an answer it can't read",
+  "badAnswerPausedAgain": true,
+  "budgetAfterAnswer": {
+    "maxCost": 2,
+    "maxTime": 60000
+  },
+  "badModelNoticeLevel": "error",
+  "badModelKeptMainSlot": true,
+  "goodModelChangedMainSlot": "claude-opus-4-8",
+  "failedTurnErrors": 0,
+  "failedTurnReplies": [
+    "The agent stopped before finishing"
+  ],
+  "pausedAgainAfterFailure": true,
+  "turnsAfterTheFailedTurn": 2,
+  "replyAfterTheFailedTurn": "stub reply",
+  "nullAnswerEndsTheRun": true,
+  "approveAllWithoutThePin": "ended",
+  "unknownBrainEndsTheRun": "Unknown brain",
+  "unusablePresetEndsTheRun": true,
+  "processStillAliveAfterFailedSetups": true
+}

@@ -1,0 +1,226 @@
+/** @module
+  @summary The session core: one conversation as one run that any
+  front-end can drive. It waits for an answer with an interrupt, runs a
+  turn or applies a command, and reports through events. It draws nothing
+  and asks no one, so the terminal, an app's engine, and a test drive it
+  the same way, and a session one of them saved is a file another can
+  resume. See docs/dev/agents/session-core.md.
+
+  A front-end answers the pause, `agent::sessionInput`, with an `Answer`.
+  Its policy must leave that effect to `propagate`. Every approval the
+  run's policy does not decide leaves the run as an interrupt too.
+
+  Events: `session.reply`, `session.error`, `session.notice`,
+  `session.budgetStop`.
+*/
+import { emit } from "std::statelog"
+
+import { setReplyStyle, setTurnBudget } from "./lib/answer.agency"
+import { checkCliBundles, setJobToolsOn } from "./lib/cliTools.agency"
+import { compactIfDue, contextStatus } from "./lib/compaction.agency"
+import { groundingText, setGrounding } from "./lib/grounding.agency"
+import { Resolved } from "./lib/models.agency"
+import { notice } from "./lib/notice.agency"
+import { addNote, withPendingNotes } from "./lib/pendingNotes.agency"
+import { activePresetName } from "./lib/presets.agency"
+import {
+  conversationThread,
+  currentRecord,
+  markTurnDone,
+  recordTurn,
+  setCurrentRecord,
+ } from "./lib/record.agency"
+import { applyLlmOptionsAnswer, applyModelSpec, takePendingLlmOptions } from "./lib/session.agency"
+import { SessionRecord } from "./lib/sessions.agency"
+import { currentBrainName, runTurn } from "./lib/turn.agency"
+import { getResolvedSlots } from "./shared.agency"
+
+/** One turn's limits: a cost in dollars and a time in milliseconds. A
+  negative value is no limit. */
+export type TurnBudget = {
+  maxCost: number;
+  maxTime: number
+}
+
+/** What a front-end shows and saves between turns. */
+export type PauseData = {
+  // The id of the thread the conversation runs on, "" before the first turn.
+  thread: string;
+  // The agent's working folder now. A coder can move it.
+  cwd: string;
+  // Null for a session that is not saved.
+  record: SessionRecord | null;
+  // The resolved model of each slot: main, reasoning, router.
+  models: Record<string, Resolved>;
+  // The active preset's name, or "".
+  preset: string;
+  budget: TurnBudget;
+  // How full the conversation's context window is, as the footer says it.
+  context: string
+}
+
+effect agent::sessionInput {
+  thread: string;
+  cwd: string;
+  record: any;
+  models: any;
+  preset: string;
+  budget: any;
+  context: string
+}
+
+export type SessionStart = {
+  // The folder the agent works in.
+  cwd: string;
+  // A line on how to format replies for this front-end, or "".
+  replyStyle: string;
+  // The session's record, or null for a session that is not saved.
+  record: SessionRecord | null;
+  // What the session was started with, for the session facts, or "".
+  startedWith: string
+}
+
+/** A message from the user. `notes` are lines put above it, such as the
+  output of a shell command the user ran, or an image's path. `target` is
+  a start target such as "code", or "" for the main agent. */
+export type Message = {
+  kind: "message";
+  text: string;
+  notes: string[];
+  target: string
+}
+
+/** Switch models, from a spec such as `opus` or `reasoning=claude-opus-4-8`. */
+export type ModelChange = {
+  kind: "model";
+  spec: string
+}
+
+/** Set the session's own LLM options, such as the effort. `options` is
+  `any` and not `LlmOptions` on purpose: checking a value against a type
+  fills each optional field it lacks with null, and a null there means
+  "remove this option". */
+export type OptionsChange = {
+  kind: "options";
+  options: any
+}
+
+/** Set the limits of each later turn. */
+export type BudgetChange = {
+  kind: "budget";
+  maxCost: number;
+  maxTime: number
+}
+
+/** Everything the pause accepts. */
+export type Answer = Message | ModelChange | OptionsChange | BudgetChange
+
+def pauseData(budget: TurnBudget): PauseData {
+  const threadId = conversationThread()
+  return {
+    thread: threadId,
+    cwd: getAgentCwd(),
+    record: currentRecord(),
+    models: getResolvedSlots(),
+    preset: activePresetName(),
+    budget: budget,
+    context: contextStatus(threadId)
+  }
+}
+
+// The coordinator's useLlmOptions tool records a request during the turn.
+// It is applied here, outside the tool's branch.
+def applyPendingLlmOptions() {
+  const pending = takePendingLlmOptions()
+  if (pending == null) {
+    return
+  }
+  applyLlmOptionsAnswer(pending)
+  const fields = Object.keys(pending)
+  const listed = if fields.length == 0 then "none (back to the preset's)" else fields.join(", ")
+  notice("Options set for the next turn: ${listed}")
+}
+
+/** The record with the brain this run really has, which is what a
+  front-end lists the session under. */
+def recordFor(record: SessionRecord | null): SessionRecord | null {
+  if (record == null) {
+    return null
+  }
+  return { ...record, brain: currentBrainName() }
+}
+
+// The match over an Answer has no `_` arm on purpose. The type checker
+// does not check an object union for a missing case yet. When it does, a
+// `_` arm would hide the case it reports.
+//
+// The turn is run with `try`, so a turn that throws is reported and the
+// session goes on, as the terminal's REPL does.
+export node session(start: SessionStart) {
+  setAgentCwd(start.cwd)
+  setCurrentRecord(recordFor(start.record))
+  setReplyStyle(start.replyStyle)
+  // A job belongs to the run and stops when the run pauses, and this run
+  // pauses after every turn.
+  setJobToolsOn(false)
+  const bundles = checkCliBundles()
+  if (bundles is failure(reason)) {
+    throw(reason)
+    return
+  }
+  // Built once. Each turn adds this same text to the conversation.
+  setGrounding(groundingText(currentBrainName(), start.startedWith))
+  let budget: TurnBudget = {
+    maxCost: -1,
+    maxTime: -1
+  }
+  while (true) {
+    const raw: any = raise agent::sessionInput("Waiting for the user", pauseData(budget))
+    // A run policy that answers this pause sends nothing. Raising again
+    // would get the same answer, forever, without ever pausing.
+    if (raw == null) {
+      return "The session ended: its pause was answered with nothing."
+    }
+    const answer: Answer! = raw
+    if (answer is failure(problem)) {
+      emit({
+        type: "session.error",
+        message: "The run was sent an answer it can't read: ${problem}"
+      })
+    } else if (answer is success(next)) {
+      match(next) {
+        { kind: "message", text, notes, target } => {
+          for (note in notes) {
+            addNote(note)
+          }
+          setTurnBudget(budget.maxCost, budget.maxTime)
+          const reply = try runTurn(target, withPendingNotes(text))
+          if (reply is success(replyText)) {
+            emit({ type: "session.reply", text: replyText })
+          } else if (reply is failure(err)) {
+            emit({ type: "session.error", message: "${err}" })
+          }
+          applyPendingLlmOptions()
+          markTurnDone()
+          recordTurn(text)
+          compactIfDue(conversationThread())
+        }
+        { kind: "model", spec } => {
+          const switched = applyModelSpec(spec)
+          if (switched is failure(reason)) {
+            notice(reason, "error")
+          }
+        }
+        { kind: "options", options } => {
+          applyLlmOptionsAnswer(options)
+        }
+        { kind: "budget", maxCost, maxTime } => {
+          budget = {
+            maxCost: maxCost,
+            maxTime: maxTime
+          }
+        }
+      }
+    }
+  }
+}

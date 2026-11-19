@@ -1,9 +1,10 @@
 import { _folderScan, _keepFolderScan } from "agency-lang/stdlib-lib/agentFolderScans.js"
+import { _holdsManySessions } from "agency-lang/stdlib-lib/agentProcess.js"
 import { SkillCommand, commandsDir } from "std::skills"
 
 import { claudeSkillCommands } from "./claudeSkills.agency"
 import { instructionFolders } from "./projectContext.agency"
-import { oneSessionInThisProcess, sessionFolder } from "./sessionFolder.agency"
+import { sessionFolder } from "./sessionFolder.agency"
 
 // A scan that a rule rejects is no commands, as a missing folder is.
 def scanProjectCommands(folder: string): SkillCommand[] {
@@ -16,10 +17,10 @@ def scanProjectCommands(folder: string): SkillCommand[] {
 
 /** The commands in the session folder's `.claude/commands`. A terminal
   scans once and keeps the result, like the Claude skills (`skillSources`).
-  Any other front-end scans each time. */
+  A process that holds many sessions scans each time. */
 export def projectCommands(): SkillCommand[] {
   const folder = sessionFolder()
-  if (!oneSessionInThisProcess()) {
+  if (_holdsManySessions()) {
     return scanProjectCommands(folder)
   }
   const kept = _folderScan("commands", folder)

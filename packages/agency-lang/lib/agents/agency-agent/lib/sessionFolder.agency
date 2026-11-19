@@ -25,11 +25,3 @@ export def sessionFolder(): string {
   }
   return folder
 }
-
-/** True in a terminal, which runs one session and may keep what it found
-  when it scanned this folder. False once a front-end has set the folder:
-  its process may hold other sessions here, each with a policy of its own,
-  so each read is a scan that session's policy is asked about. */
-export def oneSessionInThisProcess(): boolean {
-  return (_sessionFolder ?? "") == ""
-}

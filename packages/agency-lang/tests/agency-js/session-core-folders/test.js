@@ -22,6 +22,10 @@ const second = projectWithHello("second");
 
 const program = await import("../../../dist/lib/agents/agency-agent/program.js");
 const { main, respondToInterrupts, approve, hasInterrupts, __setLLMClient } = program;
+// As an engine does once, when it starts. Without it the process keeps the
+// first scan of each folder, and a command added later is not seen.
+const { _setManySessions } = await import("../../../dist/lib/stdlib/agentProcess.js");
+_setManySessions(true);
 
 const PAUSE = "agent::sessionInput";
 // No rule for the scans: they are the program's own reads, which it

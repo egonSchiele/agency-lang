@@ -15,7 +15,10 @@ const project = mkdtempSync(path.join(os.tmpdir(), "session-core-project-"));
 const program = await import("../../../dist/lib/agents/agency-agent/program.js");
 const { main, respondToInterrupts, approve, hasInterrupts, __setLLMClient } = program;
 // Whether this process can host a local model: a front-end says so once.
-const { _setLocalModelsAllowed } = await import("../../../dist/lib/stdlib/agentProcess.js");
+const { _setLocalModelsAllowed, _setManySessions } = await import(
+  "../../../dist/lib/stdlib/agentProcess.js"
+);
+_setManySessions(true);
 
 const PAUSE = "agent::sessionInput";
 const PIN = { [PAUSE]: [{ action: "propagate" }] };

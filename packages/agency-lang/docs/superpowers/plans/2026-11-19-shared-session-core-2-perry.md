@@ -17,7 +17,7 @@ Paths in Part A are relative to `packages/agency-lang/`, and `AGENT` means `lib/
 ## Decisions made for this plan
 
 - **Perry starts a session with the user's own models.** It passes no model flags, so the agent's resolution picks them: `settings.json`, the default preset, then the built-in defaults for whichever provider has a key. Perry's `DEFAULT_SETTINGS.provider` and `.model` go away.
-- **Perry does not run local models.** The engine is one process for every chat, and a local model is a server that process would host. The core refuses a local request when the program is started with `localModels: false`. Perry's lists keep the reason on a local preset, and onboarding still reports a local default preset as unusable.
+- **Perry does not run local models.** The engine is one process for every chat, and a local model is a server that process would host. The core refuses a local request once the engine has called `_setLocalModelsAllowed(false)`. Perry's lists keep the reason on a local preset, and onboarding still reports a local default preset as unusable.
 - **Perry keeps its turn budget of $50 and 30 minutes** as the session's starting budget.
 - **A new session uses the user's default brain.** A brain picker is not in this plan.
 - **Perry keeps a test double for the core** (`echoCore.agency`), updated to the core's interface. Twelve test files use it. One new test file drives the real program.
@@ -59,7 +59,7 @@ Paths in Part A are relative to `packages/agency-lang/`, and `AGENT` means `lib/
 - **The pause's `effort` is "" when no one named one.** The models' own rule then decides what is sent. Perry shows that as its default.
 - **`projectDir()` kept its signature.** It reads `sessionFolder()`, a new global the core sets from `start.cwd`.
 - **The core scans its folder each time it reads the commands or skills,** and its run's policy is asked. Only the terminal keeps a scan.
-- **`localModels` is not in `ProgramStart`.** It is a fact about the process. Perry calls `_setLocalModelsAllowed(false)` from `agency-lang/stdlib-lib/agentProcess.js` once, when the engine starts.
+- **`localModels` is not in `ProgramStart`.** It is a fact about the process. Perry calls `_setLocalModelsAllowed(false)` and `_setManySessions(true)` from `agency-lang/stdlib-lib/agentProcess.js` once, when the engine starts, in `sessionProgram.ts`. Both default to the terminal's answer, so forgetting one gives no error.
 - **`main` checks its `start` against the type.** A start with a missing field is refused by name.
 - **`SavedRun` did not move.** Task A5 added only the record's `runFormat` and `_recordRunFormat`. Perry keeps its own `SavedRun`, `isSavedRun` and reader in Task B4. They move when the terminal writes the format (Plan 3).
 - **The terminal's own approval diff has no size limit still.** It renders through `diff` in `std::syntax`, not through hunks, so `editDiff` does not fit it.
@@ -81,9 +81,9 @@ Tests in Part A that send a message name their brain: `brain: "simple"`. The coo
 - `configureLocalModel(...)` returns `Result<boolean>`. Every `print` + `_exit(1)` in it becomes a returned failure with the same text.
 - `applyModelRequest` returns that failure, as it does for a hosted model that does not resolve. Nothing is changed when it fails.
 - The terminal's startup prints the failure and exits with 1, as now. `/preset` and `/local` in the REPL print it and keep the session.
-- `ProgramStart` gains `localModels: boolean`. `main` stores it with `setLocalModelsAllowed(on: boolean)` in `session.agency`, a `let` global, so it follows the session. When it is false, `applyModelRequest` returns `failure("Local models are not available here.")` for a local request before it loads anything. The terminal never calls the setter, and the default is true.
+- Whether local models may run is a setting of the process: `_setLocalModelsAllowed(allowed: boolean)` in `lib/stdlib/agentProcess.ts`. When it is false, `applyModelRequest` returns `failure("Local models are not available here.")` for a local request before it loads anything. The terminal never calls the setter, and the default is true.
 
-- [ ] **Step 1: Write the failing tests.** In `quietStartup.agency`: `applyModelRequest` for a local model whose name does not resolve returns a failure and the run goes on to the next line. In `session-core/test.js`, with a `settings.json` in the temp home that holds `{ "presets": { "mine": { "local": "no-such-model", "default": true } } }`: a program started with `localModels: false` throws "Local models are not available here." from `main`, and the test's process is still running to assert it.
+- [ ] **Step 1: Write the failing tests.** In `quietStartup.agency`: `applyModelRequest` for a local model whose name does not resolve returns a failure and the run goes on to the next line. In `session-core/test.js`, with a `settings.json` in the temp home that holds `{ "presets": { "mine": { "local": "no-such-model", "default": true } } }`: after `_setLocalModelsAllowed(false)`, a program throws "Local models are not available here." from `main`, and the test's process is still running to assert it.
 - [ ] **Step 2:** Run: `pnpm run agency test lib/agents/agency-agent/tests/quietStartup.agency` and `pnpm run agency test js tests/agency-js/session-core`. Expected: FAIL. The first ends the test process.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Run both, and `AGENT/tests/presetSession.agency`. Expected: pass.
@@ -143,7 +143,7 @@ So the scans stay once per process and per folder, and the terminal still does i
   - After `{ kind: "effort", effort: "low" }`, a turn's call is sent `low` and the pause reports `effort: "low"`. After `"default"`, a turn's call is sent none. `"extreme"` is an error notice and the pause still reports the old effort.
   - `{ kind: "preset", name: "no-such-preset" }` is an error notice and the pause's `preset` is unchanged.
   - With `{ "presets": { "big": { "provider": "anthropic", "pin": "claude-opus-4-8" } } }` in the temp home's `settings.json`: `{ kind: "preset", name: "big" }`, and the pause reports `preset: "big"` and a main model of `claude-opus-4-8`.
-  - With `localModels: false` and a preset `{ "local": "no-such-model" }`: picking it is an error notice that says "Local models are not available here.", and the pause is unchanged. Review Focus 2.
+  - After `_setLocalModelsAllowed(false)`, with a preset `{ "local": "no-such-model" }`: picking it is an error notice that says "Local models are not available here.", and the pause is unchanged. Review Focus 2.
   - A session started with `budget: { maxCost: 3, maxTime: 1000 }` reports it at its first pause.
   - With `OPENAI_API_KEY` set: `{ kind: "model", spec: "openai/gpt-5.5" }`, and the pause reports the main model's provider as `openai-responses`. This pins that a spec with the public provider name resolves, which Task B2 depends on.
   - With no provider key in the environment: start the program and record whether `main` throws or the first turn's reply is a `session.error`. Either is accepted. Write which one it is into `session-core.md`, since Perry's Task B2 words its message from it.
@@ -227,7 +227,6 @@ export type ProgramStart = {
   preset: string;
   models: { pin: string; slots: Record<string, string>; provider: string; local: string | null; effort: string | null };
   limits: { maxToolCallRounds: number | null; maxToolResultChars: number | null };
-  localModels: boolean;
   session: SessionStart;
 };
 export type SessionStart = {
@@ -254,10 +253,10 @@ export function programStart(args: { cwd: string; record: SessionRecord; brain?:
 export function messageAnswer(text: string): Answer;
 ```
 
-- `programStart` fills in: `brain` as given or `""`, `preset: ""`, no model flags, no limits, `localModels: false`, `replyStyle: ""`, `flags: null`, `budget: { maxCost: 50, maxTime: 30 * 60_000 }`.
+- `programStart` fills in: `brain` as given or `""`, `preset: ""`, no model flags, no limits, `replyStyle: ""`, `flags: null`, `budget: { maxCost: 50, maxTime: 30 * 60_000 }`.
 - The import runs the agent's module statics, and one of them reads `AGENCY_AGENT_HOME` (`AGENT/lib/config.agency`). The engine takes its home from the same variable (`src/lib/agentHome.ts`), so the two agree with a static import. Tests set the variable in a vitest `setupFiles` entry, `src/test/agentHome.setup.ts`, which makes a temp home before any test module loads.
 
-- [ ] **Step 1: Write the failing test.** `sessionProgram.test.ts` sets `ANTHROPIC_API_KEY=test-key`, installs a client with the program's `__setLLMClient` that replies `stub reply`, starts the program in a temp folder with `programStart({ cwd, record, brain: "simple" })`, and checks: the first pause's effect is `SESSION_INPUT_EFFECT`; `pauseData` reads a main model and the $50 budget; a `messageAnswer("hello")` emits `session.reply` with `stub reply`; the checkpoint's `moduleFingerprints` name no file under Perry's `src/`. A second case starts with `brain: ""` and checks only that the first pause's record has `brain: "coordinator"`. It sends no message.
+- [ ] **Step 1: Write the failing test.** Two cases check the engine's process settings, since nothing else fails when one is forgotten: with a local default preset in the temp home's `settings.json`, starting the program fails with "Local models are not available here."; and a `.claude/commands` file added after a session's first turn is expanded on its next. Then: `sessionProgram.test.ts` sets `ANTHROPIC_API_KEY=test-key`, installs a client with the program's `__setLLMClient` that replies `stub reply`, starts the program in a temp folder with `programStart({ cwd, record, brain: "simple" })`, and checks: the first pause's effect is `SESSION_INPUT_EFFECT`; `pauseData` reads a main model and the $50 budget; a `messageAnswer("hello")` emits `session.reply` with `stub reply`; the checkpoint's `moduleFingerprints` name no file under Perry's `src/`. A second case starts with `brain: ""` and checks only that the first pause's record has `brain: "coordinator"`. It sends no message.
 - [ ] **Step 2:** Run: `pnpm vitest run src/agent/sessionProgram.test.ts`. Expected: FAIL.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Run `pnpm test:run` and `pnpm typecheck`. Expected: PASS.

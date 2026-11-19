@@ -164,18 +164,31 @@ the folder its saved sessions are kept under. The core sets it from
 `start.cwd`. The agent's working folder (`getAgentCwd`) starts there too,
 but a coder moves it, and these reads do not follow it.
 
-Each read is a scan, with its own `with approve`, that the run's policy is
-asked about. The terminal is the exception: it scans once in `runSession`,
-before it installs its policy handler, and keeps the result for the
-process (`lib/stdlib/agentFolderScans.ts`). A scan made under that handler
-would be put to the user, or rejected in a `-p` run.
+A terminal scans once in `runSession`, before it installs its policy
+handler, and keeps the result for the process
+(`lib/stdlib/agentFolderScans.ts`). A scan made under that handler would
+be put to the user, or rejected in a `-p` run.
+
+## What an engine sets for its process
+
+A process that holds many sessions calls two setters once, when it
+starts, before any session runs (`agency-lang/stdlib-lib/agentProcess.js`).
+They describe the process, so they are not saved with a session.
+
+- `_setManySessions(true)`: nothing is kept in the process for one session
+  that another could read. Each read of a folder's commands and skills is
+  a scan, with its own `with approve`, that the run's policy is asked
+  about.
+- `_setLocalModelsAllowed(false)`: see below.
+
+Both default to the terminal's answer. An engine that forgets one gets no
+error, so its own tests should check both: a command added while it runs
+is seen, and a local preset is refused.
 
 ## Local models
 
 Whether a process can host a local model is a fact about the process, not
-the session. An app whose one process holds every session calls
-`_setLocalModelsAllowed(false)` (`agency-lang/stdlib-lib/agentProcess.js`)
-when it starts. A local request is then refused with "Local models are
+the session. After `_setLocalModelsAllowed(false)`, a local request is then refused with "Local models are
 not available here.": `--local`, a local preset, or a model spec that
 names a local provider such as `mlx/…`.
 
@@ -194,7 +207,7 @@ Connections belong to the process.
 | `lib/agents/agency-agent/lib/notice.agency` | `notice`. |
 | `lib/agents/agency-agent/lib/sessionFolder.agency` | The folder a session started in. |
 | `lib/stdlib/agentFolderScans.ts` | The scans a terminal keeps. |
-| `lib/stdlib/agentProcess.ts` | What this process can do: host a local model or not. |
+| `lib/stdlib/agentProcess.ts` | What an engine sets for its process. |
 | `lib/stdlib/editDiff.ts` | An edit's hunks, for the core and for a front-end. |
 | `lib/stdlib/agentSessionImports.test.ts` | The import rule. |
 | `tests/agency-js/session-core` | The core, driven as a front-end drives it. |

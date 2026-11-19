@@ -7,7 +7,7 @@
 // checkpoint, so a resumed session scans again.
 //
 // A process that holds many sessions does not use this: see
-// `oneSessionInThisProcess` in the agent's sessionFolder.agency.
+// `_setManySessions` in agentProcess.ts.
 
 const scans: Record<string, unknown> = {};
 

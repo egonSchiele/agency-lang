@@ -8,9 +8,10 @@
 import { exists } from "std::shell"
 import { ClaudeSkillsScan, SkillCommand, SkillEntry, scanClaudeSkills, skillsToolFromEntries } from "std::skills"
 import { _folderScan, _keepFolderScan } from "agency-lang/stdlib-lib/agentFolderScans.js"
+import { _holdsManySessions } from "agency-lang/stdlib-lib/agentProcess.js"
 import { _repositoryAncestors } from "agency-lang/stdlib-lib/gitignore.js"
 
-import { oneSessionInThisProcess, sessionFolder } from "./sessionFolder.agency"
+import { sessionFolder } from "./sessionFolder.agency"
 
 export type SkillLabel = "personal" | "project"
 
@@ -194,10 +195,10 @@ def loadSkillSources(start: string, home: string): SkillSource[] {
 }
 
 /** The skills of the session's folder. A terminal scans once and keeps
-  the result (agentFolderScans.ts). Any other front-end scans each time. */
+  the result (agentFolderScans.ts). A process that holds many sessions scans each time. */
 export def skillSources(): SkillSource[] {
   const folder = sessionFolder()
-  if (!oneSessionInThisProcess()) {
+  if (_holdsManySessions()) {
     return loadSkillSources(folder, os.homedir())
   }
   const kept = _folderScan("skills", folder)

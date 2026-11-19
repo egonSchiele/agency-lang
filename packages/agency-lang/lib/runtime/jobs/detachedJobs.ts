@@ -5,7 +5,7 @@
 // docs/dev/stdlib/jobs.md.
 import path from "#path";
 
-import { agencyCliPath } from "../../agencyCliPath.js";
+import { getPackageRoot } from "../../importPaths.js";
 import type { Host, Root } from "../../host/host.js";
 import { agencyHomeDir } from "../agencyHome.js";
 import { processSlot } from "../processSlot.js";
@@ -29,8 +29,13 @@ import {
 } from "./jobRecord.js";
 import { collapseCarriageReturns } from "./progressText.js";
 
-/** How long `launchJob` waits for the runner to write its pid. */
-export const START_WAIT_MS = 5000;
+/** How long `launchJob` waits for a runner that is alive to write its pid.
+ *  Long, because on a busy machine starting node takes seconds; a runner
+ *  that exits ends the wait at once. */
+export const START_WAIT_MS = 30_000;
+/** The runner's entry point, below the package's root. A small file of its
+ *  own, not the `agency` command line, so a runner starts quickly. */
+const RUNNER_IN_BUILD = path.join("dist", "lib", "runtime", "jobs", "runnerMain.js");
 /** How much of the runner's own output a failed start reports. */
 const RUNNER_LOG_TAIL_CHARS = 2000;
 /** How long `requestStop` waits for the runner to write the ending. */
@@ -97,13 +102,14 @@ export async function launchJob(host: Host, start: JobStart): Promise<JobRecord>
     commandStartedAt: null,
     token: hexOf(host.random.bytes(TOKEN_BYTES)),
   });
+  let runner: { pid: number };
   try {
-    await host.subprocess.startDetached(
+    runner = await host.subprocess.startDetached(
       {
         kind: "program",
         // The node running this program, as `spawn` starts the CLI.
         program: process.execPath,
-        args: [agencyCliPath(), "job-runner", dir],
+        args: [runnerScriptPath(), dir],
       },
       // What the runner itself prints, such as a crash before it claims
       // the job, would otherwise be lost.
@@ -113,11 +119,19 @@ export async function launchJob(host: Host, start: JobStart): Promise<JobRecord>
     await giveUp(host, dir, RUNNER_NEVER_STARTED);
     throw error;
   }
+  // A runner on a busy machine can take seconds to start, so the wait is
+  // long. A runner that exits without claiming the job ends the wait at
+  // once.
   const deadline = host.clock.now() + START_WAIT_MS;
+  let why = `did not start within ${START_WAIT_MS / 1000} seconds`;
   for (;;) {
     const current = await readRecord(host, dir);
     if (current !== null && current.runnerPid !== null) {
       return current;
+    }
+    if (host.subprocess.processState(runner.pid) === "gone") {
+      why = "exited before it started the job";
+      break;
     }
     if (host.clock.now() >= deadline) {
       break;
@@ -127,9 +141,7 @@ export async function launchJob(host: Host, start: JobStart): Promise<JobRecord>
   if (await giveUp(host, dir, RUNNER_NEVER_STARTED)) {
     const printed = (await readIfThere(host, await host.files.root(dir), RUNNER_LOG_FILE)).trim();
     const said = printed === "" ? "" : ` It printed: ${printed.slice(-RUNNER_LOG_TAIL_CHARS)}`;
-    throw new Error(
-      `The job's runner did not start within ${START_WAIT_MS / 1000} seconds.${said}`,
-    );
+    throw new Error(`The job's runner ${why}.${said}`);
   }
   // The runner took the claim first, so it runs the job.
   const claimed = await readRecord(host, dir);
@@ -270,6 +282,13 @@ async function newJobFolder(host: Host, jobsRoot: Root): Promise<string> {
     }
   }
   throw new Error(`Could not find a free job id in ${ID_ATTEMPTS} tries.`);
+}
+
+/** The runner's script, in the package's build. Under vitest too, as
+ *  `agencyCliPath` finds the command line there, so a test that starts a
+ *  real runner needs a build first. */
+export function runnerScriptPath(): string {
+  return path.join(getPackageRoot(), RUNNER_IN_BUILD);
 }
 
 function hexOf(bytes: Uint8Array): string {

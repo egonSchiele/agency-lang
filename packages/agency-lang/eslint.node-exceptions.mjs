@@ -84,6 +84,8 @@ export const NODE_ONLY = {
     "encrypts stored tokens with createCipheriv; no portable cipher yet",
   "lib/stdlib/spawn.ts":
     "starts an Agency program as a process of its own, through the agency command line (std::agency)",
+  "lib/runtime/jobs/runnerMain.ts":
+    "the entry point of a background job's runner process, run by node with the job's folder as its argument",
   "lib/runtime/jobs/detachedJobs.ts":
     "starts a background job's runner as a process of its own, through the agency command line, as spawn.ts does",
   "lib/stdlib/jobs.ts":

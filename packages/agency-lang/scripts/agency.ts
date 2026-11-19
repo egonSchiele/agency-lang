@@ -148,7 +148,6 @@ import { debug } from "@/cli/debug.js";
 import { attachTarget, invocationFromRunFlags, type DebugRunFlags } from "@/cli/debugFlags.js";
 import { attachCommand } from "@/cli/attach.js";
 import { nodeHost } from "@/host/node/nodeHost.js";
-import { runJob } from "@/runtime/jobs/jobRunner.js";
 import { cleanJobsCommand, listJobsCommand, printJobsResult, stopJobCommand } from "@/cli/jobs.js";
 import { attachWatchCommand } from "@/cli/attachWatch.js";
 import { runLaunchFrom } from "@/cli/runLaunch.js";
@@ -3133,17 +3132,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .action((name?: string) => {
       effectsCmd(name);
-    });
-
-  // The process that owns one background job (lib/runtime/jobs/jobRunner.ts).
-  // `launchJob` starts it detached; a person never types it.
-  program
-    .command("job-runner", { hidden: true })
-    .description("Run one background job, started by std::jobs")
-    .argument("<dir>", "The job's folder")
-    .action(async (dir: string) => {
-      await runJob(nodeHost(), dir);
-      process.exit(0);
     });
 
   program

@@ -77,16 +77,23 @@ read is never taken for a job that does not exist.
 
 ## The runner
 
-A process of its own owns each job: the runner, which is the hidden CLI
-command `agency job-runner <dir>`. Only a parent can learn how its child
-ended, and the program that started the job may be gone by then, so the
-runner is the command's parent. It is found the way `spawn` finds the CLI,
-through `agencyCliPath()`, which falls back to the package's `dist/` under
-vitest. A test that starts a real runner needs a build first.
+A process of its own owns each job: the runner,
+`node dist/lib/runtime/jobs/runnerMain.js <dir>`. Only a parent can learn
+how its child ended, and the program that started the job may be gone by
+then, so the runner is the command's parent. The runner is a small entry
+file that loads only the Node host and `jobRunner.ts`. Starting the whole
+`agency` command line took several seconds on a busy CI machine, which is
+too long to wait for. `runnerScriptPath()` finds the file in the package's
+build, under vitest too, so a test that starts a real runner needs a build
+first.
 
 `launchJob` writes the record, starts the runner with
-`host.subprocess.startDetached`, and waits up to `START_WAIT_MS` for the
-runner to write its pid. The runner:
+`host.subprocess.startDetached`, and waits for the runner to write its
+pid. Everything the runner prints goes to `runner.log` in the job's
+folder. The wait lasts up to `START_WAIT_MS` (30 seconds) while the runner
+process is alive, since node can start slowly on a busy machine. A runner
+that exits before it claims the job ends the wait at once, and the start
+fails with the end of `runner.log` in its message. The runner:
 
 1. Runs nothing when the record no longer says `running`, a `stop` file is
    there, or it cannot take the claim.

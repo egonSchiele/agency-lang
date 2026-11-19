@@ -1,7 +1,6 @@
-// End to end: a real runner process, started detached through the built
-// CLI, running a real command. Needs `make` (or `pnpm run build`) first,
-// because the runner is `dist/scripts/agency.js job-runner`. Every test
-// stops what it started.
+// End to end: a real runner process, started detached, running a real
+// command. Needs `make` (or `pnpm run build`) first, because the runner is
+// `dist/lib/runtime/jobs/runnerMain.js`. Every test stops what it started.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { nodeHost } from "../../host/node/nodeHost.js";
 import { throwawayHome, type Throwaway } from "../../cli/spawnTestHelpers.js";

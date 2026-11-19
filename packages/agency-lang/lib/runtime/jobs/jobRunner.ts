@@ -1,5 +1,5 @@
 // What a job's runner does. The runner is a process of its own, started
-// detached by `launchJob` (`agency job-runner <dir>`), so the job outlives
+// detached by `launchJob` (`node runnerMain.js <dir>`), so the job outlives
 // the program that started it. The runner is the command's parent, which
 // is the only process that can learn how the command ended. It copies the
 // command's output into the job's folder, stops the command when a `stop`

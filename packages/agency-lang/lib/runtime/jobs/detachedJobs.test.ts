@@ -14,6 +14,7 @@ import {
   listJobRecords,
   removeEndedJobs,
   requestStop,
+  runnerScriptPath,
 } from "./detachedJobs.js";
 import {
   CLAIM_FILE,
@@ -140,10 +141,11 @@ describe("launchJob", () => {
     expect(launched.runnerPid).toBe(scripted.detached[0].pid);
     const command = scripted.detached[0].command;
     expect(command.kind).toBe("program");
-    expect(command.kind === "program" && command.args.slice(-2)).toEqual([
-      "job-runner",
+    expect(command.kind === "program" && command.args).toEqual([
+      runnerScriptPath(),
       jobDir(host, "job-3fa9c1"),
     ]);
+    expect(runnerScriptPath()).toMatch(/dist\/lib\/runtime\/jobs\/runnerMain\.js$/);
   });
 
   it("picks another id when the first one's folder exists", async () => {
@@ -176,6 +178,20 @@ describe("launchJob", () => {
     expect(clock.now()).toBeGreaterThanOrEqual(START_WAIT_MS);
   });
 
+  it("whose runner exits without claiming the job fails at once, with what it printed", async () => {
+    const { host, clock, scripted } = setUp([[0x3f, 0xa9, 0xc1]]);
+    scripted.onDetached = async (pid) => {
+      const options = scripted.detached.at(-1)!.options;
+      host.state.files[options!.outputFile!] = new TextEncoder().encode("SyntaxError: boom\n");
+      scripted.states[pid] = "gone";
+    };
+    await expect(drive(clock, launchJob(host, START))).rejects.toThrow(
+      /runner exited before it started the job\. It printed: SyntaxError: boom/,
+    );
+    expect(clock.now()).toBeLessThan(START_WAIT_MS);
+    expect(await readRecord(host, jobDir(host, "job-3fa9c1"))).toMatchObject({ state: "ended" });
+  });
+
   it("that times out says what the runner printed, from the runner's log", async () => {
     const { host, clock, scripted } = setUp([[0x3f, 0xa9, 0xc1]]);
     scripted.onDetached = async () => {
@@ -185,7 +201,7 @@ describe("launchJob", () => {
       );
     };
     await expect(drive(clock, launchJob(host, START))).rejects.toThrow(
-      /did not start within 5 seconds\. It printed: Error: Cannot find module 'x'/,
+      /did not start within 30 seconds\. It printed: Error: Cannot find module 'x'/,
     );
     expect(scripted.detached[0].options?.outputFile).toBe(
       `${jobDir(host, "job-3fa9c1")}/${RUNNER_LOG_FILE}`,

@@ -82,13 +82,24 @@ nothing and sends a `session.notice` at level `error` with the reason.
   not a turn.
 
 **Events**, through `emit`: `session.reply`, `session.error`,
-`session.notice` (a line for the person, with a level), and
-`session.budgetStop`.
+`session.notice` (a line for the person, with a level),
+`session.budgetStop`, and `session.editDiff` (one file edit's `filename`,
+`edits` and `hunks`).
 
 **Approvals.** The core installs no policy handler and asks no one. The
 policy is the run's own, passed as the `policy` option on `main` and on
 every resume. What no rule decides leaves the run as an interrupt with a
 checkpoint, and the front-end answers it.
+
+**Edit diffs.** The core's one handler around a turn reports every
+`std::edit` as a `session.editDiff` event and then passes. It never
+approves and never rejects. A handler sees an edit even when the run's
+policy answers it, so an edit a rule approves has a diff too. The hunks
+come from `editDiff` in `lib/stdlib/editDiff.ts`, which has limits on how
+much it will diff and returns none past them. A front-end makes the diff
+on an approval from the interrupt's `before` and `after` with the same
+function (`agency-lang/stdlib-lib/editDiff.js`), so the two cannot
+differ.
 
 ## Things that are easy to get wrong
 
@@ -195,6 +206,7 @@ Connections belong to the process.
 | `lib/agents/agency-agent/lib/notice.agency` | `notice`. |
 | `lib/agents/agency-agent/lib/sessionFolder.agency` | The folder a session started in. |
 | `lib/stdlib/agentFolderScans.ts` | The scans a process keeps, by folder. |
+| `lib/stdlib/editDiff.ts` | An edit's hunks, for the core and for a front-end. |
 | `lib/stdlib/agentSessionImports.test.ts` | The import rule. |
 | `tests/agency-js/session-core` | The core, driven as a front-end drives it. |
 | `tests/agency-js/session-core-folders` | Two sessions in two folders in one process. |

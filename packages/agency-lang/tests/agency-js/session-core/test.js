@@ -1,9 +1,10 @@
 // Drives the agent's session program (lib/agents/agency-agent/program.agency)
 // the way a front-end does: start it, answer its pause, read its events.
 // No model is called: a test client answers every llm() call.
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { ToolCall } from "smoltalk";
 
 // The agent home is read when the modules load, so it is set first. A temp
 // home keeps the test out of the user's settings and sessions.
@@ -34,6 +35,25 @@ __setLLMClient({
     const said = lastUserText(config);
     temperatureSent[said] = config.temperature ?? "none";
     effortSent[said] = config.reasoningEffort ?? "none";
+    if (said.includes("edit the note")) {
+      // One edit, then a reply once the tool's result is in the conversation.
+      const edited = config.messages.some((message) => message.role === "tool");
+      const edit = new ToolCall("call-edit", "edit", {
+        filename: "note.txt",
+        edits: [{ oldText: "old line", newText: "new line", replaceAll: false }],
+        dir: project,
+      });
+      return {
+        success: true,
+        value: {
+          output: edited ? "edited" : null,
+          toolCalls: edited ? [] : [edit],
+          model: "test",
+          usage: { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 },
+          cost: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" },
+        },
+      };
+    }
     if (said.includes("fail this turn")) {
       throw new Error("the test client was told to fail");
     }
@@ -227,6 +247,25 @@ result.sessionStartsAfterFailedSetups = !afterFailures.ended && afterFailures.pa
 // environment often lacks the search keys a terminal has, and a choice
 // saved from there would follow the user back to the terminal.
 result.settingsFileWritten = existsSync(path.join(process.env.AGENCY_AGENT_HOME, "settings.json"));
+
+// An edit's diff is an event, for an edit the policy approves too: no one
+// is asked, and a front-end still has the diff to show on the edit's row.
+writeFileSync(path.join(project, "note.txt"), "first\nold line\nlast\n");
+// The minimal brain: the simple one has no tools.
+const editor = await startSession({ brain: "minimal" }, { ...PIN, "std::edit": [{ action: "approve" }] });
+await editor.answer(message("edit the note"));
+const diffs = eventsOf(editor, "session.editDiff");
+result.editDiff = {
+  events: diffs.length,
+  filename: diffs[0]?.filename,
+  edits: diffs[0]?.edits,
+  lines: (diffs[0]?.hunks ?? []).flatMap((hunk) =>
+    hunk.lines.map((line) => `${line.kind} ${line.tokens.map((token) => token.text).join("")}`),
+  ),
+  pausedOn: editor.pause[0].effect,
+  reply: eventsOf(editor, "session.reply").pop()?.text,
+  fileAfter: readFileSync(path.join(project, "note.txt"), "utf8"),
+};
 
 // A session can start with a turn budget.
 const budgeted = await startSession({

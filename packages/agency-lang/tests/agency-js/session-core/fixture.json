@@ -56,6 +56,27 @@
   "localModelWhereNoneCanRun": "Local models are not available here.",
   "sessionStartsAfterFailedSetups": "agent::sessionInput",
   "settingsFileWritten": false,
+  "editDiff": {
+    "events": 1,
+    "filename": "note.txt",
+    "edits": [
+      {
+        "oldText": "old line",
+        "newText": "new line",
+        "replaceAll": false
+      }
+    ],
+    "lines": [
+      "context first",
+      "delete old line",
+      "insert new line",
+      "context last",
+      "context "
+    ],
+    "pausedOn": "agent::sessionInput",
+    "reply": "edited",
+    "fileAfter": "first\nnew line\nlast\n"
+  },
   "startingBudget": {
     "maxCost": 3,
     "maxTime": 1000

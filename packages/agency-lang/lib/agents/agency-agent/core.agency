@@ -11,8 +11,9 @@
   run's policy does not decide leaves the run as an interrupt too.
 
   Events: `session.reply`, `session.error`, `session.notice`,
-  `session.budgetStop`.
+  `session.budgetStop`, `session.editDiff`.
 */
+import { editDiff } from "agency-lang/stdlib-lib/editDiff.js"
 import { emit } from "std::statelog"
 
 import { setReplyStyle, setTurnBudget } from "./lib/answer.agency"
@@ -178,6 +179,22 @@ def recordFor(record: SessionRecord | null): SessionRecord | null {
   return { ...record, brain: currentBrainName() }
 }
 
+/** Report one file edit's diff, for a front-end to show on the edit and
+  on its approval: which edit it is (`filename` and `edits`, as the edit
+  tool prepared them) and its hunks. An edit too big to diff, or data that
+  is not an edit's, gets no hunks. */
+def reportEdit(data: any) {
+  if (data == null) {
+    return
+  }
+  emit({
+    type: "session.editDiff",
+    filename: data.filename,
+    edits: data.edits,
+    hunks: editDiff(data.before, data.after)
+  })
+}
+
 // The match over an Answer has no `_` arm on purpose. The type checker
 // does not check an object union for a missing case yet. When it does, a
 // `_` arm would hide the case it reports.
@@ -241,7 +258,18 @@ export node session(start: SessionStart) {
           // "Resume desync").
           const message = withPendingNotes(text)
           const startTarget = if target == "main" then "" else target
-          const reply = try runTurn(startTarget, message)
+          let reply: Result<string> = failure("The turn did not run.")
+          handle {
+            reply = try runTurn(startTarget, message)
+          } with (intr) {
+            // Every edit's diff. A handler sees an edit even when the
+            // run's policy answers it, so an edit a rule approves is
+            // reported too. This handler never decides: it always passes.
+            if (intr.effect == "std::edit") {
+              reportEdit(intr.data)
+            }
+            return pass()
+          }
           if (reply is success(replyText)) {
             emit({ type: "session.reply", text: replyText })
           } else if (reply is failure(err)) {

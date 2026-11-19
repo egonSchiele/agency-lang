@@ -8,12 +8,12 @@
 import { map } from "std::array"
 import { expandSlash } from "std::skills"
 import { Attachment, currentThreadId } from "std::thread"
-import { pushMessage } from "std::ui/cli"
 
 import { answerTurn } from "./answer.agency"
 import { detectAttachments, modalityFilter } from "./attachments.agency"
 import { guardStopHandler } from "./budget.agency"
 import { slashCommands } from "./commandPalette.agency"
+import { notice } from "./notice.agency"
 import { withProjectContextIfMoved } from "./projectContext.agency"
 import { setConversationThread } from "./record.agency"
 import { setMessageRewritten } from "./rewrittenMessage.agency"
@@ -84,18 +84,16 @@ export def resolveBrainName(flag: string | null, settings: Settings): string {
 def checkForAttachments(expanded: string): Attachment[] {
   // Auto-attach image/PDF files the user referenced (drag-drop or typed
   // path), filtered to what the resolved model accepts. Never silent:
-  // every attach and every skip prints a visible line.
+  // every attach and every skip is a notice.
   const detected = modalityFilter(detectAttachments(expanded))
   for (skippedFile in detected.skipped) {
-    pushMessage(
-      color.yellow("📎 skipped ${skippedFile.label} (${skippedFile.reason})"),
-    )
+    notice("📎 skipped ${skippedFile.label} (${skippedFile.reason})", "warning")
   }
   if (detected.attached.length == 0) {
     return []
   }
   for (item in detected.attached) {
-    pushMessage(color.dim("📎 attached ${item.label}"))
+    notice("📎 attached ${item.label}")
   }
   const attachments = map(detected.attached) as item {
     return item.attachment

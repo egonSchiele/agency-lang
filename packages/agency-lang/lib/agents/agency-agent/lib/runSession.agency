@@ -4,6 +4,7 @@
   prompts at the terminal, so the session core does not use it: there the
   policy is the run's own. See docs/dev/agents/agent-brains.md.
 */
+import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { cliPolicyHandler } from "std::policy"
 
 import { parseAgentArgs } from "./args.agency"
@@ -65,7 +66,11 @@ export def runSession(interactive: boolean, body: () -> void raises <*>) {
   setGrounding(groundingText(brainName, JSON.stringify(parseAgentArgs().flags, null, 2)))
   const handler = policyHandlerFor(interactive)
   handle {
-    checkCliBundles()
+    const bundles = checkCliBundles()
+    if (bundles is failure(reason)) {
+      print(color.red(reason))
+      _exit(1)
+    }
     body()
   } with handler
 }

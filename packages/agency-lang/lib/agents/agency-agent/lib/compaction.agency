@@ -7,6 +7,7 @@ import { hostedModelInfo } from "std::llm"
 
 import { getResolvedSlots } from "../shared.agency"
 import { COMPACT_AT_SHARE } from "./contextBudget.agency"
+import { notice } from "./notice.agency"
 import {
   _applyCompaction,
   _compactionInput,
@@ -203,4 +204,29 @@ export def compactionDue(threadId: string): boolean {
   is not held back. */
 export def compactionFailed(threadId: string) {
   _failedAtTokens = _contextTokens(threadId)
+}
+
+/** Summarize the older messages and say what happened, in notices. False
+  when the summary could not be made. */
+export def compactAndReport(threadId: string, instructions: string): boolean {
+  notice("Compacting the conversation. Press Esc to stop.")
+  const result = compactConversation(threadId, instructions)
+  if (result is failure(reason)) {
+    notice("Could not compact the conversation: ${reason}", "warning")
+    return false
+  }
+  notice("Compacted: a summary replaced ${result.value} earlier messages.")
+  return true
+}
+
+/** Compact the conversation on `threadId` when it has grown enough.
+  Call it after the turn is marked done, so a compaction the user stops
+  does not keep the turn from being saved. */
+export def compactIfDue(threadId: string) {
+  if (!compactionDue(threadId) || !canCompact(threadId)) {
+    return
+  }
+  if (!compactAndReport(threadId, "")) {
+    compactionFailed(threadId)
+  }
 }

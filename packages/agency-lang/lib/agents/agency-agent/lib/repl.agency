@@ -21,9 +21,8 @@ import {
 import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
 import {
   canCompact,
-  compactConversation,
-  compactionDue,
-  compactionFailed,
+  compactAndReport,
+  compactIfDue,
   contextStatus,
  } from "./compaction.agency"
 import { HISTORY_PATH } from "./config.agency"
@@ -371,19 +370,6 @@ def renameSlashCommand(title: string): boolean {
   return true
 }
 
-// Summarize the older messages and say what happened. False when the
-// summary could not be made.
-def compactAndReport(threadId: string, instructions: string): boolean {
-  pushMessage(color.dim("Compacting the conversation. Press Esc to stop."))
-  const result = compactConversation(threadId, instructions)
-  if (result is failure(reason)) {
-    pushMessage(color.yellow("Could not compact the conversation: ${reason}"))
-    return false
-  }
-  pushMessage(color.dim("Compacted: a summary replaced ${result.value} earlier messages."))
-  return true
-}
-
 def compactSlashCommand(instructions: string): boolean {
   const threadId = conversationThread()
   if (!canCompact(threadId)) {
@@ -392,18 +378,6 @@ def compactSlashCommand(instructions: string): boolean {
   }
   compactAndReport(threadId, instructions)
   return true
-}
-
-// Runs after the turn is marked done, so a compaction the user stops with
-// Escape does not keep the turn from being saved.
-def compactIfDue() {
-  const threadId = conversationThread()
-  if (!compactionDue(threadId) || !canCompact(threadId)) {
-    return
-  }
-  if (!compactAndReport(threadId, "")) {
-    compactionFailed(threadId)
-  }
 }
 
 // A `!` line is a shell command only when the user typed it and pressed
@@ -432,7 +406,7 @@ def renderUserTurn(trimmed: string, msg: string): boolean {
   renderAgentResponse(result)
   applyPendingLlmOptions()
   markTurnDone()
-  compactIfDue()
+  compactIfDue(conversationThread())
   return true
 }
 
@@ -467,7 +441,7 @@ export def runSeedTurn(target: string, msg: string) {
   renderAgentResponse(response)
   applyPendingLlmOptions()
   markTurnDone()
-  compactIfDue()
+  compactIfDue(conversationThread())
   saveSeedTurn(msg)
 }
 

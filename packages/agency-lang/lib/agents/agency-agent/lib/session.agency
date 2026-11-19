@@ -55,6 +55,7 @@ import {
   getModelSettings,
   loadSettings,
  } from "./settings.agency"
+import { notice } from "./notice.agency"
 import { chatSlots, providerFormExample, providerFormTitle, SLOTS } from "./slots.agency"
 import { ToolLimits, applyToolLimits, startupLimitFlags } from "./toolLimits.agency"
 import {
@@ -169,7 +170,7 @@ def applyRequestOptions(request: ModelRequest, settings: ModelSettings) {
   const warnings = [mixedProviderWarning(options, [model.provider for model in models]), noDefaultWarning(asked, models)]
   for (warning in warnings) {
     if (warning != "") {
-      pushMessage(color.yellow("Warning: ${warning}"))
+      notice("Warning: ${warning}", "warning")
     }
   }
 }
@@ -351,11 +352,7 @@ export def reactToSlotChange(change: SlotChange): boolean {
     if (_memoryEmbeddingsPinned) {
       return false
     }
-    pushMessage(
-      color.dim(
-      "Warning: provider changed - memory is paused until restart (recall would be unreliable).",
-    ),
-    )
+    notice("Warning: provider changed - memory is paused until restart (recall would be unreliable).")
     // `with approve`: the agent is deliberately auto-pausing memory on a
     // provider switch, not asking the user — so don't surface an approval prompt.
     disableMemory() with approve
@@ -366,19 +363,16 @@ export def reactToSlotChange(change: SlotChange): boolean {
     if (override != null) {
       const missing = missingProviderEnvVar(override.provider)
       if (missing != "") {
-        pushMessage(
-          color.yellow(
+        notice(
           "Warning: the embedding slot needs ${missing}, which is not set. The assignment takes effect at next agent start, and memory falls back to the default embedding behavior until it is exported.",
-        ),
+          "warning",
         )
         return true
       }
       // The healthy path must not be silent: enableMemory already ran,
       // so the user would otherwise believe embeddings switched now.
-      pushMessage(
-        color.dim(
+      notice(
         "Embedding slot set: memory embeddings use ${override.provider}/${override.model} at next agent start.",
-      ),
       )
       return true
     }

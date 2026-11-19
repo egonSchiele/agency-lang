@@ -18,8 +18,8 @@ import {
  } from "std::mcp"
 import { keys } from "std::object"
 import { cwd } from "std::system"
-import { pushMessage } from "std::ui/cli"
 
+import { notice } from "./notice.agency"
 import { Settings, getMcpServers } from "./settings.agency"
 
 /** The global mcpServers merged with the project's. The project wins when
@@ -95,7 +95,7 @@ export def startPendingMcpServers() {
     return
   }
   for (line in startupLines("", connectPendingMcpServers())) {
-    pushMessage(color.yellow(line))
+    notice(line, "warning")
   }
 }
 

@@ -1,0 +1,46 @@
+/*
+ * The agent says what happened mid-session through events, not by
+ * printing, so a front-end with no terminal can show the same lines.
+ */
+import { guardStopHandler } from "../lib/budget.agency"
+import { checkCliBundles } from "../lib/cliTools.agency"
+import { compactIfDue } from "../lib/compaction.agency"
+import { notice } from "../lib/notice.agency"
+
+// Every event passed to emit, in order.
+let events: any[] = []
+
+callback("onEmit") as data {
+  events = [...events, data]
+}
+
+node noticeIsAnEvent(): string {
+  notice("Models changed.")
+  notice("Check your key.", "warning")
+  return JSON.stringify(events)
+}
+
+// A budget trip, as a guarded subagent raises it. The handler rejects it,
+// which ends this function with a failure.
+def tripBudget(): string {
+  raise std::guard("The cost budget ran out", { label: "the coder", dimension: "cost" })
+  return "went on"
+}
+
+node budgetStopIsAnEvent(): string {
+  handle {
+    const stopped = try tripBudget()
+  } with guardStopHandler
+  return JSON.stringify(events)
+}
+
+node bundledSkillsCheckReturnsItsResult(): boolean {
+  // The skills folder ships with the agent, so the check passes. It used
+  // to end the process when it failed; now its caller decides.
+  return isSuccess(checkCliBundles())
+}
+
+node nothingToCompactSaysNothing(): string {
+  compactIfDue("")
+  return JSON.stringify(events)
+}

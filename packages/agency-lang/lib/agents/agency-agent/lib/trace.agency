@@ -87,11 +87,25 @@ callback("onLLMCallEnd") as data {
 
 // std::agents/agency reports a subagent's start and a failed router call
 // with emit. Any other event is not the agent's and prints nothing.
+// A notice is a line the agent used to print itself (lib/notice.agency).
+// The colors are the ones those lines had.
+def printNotice(text: string, level: string) {
+  if (level == "error") {
+    pushMessage(color.red(text))
+  } else if (level == "warning") {
+    pushMessage(color.yellow(text))
+  } else {
+    pushMessage(color.dim(text))
+  }
+}
+
 callback("onEmit") as data {
   if (isPlainObject(data) && data.type == "agencyAgent.subagentStart" && isTraceEnabled()) {
     _printAgentTrace({ kind: "agentStart", toolName: data.agent, message: data.message })
   } else if (isPlainObject(data) && data.type == "agencyAgent.routerFailed") {
     print(color.dim(data.error))
+  } else if (isPlainObject(data) && data.type == "session.notice") {
+    printNotice(data.text, data.level)
   } else if (isPlainObject(data) && data.type == "session.budgetStop" && _isInteractive) {
     // Only with a person at the terminal, which is when this line was
     // printed before it became an event.

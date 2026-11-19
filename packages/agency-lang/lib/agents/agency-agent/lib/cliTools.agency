@@ -4,7 +4,6 @@
   save skills, tools, and presets, the session search, and in the REPL the
   background job tools. The harness passes them to `agencyAgent`.
 */
-import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { AgencySource } from "std::agency"
 import { AgentSettings, reasoningOptions } from "std::agents/brains/settings"
 import { coordinatorTools } from "std::agents/brains/coordinator"
@@ -30,15 +29,16 @@ static const agentSkills = skillsDir(
   name: "coordinator_skills",
 ) with approve
 
-/** Stop the run when the bundled skills folder is missing. A wrong path
-  does not make skillsDir fail, so the check looks for a skill the folder
-  is known to hold. Called inside the policy handler, before any turn. */
-export def checkCliBundles() {
+/** A failure when the bundled skills folder is missing. A wrong path does
+  not make skillsDir fail, so the check looks for a skill the folder is
+  known to hold. The caller stops the run: the terminal prints the reason
+  and exits, and the session core ends the run with it. */
+export def checkCliBundles(): Result<boolean> {
   const checked = checkBundledSkill(agentSkills, "presets")
   if (checked is failure(reason)) {
-    print(color.red("Agent setup failed: ${reason}"))
-    _exit(1)
+    return failure("Agent setup failed: ${reason}")
   }
+  return success(true)
 }
 
 // Whether a turn is offered the background job tools. On for the REPL.

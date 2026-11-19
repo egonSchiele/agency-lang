@@ -1,0 +1,15 @@
+/** @module
+  @summary A line the agent wants a person to see in the middle of a
+  session, such as "memory is paused". It is an event and not a print, so
+  each front-end shows it its own way: the terminal prints it
+  (trace.agency), and an app draws it.
+*/
+import { emit } from "std::statelog"
+
+export type NoticeLevel = "info" | "warning" | "error"
+
+/** Say `text` to whoever is showing this session. The text carries no
+  color codes: the level says how it should stand out. */
+export def notice(text: string, level: NoticeLevel = "info") {
+  emit({ type: "session.notice", text: text, level: level })
+}

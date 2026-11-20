@@ -6,7 +6,7 @@
  and exits. The worker wants to write a file, nobody has approved that, so
  it waits. Attach to it with the pid `main` prints, and answer:
 
-   pnpm run agency attach <pid>
+   pnpm run agency attach pid
 */
 import { spawn } from "std::agency"
 

@@ -1,8 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
-import { _setSecret, _getSecret, _deleteSecret, _isKeyringAvailable } from "../keyring.js";
+import {
+  _setSecret,
+  _getSecret,
+  _deleteSecret,
+  _isKeyringAvailable,
+  getSecret,
+  passwordFromSecurityOutput,
+  readSecret,
+  securityCommandLine,
+} from "../keyring.js";
 
 import { PROGRAM_OUTPUT_LIMIT } from "../abortable.js";
 import { exited, failed, programRun, testDefaultHost, testPlatform } from "./fakeSubprocess.js";
+
+/** What `security find-generic-password -g` prints on stderr for `value`. */
+function found(value: string) {
+  return exited("", `keychain: "login"\npassword: "${value}"\n`);
+}
 
 // The host's subprocess part, mocked: `mockRun` answers each program.
 const mockRun = vi.fn();
@@ -34,39 +48,43 @@ describe("keyring (macOS)", () => {
   });
 
   describe("_setSecret", () => {
-    it("calls security add-generic-password with correct args", async () => {
-      // First call is delete (may fail), second is add
-      let callCount = 0;
-      mockRun.mockImplementation(async () => {
-        callCount++;
-        // The delete call can fail
-        return callCount === 1 ? failed("not found") : exited();
-      });
+    it("stores the secret on stdin, never in the arguments", async () => {
+      await _setSecret("my-key", 's3cr$t "q" \\b');
 
-      await _setSecret("my-key", "my-value");
-
-      const addCall = call(1);
-      expect(addCall[0]).toBe("security");
-      expect(addCall[1]).toContain("add-generic-password");
-      expect(addCall[1]).toContain("-a");
-      expect(addCall[1]).toContain("my-key");
-      expect(addCall[1]).toContain("-w");
-      expect(addCall[1]).toContain("my-value");
-      expect(addCall[1]).toContain("-s");
-      expect(addCall[1]).toContain("agency-lang");
+      expect(mockRun).toHaveBeenCalledTimes(1);
+      const [cmd, args] = call(0);
+      expect(cmd).toBe("security");
+      expect(args).toEqual(["-i"]);
+      expect(mockRun.mock.calls[0][1].input).toBe(
+        '"add-generic-password" "-U" "-s" "agency-lang" "-a" "my-key" "-w" "s3cr$t \\"q\\" \\\\b"\n',
+      );
+      expect(args.some((arg) => arg.includes("s3cr"))).toBe(false);
     });
 
     it("uses custom service name", async () => {
-      let callCount = 0;
-      mockRun.mockImplementation(async () => {
-        callCount++;
-        return callCount === 1 ? failed("not found") : exited();
-      });
-
       await _setSecret("key", "val", "my-app");
 
-      const addCall = call(1);
-      expect(addCall[1]).toContain("my-app");
+      expect(mockRun.mock.calls[0][1].input).toContain('"-s" "my-app"');
+    });
+
+    it("updates in place, with no delete first", async () => {
+      await _setSecret("key", "val");
+
+      for (let index = 0; index < mockRun.mock.calls.length; index++) {
+        expect(call(index)[1]).not.toContain("delete-generic-password");
+      }
+      expect(mockRun.mock.calls[0][1].input).toContain('"-U"');
+    });
+
+    it("refuses a value with a line break", async () => {
+      await expect(_setSecret("k", "a\nb")).rejects.toThrow("must be one line");
+      expect(mockRun).not.toHaveBeenCalled();
+    });
+
+    it("a failed store throws", async () => {
+      mockRun.mockImplementation(async () => failed("add-generic-password: returned 2", 2));
+
+      await expect(_setSecret("k", "v")).rejects.toThrow();
     });
 
     it("throws on empty key", async () => {
@@ -80,7 +98,7 @@ describe("keyring (macOS)", () => {
 
   describe("_getSecret", () => {
     it("returns the secret value", async () => {
-      mockRun.mockImplementation(async () => exited("my-secret-value\n"));
+      mockRun.mockImplementation(async () => found("my-secret-value"));
 
       const result = await _getSecret("my-key");
       expect(result).toBe("my-secret-value");
@@ -88,7 +106,7 @@ describe("keyring (macOS)", () => {
 
     it("returns null when secret not found", async () => {
       mockRun.mockImplementation(async () =>
-        failed("security: SecKeychainSearchCopyNext: not found"),
+        failed("security: SecKeychainSearchCopyNext: not found", 44),
       );
 
       const result = await _getSecret("nonexistent");
@@ -96,7 +114,7 @@ describe("keyring (macOS)", () => {
     });
 
     it("uses correct security command", async () => {
-      mockRun.mockImplementation(async () => exited("val"));
+      mockRun.mockImplementation(async () => found("val"));
 
       await _getSecret("test-key", "custom-svc");
 
@@ -107,13 +125,20 @@ describe("keyring (macOS)", () => {
       expect(args).toContain("custom-svc");
       expect(args).toContain("-a");
       expect(args).toContain("test-key");
-      expect(args).toContain("-w");
+      expect(args).toContain("-g");
+      expect(args).not.toContain("-w");
+    });
+
+    it("fails when the keyring can't be read", async () => {
+      mockRun.mockImplementation(async () => failed("User interaction is not allowed.", 51));
+
+      await expect(_getSecret("k")).rejects.toThrow("51");
     });
   });
 
   describe("_getSecret with a timeout", () => {
     it("passes the timeout to the subprocess", async () => {
-      mockRun.mockImplementation(async () => exited("tok\n"));
+      mockRun.mockImplementation(async () => found("tok"));
       expect(await _getSecret("k", "svc", 1234)).toBe("tok");
       expect(mockRun.mock.calls[0][1]).toEqual({
         timeoutMs: 1234,
@@ -122,18 +147,19 @@ describe("keyring (macOS)", () => {
     });
 
     it("passes no timeout when none is given", async () => {
-      mockRun.mockImplementation(async () => exited("tok"));
+      mockRun.mockImplementation(async () => found("tok"));
       await _getSecret("k");
       expect(mockRun.mock.calls[0][1]).toEqual({ maxOutputBytes: PROGRAM_OUTPUT_LIMIT });
     });
 
-    it("reads a lookup killed at the deadline as a miss", async () => {
+    it("fails for a lookup killed at the deadline, which getSecret reads as null", async () => {
       mockRun.mockImplementation(async () => ({
         ...failed("", null),
         signal: "SIGTERM",
         timedOut: true,
       }));
-      expect(await _getSecret("k", "svc", 10)).toBeNull();
+      await expect(_getSecret("k", "svc", 10)).rejects.toThrow();
+      expect(await getSecret(testDefaultHost(), "k", "svc", 10)).toBeNull();
     });
   });
 
@@ -207,5 +233,121 @@ describe("keyring (unsupported platform)", () => {
 
   it("_isKeyringAvailable returns false", async () => {
     expect(await _isKeyringAvailable()).toBe(false);
+  });
+});
+
+describe("readSecret (macOS)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    testPlatform.os = "macos";
+  });
+
+  it("reads a missing item from exit 44", async () => {
+    mockRun.mockImplementation(async () => failed("could not be found", 44));
+    expect(await readSecret(testDefaultHost(), "k")).toEqual({ kind: "missing" });
+  });
+
+  it("reads the password from -g's stderr", async () => {
+    mockRun.mockImplementation(async () => found("v"));
+    expect(await readSecret(testDefaultHost(), "k")).toEqual({ kind: "found", value: "v" });
+  });
+
+  it("reads any other exit as a failure", async () => {
+    mockRun.mockImplementation(async () => failed("User interaction is not allowed.", 51));
+    const lookup = await readSecret(testDefaultHost(), "k");
+    expect(lookup.kind).toBe("failed");
+    expect(lookup.kind === "failed" ? lookup.reason : "").toContain("51");
+  });
+
+  it("a timeout is a failure", async () => {
+    mockRun.mockImplementation(async () => ({ ...failed("", null), timedOut: true }));
+    expect((await readSecret(testDefaultHost(), "k", "svc", 10)).kind).toBe("failed");
+  });
+
+  it("output with no password line is a failure", async () => {
+    mockRun.mockImplementation(async () => exited("", 'keychain: "login"\n'));
+    expect((await readSecret(testDefaultHost(), "k")).kind).toBe("failed");
+  });
+
+  it("a missing security command is unavailable", async () => {
+    mockRun.mockImplementation(async () => {
+      throw Object.assign(new Error("spawn security ENOENT"), { code: "ENOENT" });
+    });
+    const lookup = await readSecret(testDefaultHost(), "k");
+    expect(lookup).toEqual({ kind: "unavailable", reason: "`security` isn't installed." });
+  });
+});
+
+describe("readSecret (Linux)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    testPlatform.os = "linux";
+  });
+
+  it("reads exit 1 with no output as missing", async () => {
+    mockRun.mockImplementation(async () => failed("", 1));
+    expect(await readSecret(testDefaultHost(), "k")).toEqual({ kind: "missing" });
+  });
+
+  it("reads exit 1 with an error as a failure", async () => {
+    mockRun.mockImplementation(async () => failed("No such interface", 1));
+    expect((await readSecret(testDefaultHost(), "k")).kind).toBe("failed");
+  });
+
+  it("a missing secret-tool is unavailable", async () => {
+    mockRun.mockImplementation(async () => {
+      throw Object.assign(new Error("spawn secret-tool ENOENT"), { code: "ENOENT" });
+    });
+    expect(await readSecret(testDefaultHost(), "k")).toEqual({
+      kind: "unavailable",
+      reason: "`secret-tool` isn't installed.",
+    });
+  });
+});
+
+describe("readSecret (unsupported platform)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    testPlatform.os = "windows";
+  });
+
+  it("is unavailable, and runs nothing", async () => {
+    expect((await readSecret(testDefaultHost(), "k")).kind).toBe("unavailable");
+    expect(mockRun).not.toHaveBeenCalled();
+  });
+});
+
+describe("passwordFromSecurityOutput", () => {
+  it("takes a plain password as it is, even when it looks like hex", () => {
+    expect(passwordFromSecurityOutput('password: "616263"\n')).toBe("616263");
+  });
+
+  it("decodes the hex form of a password with quotes and backslashes", () => {
+    const line =
+      'password: 0x69742773206120226B657922205C20776974682024484F4D45  "it\'s a \\"key\\" \\134 with $HOME"';
+    expect(passwordFromSecurityOutput(line)).toBe('it\'s a "key" \\ with $HOME');
+  });
+
+  it("decodes the hex form of a non-ASCII password as UTF-8", () => {
+    const line = 'password: 0xC3BC6EC3AF636F6465  "\\303\\274n\\303\\257code"';
+    expect(passwordFromSecurityOutput(line)).toBe("ünïcode");
+  });
+
+  it("is null with no password line", () => {
+    expect(passwordFromSecurityOutput('keychain: "login"\n')).toBeNull();
+  });
+});
+
+describe("securityCommandLine", () => {
+  it("quotes every argument, escaping quotes and backslashes", () => {
+    expect(securityCommandLine(["a b", 'x"y', "c\\d", "$HOME"])).toBe(
+      '"a b" "x\\"y" "c\\\\d" "$HOME"',
+    );
+  });
+
+  it("refuses an argument with a line break or NUL", () => {
+    expect(() => securityCommandLine(["a\nb"])).toThrow("must be one line");
+    expect(() => securityCommandLine(["a\rb"])).toThrow("must be one line");
+    expect(() => securityCommandLine(["a\0b"])).toThrow("must be one line");
   });
 });

@@ -5,7 +5,7 @@ import test {
   saveSession,
   listSessions,
   findSession,
-  isAnotherFrontEndsSession,
+  isOldLoopSession,
   mostRecentSession,
   readCheckpointFile,
   SessionRecord,
@@ -15,8 +15,9 @@ import test {
   markTurnDone,
   recordTurn,
   renameSession,
+  setCurrentRecord,
  } from "../../lib/agents/agency-agent/lib/record.agency"
-import test { startSession } from "../../lib/agents/agency-agent/lib/resume.agency"
+import test { newSessionRecord } from "../../lib/agents/agency-agent/lib/resume.agency"
 import test { renameLine } from "../../lib/agents/agency-agent/lib/slashCommands/session.agency"
 
 // A rename with no turn still produces a save (the record carries the new
@@ -24,7 +25,7 @@ import test { renameLine } from "../../lib/agents/agency-agent/lib/slashCommands
 // Turn 1 would normally title the session with an LLM call; a renamed
 // session keeps its title instead. The lines are the terminal's wording.
 node renameFlow(): any {
-  startSession(null, "simple")
+  setCurrentRecord(newSessionRecord("simple"))
   const empty = renameLine(renameSession("   "))
   const renamed = renameLine(renameSession("minnesota   news 8/29"))
   const target = recordTurn("")
@@ -102,12 +103,13 @@ node refreshSchedule(): boolean[] {
 // sessions saved, listed most recently active first, found by id, and
 // the checkpoint read back unchanged. Saving a session again replaces
 // its record.
-// A session another front-end saved in this folder is not offered: its run
-// file is the session core's pause, which `restore` cannot read. Before,
-// `--continue` took the newest record of any kind and restored its file.
-node anotherFrontEndsSessionIsSkipped(): any {
-  // Only the other front-end's session is saved here. A session of this
-  // terminal's would be counted by storeRoundTrip, which shares the folder.
+// A session the terminal's old loop saved in this folder is not offered:
+// its file is one checkpoint of that loop's run, which only that loop
+// could resume. A record with no `runFormat` is one of those.
+node oldLoopSessionIsSkipped(): any {
+  // Only the old loop's session is saved here. A session saved as a run of
+  // the session program would be counted by storeRoundTrip, which shares
+  // the folder.
   const theirs: SessionRecord = {
     id: "theirs",
     cwd: "/x",
@@ -115,17 +117,16 @@ node anotherFrontEndsSessionIsSkipped(): any {
     created: 20,
     lastActive: 9999999999999,
     turns: 1,
-    title: "an app's",
-    runFormat: "savedRun"
+    title: "an old one"
   }
-  saveSession(theirs, { version: 1, pause: [] })
+  saveSession(theirs, { fake: "the old loop's checkpoint" })
   const recent = mostRecentSession()
   return {
     listed: [r.id for r in listSessions() if r.id == "theirs"],
     newestIsTheirs: recent != null && recent.id == "theirs",
     foundById: findSession("theirs") != null,
-    saysWhy: isAnotherFrontEndsSession("theirs"),
-    saysNothingForAnUnknownId: isAnotherFrontEndsSession("no-such-session")
+    saysWhy: isOldLoopSession("theirs"),
+    saysNothingForAnUnknownId: isOldLoopSession("no-such-session")
   }
 }
 
@@ -137,7 +138,8 @@ node storeRoundTrip(): any {
     created: 10,
     lastActive: 10,
     turns: 1,
-    title: "first"
+    title: "first",
+    runFormat: "savedRun"
   }
   const second: SessionRecord = {
     id: "s2",
@@ -146,7 +148,8 @@ node storeRoundTrip(): any {
     created: 20,
     lastActive: 20,
     turns: 1,
-    title: "second"
+    title: "second",
+    runFormat: "savedRun"
   }
   saveSession(first, { fake: "checkpoint one" })
   saveSession(second, { fake: "checkpoint two" })

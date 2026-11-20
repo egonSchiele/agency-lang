@@ -33,24 +33,59 @@ child.stderr.on("data", (chunk) => {
 });
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const typed = async (line, ms) => {
-  child.stdin.write(`${line}\n`);
-  await wait(ms);
-};
+const type = (line) => child.stdin.write(`${line}\n`);
 
-await wait(4000);
-await typed("hello there", 4000);
-await typed("/rename smoke test", 2000);
-await typed("/cost", 1000);
+// Each step waits for what the one before it prints, not for a fixed time:
+// a line typed while a turn is still running is not read as a command, and
+// a slow machine makes any fixed wait too short. A step that never prints
+// its text gives up after LIMIT_MS, and the fixture then says which.
+const LIMIT_MS = 30000;
+const POLL_MS = 100;
+/** Waits until what was printed after `from` holds `text`. */
+async function printedSince(from, text) {
+  const deadline = Date.now() + LIMIT_MS;
+  while (Date.now() < deadline && !stripAnsi(printed.slice(from)).includes(text)) {
+    await wait(POLL_MS);
+  }
+}
+/** Waits until something was printed and nothing more came for a second:
+ *  the header is up and the prompt is waiting. */
+async function started() {
+  const deadline = Date.now() + LIMIT_MS;
+  let seen = -1;
+  let quietSince = Date.now();
+  while (Date.now() < deadline) {
+    if (printed.length !== seen) {
+      seen = printed.length;
+      quietSince = Date.now();
+    } else if (seen > 0 && Date.now() - quietSince >= 1000) {
+      return;
+    }
+    await wait(POLL_MS);
+  }
+}
+
+await started();
+type("hello there");
+await printedSince(0, "stub reply");
+type("/rename smoke test");
+await printedSince(0, "Session renamed: smoke test");
+type("/cost");
+await printedSince(0, "Cost:");
 // Esc while the model works: the turn is dropped, and the next message
-// tells the model so.
-await typed("take your time", 1500);
+// tells the model so. The scripted model takes four seconds over this
+// message, so Esc after one and a half lands in the middle of the turn.
+const beforeEsc = printed.length;
+type("take your time");
+await wait(1500);
 child.stdin.write("\u001b");
-await wait(3000);
+await printedSince(beforeEsc, "cancelled");
 const beforeNext = printed.length;
-await typed("are you there", 7000);
+type("are you there");
+await printedSince(beforeNext, "noted the cancel");
 const afterEsc = stripAnsi(printed.slice(beforeNext));
-await typed("/exit", 2000);
+type("/exit");
+await printedSince(beforeNext, "Goodbye!");
 child.stdin.end();
 await Promise.race([exited, wait(5000)]);
 child.kill();

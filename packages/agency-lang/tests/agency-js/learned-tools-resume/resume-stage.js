@@ -1,4 +1,4 @@
-import { main, __setLLMClient } from "./agent.js";
+import { approve, respondToInterrupts, __setLLMClient } from "./agent.js";
 import { readFileSync, writeFileSync } from "node:fs";
 import { ToolCall } from "smoltalk";
 
@@ -38,7 +38,11 @@ const client = {
   },
 };
 __setLLMClient(client);
-const result = await main();
+const pause = JSON.parse(readFileSync("test-output/pause.json", "utf8"));
+const result = await respondToInterrupts(
+  pause,
+  pause.map(() => approve()),
+);
 writeFileSync(
   "__result.json",
   JSON.stringify(

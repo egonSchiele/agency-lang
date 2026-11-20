@@ -1,4 +1,4 @@
-import { main } from "./agent.js";
+import { main, hasInterrupts } from "./agent.js";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
@@ -16,9 +16,14 @@ export def seriesInfo(seriesId | id: string): string { return "original:${"${ser
 export def seriesLabel(seriesId | id: string): string { return "label:${"${seriesId}"}" }
 `,
 );
-process.env.LINES = "learn";
-await main();
-const checkpoint = JSON.parse(readFileSync("test-output/sessions/session-tools.json", "utf8"));
+// The first turn, up to the pause between the turns. The pause is saved as
+// a front-end saves it: the interrupts, as JSON.
+const paused = await main();
+if (!hasInterrupts(paused.data)) {
+  throw new Error(`Expected the pause between the turns: ${JSON.stringify(paused.data)}`);
+}
+writeFileSync("test-output/pause.json", JSON.stringify(paused.data));
+const checkpoint = JSON.parse(readFileSync("test-output/pause.json", "utf8"));
 
 function statesIn(value) {
   if (!value || typeof value !== "object") {
@@ -46,7 +51,5 @@ writeFileSync(
   }),
 );
 safeDeleteDirectoryWithin(fixtureRoot, resolve("test-output/source"));
-execFileSync(process.execPath, ["./resume-stage.js"], {
-  stdio: "inherit",
-  env: { ...process.env, RESUME: "1", LINES: "use" },
-});
+// A new process resumes the pause, with the tools' source file gone.
+execFileSync(process.execPath, ["./resume-stage.js"], { stdio: "inherit" });

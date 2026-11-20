@@ -171,8 +171,8 @@ def startAsRequested(start: StartRequest): Result<string[]> {
     return preset
   }
   const models = startModels(start.flags, start.saveSearchChoice)
-  if (models is failure(reason)) {
-    return failure(reason)
+  if (isFailure(models)) {
+    return models
   }
   return preset
 }

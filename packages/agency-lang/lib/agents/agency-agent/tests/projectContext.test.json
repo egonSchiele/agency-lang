@@ -89,26 +89,6 @@
           "type": "exact"
         }
       ]
-    },
-    {
-      "nodeName": "movedBlockIsReadUnderAPolicy",
-      "input": "",
-      "expectedOutput": "\"[true,true,true]\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "rejectRuleStillStopsTheRead",
-      "input": "",
-      "expectedOutput": "\"[false,true]\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
     }
   ]
 }

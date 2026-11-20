@@ -2,8 +2,8 @@
   @summary The harness side of a turn: which brain is selected, and the
   per-turn work (slash expansion, attachments, the hard stop for a subagent
   budget trip) that happens before `agencyAgent` sees the message. The
-  terminal's session wrapper, which installs the policy handler, is in
-  runSession.agency. See docs/dev/agents/agent-brains.md.
+  session core (core.agency) runs each turn under the run's policy. See
+  docs/dev/agents/agent-brains.md.
 */
 import { map } from "std::array"
 import { expandSlash } from "std::skills"
@@ -22,7 +22,7 @@ import { START_TARGETS, runStartTarget } from "./startTargets.agency"
 
 export static const DEFAULT_BRAIN = "coordinator"
 
-// The brain this run talks to. Set once by main(); read by runTurn/runSession.
+// The brain this run talks to. Set once by main(); read by runTurn.
 let _brainName: string = ""
 
 export def setBrainName(name: string) {
@@ -34,7 +34,7 @@ export def currentBrainName(): string {
 }
 
 // A missing brain is a harness bug: main() must call setBrainName() before
-// runSession or runTurn.
+// runTurn.
 export static const NO_BRAIN = "No brain selected: main() must call setBrainName() first"
 
 /** The `--agent` values a brain accepts besides `main`. Only the

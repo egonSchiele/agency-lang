@@ -368,7 +368,7 @@ block is already in the file.
 `coordinator_skills` tool (`lib/cliTools.agency`). The scan reads only the
 Markdown files at the top of the folder. `skillsDir` does not fail when a
 folder is missing. It builds a tool that lists nothing. So
-`checkCliBundles`, which `runSession` calls inside the policy handler,
+`checkCliBundles`, which the session core calls when the session starts,
 checks the tool with `checkBundledSkill(tool, skillName)` and exits if the
 tool does not list a skill it should.
 

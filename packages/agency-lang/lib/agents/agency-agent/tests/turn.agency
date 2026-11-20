@@ -11,21 +11,39 @@
  * fixture (projectCommands reads the session folder's .claude/commands,
  * which is the working directory when nothing sets it).
  */
+import { cliPolicyHandler } from "std::policy"
 import { exists } from "std::shell"
 import { currentThreadId, getThread } from "std::thread"
 
 import { guardStopHandler } from "../lib/budget.agency"
 import { cliSettings, namedMainModel } from "../lib/answer.agency"
+import { claudeSkillCommands } from "../lib/claudeSkills.agency"
+import { projectCommands } from "../lib/commandPalette.agency"
+import { groundingText, setGrounding } from "../lib/grounding.agency"
 import { messageWasRewritten, setMessageRewritten } from "../lib/rewrittenMessage.agency"
 import { setInteractive } from "../lib/trace.agency"
-import { runSession, setPolicyArg } from "../lib/runSession.agency"
 import {
+  currentBrainName,
   setBrainName,
   runTurn,
   resolveBrainName,
   resolveStartTarget,
  } from "../lib/turn.agency"
 import { applyResolved } from "../shared.agency"
+
+// What the session core does before its first turn (the grounding, and
+// the scans of the user's commands and skills, made before any handler
+// exists), then `body` under the terminal's policy handler with no one to
+// ask, on the stub policy.
+def underStubPolicy(body: () -> void raises <*>) {
+  setGrounding(groundingText(currentBrainName(), null))
+  claudeSkillCommands()
+  projectCommands()
+  const handler = cliPolicyHandler(file: "${__dirname}/stubPolicy.json", interactive: false)
+  handle {
+    body()
+  } with handler
+}
 
 static const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 
@@ -87,11 +105,11 @@ node slashCommandExpands(): string {
 // The same under the terminal's policy handler in a run with no one to
 // ask, where an effect no rule decides is rejected. The stub policy has no
 // rule for the scan of `.claude/commands`, so a scan made under the handler
-// would lose the command. runSession scans before it installs the handler.
+// would lose the command. The session core scans before any handler
+// exists, as underStubPolicy does.
 node slashCommandExpandsWithNoOneToAsk(): string {
   setBrainName("simple")
-  setPolicyArg("${__dirname}/stubPolicy.json")
-  runSession(false) {
+  underStubPolicy() {
     runTurn("", "/check-tests")
   }
   const text = promptText(prompts[0])
@@ -122,11 +140,10 @@ node mainTargetGetsAttachment(): string {
 // evidence that detection was bypassed.
 node namedTargetGetsBareTextWithoutReading(): string {
   setBrainName("coordinator")
-  setPolicyArg("${__dirname}/stubPolicy.json")
   writeBinary("turn-b.png", PNG, "/tmp") with approve
   let reply = ""
   handle {
-    runSession(false) {
+    underStubPolicy() {
       reply = runTurn("oracle", "look at /tmp/turn-b.png")
     }
   } with auditReadBinary
@@ -171,9 +188,8 @@ node textOnlyModelDropsAttachment(): string {
 // not written.
 node sessionPolicyDecidesTheAgentsInterrupts(): string {
   setBrainName("coordinator")
-  setPolicyArg("${__dirname}/stubPolicy.json")
   let reply = ""
-  runSession(false) {
+  underStubPolicy() {
     reply = runTurn("", "write the file")
   }
   const written = exists("turn-policy-write.txt", "/tmp") with approve
@@ -184,9 +200,8 @@ node sessionPolicyDecidesTheAgentsInterrupts(): string {
 // directory changes between turns, because its text holds the directory.
 node groundingStaysOnThread(): string {
   setBrainName("simple")
-  setPolicyArg("${__dirname}/stubPolicy.json")
   let count = -1
-  runSession(false) {
+  underStubPolicy() {
     runTurn("", "first")
     setAgentCwd("/tmp")
     runTurn("", "second")
@@ -242,13 +257,12 @@ def styleMessages(): number {
 // in the REPL. It is never in the context, which also reaches the writing
 // reviewer and the rewriter. The simple brain gets no style line at all.
 node replStyleOnlyInTheRepl(): string {
-  setPolicyArg("${__dirname}/stubPolicy.json")
   let oneShot = -1
   let simple = -1
   let repl = -1
   let inContext = true
   setBrainName("coordinator")
-  runSession(false) {
+  underStubPolicy() {
     setInteractive(false)
     runTurn("", "first") with approve
     oneShot = styleMessages()

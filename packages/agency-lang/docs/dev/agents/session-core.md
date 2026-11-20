@@ -4,9 +4,9 @@ The agent's conversation loop as a program any front-end can run. It
 exists so a session can move between front-ends: start one with
 `agency agent` in a terminal, carry on in an app.
 
-**The terminal does not use it yet.** `agency agent` still runs its own
-loop (`agent.agency`, `lib/runSession.agency`, `lib/repl.agency`). Today
-the core is driven by tests.
+`agency agent` runs every session on it, interactive and `-p` alike,
+through the session driver (`docs/dev/agents/session-driver.md`, "The
+terminal"). Perry runs it too.
 
 Design: `docs/superpowers/specs/2026-11-18-shared-session-core-design.md`.
 
@@ -87,6 +87,8 @@ Its data is what a front-end shows and saves between turns: `thread`,
 | `fork`       | none                      | Makes the session a copy with a new `record.id`, as `/fork`          |
 | `search`     | `backend`                 | Switches the web search backend and saves it, as `/search`           |
 | `savePreset` | `name`                    | Saves the session to a preset, "" for the active one, as `/preset save` |
+| `local`      | `model`                   | Runs the session on a local model, as `/local`                       |
+| `capabilities` | `settings`              | Saves one capability override and applies it, as `/settings`         |
 
 An answer the core cannot apply changes nothing and sends a
 `session.notice` at level `error` with the reason. What one that worked
@@ -121,6 +123,18 @@ did is a notice at level `info`, except a `model`, `options`, `budget`,
 - **`savePreset`** is `writeSessionPreset` in `lib/session.agency`. A save
   it refuses, such as one with no name and no active preset, is the error
   notice. The lines that say what was saved are one `info` notice.
+- **`local`** is `useLocalModel` in `lib/session.agency`: the model the
+  `/local` picker chose, a catalog name, an `hf:` URI or a `.gguf` path. A
+  process that cannot host a local model refuses it with "Local models are
+  not available here." Only the terminal sends it.
+- **`capabilities`** carries one change `/settings` picked: `{ scope,
+  field, value }`, where `scope` is `model`, `provider` or `global`, and a
+  null `value` removes the override. `applyCapabilityChange` in
+  `lib/capabilityChange.agency` saves it to `settings.json`, resolves the
+  profile again, and applies what it can now: a new `maxTokens` cap, or
+  memory turned off. A value the field can't take is refused. Every pause
+  reports the profile as `capabilities` (`capabilityReport`), which the
+  `/settings` screen draws. Only the terminal sends it.
 
 - **A model's provider.** `openai/gpt-4o` names a known provider, so with
   no provider fixed it switches to OpenAI.
@@ -214,7 +228,7 @@ it. `lib/stdlib/agentSessionImports.test.ts` walks the imports of
 
 - one of the terminal's modules: `agent.agency`, and in `lib/`: `repl`,
   `capabilitiesUi`, `mcpMenu`, `header`, `transcript`, `args`, `policy`,
-  `trace`, `runSession`, `resume`, and `slashCommands/`;
+  `trace`, `resume`, `terminal`, and `slashCommands/`;
 - any module with a top-level `callback(`.
 
 A line for the person is a notice (`lib/notice.agency`), which
@@ -237,8 +251,8 @@ the folder its saved sessions are kept under. The core sets it from
 `start.cwd`. The agent's working folder (`getAgentCwd`) starts there too,
 but a coder moves it, and these reads do not follow it.
 
-A terminal scans once in `runSession`, before it installs its policy
-handler, and keeps the result for the process
+The terminal's shell run scans once for its slash palette, before it
+installs its policy handler, and keeps the result for the process
 (`lib/stdlib/agentFolderScans.ts`). A scan made under that handler would
 be put to the user, or rejected in a `-p` run.
 

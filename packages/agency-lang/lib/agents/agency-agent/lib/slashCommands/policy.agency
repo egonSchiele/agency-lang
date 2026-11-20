@@ -12,7 +12,7 @@ import { chooseOption } from "std::ui/cli"
 import { pushMessage } from "std::ui/cli"
 
 import { POLICY_PATH } from "../config.agency"
-import { usesSavedPolicy } from "../runSession.agency"
+import { usesSavedPolicy } from "../terminal.agency"
 
 // One line per rule, the way it sits in the policy file.
 export def policyRuleLines(rules: Policy): string[] {

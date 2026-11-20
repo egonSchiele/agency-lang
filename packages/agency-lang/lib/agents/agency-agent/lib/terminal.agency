@@ -152,6 +152,13 @@ export def setSessionPolicyFile(file: string) {
   _policyFile = file
 }
 
+/** True when the session's approvals come from the saved policy file,
+  policy.json, and false when it runs on a policy of its own or on
+  --policy, --approve or --reject, none of which is written back to it. */
+export def usesSavedPolicy(): boolean {
+  return _policyFile == POLICY_PATH
+}
+
 /** What the session program starts with, from the command line. A
   one-shot run (`-p`) has no record, no reply style, and no one at the
   terminal. */

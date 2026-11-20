@@ -2,9 +2,11 @@
 
 A preset is a named set of model and tool-limit settings for
 `agency agent`, saved under `presets` in the agent home's
-`settings.json`. `--preset <name>` starts with one, a preset marked
-`"default": true` is used when no flag is given, and `/preset <name>`
-switches in a session. The coordinator has four tools to manage them.
+`settings.json`. `--preset <name>` starts with one, and `/preset <name>`
+switches in a session. With no flag, a new session starts with the last
+settings the person chose, which may name a preset (see "The last
+settings" below). There is no default preset. The coordinator has three
+tools to manage presets.
 
 ## Where things live
 
@@ -19,7 +21,9 @@ Paths are relative to `lib/agents/agency-agent/`.
 | `lib/toolLimits.agency` | The two tool limits and where each value comes from. |
 | `lib/effort.agency` | The reasoning effort choices, the built-in default per model, and the level a run sends. |
 | `lib/session.agency` | `applyModelRequest`, `pickModelsForAgent`, `switchModel`, `switchPreset`, `saveSessionPreset`. |
-| `lib/presetTools.agency` | The four tools. |
+| `lib/presetTools.agency` | The three tools. |
+| `lib/lastSettings.agency` | The last settings: what is kept, `rememberSettings`, and the start from them (`startPresetAndModels`). |
+| `lib/stdlib/agentLastSettings.ts` (from the package root) | The `last-settings.json` file: its type, reader and writer. Perry writes it too. |
 | `skills/presets.md` | The skill that tells the model how to use the tools. |
 
 ## How a run picks its models
@@ -37,6 +41,13 @@ router when its key is set (`docs/dev/agents/agent-router.md`, "The
 default router"). The resolver takes the first layer that sets a slot. `/model` prints the layer
 name, so a slot a preset set shows `(preset:per-slot)` or
 `(preset:global-pin)`.
+
+What a run starts with, first to last: the flags, then the last settings
+(their preset, and their choices as the `in-session` layer), then
+`settings.model`, then the provider's defaults. `detectionInputs` reads
+the choices before the flags and the preset, so a remembered model is
+checked the way a flag is: a missing key fails the start, and the start
+falls back.
 
 Any model flag (`--model`, `--fastmodel`, `--slowmodel`, `--provider`,
 `--local`, including `--model embedding=...`) empties the preset layer.
@@ -81,6 +92,43 @@ The startup flags, `settings.model`, and the default slots are kept in
 `let` globals in `session.agency`. `/model` and `/preset` resolve with
 them, so flags stay above the preset all session, and neither command
 reads `settings.json` or checks the default router's key inside a turn.
+
+## The last settings
+
+A new session starts with the preset, models and effort the person last
+chose, in any session, in any front-end. They replace the default preset:
+one concept answers "what does a new chat start with".
+
+- **What is kept** (`last-settings.json` in the agent home):
+  `{ preset, choices }`, where `choices` is the session's `ModelChoices`
+  without `llmOptions`. Options can name a server (`baseUrl`), and the
+  coordinator's `useLlmOptions` tool can set them, so keeping them would
+  let text injected into one chat pick the server for every later one.
+  The budget and the tool limits aren't kept.
+- **Only a person writes it.** The core calls `rememberSettings` after a
+  `model`, `effort` or `preset` answer that worked. A front-end sends
+  those; the model can't. A session with no record (incognito, one-shot)
+  writes nothing, and nor does one started with a model flag or
+  `--effort`: those flags aren't `ModelChoices`, so a write would keep
+  part of what it ran. `/local` isn't remembered. There is no tool to set
+  a default preset any more.
+- **When it is read:** at every start whose `ProgramStart` names no
+  preset, model flag or effort flag, `-p` included
+  (`startPresetAndModels`).
+- **No interrupt.** A rule added to `recommended` never reaches a saved
+  `policy.json` (approval-policies.md, "A saved policy does not follow
+  `recommended`"), so each change would ask. Like the session files
+  `_saveSession` writes, this is the agent's own bookkeeping, caused only
+  by a person's answer, and it holds names the start checks again.
+- **Upgrading:** with no file, the one preset marked `"default": true`
+  seeds the start (`seedFromDefault`), and nothing is written. The first
+  change replaces it. `keepDefaultFlag` stays so a save doesn't drop the
+  mark. Two marked presets seed nothing.
+- **Fallbacks:** a file that is missing or malformed is ignored. A
+  preset that is gone, or settings that fail to start (a local preset
+  where local models are off, a model whose key is missing), are dropped
+  with one warning, and the run starts with no preset and no choices. If
+  that fails too, the start fails as it always did.
 
 ## Keys from the keychain
 
@@ -309,7 +357,8 @@ A preset may be named `constructor`, so every lookup by name goes through
 `savePreset` takes `PresetInput`, which has no `default` field, and whose
 `slots` is an object with three named fields. A `Record` in a tool
 parameter becomes a JSON schema that OpenAI and Anthropic reject.
-Replacing the default preset keeps its `default` flag.
+Replacing a preset marked `default` keeps the mark (`keepDefaultFlag`):
+the mark still seeds the last settings for someone upgrading.
 
 ## Saving the session to a preset
 

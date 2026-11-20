@@ -122,8 +122,9 @@ function startData(id) {
 }
 
 /** A stand-in for the shell run. `answer` answers each question asked. */
-function standIn({ policy = {}, answer = () => approve() } = {}) {
+function standIn({ policy = {}, answer = () => approve(), showFails = () => false } = {}) {
   const shown = [];
+  const forks = [];
   const state = { policy, asked: 0 };
   const shell = {
     ask: async (interrupt) => {
@@ -131,9 +132,13 @@ function standIn({ policy = {}, answer = () => approve() } = {}) {
       return answer(interrupt, state);
     },
     policy: async () => state.policy,
-    show: async (line) => void shown.push(line),
+    show: async (line) => {
+      if (showFails(line)) throw new Error("the terminal could not print");
+      shown.push(line);
+    },
+    forked: async (from, to) => void forks.push([from, to]),
   };
-  return { shell, shown, state };
+  return { shell, shown, state, forks };
 }
 
 function agentFor(start) {
@@ -295,6 +300,85 @@ const result = {};
     // One "stopped" from the job test above, and one from this cancel.
     states: records.sort(),
   };
+}
+
+// An edit a rule approves inside the run is shown as its diff, as the
+// terminal's handler always showed one. An edit that is asked about is
+// drawn by the prompt, so it is not shown twice.
+{
+  writeFiles();
+  const ruled = standIn({ policy: { "std::edit": [{ action: "approve" }] } });
+  const session = await opened("s-ruled-edit", ruled);
+  await session.send(messageAnswer("edit one file"), ruled.shell);
+  const asked = standIn();
+  writeFiles();
+  const askedSession = await opened("s-asked-edit", asked);
+  await askedSession.send(messageAnswer("edit one file"), asked.shell);
+  const plain = (text) => text.replace(/\u001b\[[0-9;]*m/g, "");
+  const diffsIn = (shown) =>
+    shown.map((line) => plain(line.text)).filter((text) => text.startsWith("⏺ Edit: a.txt"));
+  result.editDiffs = {
+    ruledAsked: ruled.state.asked,
+    ruledDiffs: diffsIn(ruled.shown).length,
+    ruledShowsTheNewLine: diffsIn(ruled.shown).some((text) => text.includes("new line")),
+    askedDiffs: diffsIn(asked.shown).length,
+  };
+}
+
+// A shell that fails while the driver shows a turn's reply does not leave
+// the session stuck in the turn: it waits for a message again, and the
+// next one gets its reply.
+{
+  let failOnce = true;
+  const s = standIn({
+    showFails: (line) => {
+      const fail = failOnce && line.kind === "reply";
+      failOnce = failOnce && !fail;
+      return fail;
+    },
+  });
+  const session = await opened("s-show-fails", s);
+  let threw = false;
+  try {
+    await session.send(messageAnswer("hello"), s.shell);
+  } catch {
+    threw = true;
+  }
+  const waiting = session.pause() !== null && session.endedBecause() === "";
+  await session.send(messageAnswer("after the failure"), s.shell);
+  result.showFails = { threw, waiting, nextReplied: textsOf(s.shown, "reply").length };
+}
+
+// A fork tells the shell, so the file its "always" answers go to follows
+// the new id.
+{
+  const s = standIn();
+  const session = await opened("s-fork", s);
+  await session.send(messageAnswer("hello"), s.shell);
+  await session.send({ kind: "fork" }, s.shell);
+  const newId = session.pause()?.record?.id;
+  result.fork = {
+    told: s.forks.length === 1 && s.forks[0][0] === "s-fork" && s.forks[0][1] === newId,
+  };
+}
+
+// A session this build can't run is not taken from the front-end that
+// holds it.
+{
+  const s = standIn();
+  const session = await opened("s-other-build", s);
+  await session.send(messageAnswer("hello"), s.shell);
+  const runFile = path.join(dir, "s-other-build.json");
+  const run = JSON.parse(readFileSync(runFile, "utf8"));
+  const fingerprints = run.pause[0].checkpoint.moduleFingerprints;
+  const moduleId = Object.keys(fingerprints)[0];
+  fingerprints[moduleId] = { ...fingerprints[moduleId], hash: "another-build" };
+  writeFileSync(runFile, JSON.stringify(run));
+  const perry = { frontEnd: "perry", pid: 1, processId: "perry-process" };
+  await takeHold({ dir, id: "s-other-build", holder: perry });
+  const problem = await resumedSession("s-other-build").resume("s-other-build", standIn().shell);
+  const meta = JSON.parse(readFileSync(path.join(dir, "s-other-build.meta.json"), "utf8"));
+  result.otherBuild = { refused: problem !== "", stillHeldBy: meta.heldBy?.frontEnd };
 }
 
 writeFileSync("__result.json", JSON.stringify(result, null, 2));

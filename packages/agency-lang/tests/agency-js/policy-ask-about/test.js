@@ -1,4 +1,11 @@
-import { approvedByPolicy, main, nonInteractive, savedRulesFirst, withoutHandler } from "./agent.js";
+import {
+  answersOnlyFromTheStart,
+  approvedByPolicy,
+  main,
+  nonInteractive,
+  savedRulesFirst,
+  withoutHandler,
+} from "./agent.js";
 import { writeFileSync, mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -42,6 +49,21 @@ try {
     { policyFile: join(dir, "other-policy.json"), root: dir, runFile: join(dir, "other-run.json") },
     { inputOverride: noInput },
   );
+  // A session's own file, which holds only an ls rule. The handler runs
+  // on that plus a flag's bash rule, and is answered "always" once.
+  const sessionFile = join(dir, "session-policy.json");
+  writeFileSync(sessionFile, JSON.stringify({ "std::ls": [{ action: "approve" }] }));
+  const onlyAnswers = ["aa"];
+  const answersOnly = await answersOnlyFromTheStart(
+    { root: dir, runFile: sessionFile },
+    {
+      inputOverride: async () => {
+        const answer = onlyAnswers.shift();
+        if (answer === undefined) throw new Error("Unexpected extra input() call");
+        return answer;
+      },
+    },
+  );
   // The run's own file, before main's answers add to it.
   writeFileSync(runFile, JSON.stringify({ "std::ls": [{ action: "approve" }] }));
   const result = await main({ policyFile, root: dir, runFile }, { inputOverride });
@@ -53,6 +75,7 @@ try {
         nonInteractive: headless.data,
         savedRulesFirst: saved.data,
         approvedByPolicy: byPolicy.data,
+        answersOnlyFromTheStart: answersOnly.data,
         ...result.data,
         remainingAnswers: answers.length,
       },

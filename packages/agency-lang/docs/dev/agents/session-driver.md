@@ -355,6 +355,25 @@ Agency function of `terminal.agency`:
 Esc while the model works cancels the shell run's call. `_send` passes
 that run's abort signal to the leg, so it aborts the leg too.
 
+- **An edit a rule approved** inside the run gets no prompt, so the
+  terminal shows its diff from the core's `session.editDiff`, as its
+  policy handler always did for a rule's approval
+  (`lib/stdlib/agentTerminalDiff.ts`). An edit the new pause asks about
+  is drawn by the prompt and not shown twice.
+- **A leg's outcome is applied before anything is shown.** If the shell
+  fails in the middle of a turn, the turn is dropped (a turn waiting on
+  approvals as Esc drops it, one whose leg was not applied as a failed
+  leg), so the session never stays stuck in a turn that refuses every
+  later line. `send` says why when the session is not waiting.
+- **After a fork**, the driver tells the shell (`forked`), and a session
+  policy file the shell saves "always" answers to moves to the new id.
+- **The shell's handler saves answers only** (`cliPolicyHandler(...,
+  answersOnly: true)`): its policy can be layered from the session's own
+  policy, the saved policy's rejects and flags given now, and only the
+  rules a person answers "always" belong in the file.
+- **A resume checks the build first.** A session this build can't run is
+  refused before `takeHold`, so the front-end that has it open keeps it.
+
 **The policy.** A new session started with policy flags saves what they
 resolve to as its own policy file (`saveCarriedPolicy`), and "always"
 answers go there. A resumed session that carries a policy file runs under

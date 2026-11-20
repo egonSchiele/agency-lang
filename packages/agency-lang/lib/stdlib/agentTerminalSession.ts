@@ -12,7 +12,14 @@ import type { RunUsage } from "../runtime/invocationUsage.js";
 import { mergeHeldJobs, type HeldJob } from "../runtime/jobs/heldJobs.js";
 import { checkPolicyExplicit, type Policy } from "../runtime/policy.js";
 import { resolvePolicyDirs } from "../runtime/policyDirs.js";
-import { _readSessionRecord, readSavedRun, type SessionRecord } from "./agentSessions.js";
+import { failure, type Result } from "../types/result.js";
+import {
+  _readSessionRecord,
+  canResume,
+  readSavedRun,
+  type SessionRecord,
+} from "./agentSessions.js";
+import { renderEditDiff } from "./agentTerminalDiff.js";
 import {
   copyCarriedPolicy,
   currentApproval,
@@ -28,6 +35,7 @@ import {
   stillHeld,
   takeHold,
   type AgentModule,
+  type AgentStep,
   type Answer,
   type DriverAction,
   type DriverPhase,
@@ -47,14 +55,21 @@ import { stopDroppedJobs } from "./agentDriver/jobControl.js";
  *    when the person presses Esc at the prompt.
  *  - `policy`: the rules in force now. Read before each leg and after each
  *    answer, so an "always" answer reaches the rest of the pause.
- *  - `show`: print a line the driver has for the person. */
+ *  - `show`: print a line the driver has for the person.
+ *  - `forked`: the session was forked from one id to another, so a
+ *    session policy file the shell saves "always" answers to moves too. */
 export type TerminalShell = {
   ask: (interrupt: Interrupt) => Promise<InterruptResponse>;
   policy: () => Promise<Policy>;
   show: (line: ShownLine) => Promise<void>;
+  forked?: (from: string, to: string) => Promise<void>;
 };
 
 export type ShownLine = { kind: "reply" | "error" | "info" | "warning"; text: string };
+
+/** A line a leg reported. `editOf` is the file of an edit's diff, which is
+ *  shown only when no prompt draws it. */
+type Reported = ShownLine & { editOf?: string };
 
 export type TerminalSession = {
   /** Starts the run. "" or why it could not start. */
@@ -87,21 +102,58 @@ export type TerminalSessionArgs = {
   onSaved?: (id: string) => void;
 };
 
-/** Collects what a leg reports for the person: the reply and the errors.
- *  The terminal's trace callbacks print everything else. */
-function callbacksFor(shown: ShownLine[]): AgencyCallbacks {
+/** An edit's diff as the core reports it (`session.editDiff`). */
+function editDiffLine(data: object): Reported | null {
+  if (!("filename" in data) || !("hunks" in data) || !Array.isArray(data.hunks)) {
+    return null;
+  }
+  const filename = String(data.filename);
+  return { kind: "info", text: renderEditDiff(filename, data.hunks), editOf: filename };
+}
+
+/** Collects what a leg reports for the person: the reply, the errors, and
+ *  each edit's diff. The terminal's trace callbacks print everything else. */
+function callbacksFor(reported: Reported[]): AgencyCallbacks {
   return {
     onEmit: (data: unknown) => {
       if (typeof data !== "object" || data === null || !("type" in data)) {
         return;
       }
       if (data.type === "session.reply" && "text" in data) {
-        shown.push({ kind: "reply", text: String(data.text) });
+        reported.push({ kind: "reply", text: String(data.text) });
       } else if (data.type === "session.error" && "message" in data) {
-        shown.push({ kind: "error", text: String(data.message) });
+        reported.push({ kind: "error", text: String(data.message) });
+      } else if (data.type === "session.editDiff") {
+        const diff = editDiffLine(data);
+        if (diff !== null) reported.push(diff);
       }
     },
   };
+}
+
+/** The files of the edits a leg's new pause asks about: their prompt draws
+ *  the diff, so the leg's report of it is not shown too. */
+function editsAsked(result: Result<AgentStep>): string[] {
+  if (!result.success || result.value.kind !== "needsApproval") {
+    return [];
+  }
+  return result.value.interrupts
+    .filter((interrupt) => interrupt.effect === "std::edit")
+    .map((interrupt) => {
+      const data: unknown = interrupt.data;
+      return typeof data === "object" && data !== null && "filename" in data
+        ? String(data.filename)
+        : "";
+    });
+}
+
+/** What of a leg's report to show: everything but the diffs a prompt will
+ *  draw. */
+function linesToShow(reported: Reported[], result: Result<AgentStep>): ShownLine[] {
+  const asked = editsAsked(result);
+  return reported
+    .filter((line) => line.editOf === undefined || !asked.includes(line.editOf))
+    .map(({ kind, text }) => ({ kind, text }));
 }
 
 /** The answer a rule in `policy` gives an interrupt, or null when it gives
@@ -213,6 +265,7 @@ async function onHappened(
       if (!copied.success) {
         await shell.show({ kind: "warning", text: copied.error });
       }
+      await shell.forked?.(happened.from, happened.to);
       return;
     }
     default:
@@ -234,36 +287,51 @@ async function movedAway(args: TerminalSessionArgs, phase: DriverPhase): Promise
   return movedMessage(now?.heldBy?.frontEnd ?? "another front-end", record.id);
 }
 
-/** Runs one leg, shows what it reported, and gives the action that
- *  finishes it. */
+/** Runs one leg, and gives the action that finishes it and the lines to
+ *  show. It calls nothing of the shell's after the leg: the caller applies
+ *  the action first, so a shell that fails while showing a line never
+ *  leaves a finished leg unapplied. The policy read before the leg settles
+ *  the new pause's approvals; no answer was given during the leg. */
 async function runLeg(
   args: TerminalSessionArgs,
   leg: Leg,
   shell: TerminalShell,
   abortSignal: AbortSignal | undefined,
-): Promise<{ action: DriverAction; usage: RunUsage | null }> {
-  const shown: ShownLine[] = [];
+): Promise<{ action: DriverAction; usage: RunUsage | null; shown: ShownLine[] }> {
+  const reported: Reported[] = [];
+  const policy = await shell.policy();
   const outcome: LegOutcome = await resumeRun({
     agent: args.agent,
-    callbacks: callbacksFor(shown),
-    policy: await shell.policy(),
+    callbacks: callbacksFor(reported),
+    policy,
     interrupts: leg.interrupts,
     responses: leg.responses,
     abortSignal,
   });
-  for (const line of shown) {
-    await shell.show(line);
-  }
-  const settle = settleUnder(await shell.policy(), args.host);
   return {
     action: {
       type: "legFinished",
       result: outcome.result,
-      settle,
+      settle: settleUnder(policy, args.host),
       startedJobs: outcome.startedJobs,
     },
     usage: outcome.usage,
+    shown: linesToShow(reported, outcome.result),
   };
+}
+
+/** The action that leaves a turn an error interrupted: a turn waiting on
+ *  an approval is dropped, as Esc drops it, and one whose leg was not
+ *  applied fails. Null when no turn is in progress. */
+function actionAfterError(phase: DriverPhase, error: unknown): DriverAction | null {
+  if (phase.kind === "approving") {
+    return { type: "approvalCancelled" };
+  }
+  if (phase.kind === "working" || phase.kind === "answering") {
+    const message = error instanceof Error ? error.message : String(error);
+    return { type: "legFinished", result: failure(message), settle: () => null };
+  }
+  return null;
 }
 
 /** Asks the approval showing, and gives the action that answers it. */
@@ -292,15 +360,42 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
   // A function, so a read after an await sees the phase as it is now.
   const endedReason = (): string => (phase.kind === "ended" ? phase.reason : "");
 
-  const apply = async (action: DriverAction, shell: TerminalShell): Promise<void> => {
-    const step = reduceDriver(phase, action);
-    phase = step.phase;
-    for (const happened of step.happened) {
-      await onHappened(args, happened, shell);
+  /** Moves to the phase `action` leads to, with no side effect, and gives
+   *  what happened on the way. */
+  const advance = (action: DriverAction): Happened[] => {
+    const next = reduceDriver(phase, action);
+    phase = next.phase;
+    return next.happened;
+  };
+
+  /** Shows what happened, acts on it, and saves. */
+  const afterwards = async (happened: Happened[], shell: TerminalShell): Promise<void> => {
+    for (const each of happened) {
+      await onHappened(args, each, shell);
     }
     if (phase.kind === "waitingForUser" || phase.kind === "approving") {
       // run-read-ok: the save takes the record's lock on the host of whatever run is current, or on the process's lock host. One terminal session saves one step at a time, so the lock never contends.
       await saveTerminalRun(args, phase, shell);
+    }
+  };
+
+  const apply = async (action: DriverAction, shell: TerminalShell): Promise<void> => {
+    await afterwards(advance(action), shell);
+  };
+
+  /** After an error in the middle of a turn: the session goes back to
+   *  waiting for a message, so it never stays stuck in a turn that refuses
+   *  every later line. The turn's jobs are stopped. What the shell could
+   *  not show is not tried again. */
+  const recover = async (error: unknown): Promise<void> => {
+    const action = actionAfterError(phase, error);
+    if (action === null) {
+      return;
+    }
+    for (const each of advance(action)) {
+      if (each.type === "turnJobsDropped") {
+        await stopDroppedJobs(args.host, each.jobs);
+      }
     }
   };
 
@@ -316,7 +411,11 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
       }
       const leg = await runLeg(args, phase.leg, shell, abortSignal);
       usage = leg.usage ?? usage;
-      await apply(leg.action, shell);
+      const happened = advance(leg.action);
+      for (const line of leg.shown) {
+        await shell.show(line);
+      }
+      await afterwards(happened, shell);
       return true;
     }
     const showing = phase.kind === "approving" ? currentApproval(phase.queue) : null;
@@ -328,22 +427,35 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
   };
 
   const drive = async (shell: TerminalShell, abortSignal?: AbortSignal): Promise<void> => {
-    while (await step(shell, abortSignal)) {
-      // Each step changed the phase; go on until there is nothing to do.
+    try {
+      while (await step(shell, abortSignal)) {
+        // Each step changed the phase; go on until there is nothing to do.
+      }
+    } catch (error) {
+      await recover(error);
+      throw error;
     }
   };
 
   return {
     async start(shell) {
       const policy = await shell.policy();
-      const shown: ShownLine[] = [];
-      const outcome = await startRun({ agent: args.agent, callbacks: callbacksFor(shown), policy });
+      const reported: Reported[] = [];
+      const outcome = await startRun({
+        agent: args.agent,
+        callbacks: callbacksFor(reported),
+        policy,
+      });
       usage = outcome.usage ?? usage;
-      for (const line of shown) {
+      const happened = advance({
+        type: "legFinished",
+        result: outcome.result,
+        settle: settleUnder(policy, args.host),
+      });
+      for (const line of linesToShow(reported, outcome.result)) {
         await shell.show(line);
       }
-      const settle = settleUnder(policy, args.host);
-      await apply({ type: "legFinished", result: outcome.result, settle }, shell);
+      await afterwards(happened, shell);
       return endedReason();
     },
 
@@ -351,6 +463,12 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
       const run = await readSavedRun(args.dir, id);
       if (run === null) {
         return `The file for session ${id} is missing or is not a saved session.`;
+      }
+      // A session this build can't run is refused before taking hold, so
+      // the front-end that has it open keeps it.
+      if (canResume(run) !== "yes") {
+        phase = restoredPhase(run).phase;
+        return endedReason();
       }
       // run-read-ok: takeHold locks the record as a save does (see `apply`), before this session has run any leg.
       const held = await takeHold({ dir: args.dir, id, holder: args.holder });
@@ -370,6 +488,8 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
 
     async send(answer, shell, abortSignal) {
       if (phase.kind !== "waitingForUser") {
+        const why = endedReason() || "The session is not waiting for a message.";
+        await shell.show({ kind: "warning", text: why });
         return;
       }
       const action: DriverAction =

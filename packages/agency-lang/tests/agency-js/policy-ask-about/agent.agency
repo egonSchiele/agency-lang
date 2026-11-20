@@ -66,6 +66,24 @@ node nonInteractive(args: { policyFile: string, root: string, runFile: string })
   return { type: response.type, reason: response.value }
 }
 
+// A handler started on a layered policy (the file's rules plus a flag's)
+// that saves answers only: the program's own "always" answer, given before
+// any askAbout, adds only its rule to the file, never the flag's.
+node answersOnlyFromTheStart(args: { root: string, runFile: string }): any {
+  const layered = {
+    "std::ls": [{ action: "approve" }],
+    "std::bash": [{ action: "approve" }]
+  }
+  const handler = cliPolicyHandler(file: args.runFile, policy: layered, answersOnly: true)
+  let ownGlob = "rejected"
+  handle {
+    interrupt std::glob("List files", { dir: "${args.root}/y", pattern: "*" })
+    ownGlob = "approved"
+  } with handler
+  flushPolicy()
+  return { ownGlob: ownGlob, file: fileContents(args.runFile) }
+}
+
 // An interrupt the run's policy approves is approved with no prompt.
 node approvedByPolicy(args: { policyFile: string, root: string, runFile: string }): any {
   const handler = cliPolicyHandler(file: args.policyFile)

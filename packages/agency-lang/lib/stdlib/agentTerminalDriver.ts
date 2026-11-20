@@ -38,8 +38,9 @@ import { setReplJobsSource } from "./cliJobLine.js";
 import type { TokenSnapshot } from "./cliTokens.js";
 import type { JobSummaryForAgency } from "./jobs.js";
 
-/** The shell run's three Agency functions the session calls back. */
-type ShellFunctions = { ask: unknown; policy: unknown; show: unknown };
+/** The shell run's Agency functions the session calls back. `forked` is
+ *  left out where nothing follows a fork, as in a one-shot run. */
+type ShellFunctions = { ask: unknown; policy: unknown; show: unknown; forked?: unknown };
 
 type Current = { session: TerminalSession; functions: ShellFunctions };
 
@@ -58,6 +59,11 @@ function shellFor(run: Run, functions: ShellFunctions): TerminalShell {
     policy: async () => ((await callAgency(run, functions.policy)) ?? {}) as Policy,
     show: async (line: ShownLine) => {
       await callAgency(run, functions.show, line.kind, line.text);
+    },
+    forked: async (from: string, to: string) => {
+      if (functions.forked != null) {
+        await callAgency(run, functions.forked, from, to);
+      }
     },
   };
 }

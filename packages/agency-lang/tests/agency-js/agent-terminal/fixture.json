@@ -32,5 +32,14 @@
   "cancelledJob": {
     "held": 0,
     "states": ["stopped", "stopped"]
-  }
+  },
+  "editDiffs": {
+    "ruledAsked": 0,
+    "ruledDiffs": 1,
+    "ruledShowsTheNewLine": true,
+    "askedDiffs": 0
+  },
+  "showFails": { "threw": true, "waiting": true, "nextReplied": 1 },
+  "fork": { "told": true },
+  "otherBuild": { "refused": true, "stillHeldBy": "perry" }
 }

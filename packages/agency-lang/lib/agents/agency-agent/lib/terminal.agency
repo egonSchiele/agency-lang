@@ -63,11 +63,20 @@ def showForSession(kind: string, text: string) {
   }
 }
 
+/** The session was forked: a session policy file "always" answers go to
+  moves to the new id, as the driver copied it there. */
+def forkedForSession(from: string, to: string) {
+  if (_policyFile == carriedPolicyPath(from)) {
+    _policyFile = carriedPolicyPath(to)
+  }
+}
+
 def shellFunctions(): any {
   return {
     ask: askForSession,
     policy: policyForSession,
-    show: showForSession
+    show: showForSession,
+    forked: forkedForSession
   }
 }
 

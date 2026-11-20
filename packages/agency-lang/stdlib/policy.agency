@@ -1535,6 +1535,7 @@ export def cliPolicyHandler(
   fields: ScopedRuleFields = {},
   policy: Policy | null = null,
   interactive: boolean = true,
+  answersOnly: boolean = false,
 ): any {
   """
   Build a CLI approval handler that remembers decisions in a policy file.
@@ -1544,6 +1545,7 @@ export def cliPolicyHandler(
   @param fields - Per-effect scope overrides, with [] disabling scoped approval for an effect.
   @param policy - Initial rules to use instead of reading the file, or null to load it.
   @param interactive - Prompt for unresolved interrupts when true, or reject them when false.
+  @param answersOnly - Save only the rules "always" answers add to the file, never the rest of policy, for a policy layered from more than the file
   """
   globalCliPolicyOpts = {
     file: file,
@@ -1562,6 +1564,6 @@ export def cliPolicyHandler(
   }
   _pendingSave = false
   _pendingAnswers = []
-  _saveAnswersOnly = false
+  _saveAnswersOnly = answersOnly
   return _handler
 }

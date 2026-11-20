@@ -1,3 +1,7 @@
+## Nov 20 2026 — v0.43.2
+
+Agency agent: new chats start with the last settings you chose.
+
 ## Nov 19 2026 — v0.43.1
 
 When agency-lang scripts run `node`, they use the `node` they were started with.

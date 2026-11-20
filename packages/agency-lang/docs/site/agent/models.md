@@ -1,6 +1,16 @@
 # Models and settings
 
-The agent picks a model provider automatically from the API keys in your environment. Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`, and the agent will pick it up automatically. You can also set an explicit model and provider:
+The agent picks a model provider automatically from the API keys in your environment. Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`, and the agent will pick it up automatically.
+
+You can also keep a key in your system keyring (the macOS Keychain, or the Secret Service on Linux). The agent reads it when the variable isn't set in your environment. A key in the environment always wins. Create the entry with this command, which asks for the key, so it never shows up in your shell history or in `ps`:
+
+```bash
+security add-generic-password -s agency-lang -a ANTHROPIC_API_KEY -w
+```
+
+The service is `agency-lang`, and the account is the variable's name. On Linux, use `secret-tool store --label agency-lang service agency-lang account ANTHROPIC_API_KEY`. Create it with these commands, not in Keychain Access: an entry made there doesn't trust the `security` command, so every start asks for permission, and the key isn't read. A key from the keyring becomes part of the agent's environment, just like one from your shell profile, so the commands the agent runs can see it.
+
+You can also set an explicit model and provider:
 
 ```bash
 agency agent --provider anthropic

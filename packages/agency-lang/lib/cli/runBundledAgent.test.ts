@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, test, vi } from "vitest";
 
+// No test here may read the developer's keychain: the launcher's default
+// loadApiKeys is replaced for the whole file.
+vi.mock("../stdlib/apiKeys.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../stdlib/apiKeys.js")>()),
+  loadApiKeys: async () => ({ loaded: [], failed: null }),
+}));
+
 // Force the precompiled-file branch so runBundledAgent never invokes the
 // compiler; spawn is injected, so nothing actually launches.
 vi.mock("fs", async (importOriginal) => {
@@ -208,11 +215,11 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     vi.unstubAllEnvs();
   });
 
-  it("serializes the override into AGENCY_CONFIG_OVERRIDES", () => {
+  it("serializes the override into AGENCY_CONFIG_OVERRIDES", async () => {
     const onMock = vi.fn();
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: onMock }) as never);
 
-    runBundledAgent(
+    await runBundledAgent(
       {},
       "agency-agent",
       ["--trace", "t.trace", "--log", "l.jsonl"],
@@ -235,14 +242,20 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(opts.env.PATH).toBe(process.env.PATH);
   });
 
-  it("merges onto inherited overrides: --trace keeps the harness statelog path", () => {
+  it("merges onto inherited overrides: --trace keeps the harness statelog path", async () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     vi.stubEnv(
       CONFIG_OVERRIDES_ENV,
       JSON.stringify({ observability: true, log: { logFile: "harness.jsonl" } }),
     );
 
-    runBundledAgent({}, "agency-agent", ["--trace", "t.trace"], {}, { spawn: spawnMock as never });
+    await runBundledAgent(
+      {},
+      "agency-agent",
+      ["--trace", "t.trace"],
+      {},
+      { spawn: spawnMock as never },
+    );
 
     const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
     expect(JSON.parse(opts.env[CONFIG_OVERRIDES_ENV])).toEqual({
@@ -254,14 +267,14 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     });
   });
 
-  it("an explicit --log still wins the logFile key (user intent); the rest of the inherited overrides survive", () => {
+  it("an explicit --log still wins the logFile key (user intent); the rest of the inherited overrides survive", async () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     vi.stubEnv(
       CONFIG_OVERRIDES_ENV,
       JSON.stringify({ observability: true, log: { logFile: "harness.jsonl" } }),
     );
 
-    runBundledAgent(
+    await runBundledAgent(
       {},
       "agency-agent",
       ["--log", "other.jsonl"],
@@ -275,7 +288,7 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(overrides.observability).toBe(true);
   });
 
-  it("the launcher's own code identity replaces an inherited log.code: a trace never names another program", () => {
+  it("the launcher's own code identity replaces an inherited log.code: a trace never names another program", async () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     vi.stubEnv(
       CONFIG_OVERRIDES_ENV,
@@ -287,7 +300,7 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
       }),
     );
 
-    runBundledAgent({}, "agency-agent", [], {}, { spawn: spawnMock as never });
+    await runBundledAgent({}, "agency-agent", [], {}, { spawn: spawnMock as never });
 
     const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
     const overrides = JSON.parse(opts.env[CONFIG_OVERRIDES_ENV]);
@@ -296,12 +309,12 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(overrides.log.logFile).toBe("harness.jsonl");
   });
 
-  it("sets AGENCY_MAX_COST/AGENCY_MAX_TIME from the forwarded flags and clears stale ones", () => {
+  it("sets AGENCY_MAX_COST/AGENCY_MAX_TIME from the forwarded flags and clears stale ones", async () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     vi.stubEnv("AGENCY_MAX_COST", "999");
     vi.stubEnv("AGENCY_MAX_TIME", "999999");
 
-    runBundledAgent(
+    await runBundledAgent(
       {},
       "agency-agent",
       ["--print", "hi", "--max-cost", "0.5"],
@@ -318,12 +331,12 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(opts.env.AGENCY_MAX_TIME).toBeUndefined();
   });
 
-  it("clears both budget env vars when no budget flags are forwarded", () => {
+  it("clears both budget env vars when no budget flags are forwarded", async () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     vi.stubEnv("AGENCY_MAX_COST", "999");
     vi.stubEnv("AGENCY_MAX_TIME", "999999");
 
-    runBundledAgent(
+    await runBundledAgent(
       {},
       "agency-agent",
       ["--print", "hi"],
@@ -341,12 +354,12 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
   test.each([
     { forwarded: ["--max-time", "bogus"], message: /max-time/i },
     { forwarded: ["--max-cost", "bogus"], message: /max-cost/i },
-  ])("invalid budget exits before spawn: $forwarded", ({ forwarded, message }) => {
+  ])("invalid budget exits before spawn: $forwarded", async ({ forwarded, message }) => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     const exitMock = vi.fn();
     const errorMock = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    runBundledAgent(
+    await runBundledAgent(
       {},
       "agency-agent",
       forwarded,
@@ -362,9 +375,9 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  it("--workdir becomes the child's spawn cwd; absent means inherit", () => {
+  it("--workdir becomes the child's spawn cwd; absent means inherit", async () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
-    runBundledAgent(
+    await runBundledAgent(
       {},
       "agency-agent",
       ["--workdir", os.tmpdir(), "-p", "hi"],
@@ -374,29 +387,29 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect((spawnMock.mock.calls[0][2] as { cwd?: string }).cwd).toBe(path.resolve(os.tmpdir()));
 
     spawnMock.mockClear();
-    runBundledAgent({}, "agency-agent", ["-p", "hi"], {}, { spawn: spawnMock as never });
+    await runBundledAgent({}, "agency-agent", ["-p", "hi"], {}, { spawn: spawnMock as never });
     expect((spawnMock.mock.calls[0][2] as { cwd?: string }).cwd).toBeUndefined();
   });
 
-  it("--incognito beats an inherited override that turns logging on", () => {
+  it("--incognito beats an inherited override that turns logging on", async () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     vi.stubEnv(
       CONFIG_OVERRIDES_ENV,
       JSON.stringify({ observability: true, log: { logFile: "harness.jsonl" } }),
     );
 
-    runBundledAgent({}, "agency-agent", ["--incognito"], {}, { spawn: spawnMock as never });
+    await runBundledAgent({}, "agency-agent", ["--incognito"], {}, { spawn: spawnMock as never });
 
     const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
     expect(JSON.parse(opts.env[CONFIG_OVERRIDES_ENV]).observability).toBe(false);
   });
 
-  it("--incognito with --log exits before spawn", () => {
+  it("--incognito with --log exits before spawn", async () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     const exitMock = vi.fn();
     const errorMock = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    runBundledAgent(
+    await runBundledAgent(
       {},
       "agency-agent",
       ["--incognito", "--log"],
@@ -411,12 +424,12 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  it("a --workdir that is not a directory exits before spawn", () => {
+  it("a --workdir that is not a directory exits before spawn", async () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     const exitMock = vi.fn();
     const errorMock = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    runBundledAgent(
+    await runBundledAgent(
       {},
       "agency-agent",
       ["--workdir", "/no/such/dir/anywhere", "-p", "hi"],
@@ -429,9 +442,9 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  it("always records which code is running, even with no debug flags", () => {
+  it("always records which code is running, even with no debug flags", async () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
-    runBundledAgent({}, "agency-agent", ["--print", "hi"], {}, { spawn: spawnMock as never });
+    await runBundledAgent({}, "agency-agent", ["--print", "hi"], {}, { spawn: spawnMock as never });
     const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
     const overrides = JSON.parse(opts.env[CONFIG_OVERRIDES_ENV]);
     expect(Object.keys(overrides)).toEqual(["log"]);
@@ -442,10 +455,10 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     );
   });
 
-  it("--agent-home sets AGENCY_AGENT_HOME in the child env, beating an inherited value", () => {
+  it("--agent-home sets AGENCY_AGENT_HOME in the child env, beating an inherited value", async () => {
     vi.stubEnv("AGENCY_AGENT_HOME", "/from/env");
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
-    runBundledAgent(
+    await runBundledAgent(
       {},
       "agency-agent",
       ["--agent-home", "/from/flag", "hi"],
@@ -458,18 +471,18 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(opts.env.AGENCY_AGENT_HOME).toBe("/from/flag");
   });
 
-  it("without the flag, an inherited AGENCY_AGENT_HOME passes through untouched", () => {
+  it("without the flag, an inherited AGENCY_AGENT_HOME passes through untouched", async () => {
     vi.stubEnv("AGENCY_AGENT_HOME", "/from/env");
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
-    runBundledAgent({}, "agency-agent", ["hi"], {}, { spawn: spawnMock as never });
+    await runBundledAgent({}, "agency-agent", ["hi"], {}, { spawn: spawnMock as never });
     const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
     expect(opts.env.AGENCY_AGENT_HOME).toBe("/from/env");
   });
 
-  it("the child receives the ORIGINAL argv, budget flags included", () => {
+  it("the child receives the ORIGINAL argv, budget flags included", async () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     const forwarded = ["-p", "hi", "--max-cost", "0.5"];
-    runBundledAgent({}, "agency-agent", forwarded, {}, { spawn: spawnMock as never });
+    await runBundledAgent({}, "agency-agent", forwarded, {}, { spawn: spawnMock as never });
     const argv = spawnMock.mock.calls[0][1] as string[];
     expect(argv.slice(-4)).toEqual(forwarded);
   });

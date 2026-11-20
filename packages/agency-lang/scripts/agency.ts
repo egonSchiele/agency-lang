@@ -2570,9 +2570,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .argument("[args...]", "Arguments forwarded to the agent")
     .helpOption(false)
-    .action((args: string[]) => {
+    .action(async (args: string[]) => {
       const launchAgent = deps.launchAgent ?? agent;
-      launchAgent(getConfig(), args, {
+      await launchAgent(getConfig(), args, {
         // Present only when the user explicitly wrote -c; cwd config
         // discovery never sets this option — the provenance the staged
         // configured compile needs.
@@ -2588,9 +2588,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--trace [file]", "Write an execution trace of the diagnosis to this file")
     .option("--log-file <path>", "Append statelog events from the diagnosis to this file")
     .action(
-      (file: string, opts: { symptom?: string; trace?: string | boolean; logFile?: string }) => {
+      async (
+        file: string,
+        opts: { symptom?: string; trace?: string | boolean; logFile?: string },
+      ) => {
         const config = getConfig();
-        doctor(config, file, {
+        await doctor(config, file, {
           symptom: opts.symptom,
           trace: opts.trace as string | true | undefined,
           logFile: opts.logFile,
@@ -2623,9 +2626,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("review", { hidden: true })
     .description("Review an Agency file for type errors and code quality")
     .argument("<file>", "The .agency file to review")
-    .action((file: string) => {
+    .action(async (file: string) => {
       const config = getConfig();
-      review(config, file);
+      await review(config, file);
     });
 
   const scheduleCmd = program.command("schedule").description("Manage scheduled agent runs");
@@ -3118,9 +3121,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<file>", "The .agency file to analyze")
     .option("-o, --output <path>", "Output path for the policy file (default: policy.json)")
     .option("-p, --existing <path>", "Existing policy file to modify")
-    .action((file: string, options: { output?: string; existing?: string }) => {
+    .action(async (file: string, options: { output?: string; existing?: string }) => {
       const config = getConfig();
-      policyGen(config, file, options);
+      await policyGen(config, file, options);
     });
 
   program

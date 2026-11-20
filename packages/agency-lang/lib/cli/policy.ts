@@ -28,11 +28,11 @@ export function uniqueInterruptEffects(
   return kinds;
 }
 
-export function policyGen(
+export async function policyGen(
   config: AgencyConfig,
   file: string,
   options: { output?: string; existing?: string },
-): void {
+): Promise<void> {
   const absoluteFile = path.resolve(file);
   if (!existsSync(absoluteFile)) {
     console.error(`File not found: ${file}`);
@@ -89,5 +89,5 @@ export function policyGen(
     ...(existingPolicyJson ? [existingPolicyJson] : []),
   ];
 
-  runBundledAgent(config, "policy", agentArgs);
+  return runBundledAgent(config, "policy", agentArgs);
 }

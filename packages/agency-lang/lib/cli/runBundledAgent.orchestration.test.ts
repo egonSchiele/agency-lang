@@ -6,7 +6,9 @@ import { runBundledAgent, type RunBundledAgentDependencies } from "./runBundledA
  *  compiler, no real processes. The stage registers no exit listener, so
  *  listener-count coverage lives in stageConfiguredAgent.test.ts against the
  *  real staging. */
-function makeLaunchHarness(options: { spawnError?: Error } = {}) {
+function makeLaunchHarness(
+  options: { spawnError?: Error; keychain?: { loaded: string[]; failed: string | null } } = {},
+) {
   const agentDir = "/bundle/agency-agent";
   const precompiledFile = `${agentDir}/agent.js`;
   const runFile = "/owned-temp/agency-agent-1/agent.js";
@@ -14,7 +16,9 @@ function makeLaunchHarness(options: { spawnError?: Error } = {}) {
   const cleanup = vi.fn();
   const stage = vi.fn(() => ({ runFile, cleanup }));
   const calls: string[][] = [];
+  const order: string[] = [];
   const spawn = vi.fn((_command: string, argv: string[]) => {
+    order.push("spawn");
     if (options.spawnError !== undefined) {
       throw options.spawnError;
     }
@@ -31,6 +35,11 @@ function makeLaunchHarness(options: { spawnError?: Error } = {}) {
     compile: vi.fn(() => "/compiled/agent.js") as never,
     spawn: spawn as never,
     exit: vi.fn(),
+    // Never the real keychain: every test here gets this stand-in.
+    loadApiKeys: vi.fn(async () => {
+      order.push("load");
+      return options.keychain ?? { loaded: [], failed: null };
+    }),
   };
   return {
     config: {},
@@ -40,6 +49,7 @@ function makeLaunchHarness(options: { spawnError?: Error } = {}) {
     cleanup,
     stage,
     deps: dependencies,
+    order,
     get spawned() {
       const argv = calls.at(-1) ?? [];
       const fileIndex = argv.findIndex((argument) => argument.endsWith("agent.js"));
@@ -52,11 +62,11 @@ function makeLaunchHarness(options: { spawnError?: Error } = {}) {
 }
 
 describe("runBundledAgent config selection and cleanup", () => {
-  test.each(["exit", "error"])("forwarded config selects staging; cleanup on %s", (event) => {
+  test.each(["exit", "error"])("forwarded config selects staging; cleanup on %s", async (event) => {
     const harness = makeLaunchHarness();
     const forwarded = ["-p", "hi", "--config", "child.json"];
     const errorSilencer = vi.spyOn(console, "error").mockImplementation(() => {});
-    runBundledAgent(
+    await runBundledAgent(
       harness.config,
       "agency-agent",
       forwarded,
@@ -72,17 +82,17 @@ describe("runBundledAgent config selection and cleanup", () => {
     errorSilencer.mockRestore();
   });
 
-  test("no config selects the shipped precompiled agent without staging", () => {
+  test("no config selects the shipped precompiled agent without staging", async () => {
     const harness = makeLaunchHarness();
-    runBundledAgent(harness.config, "agency-agent", ["--help"], {}, harness.deps);
+    await runBundledAgent(harness.config, "agency-agent", ["--help"], {}, harness.deps);
     expect(harness.stage).not.toHaveBeenCalled();
     expect(harness.spawned.runFile).toBe(harness.precompiledFile);
   });
 
-  test("root config alone selects the staged runFile and preserves forwarded argv", () => {
+  test("root config alone selects the staged runFile and preserves forwarded argv", async () => {
     const harness = makeLaunchHarness();
     const forwarded = ["-p", "hi"];
-    runBundledAgent(
+    await runBundledAgent(
       harness.config,
       "agency-agent",
       forwarded,
@@ -93,9 +103,9 @@ describe("runBundledAgent config selection and cleanup", () => {
     expect(harness.spawned.forwardedArgs).toEqual(forwarded);
   });
 
-  test("synchronous spawn throw cleans exactly once", () => {
+  test("synchronous spawn throw cleans exactly once", async () => {
     const harness = makeLaunchHarness({ spawnError: new Error("sync") });
-    expect(() =>
+    await expect(
       runBundledAgent(
         harness.config,
         "agency-agent",
@@ -103,29 +113,35 @@ describe("runBundledAgent config selection and cleanup", () => {
         { explicitConfigPath: "root.json" },
         harness.deps,
       ),
-    ).toThrow("sync");
+    ).rejects.toThrow("sync");
     expect(harness.cleanup).toHaveBeenCalledTimes(1);
   });
 
-  test("a failed fallback compile exits 1 through the seam without spawning", () => {
+  test("a failed fallback compile exits 1 through the seam without spawning", async () => {
     const harness = makeLaunchHarness();
     harness.deps.fileExists = () => false;
     vi.mocked(harness.deps.compile).mockReturnValue(null);
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    runBundledAgent(harness.config, "agency-agent", [], {}, harness.deps);
+    await runBundledAgent(harness.config, "agency-agent", [], {}, harness.deps);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/Failed to compile/));
     expect(harness.deps.exit).toHaveBeenCalledWith(1);
     expect(harness.deps.spawn).not.toHaveBeenCalled();
     errorSpy.mockRestore();
   });
 
-  test("a staging failure prints the config error and exits 2 without spawning", () => {
+  test("a staging failure prints the config error and exits 2 without spawning", async () => {
     const harness = makeLaunchHarness();
     harness.stage.mockImplementation(() => {
       throw new Error("Invalid agency.json config:\n  - client: boom");
     });
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    runBundledAgent(harness.config, "agency-agent", ["--config", "bad.json"], {}, harness.deps);
+    await runBundledAgent(
+      harness.config,
+      "agency-agent",
+      ["--config", "bad.json"],
+      {},
+      harness.deps,
+    );
     expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/Invalid agency\.json config/));
     expect(harness.deps.exit).toHaveBeenCalledWith(2);
     expect(harness.deps.spawn).not.toHaveBeenCalled();
@@ -135,14 +151,30 @@ describe("runBundledAgent config selection and cleanup", () => {
   test.each([
     { forwarded: ["--max-time", "bogus"], message: /max-time/i },
     { forwarded: ["--max-cost", "bogus"], message: /max-cost/i },
-  ])("invalid budget exits before staging or spawn: $forwarded", ({ forwarded, message }) => {
+  ])("invalid budget exits before staging or spawn: $forwarded", async ({ forwarded, message }) => {
     const harness = makeLaunchHarness();
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    runBundledAgent(harness.config, "agency-agent", forwarded, {}, harness.deps);
+    await runBundledAgent(harness.config, "agency-agent", forwarded, {}, harness.deps);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(message));
     expect(harness.deps.exit).toHaveBeenCalledWith(2);
     expect(harness.stage).not.toHaveBeenCalled();
     expect(harness.deps.spawn).not.toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+});
+
+describe("runBundledAgent and the keychain", () => {
+  test("loads keys from the keychain before it spawns", async () => {
+    const harness = makeLaunchHarness();
+    await runBundledAgent(harness.config, "agency-agent", ["-p", "hi"], {}, harness.deps);
+    expect(harness.order).toEqual(["load", "spawn"]);
+  });
+
+  test("launches even when the keychain can't be read", async () => {
+    const harness = makeLaunchHarness({ keychain: { loaded: [], failed: "locked" } });
+    const errorSilencer = vi.spyOn(console, "error").mockImplementation(() => {});
+    await runBundledAgent(harness.config, "agency-agent", ["-p", "hi"], {}, harness.deps);
+    expect(harness.order).toEqual(["load", "spawn"]);
+    errorSilencer.mockRestore();
   });
 });

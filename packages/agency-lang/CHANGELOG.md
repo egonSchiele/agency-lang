@@ -1,3 +1,7 @@
+## Nov 19 2026 — v0.43.1
+
+When agency-lang scripts run `node`, they use the `node` they were started with.
+
 ## Nov 19 2026 — v0.43.0
 
 `agency agent` now runs its sessions on the shared session core, the same one other front-ends use.

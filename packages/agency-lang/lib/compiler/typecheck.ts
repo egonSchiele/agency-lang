@@ -47,8 +47,9 @@ type TypeCheckErrorShape = {
 // Provide a path the symbol table can use to resolve relative imports.
 // If `sourcePath` is supplied we use it directly; otherwise we synthesize
 // one in a tempdir that's cleaned up after `fn` returns. Used by
-// typeCheckSource and `agency tc` on stdin — separates "where does this source
-// live on disk" from "what do we do once it's there."
+// `agency tc` on stdin, a command run in a project, whose folder it can
+// write. The checker pipeline below does not use it: it checks a source
+// with no path without writing anything (`unwrittenSourcePath`).
 export function withSourcePath<T>(
   source: string,
   sourcePath: string | undefined,
@@ -128,7 +129,14 @@ function runCheckerPipeline<T>(
   }) => T,
   overrides: Record<string, string> = {},
 ): T {
-  return withSourcePath(source, sourcePath, (syntheticPath) => {
+  // With no path, the source is checked at a path that is never written:
+  // the symbol table reads its text from the override. Writing it would
+  // need a folder this process can write under its current one, and a
+  // program that type-checks a string at run time (std::agency typecheck)
+  // may be started anywhere, such as `/` for an app opened from Finder.
+  const syntheticPath = sourcePath ?? unwrittenSourcePath();
+  const sources = sourcePath ? overrides : { ...overrides, [syntheticPath]: source };
+  {
     // `keepGoing` for the splices: a splice that cannot expand is left in
     // place rather than reported. This pipeline answers what the code checks
     // as; the compile paths report splice failures with a position.
@@ -144,7 +152,7 @@ function runCheckerPipeline<T>(
     // prepareProgram's default.
     const prepared = prepareProgram(source, syntheticPath, config, {
       keepGoing: true,
-      symbolTable: SymbolTable.build(syntheticPath, {}, overrides),
+      symbolTable: SymbolTable.build(syntheticPath, {}, sources),
     });
     failIfNotCheckable(prepared.diagnostics, sourcePath);
     if (!prepared.ok) {
@@ -160,7 +168,20 @@ function runCheckerPipeline<T>(
       info,
     );
     return fn({ checkResult, symbolTable, syntheticPath });
-  });
+  }
+}
+
+/** A path for a source that has none, in a folder that is never made:
+ *  where `withSourcePath` would have written it, so anything that looks
+ *  upward from the path (the project's packages) finds what it found
+ *  before. No file is there, so a relative import does not resolve. */
+function unwrittenSourcePath(): string {
+  return path.join(
+    process.cwd(),
+    ".agency-tmp",
+    `typecheck-${nanoid()}`,
+    `agency_${nanoid()}.agency`,
+  );
 }
 
 /** `overrides` maps an absolute path to in-memory source, so `sourcePath`

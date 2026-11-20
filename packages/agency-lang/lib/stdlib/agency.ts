@@ -90,7 +90,7 @@ function compileToProgram(
   // The compiled JS travels IN the CompiledProgram value so that any
   // checkpoint containing it is fully self-contained — the code is
   // generated at runtime and cannot be assumed present on disk at resume
-  // time. `_run` materializes it to .agency-tmp/ at fork time; `modules`
+  // time. `_run` materializes it under the Agency home at fork time; `modules`
   // carries the rest of a multi-file closure, materialized beside it. The
   // one exception is a trusted module: the program imports the host's
   // compiled file by its absolute path, and `trustedModules` names each one.

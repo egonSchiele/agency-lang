@@ -1,3 +1,31 @@
+## Nov 19 2026 — v0.43.0
+
+`agency agent` now runs its sessions on the shared session core, the same one other front-ends use.
+
+### Breaking
+
+- **Sessions saved by earlier versions of `agency agent` can't be resumed.** The picker and `--continue` leave them out, and `--resume <id>` says why.
+- **The note `/jobs stop` leaves for the model no longer carries the job's output.** The model reads it with `jobOutput`.
+
+### Agent
+
+- **A session is saved at every pause,** including while it waits on an approval. A session closed at an approval asks it again when resumed.
+- **A session started with `--policy`, `--approve`, or `--reject` keeps that policy.** "Always" answers are saved with the session, and flags given at resume are laid on top.
+- **Esc stops the background jobs the cancelled turn started.** Before, they kept running with nothing able to stop them.
+- **`agency agent -p` runs through the session core** and offers no job tools.
+
+### TypeScript API
+
+- **New `onJobStarted` in `InvocationOptions`:** a run tells its caller of each job it starts.
+- **The session driver reports `turnJobsDropped`** when a turn that started jobs is dropped, and `stopDroppedJobs` stops them.
+- **`repl()` takes a `tokens` callback,** and `setReplJobsSource` points its job watch at another run's jobs.
+- **Two new session core answers, `local` and `capabilities`.** A pause also reports the capability profile.
+- **`cliPolicyHandler` takes `answersOnly`,** which saves only the rules that "always" answers add.
+
+### Other
+
+- Upgrade smoltalk to v0.21.2.
+
 ## Nov 19 2026 — v0.42.1
 
 ### Breaking

@@ -17,7 +17,7 @@ import { getGeneratedTools, learnSessionTools, learnSkill, writeToolFor } from "
 import { learnedExtras } from "./learned.agency"
 import { useLlmOptions } from "./llmOptionTools.agency"
 import { getMcpTools } from "./mcp.agency"
-import { deletePreset, listPresets, savePreset, setDefaultPreset } from "./presetTools.agency"
+import { deletePreset, listPresets, savePreset } from "./presetTools.agency"
 import { searchSessions } from "./sessionSearch.agency"
 
 // Skills about the agent itself. The folder ships with the agent, so the
@@ -90,7 +90,6 @@ export def cliTools(turnStart: any, settings: AgentSettings): any[] {
     listPresets,
     savePreset,
     deletePreset,
-    setDefaultPreset,
     useLlmOptions,
     learnTools.partial(turnStart: turnStart, settings: settings),
     searchSessions,

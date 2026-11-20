@@ -22,9 +22,9 @@
       ]
     },
     {
-      "nodeName": "oneDefaultIsUsed",
+      "nodeName": "noFlagNoPreset",
       "input": "",
-      "expectedOutput": "\"opus\"",
+      "expectedOutput": "\"[]\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -35,16 +35,6 @@
       "nodeName": "badPresetIsAWarning",
       "input": "",
       "expectedOutput": "[\"Warning: preset 'broken': maxToolCallRounds must be a whole number above zero, in <path>; ignoring it.\"]",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "twoDefaultsMeanNoPreset",
-      "input": "",
-      "expectedOutput": "\"|Warning: presets opus and cheap are both marked default in <path>; using no preset.\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -102,26 +92,6 @@
       ]
     },
     {
-      "nodeName": "setDefaultLeavesExactlyOne",
-      "input": "",
-      "expectedOutput": "\"{\\\"opus\\\":{\\\"provider\\\":\\\"anthropic\\\"},\\\"cheap\\\":{\\\"provider\\\":\\\"openrouter\\\",\\\"default\\\":true}}\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "setDefaultRefusesABadPreset",
-      "input": "",
-      "expectedOutput": "true",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
       "nodeName": "deleteRemovesOnlyThatPreset",
       "input": "",
       "expectedOutput": "\"{\\\"cheap\\\":{\\\"provider\\\":\\\"openrouter\\\"}}\"",
@@ -142,9 +112,9 @@
       ]
     },
     {
-      "nodeName": "listLinesMarkActiveAndDefault",
+      "nodeName": "listLinesMarkTheActive",
       "input": "",
-      "expectedOutput": "[\"Presets:\",\"  opus (default)\",\"  cheap (active)\",\"  broken (not valid: preset 'broken': maxToolCallRounds must be a whole number above zero)\",\"Switch with /preset <name>.\"]",
+      "expectedOutput": "[\"Presets:\",\"  opus\",\"  cheap (active)\",\"  broken (not valid: preset 'broken': maxToolCallRounds must be a whole number above zero)\",\"Switch with /preset <name>.\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -175,26 +145,6 @@
       "nodeName": "activeNameClearsWithThePreset",
       "input": "",
       "expectedOutput": "\"[]\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "listingHasNoDefaultWhenTwoAreMarked",
-      "input": "",
-      "expectedOutput": "\"[]\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "setDefaultKeepsANullEntry",
-      "input": "",
-      "expectedOutput": "\"{\\\"broken\\\":null,\\\"cheap\\\":{\\\"provider\\\":\\\"openrouter\\\",\\\"default\\\":true}}\"",
       "evaluationCriteria": [
         {
           "type": "exact"

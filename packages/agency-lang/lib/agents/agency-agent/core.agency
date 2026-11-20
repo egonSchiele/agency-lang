@@ -28,6 +28,7 @@ import { canCompact, compactAndReport, compactIfDue, contextStatus } from "./lib
 import { groundingText, setGrounding } from "./lib/grounding.agency"
 import { Resolved } from "./lib/models.agency"
 import { notice } from "./lib/notice.agency"
+import { rememberSettings } from "./lib/lastSettings.agency"
 import { addNote, withPendingNotes } from "./lib/pendingNotes.agency"
 import { activePresetName } from "./lib/presets.agency"
 import {
@@ -410,10 +411,15 @@ export node session(start: SessionStart) {
           recordTurn(text)
           compactIfDue(conversationThread())
         }
+        // A model, effort or preset change that works is kept for new
+        // chats (lastSettings.agency). Only these answers write it: a
+        // person sends them, and the model can't.
         { kind: "model", spec } => {
           const switched = applyModelSpec(spec)
           if (switched is failure(reason)) {
             notice(reason, "error")
+          } else {
+            rememberSettings(activePresetName(), modelChoices())
           }
         }
         { kind: "options", options } => {
@@ -430,12 +436,16 @@ export node session(start: SessionStart) {
           const applied = applyEffortAnswer(effort)
           if (applied is failure(reason)) {
             notice(reason, "error")
+          } else {
+            rememberSettings(activePresetName(), modelChoices())
           }
         }
         { kind: "preset", name } => {
           const presetSwitch = applyPresetAnswer(name)
           if (presetSwitch is failure(reason)) {
             notice("Could not switch preset: ${reason}", "error")
+          } else {
+            rememberSettings(activePresetName(), modelChoices())
           }
         }
         { kind: "budget", maxCost, maxTime } => {

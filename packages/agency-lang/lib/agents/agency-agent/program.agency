@@ -19,10 +19,10 @@ import { setAgentName } from "std::statelog"
 import node { session } from "./core.agency"
 import { SessionStart } from "./core.agency"
 import { setJobToolsOn } from "./lib/cliTools.agency"
+import { startPresetAndModels } from "./lib/lastSettings.agency"
 import { ModelFlags } from "./lib/modelRequest.agency"
 import { notice } from "./lib/notice.agency"
-import { activePreset, startPresetQuiet } from "./lib/presets.agency"
-import { startModels } from "./lib/session.agency"
+import { activePreset } from "./lib/presets.agency"
 import { loadSettings } from "./lib/settings.agency"
 import { LimitFlags, applyToolLimits, setStartupLimitFlags } from "./lib/toolLimits.agency"
 import {
@@ -94,21 +94,23 @@ node main(start: ProgramStart!) {
     }
   }
 
-  // The preset comes before the models: it is one of their layers.
-  const preset = startPresetQuiet(start.preset, settings)
-  if (preset is failure(presetProblem)) {
-    throw(presetProblem)
+  // The preset, then the models: the preset is one of their layers. A run
+  // that names no preset, model or effort flag starts from the last
+  // settings the person chose (lib/lastSettings.agency). The search
+  // backend is chosen for this session, and saved only when the
+  // front-end says this is the user's own terminal.
+  const started = startPresetAndModels({
+    preset: start.preset,
+    flags: start.models,
+    saveSearchChoice: start.saveSearchChoice ?? false,
+    settings: settings
+  })
+  if (started is failure(startProblem)) {
+    throw(startProblem)
     return
   }
-  for (warning in preset.value) {
+  for (warning in started.value) {
     notice(warning, "warning")
-  }
-  // The search backend is chosen for this session, and saved only when
-  // the front-end says this is the user's own terminal.
-  const models = startModels(start.models, start.saveSearchChoice ?? false)
-  if (models is failure(modelProblem)) {
-    throw(modelProblem)
-    return
   }
 
   setStartupLimitFlags(start.limits)

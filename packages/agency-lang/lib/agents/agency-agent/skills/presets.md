@@ -1,6 +1,6 @@
 ---
 name: presets
-description: Create, change, delete, list, or pick the default agent preset (saved provider, model, and tool-limit settings).
+description: Create, change, delete, or list agent presets (saved provider, model, and tool-limit settings).
 ---
 
 # Presets
@@ -9,6 +9,11 @@ A preset is a named set of settings the agent can start with: a provider,
 models, two tool limits, and `llm()` options. Presets live in the agent's
 settings.json. A preset does not change your prompt, your tools, or the
 approval policy.
+
+A new chat starts with the preset, models, and effort the user last
+chose, in any chat. There is no default preset. To have new chats start
+with a preset, the user switches to it with `/preset <name>`. You can't
+do that for them.
 
 ## Fields
 
@@ -44,10 +49,9 @@ Set only the fields the user asked for.
 
 ## Tools
 
-- `listPresets()`: the saved presets, the default, and the active one.
+- `listPresets()`: the saved presets and the active one.
 - `savePreset(name, preset)`: create or replace one.
 - `deletePreset(name)`: delete one.
-- `setDefaultPreset(name)`: make one the default. `savePreset` cannot.
 - `useLlmOptions(options)`: set `llm()` options for this session only,
   from the next turn. Nothing is saved. The user approves the change, and
   a `/model` or `/preset` switch drops it.
@@ -76,9 +80,9 @@ savePreset("cheap", { provider: "openrouter", slots: { main: "deepseek/deepseek-
 
 User: make it my default
 
-```
-setDefaultPreset("cheap")
-```
+Say that new chats start with whatever the user last chose, so running
+`/preset cheap` now makes new chats start with it until they pick
+something else.
 
 User: use fireworks only for glm, and save that as a preset called glm-fw
 

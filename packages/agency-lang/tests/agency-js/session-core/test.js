@@ -158,9 +158,23 @@ function startData(overrides = {}) {
   };
 }
 
+const noModelFlags = { pin: "", slots: {}, provider: "", local: null, effort: null };
+
+// The settings a new session starts from, which a model, effort or preset
+// answer writes. Each session starts without them unless a check keeps
+// them, so one section's choices never decide another's start.
+const lastSettingsFile = path.join(process.env.AGENCY_AGENT_HOME, "last-settings.json");
+const lastSettingsText = () =>
+  existsSync(lastSettingsFile) ? readFileSync(lastSettingsFile, "utf8") : null;
+const lastSettings = () => {
+  const text = lastSettingsText();
+  return text === null ? null : JSON.parse(text);
+};
+
 /** One session, as a front-end holds it: the pause it waits at, and
  *  everything it emitted. */
-async function startSession(overrides = {}, policy = PIN) {
+async function startSession(overrides = {}, policy = PIN, { keepLastSettings = false } = {}) {
+  if (!keepLastSettings) rmSync(lastSettingsFile, { force: true });
   const emitted = [];
   const callbacks = { onEmit: (event) => void emitted.push(event) };
   const first = await main(startData(overrides), { callbacks, policy });
@@ -194,6 +208,8 @@ const result = {};
 
 // A turn.
 const chat = await startSession();
+// Starting a session writes no last settings.
+result.lastSettingsAfterStart = existsSync(lastSettingsFile);
 result.firstPauseEffect = chat.pause[0].effect;
 result.firstPauseBrain = pauseData(chat).brain;
 result.firstPauseModules = Object.keys(chat.pause[0].checkpoint?.moduleFingerprints ?? {});
@@ -270,6 +286,9 @@ result.overBudgetTurn = {
 result.effortBeforeAnyChoice = pauseData(chat).effort;
 await chat.answer({ kind: "effort", effort: "low" });
 result.effortAfterLow = pauseData(chat).effort;
+// This session started with a model flag, so it is a one-off: its
+// settings are not remembered for new chats.
+result.flagSessionNotRemembered = !existsSync(lastSettingsFile);
 await chat.answer(message("with low effort"));
 result.effortSentAfterLow = effortSent["with low effort"];
 // It outlasts a model switch, as --effort does.
@@ -413,11 +432,15 @@ writeFileSync(
     },
   }),
 );
-const noModelFlags = { pin: "", slots: {}, provider: "", local: null, effort: null };
 _setLocalModelsAllowed(false);
 const preset = await startSession({ models: noModelFlags });
 await preset.answer({ kind: "effort", effort: "low" });
+// A saved session started with no flags remembers each change for new
+// chats, and no one is asked: the pause after it is the next one.
+result.lastSettingsAfterEffort = lastSettings();
+result.noPromptForRemembering = preset.pause[0].effect;
 await preset.answer({ kind: "preset", name: "big" });
+result.presetRemembered = lastSettings();
 result.presetSwitch = {
   preset: pauseData(preset).preset,
   mainModel: pauseData(preset).models.main?.model,
@@ -425,6 +448,7 @@ result.presetSwitch = {
   effort: pauseData(preset).effort,
 };
 // A local preset, where the process cannot host a local model.
+const lastBeforeRefusal = lastSettingsText();
 await preset.answer({ kind: "preset", name: "mine" });
 const localNotice = eventsOf(preset, "session.notice").pop();
 result.localPresetWhereNoneCanRun = {
@@ -433,6 +457,117 @@ result.localPresetWhereNoneCanRun = {
   presetKept: pauseData(preset).preset,
   mainModelKept: pauseData(preset).models.main?.model,
 };
+// A refused answer changes nothing, the last settings included.
+result.badAnswerLeavesIt = lastBeforeRefusal !== null && lastSettingsText() === lastBeforeRefusal;
+
+// The session's options are never kept for new chats: they can name a
+// server, and the coordinator can set them.
+const optioned = await startSession({ models: noModelFlags });
+await optioned.answer({ kind: "options", options: { temperature: 0.3 } });
+await optioned.answer({ kind: "effort", effort: "high" });
+result.noOptionsKept = Object.keys(lastSettings()?.choices ?? { missing: true });
+
+// A session that is not saved remembers nothing.
+const unsavedChoice = await startSession({
+  models: noModelFlags,
+  session: { ...startData().session, record: null },
+});
+await unsavedChoice.answer({ kind: "effort", effort: "low" });
+result.unsavedNotRemembered = !existsSync(lastSettingsFile);
+
+// A run that names no preset, model or effort flag starts from the last
+// settings. Ones that can't be used here are dropped with a warning.
+const presetsSettings = readFileSync(settingsFile, "utf8");
+const writeLast = (value) => writeFileSync(lastSettingsFile, JSON.stringify(value));
+const startFromLast = (overrides = {}) =>
+  startSession({ models: noModelFlags, ...overrides }, PIN, { keepLastSettings: true });
+const warningsOf = (session) =>
+  eventsOf(session, "session.notice")
+    .filter((event) => event.level === "warning")
+    .map((event) => event.text);
+const startedOn = (session) => ({
+  running: !session.ended,
+  preset: session.ended ? null : pauseData(session).preset,
+});
+const BIG_AT_LOW = { preset: "big", choices: { pin: "", slots: {}, effort: "low" } };
+
+writeLast(BIG_AT_LOW);
+const fromLast = await startFromLast();
+result.startsFromLast = { preset: pauseData(fromLast).preset, effort: pauseData(fromLast).effort };
+
+writeLast(BIG_AT_LOW);
+// startData's own models name a model: a flag, so the file is not read.
+const flagged = await startSession({}, PIN, { keepLastSettings: true });
+result.flagIgnoresLast = pauseData(flagged).preset;
+
+writeLast({ preset: "deleted", choices: { pin: "", slots: {} } });
+const gone = await startFromLast();
+result.rememberedPresetGone = { ...startedOn(gone), warnings: warningsOf(gone) };
+
+writeLast({ preset: "mine", choices: { pin: "", slots: {} } });
+const localLast = await startFromLast();
+result.localPresetFallsBack = { ...startedOn(localLast), warnings: warningsOf(localLast) };
+
+// A model picked where its key was set, started where it isn't.
+const openRouterKey = process.env.OPENROUTER_API_KEY;
+delete process.env.OPENROUTER_API_KEY;
+writeLast({ preset: "", choices: { pin: "openrouter/moonshotai/kimi-k3", slots: {} } });
+const keyless = await startFromLast();
+result.lastModelWithoutKeyFallsBack = {
+  ...startedOn(keyless),
+  warned: warningsOf(keyless).some((text) =>
+    text.startsWith("Your last settings could not be used:"),
+  ),
+};
+if (openRouterKey !== undefined) process.env.OPENROUTER_API_KEY = openRouterKey;
+
+// A model the catalog doesn't list, picked in a chat whose provider came
+// from the keys. The next chat runs it on that same provider: a bare name
+// would be read against whatever a fresh start detects.
+const picker = await startSession({ models: noModelFlags });
+await picker.answer({ kind: "model", spec: "claude-future-9" });
+const nextChat = await startFromLast();
+result.lastModelChoiceKeepsItsProvider = {
+  inTheChat: pauseData(picker).models.main?.provider,
+  inTheNextChat: nextChat.ended ? "ended" : pauseData(nextChat).models.main?.provider,
+  model: nextChat.ended ? "ended" : pauseData(nextChat).models.main?.model,
+};
+
+// Someone upgrading: no file, and a preset marked default seeds the start
+// without writing anything. Their first change replaces the mark.
+const savedPresets = JSON.parse(presetsSettings).presets;
+const SMALL = { provider: "anthropic", pin: "claude-sonnet-4-6" };
+rmSync(lastSettingsFile, { force: true });
+writeFileSync(
+  settingsFile,
+  JSON.stringify({
+    presets: { ...savedPresets, big: { ...savedPresets.big, default: true }, small: SMALL },
+  }),
+);
+const seeded = await startFromLast();
+result.seedFromDefaultMark = {
+  preset: pauseData(seeded).preset,
+  fileWritten: existsSync(lastSettingsFile),
+};
+await seeded.answer({ kind: "effort", effort: "low" });
+const afterTheChange = lastSettings();
+writeFileSync(
+  settingsFile,
+  JSON.stringify({ presets: { ...savedPresets, small: { ...SMALL, default: true } } }),
+);
+const afterSeed = await startFromLast();
+result.changeReplacesSeed = {
+  file: afterTheChange,
+  preset: pauseData(afterSeed).preset,
+  effort: pauseData(afterSeed).effort,
+};
+
+// A one-shot run reads them too: no default preset is left to lean on.
+writeFileSync(settingsFile, presetsSettings);
+writeLast(BIG_AT_LOW);
+const oneShotFromLast = await startFromLast({ oneShot: true });
+result.oneShotReadsLast = pauseData(oneShotFromLast).preset;
+rmSync(lastSettingsFile, { force: true });
 
 // A model named with the provider a person sees. The agent runs every
 // OpenAI model through its `openai-responses` client, and reports that.

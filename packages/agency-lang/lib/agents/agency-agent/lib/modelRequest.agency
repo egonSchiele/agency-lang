@@ -266,17 +266,25 @@ export def requestProvider(request: ModelRequest, settings: ModelSettings): stri
 
 export def detectionInputs(request: ModelRequest): DetectionInputs {
   """
-  For each of pin, main, and reasoning, the first model the flags or the
-  preset give. Provider detection only accepts a provider with no
-  built-in defaults when the models come with it.
+  For each of pin, main, and reasoning, the first model the choices, the
+  flags or the preset give. Provider detection only accepts a provider
+  with no built-in defaults when the models come with it. The choices
+  come first because a run can start from remembered ones
+  (lastSettings.agency), and detection is where a missing key fails the
+  start; a /model switch builds its own request.
   """
   const preset = presetModelSettings(request)
   const presetSlots = preset.slots ?? {}
   const flagSlots = request.flags.slots
+  const chosenSlots = request.choices.slots
   return {
-    pin: firstSet([request.flags.pin, preset.pin ?? ""]),
-    main: firstSet([flagSlots["main"] ?? "", presetSlots["main"] ?? ""]),
-    reasoning: firstSet([flagSlots["reasoning"] ?? "", presetSlots["reasoning"] ?? ""])
+    pin: firstSet([request.choices.pin, request.flags.pin, preset.pin ?? ""]),
+    main: firstSet([chosenSlots["main"] ?? "", flagSlots["main"] ?? "", presetSlots["main"] ?? ""]),
+    reasoning: firstSet([
+      chosenSlots["reasoning"] ?? "",
+      flagSlots["reasoning"] ?? "",
+      presetSlots["reasoning"] ?? "",
+    ])
   }
 }
 

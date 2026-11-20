@@ -110,6 +110,19 @@ node detectionSeesThePresetModels(): string {
   return "${inputs.pin}|${inputs.main}|${inputs.reasoning}"
 }
 
+// A new run can start from remembered choices, so detection, which is
+// where a missing key fails the start, reads them first, as it reads a flag.
+node choicesComeFirstInDetection(): string {
+  const preset = { ...PRESET, pin: "claude-opus-4-8" }
+  const choices = {
+    pin: "openrouter/moonshotai/kimi-k3",
+    slots: { main: "choice-main" }
+  }
+  const chosen = detectionInputs(request(noModelFlags(), preset, choices))
+  const none = detectionInputs(request(noModelFlags(), preset, noModelChoices()))
+  return "${chosen.pin}|${chosen.main}|${chosen.reasoning} ${none.pin}"
+}
+
 node localPresetRunsLocal(): string {
   const preset = {
     local: "qwen3.5-2b",

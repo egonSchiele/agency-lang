@@ -14,17 +14,7 @@
     {
       "nodeName": "replaceKeepsTheDefault",
       "input": "",
-      "expectedOutput": "\"Replaced the 'opus' preset. It is still the default preset. To use it now, the user runs /preset opus. To start with it, agency agent --preset opus.\\n{\\\"search\\\":{\\\"backend\\\":\\\"tavily\\\"},\\\"model\\\":{\\\"slots\\\":{\\\"fast\\\":\\\"gpt-5.5\\\"}},\\\"presets\\\":{\\\"opus\\\":{\\\"provider\\\":\\\"anthropic\\\",\\\"pin\\\":\\\"claude-opus-4-8\\\",\\\"default\\\":true}}}\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "setDefaultMovesIt",
-      "input": "",
-      "expectedOutput": "\"'cheap' is now the default preset. It applies from the next agent start.\\n{\\\"presets\\\":{\\\"opus\\\":{\\\"provider\\\":\\\"anthropic\\\"},\\\"cheap\\\":{\\\"provider\\\":\\\"openrouter\\\",\\\"default\\\":true}}}\"",
+      "expectedOutput": "\"Replaced the 'opus' preset. To use it now, the user runs /preset opus. To start with it, agency agent --preset opus.\\n{\\\"search\\\":{\\\"backend\\\":\\\"tavily\\\"},\\\"model\\\":{\\\"slots\\\":{\\\"fast\\\":\\\"gpt-5.5\\\"}},\\\"presets\\\":{\\\"opus\\\":{\\\"provider\\\":\\\"anthropic\\\",\\\"pin\\\":\\\"claude-opus-4-8\\\",\\\"default\\\":true}}}\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -34,7 +24,7 @@
     {
       "nodeName": "deleteTheDefault",
       "input": "",
-      "expectedOutput": "\"Deleted the 'opus' preset. It was the default, so there is no default preset now.\\n{\\\"search\\\":{\\\"backend\\\":\\\"tavily\\\"},\\\"model\\\":{\\\"slots\\\":{\\\"fast\\\":\\\"gpt-5.5\\\"}},\\\"presets\\\":{}}\"",
+      "expectedOutput": "\"Deleted the 'opus' preset.\\n{\\\"search\\\":{\\\"backend\\\":\\\"tavily\\\"},\\\"model\\\":{\\\"slots\\\":{\\\"fast\\\":\\\"gpt-5.5\\\"}},\\\"presets\\\":{}}\"",
       "evaluationCriteria": [
         {
           "type": "exact"

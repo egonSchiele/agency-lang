@@ -565,7 +565,6 @@ const TOOL_PRESENTATIONS: Record<string, ToolPresentation> = {
   listPresets: one("Preset list", nothing),
   savePreset: one("Preset save", (a) => [text(a.name)]),
   deletePreset: one("Preset delete", (a) => [text(a.name)]),
-  setDefaultPreset: one("Preset default", (a) => [text(a.name)]),
   useLlmOptions: one("LLM options", nothing),
   elapsedTime: one("Elapsed", nothing, "preview"),
 

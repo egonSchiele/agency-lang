@@ -27,6 +27,7 @@ import {
   ModelChoices,
   ModelFlags,
   ModelRequest,
+  hasModelFlags,
   localModelOf,
   modelFlagsFromArgs,
   noModelChoices,
@@ -112,6 +113,13 @@ export def setStartupModelFlags(
   _startupFlags = flags
   _startupModelSettings = settings
   _startupDefaultSlots = defaults
+}
+
+/** Whether the run started with a model flag or `--effort`. Such a run is
+  a one-off: those flags are not session choices, so its settings are not
+  remembered for new chats (lastSettings.agency). */
+export def startedWithModelFlags(): boolean {
+  return hasModelFlags(_startupFlags) || _startupFlags.effort != null
 }
 
 // A session saved before the default router existed restores this global
@@ -708,16 +716,26 @@ export def pickModelsForAgent(args: Record<string, any>) {
   `saveSearchChoice` is whether the search backend picked for this
   session is also saved to settings.json. The terminal saves it. An app
   does not: its environment often lacks the search keys a terminal has,
-  and a choice saved from there would follow the user back. */
-export def startModels(flags: ModelFlags, saveSearchChoice: boolean = true): Result<boolean> {
+  and a choice saved from there would follow the user back.
+
+  `choices` are the session's own choices to start with: the last
+  settings' (lastSettings.agency), or null for none. They become the
+  session's choices when the request resolves. */
+export def startModels(
+  flags: ModelFlags,
+  saveSearchChoice: boolean = true,
+  choices: ModelChoices | null = null,
+): Result<boolean> {
   // A one-shot run gets the default slots too: this runs before the
   // agent branches on one-shot.
   setStartupModelFlags(flags, getModelSettings(loadSettings()), defaultSlots())
-  const request = currentModelRequest(noModelChoices())
+  const chosen = choices ?? noModelChoices()
+  const request = currentModelRequest(chosen)
   const applied = applyModelRequest(request, _startupModelSettings)
   if (isFailure(applied)) {
     return applied
   }
+  _choices = chosen
   configureSearch(requestIsLocal(request), saveSearchChoice)
   return success(true)
 }
@@ -763,9 +781,11 @@ export def parsePresetCommand(cmd: string): PresetCommand {
   return { kind: "switch", name: rest }
 }
 
-// /local moves the session to a local model without changing its request,
-// so the request no longer describes the models the session runs.
-def movedByLocalCommand(request: ModelRequest): boolean {
+/** /local moves the session to a local model without changing its
+  request, so the request no longer describes the models the session runs.
+  `/preset save` and the last settings (lastSettings.agency) both refuse
+  to copy such a session. */
+export def movedByLocalCommand(request: ModelRequest): boolean {
   const main = getResolvedSlots()["main"]
   const runsLocal = main != null && main.via == "local"
   return runsLocal != requestIsLocal(request)

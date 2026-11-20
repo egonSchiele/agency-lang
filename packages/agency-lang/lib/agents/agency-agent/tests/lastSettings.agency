@@ -1,0 +1,119 @@
+import { setEnv } from "std::system"
+
+import { usingDefaultAgentHome } from "../lib/config.agency"
+import {
+  checkedChoices,
+  lastSettingsOf,
+  portableChoices,
+  readLastSettings,
+  rememberSettings,
+  seedFromDefault,
+  startWith,
+  usesLastSettings,
+ } from "../lib/lastSettings.agency"
+import { noModelChoices, noModelFlags } from "../lib/modelRequest.agency"
+import { activePresetName, readPresetTable } from "../lib/presets.agency"
+import { setCurrentRecord } from "../lib/record.agency"
+import { applyModelRequest, currentModelRequest, setStartupModelFlags } from "../lib/session.agency"
+import { configureLocalModel } from "../shared.agency"
+
+static const BIG = { provider: "anthropic", pin: "claude-opus-4-8" }
+static const SMALL = { provider: "anthropic", pin: "claude-sonnet-4-6" }
+
+// Options can name a server, so they are never kept for new chats.
+node keepsNoOptions(): string {
+  const kept = lastSettingsOf("big", {
+    pin: "opus",
+    slots: {},
+    effort: "high",
+    llmOptions: { temperature: 0.2 }
+  })
+  return JSON.stringify(kept)
+}
+
+// An effort the start can't use is dropped; one it can is kept.
+node badEffortDropped(): string {
+  // As a hand-edited file holds it: the reader checks no effort's value.
+  const edited: any = { preset: "", choices: { pin: "", slots: {}, effort: "max" } }
+  const bad = checkedChoices(edited)
+  const good = checkedChoices({ preset: "", choices: { pin: "", slots: {}, effort: "low" } })
+  return "${bad.effort == null}|${good.effort}"
+}
+
+// Any preset, model or effort flag means the run is choosing now.
+node flagsTurnItOff(): string {
+  const none = usesLastSettings("", noModelFlags())
+  const preset = usesLastSettings("big", noModelFlags())
+  const pin = usesLastSettings("", { ...noModelFlags(), pin: "opus" })
+  const effort = usesLastSettings("", { ...noModelFlags(), effort: "high" })
+  return "${none}|${preset}|${pin}|${effort}"
+}
+
+// The old default mark seeds the start only when it names one preset.
+node seedNeedsOneDefault(): string {
+  const one = seedFromDefault(readPresetTable({ big: { ...BIG, default: true }, small: SMALL }))
+  const none = seedFromDefault(readPresetTable({ big: BIG, small: SMALL }))
+  const two = seedFromDefault(readPresetTable({ big: { ...BIG, default: true }, small: { ...SMALL, default: true } }))
+  if (one == null) {
+    return "no seed"
+  }
+  return "${one.preset}|${JSON.stringify(one.choices)}|${none == null}|${two == null}"
+}
+
+// With no provider fixed, the session's provider came from the keys, and
+// a fresh start could read a bare model name against another one. So the
+// chat models are kept with the provider they ran on; other slots and the
+// effort stay as chosen. A fixed provider reads the names the same way at
+// every start, so they are kept as typed.
+node portableChoicesKeepTheProvider(): string {
+  const resolved = {
+    main: { model: "claude-future-9", provider: "anthropic", via: "" },
+    reasoning: { model: "claude-future-9", provider: "anthropic", via: "" }
+  }
+  const choices = { pin: "claude-future-9", slots: { embedding: "openai/text-embedding-3-small" } }
+  const detected = portableChoices(choices, resolved, false)
+  const fixed = portableChoices(choices, resolved, true)
+  const effortOnly = portableChoices({ pin: "", slots: {}, effort: "low" }, resolved, false)
+  return "${JSON.stringify(detected)} ${JSON.stringify(fixed)} ${JSON.stringify(effortOnly)}"
+}
+
+// `/local` moves the session to a local model without changing its
+// choices, so its resolved slots no longer match them. A change after it
+// is not remembered: the local slots would be kept as hosted specs. The
+// file keeps what the last hosted change wrote.
+node changeAfterLocalIsNotRemembered(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  setStartupModelFlags(noModelFlags(), {})
+  setCurrentRecord({ id: "s1", cwd: "/work", brain: "", created: 1, lastActive: 1, turns: 0, title: "" })
+  const choices = { pin: "claude-opus-4-8", slots: {} }
+  applyModelRequest(currentModelRequest(choices), {})
+  rememberSettings("", choices)
+  const hosted = readLastSettings()
+  // What /local does to the resolved slots.
+  configureLocalModel("mlx:mlx-community/Qwen3-4B-4bit", "", "off")
+  rememberSettings("", { ...choices, effort: "high" })
+  const after = readLastSettings()
+  if (hosted == null) {
+    return "nothing written"
+  }
+  return "${hosted.choices.slots["main"]}|${JSON.stringify(after) == JSON.stringify(hosted)}"
+}
+
+// A remembered preset that was deleted is dropped with one warning, and
+// the run starts with no preset.
+node startFallsBackOnGonePreset(): string {
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  const started = startWith({ preset: "deleted", choices: noModelChoices() }, {
+    preset: "",
+    flags: noModelFlags(),
+    saveSearchChoice: false,
+    settings: { presets: { big: BIG } }
+  })
+  if (started is failure(reason)) {
+    return "failed: ${reason}"
+  }
+  return "${started.value.join("|")}|[${activePresetName()}]"
+}

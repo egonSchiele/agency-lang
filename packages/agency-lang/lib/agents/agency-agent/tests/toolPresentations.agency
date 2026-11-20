@@ -33,3 +33,13 @@ node everyAgentToolHasARow(): string {
   }
   return "ok"
 }
+
+// The agent has no way to choose what new chats start with: only a
+// person's answer writes the last settings. So there is no tool to set a
+// default preset, and no row left for one.
+node noSetDefaultTool(): string {
+  const settings = cliSettings()
+  const turnTools = [...coordinatorTools(settings, now()), ...cliTools(now(), settings)]
+  const offered = map(turnTools, \tool -> tool.name)
+  return "${offered.includes("setDefaultPreset")}|${presentedToolNames().includes("setDefaultPreset")}"
+}

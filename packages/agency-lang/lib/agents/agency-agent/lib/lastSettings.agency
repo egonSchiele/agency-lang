@@ -1,0 +1,209 @@
+/** @module
+  @summary The last settings: what a new session starts with. The preset
+  and the model choices the person last chose, in any session, kept in
+  `last-settings.json` in the agent home. The session core writes them
+  after a model, effort or preset answer, and a run that names no preset,
+  model or effort flag starts from them. They replace the default preset:
+  a preset marked default only seeds the start until the first change.
+  See "The last settings" in docs/dev/agents/agent-presets.md.
+*/
+import { _readLastSettings, _writeLastSettings } from "agency-lang/stdlib-lib/agentLastSettings.js"
+
+import { filterEntries } from "std::object"
+
+import { getResolvedSlots } from "../shared.agency"
+import { POLICY_DIR } from "./config.agency"
+import { EFFORT_CHOICES, EffortChoice } from "./effort.agency"
+import { ModelChoices, ModelFlags, hasModelFlags, noModelChoices } from "./modelRequest.agency"
+import { Resolved } from "./models.agency"
+import { notice } from "./notice.agency"
+import { qualified } from "./presetSnapshot.agency"
+import { PresetTable, defaultNames, readPresetTable, startPresetQuiet } from "./presets.agency"
+import { currentRecord } from "./record.agency"
+import {
+  currentModelRequest,
+  fixedProvider,
+  movedByLocalCommand,
+  startModels,
+  startedWithModelFlags,
+ } from "./session.agency"
+import { Settings } from "./settings.agency"
+import { isChatSlot } from "./slots.agency"
+
+/** What a new session starts with. `preset` is a saved preset's name, or
+  "" for none. `choices` never holds `llmOptions`. The file's own type is
+  `LastSettings` in lib/stdlib/agentLastSettings.ts. */
+export type LastSettings = {
+  preset: string;
+  choices: ModelChoices
+}
+
+/** The settings to keep for new chats. The options are dropped: they can
+  name a server, and the coordinator's useLlmOptions tool can set them. */
+export def lastSettingsOf(preset: string, choices: ModelChoices): LastSettings {
+  let kept: ModelChoices = {
+    pin: choices.pin,
+    slots: choices.slots
+  }
+  if (choices.effort != null) {
+    kept = { ...kept, effort: choices.effort }
+  }
+  return {
+    preset: preset,
+    choices: kept
+  }
+}
+
+/** The choices as a fresh start reads them back to the same models. With
+  no provider fixed, the session's provider came from the keys, and a
+  bare model name could be read against another provider at the next
+  start (one the catalog doesn't list goes to openai). So the chat models
+  are kept with the provider they ran on, as `/preset save` keeps them
+  (`detectedProviderFields` in presetSnapshot.agency). Other slots and
+  the effort stay as chosen. */
+export def portableChoices(
+  choices: ModelChoices,
+  resolved: Record<string, Resolved>,
+  providerFixed: boolean,
+): ModelChoices {
+  const namesAChatModel = choices.pin != "" || choices.slots["main"] != null || choices.slots["reasoning"] != null
+  if (providerFixed || !namesAChatModel) {
+    return choices
+  }
+  const others = filterEntries(choices.slots, \(model, slot) -> !isChatSlot(slot))
+  const chat = filterEntries({
+    main: qualified(resolved["main"]),
+    reasoning: qualified(resolved["reasoning"])
+  }, \(model, slot) -> model != "")
+  return {
+    ...choices,
+    pin: "",
+    slots: { ...others, ...chat }
+  }
+}
+
+/** The kept choices, with an effort the start can't use dropped. The file
+  may have been edited by hand. */
+export def checkedChoices(last: LastSettings): ModelChoices {
+  const choices: ModelChoices = {
+    pin: last.choices.pin,
+    slots: last.choices.slots
+  }
+  const effort = last.choices.effort
+  if (effort != null && EFFORT_CHOICES.includes(effort)) {
+    return { ...choices, effort: effort as EffortChoice }
+  }
+  return choices
+}
+
+/** Whether a run starts from the last settings: it names no preset, no
+  model flag and no effort flag. Any of those means it is choosing now. */
+export def usesLastSettings(preset: string, flags: ModelFlags): boolean {
+  return preset == "" && !hasModelFlags(flags) && flags.effort == null
+}
+
+/** For someone upgrading from the default preset: the one preset marked
+  `"default": true`, as last settings with no choices. Null when none or
+  more than one is marked. */
+export def seedFromDefault(table: PresetTable): LastSettings | null {
+  const marked = defaultNames(table)
+  if (marked.length != 1) {
+    return null
+  }
+  return {
+    preset: marked[0],
+    choices: noModelChoices()
+  }
+}
+
+/** The last settings in the agent home, or null when there are none. */
+export def readLastSettings(): LastSettings | null {
+  return _readLastSettings(POLICY_DIR)
+}
+
+/** What a run starts with, from its `ProgramStart`. */
+export type StartRequest = {
+  preset: string;
+  flags: ModelFlags;
+  saveSearchChoice: boolean;
+  settings: Settings
+}
+
+/** Pick the preset and the models a run starts with, from the last
+  settings when it names no preset, model or effort flag. Returns the
+  warnings to show. A preset marked default seeds the last settings
+  until there are any. */
+export def startPresetAndModels(start: StartRequest): Result<string[]> {
+  let last: LastSettings | null = null
+  if (usesLastSettings(start.preset, start.flags)) {
+    last = readLastSettings() ?? seedFromDefault(readPresetTable(start.settings.presets))
+  }
+  return startWith(last, start)
+}
+
+/** Start with `last`, or as the request says when it is null. Last
+  settings that can't be used here are dropped with one warning, and the
+  run starts with no preset and no choices. If that start fails too, the
+  failure is returned. */
+export def startWith(last: LastSettings | null, start: StartRequest): Result<string[]> {
+  if (last == null) {
+    return startAsRequested(start)
+  }
+  const preset = startPresetQuiet(last.preset, start.settings)
+  if (isFailure(preset)) {
+    return startWithout(start, "The preset '${last.preset}' your last chat used is gone or not valid; starting without it.")
+  }
+  const models = startModels(start.flags, start.saveSearchChoice, checkedChoices(last))
+  if (models is failure(reason)) {
+    // The reason is a sentence; the warning gives it its own full stop.
+    let said = "${reason}"
+    if (said.endsWith(".")) {
+      said = said.slice(0, said.length - 1)
+    }
+    return startWithout(start, "Your last settings could not be used: ${said}. Starting without them.")
+  }
+  return preset
+}
+
+def startAsRequested(start: StartRequest): Result<string[]> {
+  const preset = startPresetQuiet(start.preset, start.settings)
+  if (isFailure(preset)) {
+    return preset
+  }
+  const models = startModels(start.flags, start.saveSearchChoice)
+  if (isFailure(models)) {
+    return models
+  }
+  return preset
+}
+
+// Only the fallback's own warnings are shown, so a table warning the
+// first attempt also gave is not said twice.
+def startWithout(start: StartRequest, warning: string): Result<string[]> {
+  const started = startAsRequested(start)
+  if (isFailure(started)) {
+    return started
+  }
+  return success([...started.value, warning])
+}
+
+/** Keep this session's preset and choices for new chats. Only a session
+  that is saved, and that started with no model or effort flag, writes
+  them. An incognito session has no record, so it writes nothing. Nor does
+  one `/local` moved: its choices no longer describe the models it runs,
+  and its resolved slots are local (`/preset save` refuses it the same
+  way). A write that fails is a warning: the change it follows still
+  counts. */
+export def rememberSettings(preset: string, choices: ModelChoices) {
+  if (currentRecord() == null || startedWithModelFlags()) {
+    return
+  }
+  if (movedByLocalCommand(currentModelRequest(choices))) {
+    return
+  }
+  const portable = portableChoices(choices, getResolvedSlots(), fixedProvider() != "")
+  const problem = _writeLastSettings(POLICY_DIR, lastSettingsOf(preset, portable))
+  if (problem != "") {
+    notice("Could not remember these settings for new chats: ${problem}", "warning")
+  }
+}

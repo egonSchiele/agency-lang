@@ -1,4 +1,5 @@
 {
+  "lastSettingsAfterStart": false,
   "firstPauseEffect": "agent::sessionInput",
   "firstPauseBrain": "simple",
   "firstPauseModules": [
@@ -42,6 +43,7 @@
   },
   "effortBeforeAnyChoice": "",
   "effortAfterLow": "low",
+  "flagSessionNotRemembered": true,
   "effortSentAfterLow": "low",
   "effortAfterAModelSwitch": "low",
   "effortSentAfterDefault": "none",
@@ -100,6 +102,22 @@
     "maxCost": 3,
     "maxTime": 1000
   },
+  "lastSettingsAfterEffort": {
+    "preset": "",
+    "choices": {
+      "pin": "",
+      "slots": {},
+      "effort": "low"
+    }
+  },
+  "noPromptForRemembering": "agent::sessionInput",
+  "presetRemembered": {
+    "preset": "big",
+    "choices": {
+      "pin": "",
+      "slots": {}
+    }
+  },
   "presetSwitch": {
     "preset": "big",
     "mainModel": "claude-opus-4-8",
@@ -111,6 +129,59 @@
     "presetKept": "big",
     "mainModelKept": "claude-opus-4-8"
   },
+  "badAnswerLeavesIt": true,
+  "noOptionsKept": [
+    "pin",
+    "slots",
+    "effort"
+  ],
+  "unsavedNotRemembered": true,
+  "startsFromLast": {
+    "preset": "big",
+    "effort": "low"
+  },
+  "flagIgnoresLast": "",
+  "rememberedPresetGone": {
+    "running": true,
+    "preset": "",
+    "warnings": [
+      "The preset 'deleted' your last chat used is gone or not valid; starting without it."
+    ]
+  },
+  "localPresetFallsBack": {
+    "running": true,
+    "preset": "",
+    "warnings": [
+      "Your last settings could not be used: Local models are not available here. Starting without them."
+    ]
+  },
+  "lastModelWithoutKeyFallsBack": {
+    "running": true,
+    "preset": "",
+    "warned": true
+  },
+  "lastModelChoiceKeepsItsProvider": {
+    "inTheChat": "anthropic",
+    "inTheNextChat": "anthropic",
+    "model": "claude-future-9"
+  },
+  "seedFromDefaultMark": {
+    "preset": "big",
+    "fileWritten": false
+  },
+  "changeReplacesSeed": {
+    "file": {
+      "preset": "big",
+      "choices": {
+        "pin": "",
+        "slots": {},
+        "effort": "low"
+      }
+    },
+    "preset": "big",
+    "effort": "low"
+  },
+  "oneShotReadsLast": "big",
   "fixedProviderWithNoPreset": "",
   "localProviderInAModelSpec": {
     "level": "error",

@@ -19,7 +19,9 @@ export type PresetSlots = {
   router?: string
 }
 
-/** What savePreset accepts. It has no `default`: setDefaultPreset owns that. */
+/** What savePreset accepts. It has no `default`: the mark is kept only to
+  seed the last settings for someone upgrading (lastSettings.agency), and
+  nothing sets it now. */
 export type PresetInput = {
   provider?: string;
   pin?: string;

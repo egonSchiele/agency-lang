@@ -29,21 +29,19 @@ export type PresetChoice = {
 
 /** One change to the saved presets. `preset` is set only for "save". */
 export type PresetEdit = {
-  kind: "save" | "delete" | "setDefault";
+  kind: "save" | "delete";
   name: string;
   preset: Preset | null
 }
 
 /** What was saved under a name before an edit, for the tool's reply. */
 export type PresetEditOutcome = {
-  existed: boolean;
-  wasDefault: boolean
+  existed: boolean
 }
 
 /** What listPresets returns to the model. */
 export type PresetListing = {
   presets: Record<string, Preset>;
-  default: string;
   active: string;
   invalid: Record<string, string>
 }
@@ -132,6 +130,9 @@ export def readPresetTable(raw: any): PresetTable {
   }
 }
 
+/** The presets marked `"default": true`. The mark no longer decides a
+  start: it seeds the last settings for someone upgrading
+  (`seedFromDefault` in lastSettings.agency). */
 export def defaultNames(table: PresetTable): string[] {
   return [name for name in Object.keys(table.presets) if table.presets[name].default == true]
 }
@@ -172,14 +173,6 @@ def tableWarnings(table: PresetTable): string[] {
   return ["Warning: ${table.fileProblem} in ${SETTINGS_PATH}; ignoring it.", ...perPreset]
 }
 
-def sayNames(names: string[]): string {
-  if (names.length == 2) {
-    return "${names[0]} and ${names[1]} are both"
-  }
-  const allButLast = names.slice(0, names.length - 1).join(", ")
-  return "${allButLast}, and ${names[names.length - 1]} are all"
-}
-
 def namedChoice(name: string, table: PresetTable, warnings: string[]): Result<PresetChoice> {
   const problem = savedEntry(table.problems, name)
   if (problem != null) {
@@ -196,26 +189,19 @@ def namedChoice(name: string, table: PresetTable, warnings: string[]): Result<Pr
 
 export def choosePreset(flag: string, table: PresetTable): Result<PresetChoice> {
   """
-  Pick the preset a run starts with: the --preset value, else the one
-  default preset, else none. Two or more defaults mean none, with a warning.
+  Pick the preset a run starts with: the named one, else none. A preset
+  marked default does not decide it: a run with no preset flag starts
+  from the last settings (lastSettings.agency), which name the preset.
 
-  @param flag - The --preset value, or "" when it was not given
+  @param flag - The preset's name, or "" for none
   @param table - The saved presets
   """
   const warnings = tableWarnings(table)
   if (flag != "") {
     return namedChoice(flag, table, warnings)
   }
-  const defaults = defaultNames(table)
-  if (defaults.length > 1) {
-    const warning = "Warning: presets ${sayNames(defaults)} marked default in ${SETTINGS_PATH}; using no preset."
-    return success({
-      name: "",
-      warnings: [...warnings, warning]
-    })
-  }
   return success({
-    name: defaults[0] ?? "",
+    name: "",
     warnings: warnings
   })
 }
@@ -262,9 +248,9 @@ export def serverNotice(table: PresetTable, active: string): string {
   """
   A line naming the MLX server the active preset sends chat requests to,
   or "" when it names none. The header shows it at every start, because
-  a default preset applies with no flag, and an address can reach
-  settings.json without savePreset's approval: by hand, or through a
-  plain file write.
+  the last settings apply a preset with no flag (lastSettings.agency),
+  and an address can reach settings.json without savePreset's approval:
+  by hand, or through a plain file write.
 
   @param table - The preset table
   @param active - The active preset's name, or ""
@@ -281,27 +267,17 @@ export def serverNotice(table: PresetTable, active: string): string {
 }
 
 export def presetListing(table: PresetTable, active: string): PresetListing {
-  // Two defaults mean startup uses none, so report none here too.
-  const defaults = defaultNames(table)
-  const theDefault = if defaults.length == 1 then defaults[0] else ""
   return {
     presets: table.presets,
-    default: theDefault,
     active: active,
     invalid: table.problems
   }
 }
 
-def presetMarks(preset: Preset, isActive: boolean): string {
-  const candidates = [
-    { label: "active", applies: isActive },
-    { label: "default", applies: preset.default == true },
-  ]
-  const marks = [mark.label for mark in candidates if mark.applies]
-  if (marks.length == 0) {
-    return ""
-  }
-  return " (${marks.join(", ")})"
+// A preset marked default is not marked: the mark no longer decides what
+// a new chat starts with.
+def presetMarks(isActive: boolean): string {
+  return if isActive then " (active)" else ""
 }
 
 /** The lines /preset prints with no argument. */
@@ -311,7 +287,7 @@ export def presetListLines(table: PresetTable, active: string): string[] {
   if (names.length == 0 && invalid.length == 0) {
     return ["No presets are saved. Ask the agent to make one, or add them to ${SETTINGS_PATH}."]
   }
-  const rows = ["  ${name}${presetMarks(table.presets[name], name == active)}" for name in names]
+  const rows = ["  ${name}${presetMarks(name == active)}" for name in names]
   const broken = ["  ${name} (not valid: ${table.problems[name]})" for name in invalid]
   return ["Presets:", ...rows, ...broken, "Switch with /preset <name>."]
 }
@@ -321,11 +297,8 @@ def savedPresets(settings: Settings): Record<string, any> {
 }
 
 export def editOutcome(settings: Settings, name: string): PresetEditOutcome {
-  const presets = savedPresets(settings)
-  const previous = savedEntry(presets, name)
   return {
-    existed: hasSavedEntry(presets, name),
-    wasDefault: previous != null && previous.default == true
+    existed: hasSavedEntry(savedPresets(settings), name)
   }
 }
 
@@ -336,7 +309,9 @@ def withPreset(presets: Record<string, any>, name: string, preset: Preset): Reco
   }
 }
 
-// savePreset takes no `default`, so a replace would drop the flag.
+// savePreset takes no `default`, so a replace would drop the flag. The
+// flag still seeds a start for someone upgrading (seedFromDefault in
+// lastSettings.agency), so a save must not drop it.
 def keepDefaultFlag(previous: any, preset: Preset): Preset {
   if (previous != null && previous.default == true) {
     return {
@@ -347,46 +322,21 @@ def keepDefaultFlag(previous: any, preset: Preset): Preset {
   return preset
 }
 
-def withDefaultFlag(preset: any, isDefault: boolean): any {
-  // A hand-edited file can hold a null or non-object entry. Leave it as
-  // it is: filterEntries would throw on it.
-  if (!isPlainObject(preset)) {
-    return preset
-  }
-  const rest = filterEntries(preset, \(fieldValue, field) -> field != "default")
-  if (isDefault) {
-    return {
-      ...rest,
-      default: true
-    }
-  }
-  return rest
-}
-
 def editedPresets(presets: Record<string, any>, edit: PresetEdit): Record<string, any> {
   return match(edit.kind) {
     "save" => withPreset(presets, edit.name, keepDefaultFlag(savedEntry(presets, edit.name), edit.preset ?? {}))
     "delete" => filterEntries(presets, \(preset, name) -> name != edit.name)
-    "setDefault" => mapValues(presets, \(preset, name) -> withDefaultFlag(preset, name == edit.name))
     _ => presets
   }
 }
 
-// A delete may name an invalid preset, so the user can clear it out. A
-// new default must be valid, or the next start would ignore it.
+// A delete may name an invalid preset, so the user can clear it out.
 def editProblem(presets: Record<string, any>, edit: PresetEdit): string {
   if (edit.kind == "save" && edit.preset == null) {
     return "no preset was given to save"
   }
   if (edit.kind != "save" && !hasSavedEntry(presets, edit.name)) {
     return "no preset named ${edit.name} is saved"
-  }
-  if (edit.kind != "setDefault") {
-    return ""
-  }
-  const valid = checkPreset(edit.name, savedEntry(presets, edit.name), true)
-  if (valid is failure(reason)) {
-    return "it cannot be the default: ${reason}"
   }
   return ""
 }

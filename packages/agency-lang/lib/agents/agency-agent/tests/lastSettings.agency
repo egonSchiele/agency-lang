@@ -1,15 +1,21 @@
 import { setEnv } from "std::system"
 
+import { usingDefaultAgentHome } from "../lib/config.agency"
 import {
   checkedChoices,
   lastSettingsOf,
   portableChoices,
+  readLastSettings,
+  rememberSettings,
   seedFromDefault,
   startWith,
   usesLastSettings,
  } from "../lib/lastSettings.agency"
 import { noModelChoices, noModelFlags } from "../lib/modelRequest.agency"
 import { activePresetName, readPresetTable } from "../lib/presets.agency"
+import { setCurrentRecord } from "../lib/record.agency"
+import { applyModelRequest, currentModelRequest, setStartupModelFlags } from "../lib/session.agency"
+import { configureLocalModel } from "../shared.agency"
 
 static const BIG = { provider: "anthropic", pin: "claude-opus-4-8" }
 static const SMALL = { provider: "anthropic", pin: "claude-sonnet-4-6" }
@@ -69,6 +75,31 @@ node portableChoicesKeepTheProvider(): string {
   const fixed = portableChoices(choices, resolved, true)
   const effortOnly = portableChoices({ pin: "", slots: {}, effort: "low" }, resolved, false)
   return "${JSON.stringify(detected)} ${JSON.stringify(fixed)} ${JSON.stringify(effortOnly)}"
+}
+
+// `/local` moves the session to a local model without changing its
+// choices, so its resolved slots no longer match them. A change after it
+// is not remembered: the local slots would be kept as hosted specs. The
+// file keeps what the last hosted change wrote.
+node changeAfterLocalIsNotRemembered(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  setStartupModelFlags(noModelFlags(), {})
+  setCurrentRecord({ id: "s1", cwd: "/work", brain: "", created: 1, lastActive: 1, turns: 0, title: "" })
+  const choices = { pin: "claude-opus-4-8", slots: {} }
+  applyModelRequest(currentModelRequest(choices), {})
+  rememberSettings("", choices)
+  const hosted = readLastSettings()
+  // What /local does to the resolved slots.
+  configureLocalModel("mlx:mlx-community/Qwen3-4B-4bit", "", "off")
+  rememberSettings("", { ...choices, effort: "high" })
+  const after = readLastSettings()
+  if (hosted == null) {
+    return "nothing written"
+  }
+  return "${hosted.choices.slots["main"]}|${JSON.stringify(after) == JSON.stringify(hosted)}"
 }
 
 // A remembered preset that was deleted is dropped with one warning, and

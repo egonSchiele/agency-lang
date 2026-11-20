@@ -126,7 +126,9 @@ one concept answers "what does a new chat start with".
 - **Upgrading:** with no file, the one preset marked `"default": true`
   seeds the start (`seedFromDefault`), and nothing is written. The first
   change replaces it. `keepDefaultFlag` stays so a save doesn't drop the
-  mark. Two marked presets seed nothing.
+  mark. Two marked presets seed nothing. Nothing clears the mark: doing
+  so would mean writing `settings.json` outside its approval rule. So
+  deleting `last-settings.json` brings the marked preset back.
 - **Fallbacks:** a file that is missing or malformed is ignored. A
   preset that is gone, or settings that fail to start (a local preset
   where local models are off, a model whose key is missing), are dropped

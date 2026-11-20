@@ -781,9 +781,11 @@ export def parsePresetCommand(cmd: string): PresetCommand {
   return { kind: "switch", name: rest }
 }
 
-// /local moves the session to a local model without changing its request,
-// so the request no longer describes the models the session runs.
-def movedByLocalCommand(request: ModelRequest): boolean {
+/** /local moves the session to a local model without changing its
+  request, so the request no longer describes the models the session runs.
+  `/preset save` and the last settings (lastSettings.agency) both refuse
+  to copy such a session. */
+export def movedByLocalCommand(request: ModelRequest): boolean {
   const main = getResolvedSlots()["main"]
   const runsLocal = main != null && main.via == "local"
   return runsLocal != requestIsLocal(request)

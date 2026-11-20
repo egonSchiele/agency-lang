@@ -20,7 +20,13 @@ import { notice } from "./notice.agency"
 import { qualified } from "./presetSnapshot.agency"
 import { PresetTable, defaultNames, readPresetTable, startPresetQuiet } from "./presets.agency"
 import { currentRecord } from "./record.agency"
-import { fixedProvider, startModels, startedWithModelFlags } from "./session.agency"
+import {
+  currentModelRequest,
+  fixedProvider,
+  movedByLocalCommand,
+  startModels,
+  startedWithModelFlags,
+ } from "./session.agency"
 import { Settings } from "./settings.agency"
 import { isChatSlot } from "./slots.agency"
 
@@ -183,10 +189,16 @@ def startWithout(start: StartRequest, warning: string): Result<string[]> {
 
 /** Keep this session's preset and choices for new chats. Only a session
   that is saved, and that started with no model or effort flag, writes
-  them. An incognito session has no record, so it writes nothing. A write
-  that fails is a warning: the change it follows still counts. */
+  them. An incognito session has no record, so it writes nothing. Nor does
+  one `/local` moved: its choices no longer describe the models it runs,
+  and its resolved slots are local (`/preset save` refuses it the same
+  way). A write that fails is a warning: the change it follows still
+  counts. */
 export def rememberSettings(preset: string, choices: ModelChoices) {
   if (currentRecord() == null || startedWithModelFlags()) {
+    return
+  }
+  if (movedByLocalCommand(currentModelRequest(choices))) {
     return
   }
   const portable = portableChoices(choices, getResolvedSlots(), fixedProvider() != "")

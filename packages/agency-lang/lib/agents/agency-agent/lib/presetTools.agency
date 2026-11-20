@@ -40,8 +40,8 @@ export def savePreset(name: string, preset: PresetInput): string {
   limits the user can start the agent with. The user approves reading and
   writing settings.json. In a one-shot run nothing is saved. This does not
   switch the current session. llmOptions takes the same fields as
-  useLlmOptions. The user
-  also approves a preset that sets llmOptions.baseUrl.mlx.
+  useLlmOptions. The user also approves a preset that sets
+  llmOptions.baseUrl.mlx.
 
   @param name - Lowercase letters, digits, and hyphens, starting with a letter, e.g. cheap
   @param preset - Only the fields the user asked for. For a local model, set local and do not set provider, pin, slots.main, or slots.reasoning. slots.embedding, slots.router, the tool limits, and llmOptions may be set with it.
@@ -84,8 +84,3 @@ export def deletePreset(name: string): string {
   }
   return "Deleted the '${name}' preset."
 }
-
-// There is no tool to set a default preset. New chats start with the last
-// settings a person chose (lastSettings.agency), and only a person's
-// answer writes them: the agent has no way to change what new chats
-// start with.

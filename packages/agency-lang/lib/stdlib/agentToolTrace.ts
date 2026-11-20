@@ -746,14 +746,76 @@ function settle(event: ToolEndEvent, presentation: SummaryPresentation, args: To
   };
 }
 
+/** A tool call in words, for a front-end that draws its own rows. It is
+ *  what the trace prints, as data: the same table decides both. */
+export type ToolCallDescription = {
+  /** "Read", "Run"; an agent's label; null for a tool with no row. */
+  label: string | null;
+  /** What the call acts on, as the trace shows it: "server/config.ts lines 10–14". */
+  target: string | null;
+  /** The trace marks it failed: a failure, or a result its tool counts as
+   *  one, such as a command that exited non-zero. */
+  failed: boolean;
+  /** The words after the mark: "exit 1", "3 files". */
+  summary: string | null;
+  /** What the trace prints under the line. */
+  detail: string | null;
+};
+
+/** How the trace describes a call. A start has no outcome yet. */
+export function describeToolCall(
+  event: ToolEvent,
+  options: { spillSource?: SpillLookup } = {},
+): ToolCallDescription {
+  const presentation = presentationFor(event.toolName);
+  if (presentation?.kind === "summary") {
+    return describeSummaryCall(event, presentation, options.spillSource ?? (() => null));
+  }
+  const label = presentation?.kind === "agent" ? presentation.label : null;
+  const start: ToolCallDescription = {
+    label,
+    target: null,
+    failed: false,
+    summary: null,
+    detail: null,
+  };
+  if (event.kind === "toolStart") return start;
+  const empty = event.value === null || event.value === undefined || event.value === "";
+  const value = typeof event.value === "string" ? event.value : serialize(event.value);
+  return { ...start, failed: event.outcome === "failure", detail: empty ? null : value };
+}
+
+function describeSummaryCall(
+  event: ToolEvent,
+  presentation: SummaryPresentation,
+  lookup: SpillLookup,
+): ToolCallDescription {
+  const args: ToolArgs = isPlainObject(event.args) ? event.args : {};
+  const parts = presentation.show(args, lookup).filter((part) => part !== null);
+  const described: ToolCallDescription = {
+    label: presentation.label,
+    target: parts.length === 0 ? null : parts.join(" "),
+    failed: false,
+    summary: null,
+    detail: null,
+  };
+  if (event.kind === "toolStart") return described;
+  const settled = settle(event, presentation, args);
+  return {
+    ...described,
+    failed: settled.mark.style === "error",
+    summary: settled.summary,
+    detail: settled.detail,
+  };
+}
+
 function describeSummary(
   event: ToolEvent,
   presentation: SummaryPresentation,
   options: TraceOptions,
 ): TraceBlock | null {
-  const args: ToolArgs = isPlainObject(event.args) ? event.args : {};
-  const lookup = options.spillSource ?? (() => null);
-  const parts = presentation.show(args, lookup).filter((part) => part !== null);
+  const described = describeSummaryCall(event, presentation, options.spillSource ?? (() => null));
+  const target: TraceSpan[] = described.target === null ? [] : [{ text: ` ${described.target}` }];
   const name: TraceSpan[] = options.toolNames
     ? [{ text: "  " }, { text: event.toolName, style: "muted" }]
     : [];
@@ -762,25 +824,29 @@ function describeSummary(
     return {
       heading: [
         { text: `● ${presentation.label}`, style: "active", bold: true },
-        ...parts.map((part) => ({ text: ` ${part}` })),
+        ...target,
         ...name,
       ],
       rows: [],
     };
   }
-  const settled = settle(event, presentation, args);
+  const mark: TraceSpan = described.failed
+    ? { text: "✗", style: "error" }
+    : { text: "✓", style: "success" };
   const elapsed = presentation.twoLines ? elapsedText(event.timeTaken) : null;
-  const tail = [settled.summary, elapsed].filter((piece) => piece !== null);
-  const detailStyle: TraceStyle = settled.mark.style === "error" ? "error" : "muted";
+  const tail = [described.summary, elapsed].filter((piece) => piece !== null);
+  const detailStyle: TraceStyle = described.failed ? "error" : "muted";
   return {
     heading: [
-      { text: `${settled.mark.text} ${presentation.label}`, style: settled.mark.style, bold: true },
-      ...parts.map((part) => ({ text: ` ${part}` })),
+      { text: `${mark.text} ${presentation.label}`, style: mark.style, bold: true },
+      ...target,
       ...tail.map((piece) => ({ text: ` · ${piece}`, style: "muted" as const })),
       ...name,
     ],
     rows:
-      settled.detail === null ? [] : [{ spans: [{ text: settled.detail, style: detailStyle }] }],
+      described.detail === null
+        ? []
+        : [{ spans: [{ text: described.detail, style: detailStyle }] }],
   };
 }
 

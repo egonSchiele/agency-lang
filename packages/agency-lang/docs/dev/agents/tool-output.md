@@ -116,6 +116,13 @@ each tested once, and every value is cut to its first line. `result` is
 result counts as a failure. One function, `describeSummary`, holds every
 branch; rows hold no code beyond their `show` and the odd summarizer.
 
+**A front-end that draws its own rows** calls `describeToolCall(event)`. It
+returns the same decision as data: `label`, `target` (the parts, joined),
+`failed`, `summary` and `detail`. Perry's Mac app uses it, so a `bash`
+command that exited non-zero inside a success is red there too.
+`describeSummary` builds its line from the same call, so the two can't
+disagree. A tool with no row has a null `label` and `target`.
+
 The line is `<mark> <label> <parts> · <result> · <elapsed>`, with separators
 only between present pieces. A two-line row prints `● <label> <parts>` in
 blue at start and the marked line at end. The end event carries the call's

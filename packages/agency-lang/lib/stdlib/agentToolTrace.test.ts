@@ -6,6 +6,7 @@ const OUT_1 = "/tmp/agency-spill-0/2026-01-01T00-00-00-000Z-out001.log";
 import { stripAnsi, visualWidth } from "./layout/ansi.js";
 import {
   commandDetail,
+  describeToolCall,
   filePath,
   formatAgentTrace,
   lineRange,
@@ -942,5 +943,58 @@ describe("background job rows", () => {
     expect(end("stopJob", { id: "job-1" }, { status: "stopped" })).toBe(
       "✓ Stop job job-1 · stopped",
     );
+  });
+});
+
+// A front-end that draws its own rows (Perry's Mac app) gets the trace's
+// words and outcome as data, from the same table the terminal uses.
+describe("describeToolCall", () => {
+  const ended = (toolName: string, args: object, value: unknown, outcome: "success" | "failure") =>
+    describeToolCall({ kind: "toolEnd", toolName, args, value, outcome });
+
+  it("reports a command that exited non-zero inside a success as failed", () => {
+    const value = "Running tests\n1 test failed\nCommand exited with code 1";
+    expect(ended("bash", { command: "pnpm test" }, value, "success")).toEqual({
+      label: "Run",
+      target: "pnpm test",
+      failed: true,
+      summary: "exit 1",
+      detail: "Running tests\n1 test failed",
+    });
+  });
+
+  it("reports a command that exited 0 as a success, whatever it printed", () => {
+    const described = ended("bash", { command: "ls" }, "a\nb", "success");
+    expect(described.failed).toBe(false);
+    expect(described.summary).toBeNull();
+  });
+
+  it("names a read by its whole path and the lines it covered", () => {
+    const args = { dir: "server", filename: "config.ts", offset: 10, limit: 5 };
+    const described = ended("read", args, "text", "success");
+    expect(described.label).toBe("Read");
+    expect(described.target).toBe("server/config.ts lines 10–14");
+    expect(described.failed).toBe(false);
+  });
+
+  it("reports an exec with a non-zero exit code as failed", () => {
+    const value = { exitCode: 2, stdout: "", stderr: "boom" };
+    const described = ended("exec", { command: "make", args: ["all"] }, value, "success");
+    expect(described.failed).toBe(true);
+    expect(described.summary).toBe("exit 2");
+    expect(described.detail).toBe("boom");
+  });
+
+  it("reports a failure of a tool with no row, with no label", () => {
+    const described = ended("someTool", { x: 1 }, "it broke", "failure");
+    expect(described.label).toBeNull();
+    expect(described.failed).toBe(true);
+    expect(described.detail).toBe("it broke");
+  });
+
+  it("describes a start with its label and target, and no outcome", () => {
+    expect(
+      describeToolCall({ kind: "toolStart", toolName: "bash", args: { command: "pnpm test" } }),
+    ).toEqual({ label: "Run", target: "pnpm test", failed: false, summary: null, detail: null });
   });
 });

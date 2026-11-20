@@ -690,6 +690,7 @@ cliPolicyHandler(
   fields: ScopedRuleFields = {},
   policy: Policy | null = null,
   interactive: boolean = true,
+  answersOnly: boolean = false,
 ): any
 ```
 
@@ -729,6 +730,7 @@ overrides them. An empty override disables that choice for the effect.
 | fields | [ScopedRuleFields](#scopedrulefields) | {} | Per-effect scope overrides, with [] disabling scoped approval for an effect. |
 | policy | `Policy \| null` | null | Initial rules to use instead of reading the file, or null to load it. |
 | interactive | `boolean` | true | Prompt for unresolved interrupts when true, or reject them when false. |
+| answersOnly | `boolean` | false | Save only the rules "always" answers add to the file, never the rest of policy, for a policy layered from more than the file |
 
 **Returns:** `any`
 

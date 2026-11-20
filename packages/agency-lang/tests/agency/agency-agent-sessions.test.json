@@ -56,8 +56,8 @@
       ]
     },
     {
-      "nodeName": "anotherFrontEndsSessionIsSkipped",
-      "description": "a session another front-end saved is not listed, not the most recent, and --resume can say why",
+      "nodeName": "oldLoopSessionIsSkipped",
+      "description": "a session the terminal's old loop saved is not listed, not the most recent, and --resume can say why",
       "input": "",
       "expectedOutput": "{\"listed\":[],\"newestIsTheirs\":false,\"foundById\":false,\"saysWhy\":true,\"saysNothingForAnUnknownId\":false}",
       "evaluationCriteria": [

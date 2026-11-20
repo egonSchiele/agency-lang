@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config/config.js";
 import type { Host } from "../host/host.js";
+import type { HeldJob } from "./jobs/heldJobs.js";
 import { validatePolicy } from "./policy.js";
 import type { Policy } from "./policy.js";
 
@@ -47,6 +48,14 @@ export type InvocationOptions = {
    *  file. Only the program that starts the run sets this option. A host
    *  that serves requests must never copy a request's field into it. */
   logFile?: string;
+  /** Called with each background job the run starts, right after the run
+   *  adds it to its held jobs. For a caller that runs a program one leg at
+   *  a time and must know of a job before the leg pauses, such as the
+   *  agent's session driver, whose dropped turns would otherwise forget
+   *  the jobs they started. The job carries its token, so this is a
+   *  TypeScript function and never an Agency callback. Per execution: a
+   *  resume does not remember it, so the caller passes it again. */
+  onJobStarted?: (job: HeldJob) => void;
 };
 
 /**
@@ -113,6 +122,8 @@ export type ResolvedInvocation = {
   logFile?: string;
   /** The `input()` override for this invocation, when the caller sent one. */
   inputOverride?: (prompt: string) => Promise<string>;
+  /** The job-start listener for this invocation, when the caller sent one. */
+  onJobStarted?: (job: HeldJob) => void;
 };
 
 /**
@@ -219,9 +230,18 @@ export function resolveInvocation(request: InvocationRequest): ResolvedInvocatio
   const host = request.options?.host;
   const inputOverride = request.options?.inputOverride;
   const logFile = request.options?.logFile;
+  const onJobStarted = request.options?.onJobStarted;
 
   if (request.kind === "resume") {
-    return { runId: request.runId, contextOverride, policy, host, logFile, inputOverride };
+    return {
+      runId: request.runId,
+      contextOverride,
+      policy,
+      host,
+      logFile,
+      inputOverride,
+      onJobStarted,
+    };
   }
 
   const runId =
@@ -233,7 +253,7 @@ export function resolveInvocation(request: InvocationRequest): ResolvedInvocatio
   if (runId.length === 0) {
     throw new Error("traceId must not be empty");
   }
-  return { runId, contextOverride, policy, host, logFile, inputOverride };
+  return { runId, contextOverride, policy, host, logFile, inputOverride, onJobStarted };
 }
 
 /**

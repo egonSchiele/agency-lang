@@ -109,15 +109,17 @@ this?` sends that text now, with the image.
 ## `/jobs`
 
 `/jobs` (`lib/slashCommands/jobs.agency`) lists the background jobs this
-session started: id, status, running time, and command. `agency jobs`, at
-any terminal, lists every job on the machine. `/jobs stop <id>` stops one with
-`stopJob`. Like `!command`, it raises no interrupt, because the user typed
-it. On success it prints nothing, since the REPL prints the job's finish
-line, and it leaves a pending note saying the user stopped the job. The
-model needs the note: `stopJob` reads the job, so the jobs message stops
-listing it and a later `jobOutput` returns nothing. The note carries the
-output `stopJob` read. A job that had already ended gets a reply with its status and
-no note. See `docs/dev/stdlib/jobs.md`.
+session started: id, status, running time, and command. The jobs are the
+session run's, read through the driver (`_sessionJobs`), so the list runs
+no turn. `agency jobs`, at any terminal, lists every job on the machine.
+`/jobs stop <id>` stops one (`_stopSessionJob`). Like `!command`, it raises
+no interrupt, because the user typed it. On success it prints nothing,
+since the REPL prints the job's finish line, and it leaves a pending note
+saying the user stopped the job. The stop reads nothing from the job, so
+the session's jobs message lists it as stopped with output not read, and
+the model can read it with `jobOutput`. A job that had already ended gets
+a reply with its status and no note, and an id the session does not hold
+gets the message `stopJob` gives. See `docs/dev/stdlib/jobs.md`.
 
 ## `/mcp`
 

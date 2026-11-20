@@ -154,13 +154,18 @@ describe("startRun and resumeRun", () => {
     expect(await resume(agent, null)).toEqual({
       result: { success: true, value: { kind: "cancelled" } },
       usage: null,
+      startedJobs: [],
     });
   });
 
   it("turn a throw into a failure", async () => {
     const { agent } = standIn({ thrown: new Error("no key") });
     const outcome = await startRun({ agent, callbacks: {}, policy: null });
-    expect(outcome).toEqual({ result: { success: false, error: "no key" }, usage: null });
+    expect(outcome).toEqual({
+      result: { success: false, error: "no key" },
+      usage: null,
+      startedJobs: [],
+    });
   });
 });
 

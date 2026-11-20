@@ -17,6 +17,12 @@ import { editDiff } from "agency-lang/stdlib-lib/editDiff.js"
 import { emit } from "std::statelog"
 
 import { setReplyStyle, setTurnBudget } from "./lib/answer.agency"
+import {
+  CapabilityChange,
+  CapabilityReport,
+  applyCapabilityChange,
+  capabilityReport,
+ } from "./lib/capabilityChange.agency"
 import { checkCliBundles } from "./lib/cliTools.agency"
 import { canCompact, compactAndReport, compactIfDue, contextStatus } from "./lib/compaction.agency"
 import { groundingText, setGrounding } from "./lib/grounding.agency"
@@ -43,6 +49,7 @@ import {
   askedEffort,
   fixedProvider,
   modelChoices,
+  useLocalModel,
   writeSessionPreset,
  } from "./lib/session.agency"
 import { setSessionFolder } from "./lib/sessionFolder.agency"
@@ -83,7 +90,9 @@ export type PauseData = {
   // it is there when the session is not saved.
   brain: string;
   // The web search backend in force: "hosted", "tavily", "brave" or "off".
-  search: string
+  search: string;
+  // The capability profile, as the terminal's `/settings` screen shows it.
+  capabilities: CapabilityReport
 }
 
 effect agent::sessionInput {
@@ -97,7 +106,8 @@ effect agent::sessionInput {
   budget: any;
   context: string;
   brain: string;
-  search: string
+  search: string;
+  capabilities: any
 }
 
 export type SessionStart = {
@@ -197,8 +207,21 @@ export type SavePreset = {
   name: string
 }
 
+/** Run the session on a local model, as `/local`: a catalog name, an
+  `hf:` URI or a `.gguf` path. Refused where the process cannot host one. */
+export type LocalModel = {
+  kind: "local";
+  model: string
+}
+
+/** Save one capability override and apply it, as `/settings` does. */
+export type CapabilitiesChange = {
+  kind: "capabilities";
+  settings: CapabilityChange
+}
+
 /** Everything the pause accepts. */
-export type Answer = Message | ModelChange | OptionsChange | BudgetChange | EffortChange | PresetChange | Compact | Rename | Fork | SearchChange | SavePreset
+export type Answer = Message | ModelChange | OptionsChange | BudgetChange | EffortChange | PresetChange | Compact | Rename | Fork | SearchChange | SavePreset | LocalModel | CapabilitiesChange
 
 def pauseData(budget: TurnBudget): PauseData {
   const threadId = conversationThread()
@@ -213,7 +236,26 @@ def pauseData(budget: TurnBudget): PauseData {
     budget: budget,
     context: contextStatus(threadId),
     brain: currentBrainName(),
-    search: getSearchBackend()
+    search: getSearchBackend(),
+    capabilities: capabilityReport()
+  }
+}
+
+def localNotice(model: string) {
+  const used = useLocalModel(model)
+  if (used is failure(reason)) {
+    notice(reason, "error")
+  } else {
+    notice("Switched to local model: ${model}")
+  }
+}
+
+def capabilitiesNotice(change: CapabilityChange) {
+  const applied = applyCapabilityChange(change)
+  if (applied is success(lines)) {
+    notice(lines.join("\n"))
+  } else if (applied is failure(reason)) {
+    notice(reason, "error")
   }
 }
 
@@ -419,6 +461,12 @@ export node session(start: SessionStart) {
         }
         { kind: "savePreset", name } => {
           savePresetNotice(name)
+        }
+        { kind: "local", model } => {
+          localNotice(model)
+        }
+        { kind: "capabilities", settings } => {
+          capabilitiesNotice(settings)
         }
       }
     }

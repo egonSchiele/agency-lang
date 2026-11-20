@@ -158,8 +158,8 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
 
 The grounding block goes on the conversation thread, not in `context`. It
 holds the session facts, the date, the working directory, and the project
-`AGENTS.md`. `runSession` builds it once with `groundingText` and stores it
-with `setGrounding` (`lib/grounding.agency`). Each turn adds that stored
+`AGENTS.md`. The session core (`core.agency`) builds it once with
+`groundingText` and stores it with `setGrounding` (`lib/grounding.agency`). Each turn adds that stored
 string with `ensureSystemMessage`. Two reasons:
 
 - A system message that stays on the thread is cached by the provider. A
@@ -192,21 +192,14 @@ the context percentage, the session title, the resume transcript, and
 
 ## The safety boundary
 
-The rule, in one sentence: **`runSession` in `lib/runSession.agency` owns the
-outermost `handle ... with cliPolicyHandler`, every turn is answered inside
-it, and both production paths (one-shot and the REPL) go through
-`runSession`.**
-
-```
-export def runSession(interactive: boolean, body: () -> void raises <*>) {
-  setGrounding(groundingText(_brainName))
-  const handler = policyHandlerFor(interactive)
-  handle {
-    checkCliBundles()
-    body()          // the one-shot turn, or the whole REPL
-  } with handler
-}
-```
+The rule, in one sentence: **every turn runs in a run of the session
+program (`program.agency`), under the policy the front-end gives that run,
+and every approval no rule decides leaves the run as an interrupt for the
+front-end to ask about.** The terminal's interactive REPL and its one-shot
+`-p` both run the session program through the driver
+(`docs/dev/agents/session-driver.md`, "The terminal"). The terminal asks
+about each interrupt with `askAbout` from `std::policy`, under the
+`cliPolicyHandler` its shell run installs.
 
 `agencyAgent` installs no handler of its own. The only reads it approves are
 of the files packaged with Agency, through `agentPrompt` and `agentSkill`,
@@ -214,16 +207,18 @@ which is what every stdlib agent does. So the harness policy decides every
 interrupt a turn raises. `tests/turn.agency`
 (`sessionPolicyDecidesTheAgentsInterrupts`) runs a turn whose model writes a
 file under the CLI policy, and the write is rejected.
+`tests/agency-js/agent-terminal-oneshot` checks the same for `-p`.
 
 Handlers in Agency are not try/catch. When a function raises an interrupt,
 every handler up the chain is consulted, and if any one of them rejects,
 the interrupt is rejected. So code inside a turn that wraps its own work in
 `with approve` still cannot get past the policy handler.
 
-The `interactive` flag is threaded into the policy handler
+The `interactive` flag is threaded into the shell's policy handler
 (`cliPolicyHandler(interactive: ...)`). In a one-shot run there is no user
-at a terminal, so an interrupt the policy does not decide is rejected with
-a reason the model reads, instead of a prompt nobody can answer.
+at a terminal, so `askAbout` rejects an interrupt the policy does not
+decide with a reason the model reads, instead of a prompt nobody can
+answer.
 
 ## Statics read the user's files only in the harness
 
@@ -246,14 +241,10 @@ someone has read it and everything it calls. A tool list that includes
 `searchTools` is built inside a function, never in a static, because
 `searchTools` reads the search API keys from the environment.
 
-The grounding is built in `runSession` before the policy handler is
-installed, so reading the project's `AGENTS.md` never prompts. A block built
-later, for a moved folder or for a coder started with `--agent code`, is
-read inside a turn. So the handler `runSession` installs is the policy
-handler wrapped in `approvingInstructionReads`: while `projectContextText`
-reads the instruction files, a `std::read` of `AGENTS.md` or `CLAUDE.md`
-that no rule decides is approved instead of asking the user. A `reject`
-rule still wins.
+`projectContextText` reads the instruction files `with approve`, so
+building the grounding, or a block for a moved folder, never prompts. A
+`reject` rule in the run's policy still wins, since every handler is
+consulted.
 
 ## The spawntest brain
 

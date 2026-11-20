@@ -1,13 +1,20 @@
 /** @module
   @summary The interactive terminal: slash commands, the status line, and how
-  a turn and its reply are drawn. It calls the harness runTurn and decides
-  nothing about the work itself.
+  a line reaches the session. The session runs in its own run, through the
+  driver (terminal.agency): a message or a command that changes the session
+  is sent to it as an answer, and what the commands show is read from its
+  pause. See docs/dev/agents/session-driver.md, "The terminal".
 */
+import {
+  _cost,
+  _costRows,
+  _endedBecause,
+  _footerTokens,
+  _pause,
+  _send,
+ } from "agency-lang/stdlib-lib/agentTerminalDriver.js"
 import { localModelsSupported, listModelNames } from "std::agency/local"
 import { listHostedModels } from "std::llm"
-import { expandSlash } from "std::skills"
-import { turnStart } from "std::statelog"
-import { getCost, getModelCosts } from "std::thread"
 import {
   chooseOption,
   ChoiceItem,
@@ -18,84 +25,54 @@ import {
   clearScreen,
  } from "std::ui/cli"
 
-import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
-import {
-  canCompact,
-  compactAndReport,
-  compactIfDue,
-  contextStatus,
- } from "./compaction.agency"
+import { settingsSlashCommand } from "./capabilitiesUi.agency"
 import { HISTORY_PATH } from "./config.agency"
 import { mcpSlashCommand } from "./mcpMenu.agency"
 import { filterHostedModels } from "./modelFilters.agency"
-import { Resolved } from "./models.agency"
-import { activePresetName, presetListLines, presetTable } from "./presets.agency"
-import { diffResolved } from "./resolution.agency"
+import { presetListLines, presetTable } from "./presets.agency"
+import { availableBackendItems } from "./search.agency"
 import {
-  configureSearch,
-  setSearchBackend,
-  getSearchBackend,
-  availableBackendItems,
- } from "./search.agency"
-import {
-  applyPendingLlmOptions,
-  applyModelSpec,
-  modelChoices,
-  applyPresetAnswer,
-  setModelChoices,
-  reactToSlotChange,
-  establishedProvider,
   modelChoiceItems,
   scopedPickerNotes,
   parseModelsFilters,
   parsePresetCommand,
-  saveSessionPreset,
-  switchPreset,
  } from "./session.agency"
-import { formatTurnFailure } from "./utils.agency"
-import { configureLocalModel, explicitRouterSpec, getResolvedSlots } from "../shared.agency"
-
-
-import { _installSessionHooks, _sessionOnSubmit } from "agency-lang/stdlib-lib/agentSessions.js"
-
-import {
-  conversationThread,
-  forkSession,
-  markTurnDone,
-  recordTurn,
-  renameSession,
-  sessionTitle,
- } from "./record.agency"
-import { saveSeedTurn } from "./resume.agency"
-import { renderReply, renderUserLine } from "./transcript.agency"
-import { withPendingNotes } from "./pendingNotes.agency"
+import { displayTitle } from "./sessions.agency"
 import { attachClipboardImage } from "./slashCommands/image.agency"
 import { policySlashCommand } from "./slashCommands/policy.agency"
-import { forkLine, renameLine } from "./slashCommands/session.agency"
 import { shellCommand } from "./slashCommands/shell.agency"
 import { jobsSlashCommand } from "./slashCommands/jobs.agency"
-import { runTurn } from "./turn.agency"
+import { sendMessage, sendSeedMessage } from "./terminal.agency"
 import { parseModelSpec } from "./utils.agency"
 
-
+/** What the session reported at its last pause, or an empty object before
+  it has one. */
+def pauseNow(): any {
+  return _pause() ?? {}
+}
 
 def searchSlashCommand(): boolean {
+  const before = pauseNow()
   const opts = availableBackendItems()
   const choice = chooseOption(
     "Web search backend",
-    "Pick how this agent searches the web. Current: ${getSearchBackend()}",
+    "Pick how this agent searches the web. Current: ${before.search ?? ""}",
     opts,
     false,
     true,
   )
   if (choice != "" && choice != null && choice != undefined) {
-    setSearchBackend(choice)
-    pushMessage("Web search backend set to: ${choice}")
+    // A backend the session can't use is reported by the session itself.
+    _send({ kind: "search", backend: choice })
+    const after = pauseNow()
+    if (after.search == choice) {
+      pushMessage("Web search backend set to: ${choice}")
+    }
   }
   return true
 }
 
-// getModelCosts() returns one row per kind and model, so the model name alone
+// The usage rows give one row per kind and model, so the model name alone
 // does not identify a row: a model used for completions and for images has
 // two, and an addCost() charge has kind "manual" and no model at all.
 def costRowLabel(kind: string, model: string): string {
@@ -109,21 +86,13 @@ def costRowLabel(kind: string, model: string): string {
 }
 
 def costSlashCommand(): boolean {
-  // Derive BOTH the header total and the per-model breakdown from the
-  // same figure (getModelCosts, the invocation's usage meter), so the
-  // `Cost:` / `Tokens:` lines and the rows below them can never visibly
-  // disagree.
-  // (getCost()/getTokens() read the per-branch accumulator, a different
-  // scope — adjacent in the output, they could in principle diverge.)
-  // Rows are sorted by cost descending by getModelCosts(); a subagent
-  // on a pricier model (e.g. the oracle on opus-4.8) shows up here.
-  const byModel = getModelCosts()
-  let totalCost = 0.0
+  // The session's usage, from the driver: the run's own total, which a
+  // checkpoint carries across a resume.
+  const byModel = _costRows()
   let totalTokens = 0
   let totalCacheRead = 0
   let totalCacheWrite = 0
   for (m in byModel) {
-    totalCost = totalCost + m.cost
     // Cache reads and writes are input tokens too. Counting only
     // inputTokens + outputTokens reports a fraction of a cached
     // conversation — on a long agent run, often under a tenth of it.
@@ -133,7 +102,7 @@ def costSlashCommand(): boolean {
     totalCacheRead = totalCacheRead + m.cachedInputTokens
     totalCacheWrite = totalCacheWrite + m.cacheCreationInputTokens
   }
-  pushMessage("Cost:   $${totalCost.toFixed(4)}")
+  pushMessage("Cost:   $${_cost().toFixed(4)}")
   pushMessage("Tokens: ${totalTokens}")
   if (totalCacheRead > 0 || totalCacheWrite > 0) {
     pushMessage(
@@ -153,18 +122,27 @@ def costSlashCommand(): boolean {
   return true
 }
 
+def pushSlots(heading: string, models: any) {
+  pushMessage(heading)
+  for (slot in Object.keys(models)) {
+    const value = models[slot]
+    if (value != null) {
+      pushMessage(color.dim("  ${slot}: ${value.model} (${value.via})"))
+    }
+  }
+}
+
+/** True when the session's models changed between two pauses. */
+def modelsChanged(before: any, after: any): boolean {
+  return JSON.stringify(before.models ?? {}) != JSON.stringify(after.models ?? {})
+}
+
 def modelSlashCommand(command: string): boolean {
   let spec = parseModelSpec(command)
+  const before = pauseNow()
   if (spec == "") {
-    pushMessage("Current models:")
-    const current = getResolvedSlots()
-    for (slot in Object.keys(current)) {
-      const resolved = current[slot]
-      if (resolved != null) {
-        pushMessage("  ${slot}: ${resolved.model} (${resolved.via})")
-      }
-    }
-    const established = establishedProvider(modelChoices())
+    pushSlots("Current models:", before.models ?? {})
+    const established = before.fixedProvider ?? ""
     const items = modelChoiceItems({}, established)
     for (line in scopedPickerNotes(established, items.length)) {
       pushMessage(color.dim(line))
@@ -181,46 +159,34 @@ def modelSlashCommand(command: string): boolean {
     }
     spec = choice
   }
-  const switched = applyModelSpec(spec)
-  if (switched is failure(reason)) {
-    pushMessage(color.red(reason))
-    return true
+  // A refused spec is reported by the session itself, as an error notice.
+  _send({ kind: "model", spec: spec })
+  const after = pauseNow()
+  if (modelsChanged(before, after)) {
+    pushSlots("Model set:", after.models ?? {})
   }
-  pushResolvedSlots("Model set:", switched.value)
   return true
-}
-
-def pushResolvedSlots(heading: string, resolved: Record<string, Resolved>) {
-  pushMessage(heading)
-  for (slot in Object.keys(resolved)) {
-    const value = resolved[slot]
-    if (value != null) {
-      pushMessage(color.dim("  ${slot}: ${value.model} (${value.via})"))
-    }
-  }
 }
 
 def presetSlashCommand(command: string): boolean {
   const parsed = parsePresetCommand(command)
   if (parsed.kind == "list") {
-    for (line in presetListLines(presetTable(), activePresetName())) {
+    const current = pauseNow()
+    for (line in presetListLines(presetTable(), current.preset ?? "")) {
       pushMessage(line)
     }
     return true
   }
   if (parsed.kind == "save") {
-    for (line in saveSessionPreset(parsed.name, modelChoices())) {
-      pushMessage(line)
-    }
+    _send({ kind: "savePreset", name: parsed.name })
     return true
   }
   const name = parsed.name
-  const switched = applyPresetAnswer(name)
-  if (switched is failure(reason)) {
-    pushMessage(color.red("Could not switch preset: ${reason}"))
-    return true
+  _send({ kind: "preset", name: name })
+  const after = pauseNow()
+  if (after.preset == name) {
+    pushSlots("Preset set: ${name}", after.models ?? {})
   }
-  pushResolvedSlots("Preset set: ${name}", switched.value.resolved)
   return true
 }
 
@@ -265,30 +231,26 @@ def localSlashCommand(): boolean {
   if (choice == "" || choice == null) {
     return true
   }
-  const before = getResolvedSlots()
-  // A local model can still route with the decision model the user set.
-  // The default router stays out of a local session.
-  const configured = configureLocalModel(choice, "", explicitRouterSpec())
-  if (configured is failure(reason)) {
-    pushMessage(color.red(reason))
-    return true
-  }
-  configureSearch(true)
-  for (change in diffResolved(before, getResolvedSlots())) {
-    reactToSlotChange(change)
-  }
-  pushMessage("Switched to local model: ${choice}")
+  // The session switches and says so, or says why it can't.
+  _send({ kind: "local", model: choice })
   return true
 }
 
 // Slash-command + user-message dispatcher invoked by `repl()` for
 // every Enter keystroke. Return `false` to terminate the loop.
 def _runTurn(msg: string): boolean {
+  const goOn = dispatch(msg)
+  // Another front-end took the session: it can't go on here.
+  if (_endedBecause() != "") {
+    return false
+  }
+  return goOn
+}
+
+def dispatch(msg: string): boolean {
   // Trim once for built-in matching so `"/help\n"` (piped) or
-  // `"  /clear"` behave the same as `"/clear"`. `expandSlash` is
-  // whitespace-tolerant in its own right, but it still receives the
-  // raw `msg` so the LLM sees the exact text the user typed when
-  // nothing matches.
+  // `"  /clear"` behave the same as `"/clear"`. The session receives the
+  // raw `msg`, so the model sees the exact text the user typed.
   const trimmed = msg.trim()
   return match(trimmed) {
     "" => true
@@ -309,11 +271,7 @@ def _runTurn(msg: string): boolean {
       )
       return true
     }
-    "/settings" => {
-      showCapabilities()
-      editCapabilities()
-      return true
-    }
+    "/settings" => settingsSlashCommand()
     "/mcp" => mcpSlashCommand()
     "/search" => searchSlashCommand()
     "/cost" => costSlashCommand()
@@ -322,61 +280,48 @@ def _runTurn(msg: string): boolean {
     "/local" => localSlashCommand()
     "/preset" => presetSlashCommand(trimmed)
     "/policy" => policySlashCommand()
-    "/rename" => renameSlashCommand("")
+    "/rename" => sendAnswer({ kind: "rename", title: "" })
     "/image" => imageSlashCommand("")
-    "/compact" => compactSlashCommand("")
+    "/compact" => sendAnswer({ kind: "compact", keep: "" })
     "/jobs" => jobsSlashCommand("")
-    "/fork" => {
-      pushMessage(forkLine(forkSession()))
-      return true
-    }
-    _ => {
-      if (isShellCommand(trimmed)) {
-        return shellCommand(trimmed.slice(1).trim())
-      }
-      if (trimmed.startsWith("/image ")) {
-        return imageSlashCommand(trimmed.slice(7).trim())
-      }
-      if (trimmed.startsWith("/jobs ")) {
-        return jobsSlashCommand(trimmed.slice(6))
-      }
-      if (trimmed.startsWith("/compact ")) {
-        return compactSlashCommand(trimmed.slice(9).trim())
-      }
-      if (trimmed.startsWith("/rename ")) {
-        return renameSlashCommand(trimmed.slice(8))
-      }
-      if (trimmed.startsWith("/model ")) {
-        return modelSlashCommand(trimmed)
-      }
-      if (trimmed.startsWith("/models ")) {
-        return modelsSlashCommand(trimmed)
-      }
-      if (trimmed.startsWith("/preset ")) {
-        return presetSlashCommand(trimmed)
-      }
-      return renderUserTurn(trimmed, msg)
-    }
+    "/fork" => sendAnswer({ kind: "fork" })
+    _ => prefixedCommand(trimmed, msg)
   }
 }
 
-
-def renameSlashCommand(title: string): boolean {
-  pushMessage(renameLine(renameSession(title)))
+def prefixedCommand(trimmed: string, msg: string): boolean {
+  if (isShellCommand(trimmed)) {
+    return shellCommand(trimmed.slice(1).trim())
+  }
+  if (trimmed.startsWith("/image ")) {
+    return imageSlashCommand(trimmed.slice(7).trim())
+  }
+  if (trimmed.startsWith("/jobs ")) {
+    return jobsSlashCommand(trimmed.slice(6))
+  }
+  if (trimmed.startsWith("/compact ")) {
+    return sendAnswer({ kind: "compact", keep: trimmed.slice(9).trim() })
+  }
+  if (trimmed.startsWith("/rename ")) {
+    return sendAnswer({ kind: "rename", title: trimmed.slice(8) })
+  }
+  if (trimmed.startsWith("/model ")) {
+    return modelSlashCommand(trimmed)
+  }
+  if (trimmed.startsWith("/models ")) {
+    return modelsSlashCommand(trimmed)
+  }
+  if (trimmed.startsWith("/preset ")) {
+    return presetSlashCommand(trimmed)
+  }
+  sendMessage(msg)
   return true
 }
 
-// Added to the line that says a compaction started. Esc is the terminal's
-// key, so the hint is the terminal's too.
-static const ESC_HINT = " Press Esc to stop."
-
-def compactSlashCommand(instructions: string): boolean {
-  const threadId = conversationThread()
-  if (!canCompact(threadId)) {
-    pushMessage("Nothing to compact yet.")
-    return true
-  }
-  compactAndReport(threadId, instructions, ESC_HINT)
+/** Sends a command's answer. The session reports what it did with a
+  notice, which the terminal's trace callbacks print. */
+def sendAnswer(answer: any): boolean {
+  _send(answer)
   return true
 }
 
@@ -398,76 +343,43 @@ def imageSlashCommand(message: string): boolean {
     pushMessage(color.dim("The image will go with your next message."))
     return true
   }
-  return renderUserTurn(message, message)
-}
-
-def renderUserTurn(trimmed: string, msg: string): boolean {
-  // The message is worked out on its own line: a call inside the argument
-  // of a `try` call breaks a resume in the middle of the turn (#1506).
-  const message = withPendingNotes(msg)
-  const result = try runTurn("", message)
-  renderAgentResponse(result)
-  applyPendingLlmOptions()
-  markTurnDone()
-  compactIfDue(conversationThread(), ESC_HINT)
+  sendMessage(message)
   return true
 }
 
+/** The footer: the session's title, its spend, and how full its context
+  is, as the session reported them at its last pause. */
 export def buildStatus(): { left: string; right: string; context: string } {
-  const roundedCost = "$${getCost().toFixed(4)}"
+  const pause = pauseNow()
+  const record = pause.record ?? null
+  const title = if record == null then "" else displayTitle(record)
   return {
-    left: sessionTitle(),
-    right: roundedCost,
-    context: contextStatus(conversationThread())
+    left: title,
+    right: "$${_cost().toFixed(4)}",
+    context: pause.context ?? ""
   }
 }
 
-export def runSeedTurn(target: string, msg: string) {
-  // The REPL logs a turn for each line it reads; a seeded prompt comes from
-  // the command line, so it is logged here.
-  turnStart(msg)
-  renderUserLine(msg)
-  const response = try runTurn(target, msg)
-  renderAgentResponse(response)
-  applyPendingLlmOptions()
-  markTurnDone()
-  compactIfDue(conversationThread(), ESC_HINT)
-  saveSeedTurn(msg)
+/** The session's tokens, for the footer's per-turn counts. */
+def footerTokens(): any {
+  return _footerTokens()
 }
 
-export def renderAgentResponse(response: Result<string | null>): void {
-  if (response is success(reply)) {
-    if (reply != "" && reply != null) {
-      renderReply(reply)
-    } else {
-      pushMessage(color.red("No reply generated."))
-    }
-  } else if (response is failure(f)) {
-    pushMessage(color.red(formatTurnFailure(f)))
-  }
-}
-
-/** Hand the REPL turn its Agency callbacks. Called from main() before any
-  restore, since a resumed process skips the rest of startup. */
-export def installSessionHooks() {
-  _installSessionHooks(_runTurn, recordTurn)
-}
-
-// Runs inside runSession's policy handler; the REPL installs none of its own.
+/** Runs the REPL on the session, after the `-i` prompt when there is one. */
 export def startInteractive(seedTarget: string, seedPrompt: string, saveHistory: boolean = true) {
   if (seedPrompt != "") {
-    runSeedTurn(seedTarget, seedPrompt)
+    sendSeedMessage(seedPrompt, seedTarget)
   }
   // "" turns the history file off, for an incognito session.
   const historyFile = if saveHistory then HISTORY_PATH else ""
   repl(
     status: buildStatus,
-    onSubmit: _sessionOnSubmit,
+    onSubmit: _runTurn,
     prompt: "> ",
     historyFile: historyFile,
     historyMax: 1000,
     herdrName: "agency",
+    tokens: footerTokens,
   )
   print(color.cyan("\nGoodbye!"))
 }
-

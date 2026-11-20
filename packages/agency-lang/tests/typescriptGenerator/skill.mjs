@@ -283,7 +283,7 @@ await callHook(__run, {
     };
   });
 })
-export async function analyzeData(input: string, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride, logFile: __invocationLogFile }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function analyzeData(input: string, { messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, policy: __invocationPolicy, host: __invocationHost, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal, inputOverride: __invocationInputOverride, logFile: __invocationLogFile, onJobStarted: __invocationOnJobStarted }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "analyzeData",
@@ -298,7 +298,8 @@ export async function analyzeData(input: string, { messages: __invocationMessage
       policy: __invocationPolicy,
       host: __invocationHost,
       inputOverride: __invocationInputOverride,
-      logFile: __invocationLogFile
+      logFile: __invocationLogFile,
+      onJobStarted: __invocationOnJobStarted
     },
     input: __invocationInput,
     abortSignal: __invocationAbortSignal,

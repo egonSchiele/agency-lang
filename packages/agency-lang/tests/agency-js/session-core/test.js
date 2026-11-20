@@ -15,9 +15,8 @@ const project = mkdtempSync(path.join(os.tmpdir(), "session-core-project-"));
 const program = await import("../../../dist/lib/agents/agency-agent/program.js");
 const { main, respondToInterrupts, approve, hasInterrupts, __setLLMClient } = program;
 // Whether this process can host a local model: a front-end says so once.
-const { _setLocalModelsAllowed, _setManySessions } = await import(
-  "../../../dist/lib/stdlib/agentProcess.js"
-);
+const { _setLocalModelsAllowed, _setManySessions } =
+  await import("../../../dist/lib/stdlib/agentProcess.js");
 _setManySessions(true);
 
 const PAUSE = "agent::sessionInput";
@@ -83,10 +82,15 @@ function roundsReply(config) {
 __setLLMClient({
   async text(config) {
     const said = lastUserText(config);
-    toolsSent[said] = [...(toolsSent[said] ?? []), ...(config.tools ?? []).map((tool) => tool.name)];
+    toolsSent[said] = [
+      ...(toolsSent[said] ?? []),
+      ...(config.tools ?? []).map((tool) => tool.name),
+    ];
     temperatureSent[said] = config.temperature ?? "none";
     effortSent[said] = config.reasoningEffort ?? "none";
-    longTextSent[said] = config.messages.some((message) => messageText(message).includes(LONG_MARK));
+    longTextSent[said] = config.messages.some((message) =>
+      messageText(message).includes(LONG_MARK),
+    );
     if (said.includes("Reply with the summary only.")) {
       summaryPrompts.push(said);
     }
@@ -276,7 +280,11 @@ await chat.answer(message("with the provider's own effort"));
 result.effortSentAfterDefault = effortSent["with the provider's own effort"];
 await chat.answer({ kind: "effort", effort: "extreme" });
 const effortNotice = eventsOf(chat, "session.notice").pop();
-result.badEffort = { level: effortNotice?.level, text: effortNotice?.text, kept: pauseData(chat).effort };
+result.badEffort = {
+  level: effortNotice?.level,
+  text: effortNotice?.text,
+  kept: pauseData(chat).effort,
+};
 
 // A preset that does not exist changes nothing.
 await chat.answer({ kind: "preset", name: "no-such-preset" });
@@ -326,7 +334,10 @@ result.settingsFileWritten = existsSync(path.join(process.env.AGENCY_AGENT_HOME,
 // is asked, and a front-end still has the diff to show on the edit's row.
 writeFileSync(path.join(project, "note.txt"), "first\nold line\nlast\n");
 // The minimal brain: the simple one has no tools.
-const editor = await startSession({ brain: "minimal" }, { ...PIN, "std::edit": [{ action: "approve" }] });
+const editor = await startSession(
+  { brain: "minimal" },
+  { ...PIN, "std::edit": [{ action: "approve" }] },
+);
 await editor.answer(message("edit the note"));
 const diffs = eventsOf(editor, "session.editDiff");
 result.editDiff = {
@@ -372,6 +383,15 @@ const jobber = await startSession({ brain: "coordinator" });
 await jobber.answer(message(JOBS_TURN));
 result.jobToolsOffered = ["startJob", "jobOutput", "stopJob"].map((name) =>
   (toolsSent[JOBS_TURN] ?? []).includes(name),
+);
+
+// A one-shot run offers none: its turn is the whole run. `oneShot` decides
+// it, with no `trace` given.
+const ONE_SHOT_JOBS_TURN = "a one-shot turn that could start a job";
+const oneShotJobber = await startSession({ brain: "coordinator", oneShot: true });
+await oneShotJobber.answer(message(ONE_SHOT_JOBS_TURN));
+result.oneShotJobToolsOffered = ["startJob", "jobOutput", "stopJob"].map((name) =>
+  (toolsSent[ONE_SHOT_JOBS_TURN] ?? []).includes(name),
 );
 
 // A session can start with a turn budget.
@@ -487,7 +507,10 @@ const renamer = await startSession();
 await renamer.answer({ kind: "rename", title: "  The   grep work " });
 result.rename = { notice: lastNotice(renamer), title: pauseData(renamer).record.title };
 await renamer.answer({ kind: "rename", title: "   " });
-result.rename.emptyTitle = { notice: lastNotice(renamer), titleKept: pauseData(renamer).record.title };
+result.rename.emptyTitle = {
+  notice: lastNotice(renamer),
+  titleKept: pauseData(renamer).record.title,
+};
 const unsaved = await startSession({ session: { ...startData().session, record: null } });
 await unsaved.answer({ kind: "rename", title: "a title" });
 result.rename.notSaved = { notice: lastNotice(unsaved), record: pauseData(unsaved).record };
@@ -587,6 +610,40 @@ result.toolRounds = {
   oneShot: await roundLimitSaid({ oneShot: true }),
   session: await roundLimitSaid({}),
 };
+
+// `local`: refused where the process cannot host a local model, and the
+// models stay as they were.
+_setLocalModelsAllowed(false);
+const localer = await startSession();
+const mainBefore = pauseData(localer).models.main.model;
+await localer.answer({ kind: "local", model: "some-local-model" });
+result.local = {
+  refused: lastNotice(localer),
+  kept: pauseData(localer).models.main.model === mainBefore,
+};
+
+// `capabilities`: an override is saved to settings.json and reported at
+// the next pause; a null value removes it; a value the field can't take
+// changes nothing.
+const tuner = await startSession();
+const setTo = (value) => ({
+  kind: "capabilities",
+  settings: { scope: "global", field: "maxTokens", value },
+});
+await tuner.answer(setTo(1234));
+result.capabilities = {
+  reported: pauseData(tuner).capabilities.values.maxTokens,
+  notice: lastNotice(tuner),
+  saved: settingsSaved().capabilities?.global?.maxTokens,
+};
+await tuner.answer(setTo(null));
+result.capabilities.removed = {
+  notice: lastNotice(tuner),
+  saved: settingsSaved().capabilities?.global?.maxTokens ?? "none",
+};
+await tuner.answer(setTo("lots"));
+result.capabilities.refused = lastNotice(tuner);
+rmSync(settingsFile, { force: true });
 
 writeFileSync("__result.json", JSON.stringify(result, null, 2));
 process.exit(0);

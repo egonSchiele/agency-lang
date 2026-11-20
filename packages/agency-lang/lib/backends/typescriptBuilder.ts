@@ -282,6 +282,7 @@ function invocationFromWrapperOptions(): TsNode {
     host: ts.id("__invocationHost"),
     inputOverride: ts.id("__invocationInputOverride"),
     logFile: ts.id("__invocationLogFile"),
+    onJobStarted: ts.id("__invocationOnJobStarted"),
   });
 }
 

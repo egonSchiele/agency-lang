@@ -1,0 +1,127 @@
+/** @module
+  @summary What `/settings` changes, applied in the session run: save one
+  capability override to settings.json, resolve the profile again, and
+  apply what can apply now. The screen that picks the change is the
+  terminal's (capabilitiesUi.agency). The session core reports the profile
+  at each pause (`capabilityReport`) and takes a `capabilities` answer.
+*/
+import { setLlmOptions } from "std::llm"
+import { disableMemory } from "std::memory"
+
+import {
+  CapabilityPatch,
+  mergeCapabilityOverride,
+  removeCapabilityField,
+ } from "./capabilities.agency"
+import { getCapabilitySettings, loadSettings, saveSettings } from "./settings.agency"
+import {
+  EmbeddingKeyStatus,
+  embeddingKeyStatus,
+  getCapabilities,
+  getCapabilitiesResolved,
+  getCapabilityModelKey,
+  getCapabilityProvider,
+  getResolvedSlots,
+  refreshCapabilities,
+ } from "../shared.agency"
+
+/** The capability profile as the `/settings` screen shows it: the model
+  and provider it is for, each field's value and the layer it came from,
+  and whether the embedding slot has the key it needs. */
+export type CapabilityReport = {
+  model: string;
+  provider: string;
+  values: any;
+  sources: any;
+  embedding: EmbeddingKeyStatus
+}
+
+/** One change `/settings` asks for. `scope` is "model", "provider" or
+  "global". `value` is the field's new value, or null to remove the
+  override at that scope. */
+export type CapabilityChange = {
+  scope: string;
+  field: string;
+  value: any
+}
+
+export def capabilityReport(): CapabilityReport {
+  const resolved = getCapabilitiesResolved()
+  return {
+    model: getCapabilityModelKey(),
+    provider: getCapabilityProvider(),
+    values: resolved.values,
+    sources: resolved.sources,
+    embedding: embeddingKeyStatus(getResolvedSlots())
+  }
+}
+
+/** The settings.json key a scope writes under. Global's key is unused. */
+def scopeTargetName(scopeKey: string): string {
+  if (scopeKey == "provider") {
+    return getCapabilityProvider()
+  }
+  return getCapabilityModelKey()
+}
+
+def patchFor(field: string, value: any): CapabilityPatch | null {
+  if (field == "summarize" && value is boolean) {
+    return { summarize: value }
+  }
+  if (field == "memory" && value is boolean) {
+    return { memory: value }
+  }
+  if (field == "maxTokens" && value is number && value > 0) {
+    return { maxTokens: value }
+  }
+  return null
+}
+
+/** Re-apply the resolved cap as the branch default. After a reset the
+  resolved value falls back to a built-in layer, which is always numeric
+  for known providers, so live-apply covers removal too. */
+def applyLiveMaxTokens() {
+  const capValue = getCapabilities().maxTokens
+  if (capValue != null) {
+    setLlmOptions({
+      maxTokens: capValue
+    })
+  }
+}
+
+/** Saves the change, resolves the profile again, and applies what can
+  apply now. Returns the lines to tell the person, or why the change is
+  refused. It writes settings.json as a direct result of the command the
+  person gave, so it asks no one. */
+export def applyCapabilityChange(change: CapabilityChange): Result<string[]> {
+  let settings = loadSettings()
+  const target = scopeTargetName(change.scope)
+  const current = getCapabilitySettings(settings)
+  if (change.value == null) {
+    settings.capabilities = removeCapabilityField(current, change.scope, target, change.field)
+  } else {
+    const patch = patchFor(change.field, change.value)
+    if (patch == null) {
+      return failure("Can't set ${change.field} to ${change.value}.")
+    }
+    settings.capabilities = mergeCapabilityOverride(current, change.scope, target, patch)
+  }
+  saveSettings(settings)
+  refreshCapabilities(getCapabilityModelKey(), getCapabilityProvider())
+  let lines: string[] = []
+  if (change.field == "maxTokens") {
+    applyLiveMaxTokens()
+  }
+  if (change.field == "memory") {
+    if (getCapabilities().memory) {
+      // The ON direction cannot live-apply: turning memory on raises file
+      // interrupts mid-session. The OFF direction raises none.
+      lines.push("Memory turns on at next agent start (enabling mid-session would raise policy prompts).")
+    } else {
+      disableMemory() with approve
+    }
+  }
+  const done = if change.value == null then "Override removed." else "Saved."
+  lines.push(done)
+  return success(lines)
+}

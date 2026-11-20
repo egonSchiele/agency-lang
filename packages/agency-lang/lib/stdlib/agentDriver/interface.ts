@@ -52,6 +52,9 @@ export type ProgramStart = {
    *  terminal's trace callbacks. Left out: debug from AGENT_DEBUG, not
    *  verbose, and interactive. */
   trace?: TraceSettings;
+  /** Save the web search backend the run picks to settings.json, as the
+   *  terminal does. Left out, it is not saved. */
+  saveSearchChoice?: boolean;
 };
 
 /** The terminal's tracing flags, for one run. */
@@ -78,7 +81,15 @@ export type PauseData = {
   context: string;
   brain: string;
   search: string;
+  /** The capability profile, for the terminal's `/settings` screen: the
+   *  model and provider it is for, each field's value and source, and the
+   *  embedding slot's key status. Null from a core that reports none. */
+  capabilities: unknown;
 };
+
+/** One change `/settings` asks for: `scope` is "model", "provider" or
+ *  "global", and a null `value` removes the override at that scope. */
+export type CapabilityChange = { scope: string; field: string; value: unknown };
 
 export type MessageAnswer = { kind: "message"; text: string; notes: string[]; target: string };
 
@@ -99,7 +110,11 @@ export type MessageAnswer = { kind: "message"; text: string; notes: string[]; ta
  *    front-end calls `copyCarriedPolicy`.
  *  - `search`: switch the web search backend, and save it to settings.json.
  *  - `savePreset`: save the session's models and options to a preset, ""
- *    for the active one. */
+ *    for the active one.
+ *  - `local`: run on a local model, as `/local`. Refused where the process
+ *    cannot host one.
+ *  - `capabilities`: save one capability override and apply it, as
+ *    `/settings`. */
 export type SettingsAnswer =
   | { kind: "model"; spec: string }
   | { kind: "options"; options: unknown }
@@ -110,7 +125,9 @@ export type SettingsAnswer =
   | { kind: "rename"; title: string }
   | { kind: "fork" }
   | { kind: "search"; backend: string }
-  | { kind: "savePreset"; name: string };
+  | { kind: "savePreset"; name: string }
+  | { kind: "local"; model: string }
+  | { kind: "capabilities"; settings: CapabilityChange };
 
 export type Answer = MessageAnswer | SettingsAnswer;
 
@@ -160,5 +177,6 @@ export function pauseData(pause: Interrupt[]): PauseData | null {
     context: text(data.context),
     brain: text(data.brain),
     search: text(data.search),
+    capabilities: data.capabilities ?? null,
   };
 }

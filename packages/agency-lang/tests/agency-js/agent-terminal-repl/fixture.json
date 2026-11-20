@@ -1,0 +1,9 @@
+{
+  "replied": true,
+  "renamed": true,
+  "cost": true,
+  "nextMessageCarriesTheNote": true,
+  "goodbye": true,
+  "policyFilesLeft": [],
+  "saved": [{ "title": "smoke test", "turns": 2, "runFormat": "savedRun", "heldBy": "terminal" }]
+}

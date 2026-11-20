@@ -13,6 +13,13 @@
     }
   ],
   "approvedByPolicy": "approve",
+  "answersOnlyFromTheStart": {
+    "ownGlob": "approved",
+    "file": {
+      "std::ls": [{ "action": "approve" }],
+      "std::glob": [{ "action": "approve" }]
+    }
+  },
   "approved": "approve",
   "policyRule": [
     {

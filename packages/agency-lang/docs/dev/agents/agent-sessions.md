@@ -1,152 +1,125 @@
 # Saved sessions: save and resume for `agency agent`
 
-An interactive `agency agent` run is saved after every completed turn, and a
-later run can pick it up with `--continue` or `--resume`. The exception is an
-`--incognito` run: `agent.agency` calls `startIncognito` in place of
-`startSession`, so `_current` stays null and `recordTurn` returns null after
-every turn, the same path a one-shot run takes. That also skips the title
-call, since the title would never be saved. `startIncognito` sets a flag so
-`/rename` can say the session is not saved.
+An interactive `agency agent` session is a run of the session program
+(`program.agency`, `docs/dev/agents/session-core.md`), driven through the
+session driver (`docs/dev/agents/session-driver.md`). The driver saves it
+at every pause once it has a turn, and a later run picks it up with
+`--continue` or `--resume`. Perry saves its sessions the same way, in the
+same folders, so either front-end can go on with a session the other
+saved.
 
-The launcher turns logging off for `--incognito`. The agent checks this
-itself before it starts: `incognitoProblem` refuses the run when
-`_isLogging()` (from `lib/stdlib/statelog.ts`) says the statelog still
-records. That happens when the agent is started without the launcher, for
-example `agency run lib/agents/agency-agent/agent.agency --incognito`,
-which keeps the logging the agent was built with. Without the check the
-header would say nothing is logged while `log.jsonl` fills up.
+An `--incognito` session has no record, so nothing is saved, and `/rename`
+says the session is not saved. The launcher turns logging off for
+`--incognito`. The agent checks this itself before it starts:
+`incognitoProblem` refuses the run when `_isLogging()` (from
+`lib/stdlib/statelog.ts`) says the statelog still records. That happens
+when the agent is started without the launcher, for example
+`agency run lib/agents/agency-agent/agent.agency --incognito`, which keeps
+the logging the agent was built with.
 
-The saved thing is a runtime checkpoint, not a transcript: restoring it
-brings back the conversation, every subagent's thread, the agent's
-`let` globals, and the LLM options, and execution continues from the saved
-point.
+A one-shot run (`-p`) saves nothing either: its start has no record.
 
 ## Files
 
-`<agent home>/sessions/<cwd slug>/` holds two files per session: `<id>.json`
-(the value of `getCheckpoint`) and `<id>.meta.json` (the record: `id, cwd,
-brain, created, lastActive, turns, title`). There is no shared index, so two
-agents in one directory cannot race on it; the picker's list is derived from
-the record files. Writes go through a temp file and a rename. The agent home is `~/.agency-agent` or `AGENCY_AGENT_HOME`. The slug
-is the working directory with every non-alphanumeric character replaced by
-`-`, so sessions are per project directory, as in Claude Code.
+`<agent home>/sessions/<cwd slug>/` holds two files per session:
 
-**Two front-ends save into these folders.** Perry saves the session
-core's pause in `<id>.json`, not one checkpoint. A record's `runFormat`
-says which the file holds: `checkpoint` (also when the field is absent) or
-`savedRun`. `listSessions` returns only the checkpoint ones, and
-`startSession` checks the file is a checkpoint before it calls `restore`.
-Session search reads both formats.
+- `<id>.json`, the saved run: the pause the session waits at, each
+  interrupt with its checkpoint, and the turn in progress when it was
+  saved in the middle of one (`SavedRun` in `lib/stdlib/agentSessions.ts`).
+- `<id>.meta.json`, the record: `id, cwd, brain, created, lastActive,
+  turns, title`, `runFormat: "savedRun"`, and `heldBy`, the front-end that
+  has the session open.
 
-The file I/O is TypeScript (`lib/stdlib/agentSessions.ts`), like the REPL
-history file: harness bookkeeping under the agent's own directory, never a
-tool, so it raises no interrupt and the user's policy is not asked about it.
+There is no shared index, so two agents in one directory cannot race on
+it; the picker's list is derived from the record files. Writes go through
+a temp file and a rename. The agent home is `~/.agency-agent` or
+`AGENCY_AGENT_HOME`. The slug is the working directory with every
+non-alphanumeric character replaced by `-`, so sessions are per project
+directory, as in Claude Code.
+
+**Sessions saved by the old terminal loop** have `runFormat: "checkpoint"`
+(or none): one checkpoint, which only that loop could resume. The picker
+and `--continue` leave them out, and `--resume <id>` on one prints
+`Session <id> was saved by an older version of the agent and can't be
+resumed.` Session search still reads them.
+
+The file I/O is TypeScript (`lib/stdlib/agentSessions.ts` and
+`lib/stdlib/agentDriver/savedRun.ts`), like the REPL history file: harness
+bookkeeping under the agent's own directory, never a tool, so it raises no
+interrupt and the user's policy is not asked about it.
 
 ## Modules
 
-- `lib/agents/agency-agent/lib/sessions.agency` — the index, save, read,
-  and the picker label.
+- `lib/agents/agency-agent/lib/sessions.agency` — the listing, and the
+  picker label.
 - `lib/agents/agency-agent/lib/sessionTitle.agency` — the one-line title:
-  from the tail of the `main` thread (the reply included) on turn 1 and
+  from the tail of the conversation (the reply included) on turn 1 and
   every `TITLE_EVERY` turns after. One LLM call in its own thread; fails
   open to "".
 - `lib/agents/agency-agent/lib/resume.agency` — which session this run is
-  (`chooseSession`, `startSession`) and the restore.
-- `lib/agents/agency-agent/lib/record.agency` — the session's record: the
-  per-turn record (`recordTurn`), the footer text (`sessionTitle`),
-  `/rename` and `/fork`. It is apart from `resume.agency` so the session
-  core can use it (`docs/dev/agents/session-core.md`).
-- `lib/stdlib/agentSessions.ts` — the files, and `_sessionOnSubmit`, the
-  REPL callback that checkpoints between turns.
+  (`chooseSession`), the picker, and a new session's record.
+- `lib/agents/agency-agent/lib/terminal.agency` — starting and resuming
+  the session run, and the session's policy.
+- `lib/agents/agency-agent/lib/record.agency` — the session's record, in
+  the session run: the per-turn record (`recordTurn`), `/rename` and
+  `/fork`.
+- `lib/stdlib/agentTerminalSession.ts` — when the terminal saves, and the
+  holder check.
 
-## When the checkpoint is taken
+## When a session is saved
 
-Restoring a checkpoint resumes at the exact point it was taken, with the
-saved call stack. The REPL loop is TypeScript, so a checkpoint taken inside
-a turn (from the `onSubmit` callback) would carry the turn's own Agency
-frame under a REPL invocation that no longer exists; on resume the runtime
-would hand that frame to the next `onSubmit` call and the user's first line
-would go into it.
-
-So the checkpoint is taken between turns, from `_sessionOnSubmit`: after
-`onSubmit` and `recordTurn` have returned, the stack is "REPL waiting at the
-prompt", and that is what gets saved. On resume the replay reaches the
-`repl(...)` call, which never finished, and starts the REPL fresh; the first
-line is an ordinary new turn.
-
-The `-i` seed turn runs before the REPL, so `saveSeedTurn` checkpoints in
-Agency code there; on resume execution continues at the line after
-`checkpoint()` and then starts the REPL.
+At every pause once the session has a turn: after a turn, after a command
+that changes it (`/rename`, `/model`, ...), and while a turn waits on an
+approval. A session saved at an approval is loaded back waiting on it, and
+the approval is asked again. A session whose process stopped while a turn
+ran goes back to the turn's start, as if the person had cancelled it, and
+the next message says so.
 
 ## How a resume works
 
-`startSession` restores the checkpoint in `main()`, after the process-level
-setup and before `runSession`. The order matters: a restore replaces the
-Agency execution state (the threads, every `let` global, the LLM options,
-which `setLlmOptions` writes to the state stack) and continues from the saved
-point, but it keeps TypeScript-side effects. The memory layer and the MCP
-connections are such effects, they depend on model resolution and on reads of
-`settings.json`, and those reads must happen before the policy handler exists
-or they prompt. So a resumed run does the same setup as a fresh one, then
-restores. On replay, `main`'s completed steps are skipped, the replayed
-`handle` block in `runSession` installs the policy handler again, and the
-REPL starts fresh.
+`chooseSession` picks the record. The shell prints the saved conversation
+(`_savedTranscript`: the thread the pause names, read from the saved
+run's checkpoint) and calls `_resumeSession`, which takes hold of the
+session, loads the saved run, and goes on from where it was.
 
-The REPL's Agency callbacks are handed to `_sessionOnSubmit` through
-TypeScript module state (`installSessionHooks`, before the restore), not as
-an Agency value: a closure built by an Agency statement would be a completed
-step in the checkpoint and come back from a restore as nothing.
+Everything the session run holds comes back from the checkpoint: the
+conversation, every subagent's thread, the models, the LLM options, the
+`let` globals. So `--model` and similar flags given on a resume are
+ignored. Policy flags are not: a session that carries its own policy runs
+under it, with the flags given now laid on top (`session-driver.md`,
+"Which policy a session runs under").
 
-The slash palette is registered the same way (`setSlashPalette` from
-`std::ui/cli`, next to `installSessionHooks`): an argument to `repl(...)`
-is saved in that call's frame and replayed on resume, so a palette passed
-as one would be the session's first.
-
-### The transcript on resume
-
-A resumed run prints the saved conversation before it restores. It is
-read from the checkpoint file (`_readTranscript` in `agentSessions.ts`),
-not from the restored threads, because `restore()` replays to the saved
-point and runs nothing placed after it.
+### The transcript
 
 The conversation is the run's active thread: a brain opens no `thread`
-block of its own, so every turn's `llm()` calls land on it. Before and after each
-turn, `runTurn` in `lib/turn.agency` records that thread's id with
-`setConversationThread` (`lib/record.agency`). `recordTurn` copies the id
-into the session record as `conversationThread`, before its early return
-for a save with no turn behind it, so a save after `/fork` or `/rename`
-carries it too. The resume transcript is read from the thread that id
-names. The title refresh, compaction, and the context percentage read the
-same thread.
-`showTranscript` in `transcript.agency` draws the messages with the same
-renderers the live turns use.
+block of its own, so every turn's `llm()` calls land on it. Before and
+after each turn, `runTurn` in `lib/turn.agency` records that thread's id
+with `setConversationThread` (`lib/record.agency`), and the pause reports
+it as `thread`. `recordTurn` copies the id into the session record as
+`conversationThread`. The title refresh, compaction, and the context
+percentage read the same thread. `showTranscript` in `transcript.agency`
+draws the messages with the renderers the live turns use.
+
+The zod schemas in `lib/runtime/state/schemas.ts` must name every field the
+thread store serializes; a field missing there is dropped when the
+checkpoint is read back (see `docs/dev/runtime/checkpointing.md`).
 
 ### `/rename`
 
-`/rename <title>` sets the record's title, pins it so the periodic title
-refresh leaves it alone, and marks the record dirty. `recordTurn` returns
-a save target for a dirty record even when no turn ran, so the save that
-follows every REPL line writes it.
-
-Because the `let` globals come back from the saved run, `--model`,
-`--policy`, and similar flags passed on a resume are ignored; the session
-continues as it was left.
-
-The zod schemas in `lib/runtime/state/schemas.ts` must name every field the
-thread store serializes; a field missing there is dropped when the checkpoint
-file is read back (see `docs/dev/runtime/checkpointing.md`).
+`/rename <title>` sends a `rename` answer. The session run sets the
+record's title, pins it so the periodic title refresh leaves it alone, and
+says so in a notice. The pause after it reports the record, and the driver
+saves it.
 
 ## `/fork`
 
-`/fork` makes the running session a copy of itself. `forkSession` in
-`record.agency` gives `_current` a new record: a new id, the same turn
-count and title, and `forkedFrom` set to the original's id. It returns
-those two ids, or a failure of `"not saved"` or `"no turns"`, and
-`lib/slashCommands/session.agency` words the REPL line. It marks the
-record changed,
-so the save that follows the REPL line writes the checkpoint under the new
-id. The original session's two files are not touched. They hold the
-conversation as it was last saved, and `--resume <id>` reopens it.
+`/fork` sends a `fork` answer. `forkSession` in `record.agency` gives the
+session a new record: a new id, the same turn count and title, and
+`forkedFrom` set to the original's id. The driver saves under the new id
+from then on, and copies the session's own policy file to it
+(`copyCarriedPolicy`). The original session's two files are not touched.
+They hold the conversation as it was last saved, and `--resume <id>`
+reopens it.
 
 The footer and the resume picker show a fork's title with `(fork)` after
 it (`displayTitle` in `sessions.agency`). The mark comes from
@@ -157,10 +130,6 @@ To try something from an earlier point, resume that session and run
 `/fork` before the next message. A turn taken before `/fork` is saved to
 the original first.
 
-There is no `--fork <id>` flag. The record is a `let` global inside the
-checkpoint, and nothing placed after `restore` runs, so a restored run
-cannot be handed a new id from Agency code at startup.
-
 ## Searching saved sessions
 
 `searchSessions` in `lib/sessionSearch.agency` is a tool the coordinator
@@ -168,10 +137,10 @@ carries. It finds messages in the sessions saved for this project
 directory, so the model can answer "what did we decide last week?".
 
 - **What is read.** `_searchSessions` in `agentSessions.ts` reads the 50
-  most recently used sessions, newest first. For each it reads the thread
-  its record's `conversationThread` names, with `_readTranscript`, the
-  same reader the resume transcript uses, so only user and assistant text
-  is searched. The running session is left out.
+  most recently used sessions, newest first, in either format. For each
+  it reads the thread its record's `conversationThread` names, with
+  `_readTranscript`, so only user and assistant text is searched. The
+  running session is left out.
 - **What matches.** A message that holds every word of the query, in any
   order and letter case. No index is kept and no model is called.
 - **What comes back.** Up to 3 hits a session and 25 in all. A hit is the
@@ -184,16 +153,17 @@ directory, so the model can answer "what did we decide last week?".
   sessions directory yet it returns nothing and raises nothing. A user
   who answers "always" saves a `std::read` rule for that directory. The
   rule is not specific to this tool: it also lets the model's ordinary
-  `read` tool open the checkpoint files there, which hold every tool
-  result, every subagent thread, and the program state.
+  `read` tool open the session files there, which hold every tool result,
+  every subagent thread, and the program state.
 - **Records with no thread id.** A record saved before the id was
   recorded has no `conversationThread`, so its session gives no hits.
 - **Compacted sessions.** Messages a compaction removed are not in the
   checkpoint. What can be found of them is the text of the summary that
   replaced them.
-- An `--incognito` run has no session, and the tool returns nothing there.
+- An `--incognito` session has no record, and the tool returns nothing
+  there.
 
-## Not in v1
+## Not yet
 
-`--fork <id>`, `/resume` inside a session, saving one-shot
-(`-p`) runs, mid-turn crash recovery, and cleanup of old sessions.
+`--fork <id>`, `/resume` inside a session, saving one-shot (`-p`) runs,
+and cleanup of old sessions.

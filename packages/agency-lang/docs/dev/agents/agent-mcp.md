@@ -6,12 +6,12 @@ How agency-lang finds the optional `@agency-lang/mcp` package is in `docs/dev/st
 
 ## When servers connect
 
-Starting a stdio server runs its `command`, so it raises `mcp::connect { server, command, env }` first (see "Starting a stdio server" below). The agent's policy handler answers that question, and the handler only exists once `runSession` installs it. So the agent connects in two steps:
+Starting a stdio server runs its `command`, so it raises `mcp::connect { server, command, env }` first (see "Starting a stdio server" below). The session's policy answers that question, or the person is asked. So the agent connects in two steps:
 
-1. **Startup**, before the handler (`maybeLoadMcp` in `main`): read the config and store it in the package with `configureMcpServers`. Nothing connects, and nothing is asked.
-2. **Each turn**, under the handler: `getMcpTools()` first calls `startPendingMcpServers()`, which connects every stored server the package has no record for (`connectPendingMcpServers`), and prints a line for each one that needs a login or failed. After the first turn, nothing is pending, so later turns connect nothing.
+1. **Startup** (`maybeLoadMcp` in `agent.agency`'s `main`): read the config and store it in the package with `configureMcpServers`. Nothing connects, and nothing is asked. The servers are process state, so the session run, which `main` starts after, uses them too.
+2. **Each turn**, in the session run: `getMcpTools()` first calls `startPendingMcpServers()`, which connects every stored server the package has no record for (`connectPendingMcpServers`), and prints a line for each one that needs a login or failed. The connect's `mcp::connect` leaves the run as an approval like any other, and the terminal asks about it (`docs/dev/agents/session-driver.md`, "The terminal"). After the first turn, nothing is pending, so later turns connect nothing.
 
-The connect cannot be a step after the handler is installed in `main` or `runSession`. A resume restores the checkpoint in `main`, then skips every step that already finished, including the steps inside `runSession`'s `handle` block before the REPL. A turn always runs fresh, in every process, so a resumed session connects on its first turn too. The stored config lives in the package, which a restore does not touch.
+A turn always runs fresh, in every process, so a resumed session connects on its first turn too. The stored config lives in the package, which a checkpoint does not hold.
 
 ## Where server state lives
 
@@ -96,7 +96,7 @@ The agent needs `@agency-lang/mcp` 0.0.6 or newer. `mcpPackageProblem()` returns
 
 ## Interrupts
 
-- Starting a stdio server raises `mcp::connect`. `openUrl` raises `std::openUrl`, and `logoutMcpServer` raises `mcp::logout`. The agent's policy handler answers all three like any other interrupt, because every one of them is raised during a turn or a slash command, under `runSession`'s handler. Nothing raises at startup.
+- Starting a stdio server raises `mcp::connect`. `openUrl` raises `std::openUrl`, and `logoutMcpServer` raises `mcp::logout`. The session's policy answers all three like any other interrupt, or the person is asked: each is raised during a turn, in the session run, or during a slash command, under the shell run's handler. Nothing raises at startup.
 - Each MCP tool call raises `mcp::call`, because `std::mcp` gates every tool it hands out.
 - Starting, finishing, and cancelling a login raise nothing. A login only finishes when a person completes it in their browser.
 - A tool call on a server with no connection never reconnects it. This happens when the model still holds a tool from earlier in the same turn, after a log out or a disconnect. The call fails with `MCP server "<name>" needs a new login.` when the record says so, and otherwise with `MCP server "<name>" is not connected. Reconnect it first.` A reconnect there would read the stored config, which `configureMcpServers` can replace without asking, so it could start a command nobody approved (`docs/dev/security/roadmap.md`, A4). Servers that only `mcp()` and `mcpRaw()` touched still reconnect, as they did in 0.0.5.

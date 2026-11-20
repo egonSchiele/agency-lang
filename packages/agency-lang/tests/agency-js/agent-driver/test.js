@@ -20,6 +20,9 @@ import {
   startRun,
   thisProcessId,
 } from "../../../dist/lib/stdlib/agentDriver/index.js";
+import { stopDroppedJobs } from "../../../dist/lib/stdlib/agentDriver/jobControl.js";
+import { currentHost } from "../../../dist/lib/runtime/currentHost.js";
+import { jobStatus } from "../../../dist/lib/runtime/jobs/detachedJobs.js";
 
 const SLOW_ABORT_MS = 300;
 const PROJECT = "/driver-test";
@@ -202,11 +205,33 @@ async function savedMidTurn() {
   };
 }
 
+// A turn starts a job and is aborted. The leg reports the job it started,
+// and stopping the dropped turn's jobs stops it.
+async function abortedJob() {
+  const { callbacks } = recorder();
+  const pause = await started(callbacks);
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 1000);
+  const aborted = await send({ pause, text: "job", callbacks, abortSignal: controller.signal });
+  const host = currentHost();
+  const jobs = aborted.startedJobs;
+  const before = jobs.length === 1 ? (await jobStatus(host, jobs[0].handle.id))?.state : null;
+  await stopDroppedJobs(host, jobs);
+  const after = jobs.length === 1 ? (await jobStatus(host, jobs[0].handle.id))?.state : null;
+  return {
+    abortedLeg: stepOf(aborted).kind,
+    startedJobs: jobs.length,
+    jobBeforeStop: before,
+    jobAfterStop: after,
+  };
+}
+
 const result = {
   ...(await basics()),
   ...(await policies()),
   ...(await rejectEverything()),
   ...(await savedMidTurn()),
+  ...(await abortedJob()),
 };
 writeFileSync("__result.json", JSON.stringify(result, null, 2));
 process.exit(0);

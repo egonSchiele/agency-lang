@@ -1,0 +1,6 @@
+// Unused: test.js drives the agent's session program through the
+// terminal's session (lib/stdlib/agentTerminalSession.ts). The test runner
+// compiles a program for each test folder.
+node main() {
+  return "unused"
+}

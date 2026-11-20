@@ -57,21 +57,22 @@ export def newSessionId(): string {
 }
 
 /** Every session saved in this directory that this terminal can resume,
-  most recently saved first. A session another front-end saved is left
-  out: its run file is not a checkpoint, and `restore` cannot read it. */
+  most recently saved first: the sessions saved as a run of the session
+  program, by this terminal or by another front-end. A session the
+  terminal's old loop saved is left out: only that loop could resume it. */
 @capabilities(fileRead)
 export def listSessions(): SessionRecord[] {
   const all: SessionRecord[] = _listSessions(projectDir())
-  return [record for record in all if _recordRunFormat(record) == "checkpoint"]
+  return [record for record in all if _recordRunFormat(record) == "savedRun"]
 }
 
-/** True when a session with this id is saved here by another front-end,
-  so `--resume <id>` can say why it will not open. */
+/** True when a session with this id was saved here by the terminal's old
+  loop, so `--resume <id>` can say why it will not open. */
 @capabilities(fileRead)
-export def isAnotherFrontEndsSession(id: string): boolean {
+export def isOldLoopSession(id: string): boolean {
   const all: SessionRecord[] = _listSessions(projectDir())
   const found = find(all, \record -> record.id == id)
-  return found != null && _recordRunFormat(found) != "checkpoint"
+  return found != null && _recordRunFormat(found) == "checkpoint"
 }
 
 export def mostRecentSession(): SessionRecord | null {

@@ -1,0 +1,8 @@
+{
+  "firstLineIsTheReply": true,
+  "modelReadTheReason": true,
+  "otherLines": ["Session cost: $N"],
+  "noteWritten": false,
+  "sessionSaved": false,
+  "offersStartJob": false
+}

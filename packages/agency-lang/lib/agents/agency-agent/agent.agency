@@ -1,14 +1,12 @@
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { _isLogging } from "agency-lang/stdlib-lib/statelog.js"
-import { parseArgs } from "std::args"
+import { _cost, _pause } from "agency-lang/stdlib-lib/agentTerminalDriver.js"
 import { map } from "std::array"
-import { setLlmOptions } from "std::llm"
-import { disableMemory } from "std::memory"
+import { cliPolicyHandler } from "std::policy"
 import { evalOutput, evalValue, setAgentName } from "std::statelog"
-import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
-import { getCost } from "std::thread"
+import { cwd, isTTY, readStdin, setTitle } from "std::system"
 import { setSlashPalette } from "std::ui/cli"
-import { pushMessage, repl, clearScreen } from "std::ui/cli"
+import { clearScreen } from "std::ui/cli"
 
 import { agencyAgentBrains } from "std::agents/agency"
 
@@ -17,45 +15,121 @@ import { parseAgentArgs } from "./lib/args.agency"
 import { mergedPalette } from "./lib/commandPalette.agency"
 import { getHeader } from "./lib/header.agency"
 import { maybeLoadMcp } from "./lib/mcp.agency"
-import { printPolicyHelp } from "./lib/policy.agency"
-import { activePreset, activePresetName, presetTable, serverNotice, startPreset } from "./lib/presets.agency"
-import { installSessionHooks, startInteractive } from "./lib/repl.agency"
-import { startIncognito } from "./lib/record.agency"
-import { chooseSession, incognitoProblem, startSession } from "./lib/resume.agency"
-import { pickModelsForAgent } from "./lib/session.agency"
+import { getPolicyForAgent, printPolicyHelp } from "./lib/policy.agency"
+import { presetTable, serverNotice } from "./lib/presets.agency"
+import { startInteractive } from "./lib/repl.agency"
+import { chooseSession, incognitoProblem, newSessionRecord } from "./lib/resume.agency"
+import { SessionRecord } from "./lib/sessions.agency"
 import { loadSettings } from "./lib/settings.agency"
-import { applyToolLimits, limitFlagsFromArgs, setStartupLimitFlags } from "./lib/toolLimits.agency"
+import {
+  SessionPolicy,
+  forgetUnsavedPolicy,
+  newSessionPolicy,
+  programStartFor,
+  resumeSessionRun,
+  resumedSessionPolicy,
+  runOneShot,
+  setSessionPolicyFile,
+  startSessionRun,
+ } from "./lib/terminal.agency"
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
-import { runSession, setPolicyArg } from "./lib/runSession.agency"
 import {
   setBrainName,
-  runTurn,
   resolveBrainName,
   resolveStartTarget,
   startTargetsFor,
  } from "./lib/turn.agency"
-import { formatTurnFailure } from "./lib/utils.agency"
-import { getCapabilities } from "./shared.agency"
 
-def oneShotAgent(target: string, prompt: string): string {
+/** `agency agent -p`: one message to a session that saves nothing, with
+  no one to ask. What no rule decides is declined with a reason the model
+  reads. Its output is the reply, then the session's cost. */
+def oneShot(args: any, brainName: string, target: string, prompt: string) {
   setInteractive(false)
   // Mark the input and reply in the statelog so a one-shot run is gradable:
   // `agency eval grade` reads the agent's output from the trace's
   // `evalOutputRecorded` events, not from stdout.
   evalValue(prompt)
+  const resolved = getPolicyForAgent(args.flags.policy ?? "", args.flags.approve ?? "", args.flags.reject ?? "", false)
+  setSessionPolicyFile(resolved.policyFile)
+  const handler = cliPolicyHandler(
+    file: resolved.policyFile,
+    policy: resolved.startPolicy,
+    interactive: false,
+  )
   let reply = ""
-  runSession(false) {
-    const result = try runTurn(target, prompt)
-    // Not `match`: a match expression inside a block body keeps its value on
-    // the wrong stack, so `reply` would end up null (compiler bug).
-    if (result is success(r)) {
-      reply = r
-    } else if (result is failure(f)) {
-      reply = formatTurnFailure(f)
-    }
-  }
+  handle {
+    reply = runOneShot(args, brainName, prompt, target)
+  } with handler
   evalOutput(reply)
-  return reply
+  print(reply)
+  print(color.dim("\nSession cost: $${_cost().toFixed(4)}"))
+}
+
+/** The policy an incognito session runs under. It is not saved, so it
+  carries no policy of its own. */
+def incognitoPolicy(flags: any): SessionPolicy {
+  const resolved = getPolicyForAgent(flags.policy ?? "", flags.approve ?? "", flags.reject ?? "", true)
+  return { policy: resolved.startPolicy ?? {}, file: resolved.policyFile }
+}
+
+/** The interactive terminal: picks the session, runs it under its policy,
+  and runs the REPL on it. The session program runs in its own run,
+  through the driver; this run draws the prompt and asks the person. */
+def interactive(args: any, brainName: string, startAgent: string, seedPrompt: string, incognito: boolean) {
+  setSlashPalette(mergedPalette())
+  let chosen: SessionRecord | null = null
+  if (!incognito) {
+    chosen = chooseSession(args.flags.continue, args.flags.resume ?? null)
+  }
+  let record: SessionRecord | null = null
+  let sessionPolicy: SessionPolicy = { policy: {}, file: "" }
+  if (chosen != null) {
+    sessionPolicy = resumedSessionPolicy(chosen.id, args.flags)
+  } else if (incognito) {
+    sessionPolicy = incognitoPolicy(args.flags)
+  } else {
+    const fresh = newSessionRecord(brainName)
+    record = fresh
+    sessionPolicy = newSessionPolicy(fresh.id, args.flags)
+  }
+  setSessionPolicyFile(sessionPolicy.file)
+  // The shell's own interrupts (`!cmd` needs none, but an MCP connect or
+  // an `/image` read does) are judged by the session's policy too, and an
+  // "always" answer to a session's approval is saved by this handler's
+  // state (askAbout).
+  // Answers only: the policy can be layered (a session's own policy, the
+  // saved policy's rejects, flags given now), and only what the person
+  // answers "always" belongs in the file.
+  const handler = cliPolicyHandler(
+    file: sessionPolicy.file,
+    policy: sessionPolicy.policy,
+    interactive: true,
+    answersOnly: true,
+  )
+  handle {
+    setTitle("Agency Agent")
+    clearScreen()
+    if (chosen != null) {
+      resumeSessionRun(chosen)
+    } else {
+      startSessionRun(programStartFor(args, brainName, record))
+      print(getHeader(brainName, _pause()))
+    }
+    const firstPause: any = _pause() ?? {}
+    const notice = serverNotice(presetTable(), firstPause.preset ?? "")
+    if (notice != "") {
+      print(color.yellow(notice))
+    }
+    if (incognito) {
+      print(
+        color.yellow(
+          "Incognito: nothing from this session is logged or saved. Your messages still go to the model provider.",
+        ),
+      )
+    }
+    startInteractive(startAgent, seedPrompt, saveHistory: !incognito)
+  } with handler
+  forgetUnsavedPolicy()
 }
 
 /* A seeded turn is if the user invokes the Agency agent with
@@ -87,11 +161,6 @@ node main() {
     printPolicyHelp()
     _exit(0)
   }
-  setPolicyArg(
-    args.flags.policy ?? "",
-    approve: args.flags.approve ?? "",
-    reject: args.flags.reject ?? "",
-  )
 
   const brainName = resolveBrainName(args.flags.brain ?? null, loadSettings())
   const brainNames = map(agencyAgentBrains(), \entry -> entry.name)
@@ -134,34 +203,12 @@ node main() {
     startAgent = resolvedStartTarget
   }
 
-  // The preset must be chosen before models resolve: it is one of their layers.
-  startPreset(args.flags.preset ?? "", loadSettings())
-  pickModelsForAgent(args)
-
-  // Memory stays off for the agent. After every model reply it ran a fact
-  // extraction and a summary on another model, and the tool calls waited
-  // for both, often a minute or more per round. The research memory also
-  // compacted the coordinator's own thread during a handoff. Must run
-  // before any handler/REPL is installed.
-  disableMemory() with approve
-
   // Store the configured MCP servers. They connect on the first turn, under
   // the policy handler, which answers each stdio server's mcp::connect.
+  // They are the process's, so the session run uses them too.
   maybeLoadMcp(loadSettings())
-
-  setStartupLimitFlags(limitFlagsFromArgs(args))
-  applyToolLimits(activePreset(), isOneShot)
-
-  const capsMaxTokens = getCapabilities().maxTokens
-  if (capsMaxTokens != null) {
-    setLlmOptions({
-      maxTokens: capsMaxTokens
-    })
-  }
   setAgentCwd(cwd())
 
-  // Interactive runs are saved per turn, and a resumed one restores its
-  // checkpoint here, after the setup above and before the session starts.
   // One-shot runs are not saved, so a resume flag on one is a mistake
   // rather than something to ignore.
   if (isOneShot && (args.flags.continue || args.flags.resume != null)) {
@@ -182,52 +229,19 @@ node main() {
       _exit(1)
     }
   }
-  // Everything above is process-level: model resolution feeds the memory
-  // layer, and memory, MCP, and the settings reads behind them must run
-  // before the policy handler exists or they prompt. A restore keeps
-  // those TypeScript-side effects and replaces only the Agency state.
+
   if (!isOneShot) {
-    installSessionHooks()
-    setSlashPalette(mergedPalette())
-    if (incognito) {
-      startIncognito()
-    } else {
-      startSession(
-        chooseSession(args.flags.continue, args.flags.resume ?? null),
-        brainName,
-      )
-    }
+    interactive(args, brainName, startAgent, positionalQuery, incognito)
+    return
   }
 
-  if (isOneShot) {
-    let prompt = positionalQuery
-    if (!hasQuery) {
-      const fromStdin = readStdin()
-      if (fromStdin == null || fromStdin == "") {
-        _exit(0)
-      }
-      prompt = fromStdin
+  let prompt = positionalQuery
+  if (!hasQuery) {
+    const fromStdin = readStdin()
+    if (fromStdin == null || fromStdin == "") {
+      _exit(0)
     }
-    print(oneShotAgent(startAgent, prompt))
-    const roundedCost = "$${getCost().toFixed(4)}"
-    print(color.dim("\nSession cost: ${roundedCost}"))
-  } else {
-    setTitle("Agency Agent")
-    clearScreen()
-    print(getHeader(brainName))
-    const notice = serverNotice(presetTable(), activePresetName())
-    if (notice != "") {
-      print(color.yellow(notice))
-    }
-    if (incognito) {
-      print(
-        color.yellow(
-          "Incognito: nothing from this session is logged or saved. Your messages still go to the model provider.",
-        ),
-      )
-    }
-    runSession(true) {
-      startInteractive(startAgent, positionalQuery, saveHistory: !incognito)
-    }
+    prompt = fromStdin
   }
+  oneShot(args, brainName, startAgent, prompt)
 }

@@ -18,6 +18,7 @@ import { setAgentName } from "std::statelog"
 
 import node { session } from "./core.agency"
 import { SessionStart } from "./core.agency"
+import { setJobToolsOn } from "./lib/cliTools.agency"
 import { ModelFlags } from "./lib/modelRequest.agency"
 import { notice } from "./lib/notice.agency"
 import { activePreset, startPresetQuiet } from "./lib/presets.agency"
@@ -54,7 +55,13 @@ export type ProgramStart = {
   // What the run shows of its work, for a process that loaded the
   // terminal's trace callbacks. Left out: debug from AGENT_DEBUG, not
   // verbose, and interactive, as the terminal starts.
-  trace?: TraceSettings
+  trace?: TraceSettings;
+  // Whether the web search backend the run picks is saved to
+  // settings.json, as the terminal does: it is the user's own terminal,
+  // so the choice is theirs and the note about it prints once. Left out,
+  // it is not saved: an app's environment often lacks the search keys a
+  // terminal has.
+  saveSearchChoice?: boolean
 }
 
 // `start` is checked against its type. A front-end built for another
@@ -65,6 +72,10 @@ node main(start: ProgramStart!) {
     setVerbose(start.trace.verbose)
     setInteractive(start.trace.interactive)
   }
+  // A one-shot run's turn is the whole run, so its model could never read
+  // a job it started, and the job would outlive the run. `oneShot`, not
+  // `trace`, decides it: `trace` may be left out.
+  setJobToolsOn(!(start.oneShot ?? false))
   const settings = loadSettings()
   const brainName = resolveBrainName(start.brain, settings)
   const brainNames = map(agencyAgentBrains(), \entry -> entry.name)
@@ -92,9 +103,9 @@ node main(start: ProgramStart!) {
   for (warning in preset.value) {
     notice(warning, "warning")
   }
-  // The search backend is chosen for this session and not saved: the
-  // settings file is the user's, and this may not be their terminal.
-  const models = startModels(start.models, false)
+  // The search backend is chosen for this session, and saved only when
+  // the front-end says this is the user's own terminal.
+  const models = startModels(start.models, start.saveSearchChoice ?? false)
   if (models is failure(modelProblem)) {
     throw(modelProblem)
     return

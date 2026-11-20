@@ -1,15 +1,11 @@
-import { currentRun, currentRunOrNone, type Run } from "../runtime/asyncContext.js";
+import { currentRunOrNone } from "../runtime/asyncContext.js";
 import type { MessageJSON } from "smoltalk";
 import type { Host, Root } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { processSlot } from "../runtime/processSlot.js";
-import { __call } from "../runtime/call.js";
-import { hasInterrupts } from "../runtime/interrupts.js";
-import { checkpointFor, getCheckpointFor } from "../runtime/checkpoint.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { stripSlug } from "../runtime/runner.js";
 import { _contentToString } from "./threads.js";
-import { printAgentTrace } from "./agentToolTrace.js";
 import type { Interrupt } from "../runtime/interrupts.js";
 import { getModuleFingerprint } from "../runtime/moduleFingerprintRegistry.js";
 import { isPlainObject } from "../utils/isPlainObject.js";
@@ -30,14 +26,13 @@ import { isPlainObject } from "../utils/isPlainObject.js";
 /**
  * What a session's run file holds.
  *
- * - `checkpoint`: one checkpoint, taken between turns. `agency agent`
- *   writes this, and resumes it with `restore`.
- * - `savedRun`: the interrupts a session core paused on, each with its
- *   checkpoint, as a front-end that drives the core from outside saves it
- *   (`{ version, pause, cancelledTexts, failedTexts, turn }`). Perry writes this.
- *
- * Both programs save into the same folders, and neither can resume the
- * other's file yet.
+ * - `checkpoint`: one checkpoint, taken between turns, as the terminal's
+ *   old loop saved it. Nothing resumes it now; session search still reads
+ *   it.
+ * - `savedRun`: the interrupts the session core paused on, each with its
+ *   checkpoint, as the session driver saves it
+ *   (`{ version, pause, cancelledTexts, failedTexts, turn }`). `agency agent`
+ *   and Perry both write this, in the same format.
  */
 export type RunFormat = "checkpoint" | "savedRun";
 
@@ -489,54 +484,11 @@ export function canResume(run: SavedRun): "yes" | "changed" | "notLoaded" {
   return "yes";
 }
 
-type SaveTarget = { dir: string; record: SessionRecord } | null;
-
-// The Agency callbacks the REPL turn wraps. Installed from `main()` before
-// any restore, and held here rather than passed through Agency code: a
-// closure built by an Agency statement would be in the checkpoint as a
-// completed step, and come back from a restore as nothing.
-let hooks: { onSubmit: unknown; afterTurn: unknown } | null = null;
-
-export function _installSessionHooks(onSubmit: unknown, afterTurn: unknown): void {
-  hooks = { onSubmit, afterTurn };
-}
-
-function call(run: Run, fn: unknown, ...args: unknown[]): Promise<unknown> {
-  return __call(run, fn, { type: "positional", args });
-}
-
-/**
- * The REPL's `onSubmit` for a saved session. After a turn, once its Agency
- * frames have returned, the stack is "REPL waiting at the prompt"; that is
- * the state checkpointed and written. (A checkpoint taken inside the turn
- * would carry the turn's own frame, and on resume the runtime would hand
- * that frame to the next `onSubmit` call.)
- */
-export async function _sessionOnSubmit(line: string): Promise<unknown> {
-  const run = currentRun();
-  if (!hooks) throw new Error("_installSessionHooks was not called");
-  const reply = await call(run, hooks.onSubmit, line);
-  // A turn stopped by an interrupt did not finish, so there is nothing to
-  // record; the REPL shows the interrupt.
-  if (reply === false || hasInterrupts(reply)) return reply;
-  const target = (await call(run, hooks.afterTurn, line)) as SaveTarget;
-  if (target) {
-    const cp = getCheckpointFor(run, await checkpointFor(run));
-    const error = await saveSession(run.ctx.host, target.dir, target.record, cp);
-    if (error) {
-      printAgentTrace(run.ctx.host, { kind: "sessionSaveFailure", message: error });
-    } else {
-      reportHerdrSession(target.record.id);
-    }
-  }
-  return reply;
-}
-
 /** Tell Herdr which session the pane holds and how to reopen it after a
  *  Herdr restart, through the hook the line-mode REPL installs. Herdr runs
  *  the command in the pane's directory, which is the directory the session
  *  is saved under. */
-function reportHerdrSession(id: string): void {
+export function reportHerdrSession(id: string): void {
   const hook = (globalThis as any).__agencyHerdrSession;
   if (typeof hook === "function") {
     hook({ id, resumeArgv: ["agency", "agent", "--resume", id] });

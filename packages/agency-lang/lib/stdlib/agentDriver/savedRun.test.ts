@@ -132,6 +132,7 @@ describe("restoredPhase", () => {
       text: "do it",
       cancelledTexts: ["earlier"],
       queue: { interrupts: [BASH], responses: [] },
+      turnJobs: [],
     });
     expect(happened).toEqual([]);
   });
@@ -150,6 +151,7 @@ describe("restoredPhase", () => {
       text: "do it",
       cancelledTexts: ["earlier"],
       queue: { interrupts: [question, BASH], responses: [reject("can't answer")] },
+      turnJobs: [],
     });
     expect(happened).toEqual([
       { type: "settled", interrupt: question, response: reject("can't answer"), by: "rule" },

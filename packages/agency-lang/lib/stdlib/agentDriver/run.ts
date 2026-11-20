@@ -2,6 +2,7 @@
 // pause and says what to answer it with. See docs/dev/agents/session-driver.md.
 import type { Host } from "../../host/host.js";
 import { isAbortError } from "../../runtime/errors.js";
+import type { HeldJob } from "../../runtime/jobs/heldJobs.js";
 import type { AgencyCallbacks } from "../../runtime/hooks.js";
 import { hasInterrupts, type Interrupt, type InterruptResponse } from "../../runtime/interrupts.js";
 import type { RunUsage } from "../../runtime/invocationUsage.js";
@@ -18,12 +19,15 @@ export const PAUSE_WITH_OTHER_INTERRUPTS_ERROR = "The session's pause came with 
 // `policy` is the run's policy: it answers the approvals a rule matches,
 // inside the run. `host` is what the run takes from its platform, its
 // working folder included. `logFile` is where the run's events are logged.
-// Like the callbacks, all three must be given again on every resume: the
-// runtime does not keep them.
+// `onJobStarted` is told of each background job the leg starts. Like the
+// callbacks, all four must be given again on every resume: the runtime
+// does not keep them.
 type Placement = { host?: Host; logFile?: string };
-export type StartOptions = { callbacks: AgencyCallbacks; policy?: Policy } & Placement;
+type JobListener = { onJobStarted?: (job: HeldJob) => void };
+export type StartOptions = { callbacks: AgencyCallbacks; policy?: Policy } & Placement &
+  JobListener;
 export type ResumeMetadata = { callbacks: AgencyCallbacks };
-export type ResumeInvocation = { policy?: Policy } & Placement;
+export type ResumeInvocation = { policy?: Policy } & Placement & JobListener;
 export type ResumeOptions = {
   metadata: ResumeMetadata;
   invocation?: ResumeInvocation;
@@ -49,8 +53,15 @@ export type AgentStep =
   | { kind: "cancelled" };
 
 /** What one call into the run gave back. `usage` is the run's total
- *  spend so far, or null when the call threw and gave back no result. */
-export type LegOutcome = { result: Result<AgentStep>; usage: RunUsage | null };
+ *  spend so far, or null when the call threw and gave back no result.
+ *  `startedJobs` is every background job the call started, whatever its
+ *  outcome: a leg that was aborted or failed started them too, and only
+ *  this list still knows them (`turnJobsDropped` in machine.ts). */
+export type LegOutcome = {
+  result: Result<AgentStep>;
+  usage: RunUsage | null;
+  startedJobs: HeldJob[];
+};
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -83,8 +94,14 @@ export function toStep(result: RunNodeResult<unknown>): Result<AgentStep> {
   return success({ kind: "needsApproval", interrupts });
 }
 
-function outcomeOf(result: RunNodeResult<unknown>): LegOutcome {
-  return { result: toStep(result), usage: result.usage ?? null };
+function outcomeOf(result: RunNodeResult<unknown>, startedJobs: HeldJob[]): LegOutcome {
+  return { result: toStep(result), usage: result.usage ?? null, startedJobs };
+}
+
+/** A list the leg's jobs are added to, and the listener that adds them. */
+function jobCollector(): { startedJobs: HeldJob[]; onJobStarted: (job: HeldJob) => void } {
+  const startedJobs: HeldJob[] = [];
+  return { startedJobs, onJobStarted: (job) => void startedJobs.push(job) };
 }
 
 /** The policy a run is given: the caller's, or none, with the core's
@@ -101,11 +118,12 @@ export async function startRun(args: {
   policy: Policy | null;
 }): Promise<LegOutcome> {
   const policy = runPolicy(args.policy);
+  const { startedJobs, onJobStarted } = jobCollector();
   try {
-    const result = await args.agent.main({ callbacks: args.callbacks, policy });
-    return outcomeOf(result);
+    const result = await args.agent.main({ callbacks: args.callbacks, policy, onJobStarted });
+    return outcomeOf(result, startedJobs);
   } catch (error) {
-    return { result: failure(errorText(error)), usage: null };
+    return { result: failure(errorText(error)), usage: null, startedJobs };
   }
 }
 
@@ -121,18 +139,19 @@ export async function resumeRun(args: {
   abortSignal?: AbortSignal;
 }): Promise<LegOutcome> {
   const policy = runPolicy(args.policy);
+  const { startedJobs, onJobStarted } = jobCollector();
   try {
     const result = await args.agent.respondToInterrupts(args.interrupts, args.responses, {
       metadata: { callbacks: args.callbacks },
-      invocation: { policy },
+      invocation: { policy, onJobStarted },
       abortSignal: args.abortSignal,
     });
-    return outcomeOf(result);
+    return outcomeOf(result, startedJobs);
   } catch (error) {
     if (isAbortError(error)) {
-      return { result: success({ kind: "cancelled" }), usage: null };
+      return { result: success({ kind: "cancelled" }), usage: null, startedJobs };
     }
-    return { result: failure(errorText(error)), usage: null };
+    return { result: failure(errorText(error)), usage: null, startedJobs };
   }
 }
 

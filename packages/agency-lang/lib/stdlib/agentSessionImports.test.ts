@@ -23,8 +23,8 @@ const TERMINAL_MODULES = [
   "lib/args.agency",
   "lib/policy.agency",
   "lib/trace.agency",
-  "lib/runSession.agency",
   "lib/resume.agency",
+  "lib/terminal.agency",
 ];
 
 const TERMINAL_FOLDERS = ["lib/slashCommands/"];

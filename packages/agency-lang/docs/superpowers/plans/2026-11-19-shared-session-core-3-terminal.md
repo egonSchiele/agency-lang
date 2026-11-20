@@ -12,7 +12,9 @@
 4. **The terminal switches over.** `agency agent` runs its sessions through the driver. Its old loop is deleted.
 5. **Both front-ends see each other's sessions** without stepping on them.
 
-**Not in this plan: background jobs.** Jobs are designed in `docs/superpowers/specs/2026-11-19-jobs-interface-design.md` (on `adit/jobs-interface`). A job becomes a separate process with a record on disk. It no longer belongs to its run, so a pause does not stop it. **The switch (Part D) waits on one ticket, ADI-341:** the agent's job tools move onto the new jobs, and the run's job table is deleted. Until then the terminal keeps its old loop and its jobs. Parts A, B and C do not touch jobs and can land now.
+**Background jobs are done, and Part D builds on them.** Jobs were built in #1512 (spec: `docs/superpowers/specs/2026-11-19-jobs-interface-design.md`; how they work: `docs/dev/stdlib/jobs.md`). A job is a separate process with a record on disk. It does not belong to its run, so a pause does not stop it. The run keeps the jobs it started on its context (`heldJobs`), and every checkpoint saves them. The session core already offers the job tools, and nothing calls `setJobToolsOn(false)` for a session any more. Parts A, B and C are merged (#1510, #1511).
+
+**What that means for the switch.** After it, the terminal has two runs: the shell run, which draws the prompt and runs slash commands, and the session run, which holds the jobs. Three things in the terminal read the run's jobs today, and each must read the session run's jobs after the switch: the line printed when a job ends, `/jobs`, and `/jobs stop`. Tasks D1 and D2 say how.
 
 **Architecture:** `agency agent` becomes two runs in one process. The *shell run* is `agent.agency`: it parses flags, picks the session, and runs `repl()`. It is never saved. The *session run* is `program.agency`, started and resumed by the driver, in TypeScript. For each line the REPL submits, the driver sends an answer to the session run. When the run pauses on an approval, the shell run draws the prompt and the driver resumes with the result. The driver saves at every pause.
 
@@ -20,7 +22,9 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-18-shared-session-core-design.md`. The core as built: `docs/dev/agents/session-core.md`. Revised after the review in `2026-11-19-shared-session-core-3-terminal-review.md` and an architecture review.
 
-**Written against:** agency-lang `main` at `cfc225a6f` (0.42.0) and Perry `main` at `e794183` (#26, Perry on the core).
+**Written against:** agency-lang `main` at `cfc225a6f` (0.42.0) and Perry `main` at `e794183` (#26, Perry on the core). Part D was revised against agency-lang `main` at `4ae5c8cb0` (#1512, jobs).
+
+**Where this stands.** Parts A, B and C are merged and must not be done again. Their tasks stay below as the record of what was built, and where the code differs from a task, the code is right. **Start at Part D.**
 
 Paths are relative to `packages/agency-lang/` unless they start with `perry/`. `AGENT` means `lib/agents/agency-agent`.
 
@@ -55,7 +59,7 @@ The draft of this plan listed facts to find first. These are the answers, each r
 - **The driver is not a new package export.** It lives in `lib/stdlib/agentDriver/` and is reached as `agency-lang/stdlib-lib/agentDriver/index.js`, like the agent's other TypeScript. Its only users are front-ends of the agent.
 - **Perry lists sessions without loading them.** It loads one when a client opens it.
 - **The core asks nobody about its own settings writes.** `/settings`, `/search` and `/preset save` write the user's settings files as a direct result of a command the user just gave. The terminal asked about them only because its handler saw every interrupt. After the switch it does not ask.
-- **The prompt stays Agency code in the shell run.** One hidden function is added to `std::policy` that asks about one interrupt passed as data. `std::policy`'s own state stays the one copy of the policy in the terminal, and its own writer stays the one writer of the policy file. The driver keeps no copy.
+- **The prompt stays Agency code in the shell run.** One hidden function is added to `std::policy` that asks about one interrupt passed as data. `std::policy`'s own state stays the one copy of the policy in the terminal, and its own writer stays the one writer of the policy file. The driver keeps no copy. As merged, `askAbout` takes the policy as an argument, so this holds only while the terminal always passes `currentPolicy()` back in, as Task D2 does.
 - **The switch lands as its own pull request,** after the driver and the answers are in a release. The old loop is deleted in it. There is no flag.
 
 ## Global Constraints
@@ -83,7 +87,7 @@ The draft of this plan listed facts to find first. These are the answers, each r
 
 ---
 
-# Part A: the shared driver (agency-lang, then Perry)
+# Part A: the shared driver (agency-lang, then Perry). Done in #1510.
 
 One pull request in agency-lang, a release, then one in Perry.
 
@@ -207,7 +211,7 @@ export function reduceDriver(phase: DriverPhase, action: DriverAction): { phase:
 
 ---
 
-# Part B: a session's policy follows it (agency-lang)
+# Part B: a session's policy follows it (agency-lang). Done in #1511.
 
 ### Task B1: The session reports the policy it was started under, and a front-end runs it under that
 
@@ -268,7 +272,7 @@ Perry's `resolvePolicy` (`perry/src/agent/policy.ts`) says of itself that it is 
 
 ---
 
-# Part C: every command as an answer, and what the pickers read (agency-lang)
+# Part C: every command as an answer, and what the pickers read (agency-lang). Done in #1511.
 
 ### Task C1: The process's trace settings
 
@@ -300,7 +304,8 @@ Which command needs what, after the switch:
 | `/init`, a skill, a user command | `message` answer |
 | `/compact`, `/rename`, `/fork`, `/search`, `/preset save` | **New answers, below.** Perry can use these too |
 | `/local`, `/settings` | New answers, added with the switch (Task D2). Only the terminal uses them |
-| `/jobs` | Kept, same name |
+| `/jobs` | Shell run, from the driver's `sessionJobs` (Task D2). It reads the session's jobs from disk and runs no leg |
+| `/jobs stop <id>` | Shell run, with the driver's `stopSessionJob` (Task D2). Sent as `notes` on the next message, as today. It runs no leg |
 
 **Files:**
 - Modify: `AGENT/core.agency`, `AGENT/program.agency`, `AGENT/lib/record.agency`, `AGENT/lib/session.agency`, `AGENT/lib/search.agency`, `lib/stdlib/agentDriver/interface.ts`
@@ -337,8 +342,9 @@ Which command needs what, after the switch:
 - Produces, in `std::policy`, both marked `@hidden` as `askUserChoices` is (they are for a program that shows another run's interrupts, not for the guide):
 
 ```
-/** Ask the user about an interrupt another run raised. */
-export def askAbout(intr: any): any
+/** Ask the user about an interrupt another run raised. As merged, it takes
+  the policy to judge by and the file an "always" answer is saved to. */
+export def askAbout(intr: any, policy: Policy, file: string): any
 /** The policy this program's handler is using now. */
 export def currentPolicy(): Policy
 ```
@@ -357,11 +363,48 @@ Open the pull request for Parts B and C together. A release follows.
 
 ---
 
-# Part D: the switch (agency-lang). Waits on ADI-341.
+# Part D: the switch (agency-lang)
 
 One pull request. Until it merges, nothing above changes what `agency agent` does.
 
-### Task D1: The footer reads usage it is given
+A second review of this part is in `2026-11-19-shared-session-core-3-terminal-review-2.md`. Its points are in the tasks below, with one difference: for a dropped turn's jobs it suggests the driver keeps holding them, and this plan stops them, which is less to build (the owner's call: whichever is easier).
+
+### Task D0: A dropped turn's jobs are stopped
+
+Under the driver each leg is a new run. Its held jobs come only from the checkpoint it resumes. Every way a turn can be dropped goes back to the pause the turn **started** from, which was saved before the turn's jobs existed:
+
+- Esc while the model works (`run.ts` returns `{ kind: "cancelled" }` and nothing else; `cancelTurn` in `machine.ts`);
+- a leg that fails (`legFinished`);
+- Esc at an approval prompt (`approvalCancelled`);
+- the process stopping in the middle of a turn (`savedRun` saves only `pause` for `working`).
+
+So a job the model started in that turn keeps running, and the session no longer holds it. `/jobs` does not list it, the model is never told of it, and nothing in the session can stop it until its time limit. This is true on `main` today, for Perry too, since #1512 gave every session the job tools. `docs/dev/stdlib/jobs.md` names it as the case to avoid.
+
+**The rule:** when a turn is dropped, the driver stops the jobs that turn started. Esc means "stop what the agent is doing", and the next message already tells the model its changes may be half made.
+
+**Files:**
+- Modify: `lib/stdlib/jobs.ts`, `lib/stdlib/agentDriver/run.ts`, `machine.ts`, `index.ts`; the runtime file that carries a run's options to its context
+- Create: `lib/stdlib/agentDriver/jobs.ts`
+- Test: `lib/stdlib/agentDriver/machine.test.ts`, `tests/agency-js/agent-driver/`
+
+**Interfaces:**
+- **The driver learns of each job as it starts.** A run takes an option, given in TypeScript on every start and resume as `callbacks` and `policy` are, that `_launchJob` (`lib/stdlib/jobs.ts`) calls with the new `HeldJob` right after it adds it to the run's list. It is not an Agency `callback`: a `HeldJob` has the job's token, which must not reach Agency code. Step 1 finds where a run's options reach its context and names the option.
+- `startRun` and `resumeRun` return `startedJobs: HeldJob[]` beside the step and the usage, for every outcome, `cancelled` and a failure included.
+- `DriverPhase`'s `working` and `approving` gain `turnJobs: HeldJob[]`: the jobs started since the turn's message, added to after each leg. A turn that finishes drops the list, since the pause it ends on holds those jobs.
+- `Happened` gains `{ type: "turnJobsDropped"; jobs: HeldJob[] }`, given with `turnCancelled` and `legFailed` when the list is not empty.
+- `agentDriver/jobs.ts`: `stopDroppedJobs(host: Host, jobs: HeldJob[]): Promise<void>` calls `requestStop` for each job whose token `heldJobStatus` matches. A front-end calls it for every `turnJobsDropped`.
+- **A process that dies in the middle of a turn** cannot stop anything. Its jobs run to their time limit, and `agency jobs` lists and stops them. This is accepted and written in `session-driver.md`.
+
+- [ ] **Step 1:** Find where a run's options reach its context, and write the option's name and type here. If it needs more than passing one function through, stop and report.
+- [ ] **Step 2: Write the failing tests.**
+  - `reduceDriver`: a `working` phase whose leg reported one started job, then cancelled, gives `turnCancelled` and `turnJobsDropped` with that job. The same for `legFinished` with a failure, and for `approvalCancelled` after a leg that started a job. A turn that finishes gives no `turnJobsDropped`.
+  - In `tests/agency-js/agent-driver/`: a scripted turn starts `sleep 30` with `maxMinutes: 1`, the leg is aborted, and after `stopDroppedJobs` the job's record reads `stopped`.
+- [ ] **Step 3:** Run. Expected: FAIL.
+- [ ] **Step 4:** Implement.
+- [ ] **Step 5:** Run `pnpm vitest run lib/stdlib/agentDriver` and the agency-js test. Expected: PASS.
+- [ ] **Step 6:** Update `session-driver.md` and the "Checkpoints and pauses" part of `docs/dev/stdlib/jobs.md`. Commit: `Agent driver: stop the jobs a dropped turn started`.
+
+### Task D1: The footer reads usage it is given, and the job watch reads jobs it is given
 
 **Files:**
 - Modify: `lib/stdlib/cli.ts`, `stdlib/ui/cli.agency`
@@ -370,12 +413,17 @@ One pull request. Until it merges, nothing above changes what `agency agent` doe
 **Interfaces:**
 - `repl()` takes an optional `tokens: () => TokenSnapshot`. `_runLineRepl` calls it in place of `readTokenSnapshot(replCtx)` at its three call sites. With none given it reads the run it is in, as now. This is a new argument on a public stdlib function, for any REPL that drives another run. It is not added to the guide's first example.
 - The terminal builds a `TokenSnapshot` from the driver's `RunUsage`: the totals, and `models` from `RunUsage.entries`.
+- `tokens` is an Agency function, so `_runLineRepl` calls it with `callBridgeFn`, which is async, and awaits it at each call site.
+- **The job watch's list does not go through `repl()`.** `watchHeldJobs` calls `held()` synchronously, and a function passed through Agency arrives wrapped and async, so the watch would get a promise and see no jobs. It would also put each job's token on the Agency call path. So `lib/stdlib/cli.ts` exports `setReplJobsSource(source: (() => HeldJob[]) | null): void`, kept in a `processSlot` (`lib/runtime/processSlot.ts`). `_runLineRepl` gives `watchHeldJobs` a `held` that calls the source when one is set, and reads `replCtx.heldJobs` when none is, as now. `repl()` gets no new argument for jobs. The terminal's driver sets the source from TypeScript (Task D2).
+- **A job that ended while no terminal was open gets no finish line after `--resume`.** The watch reports only a job that ended after it began. This is intended: the model's jobs message lists the job as unread.
 
-- [ ] **Step 1: Write the failing test.** A REPL given `tokens` that returns 120 in and 30 out prints a footer with those counts after a turn.
+- [ ] **Step 1: Write the failing tests.**
+  - A REPL given `tokens` that returns 120 in and 30 out prints a footer with those counts after a turn. The test calls `repl()` from Agency, so a wrapped function is what it tests.
+  - With `setReplJobsSource` given a function that returns one job, whose record then ends, the REPL prints that job's finish line. The run the REPL is in holds no jobs.
 - [ ] **Step 2:** Run. Expected: FAIL.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Run `pnpm vitest run lib/stdlib/cli.test.ts`. Expected: PASS.
-- [ ] **Step 5:** Commit: `REPL: the footer's token counts can come from the caller`.
+- [ ] **Step 5:** Commit: `REPL: token counts and the watched jobs can come from outside its run`.
 
 ### Task D2: The terminal's driver loop
 
@@ -396,14 +444,25 @@ One pull request. Until it merges, nothing above changes what `agency agent` doe
 - **Approvals in one pause.** The driver walks the queue. `settle` checks each waiting interrupt against `shell.policy()` (a reject rule answers anything; an approve rule answers only a raise that wants no typed value, as `cliPolicyHandler` does). What it does not decide is asked with `shell.ask`. After each answer the rest are checked again, so an "always" settles them (Review Focus 4). For each `settled` in `Happened` the driver prints the line `std::policy` prints today ("Approved … by the rule just saved", "Policy rejected …"), and an edit's diff.
 - **Esc at a prompt** arrives as the cancellation `shell.ask` throws. `_send` catches it and dispatches `approvalCancelled`, so the turn is dropped as it is for an abort (Review Focus 5).
 - It prints `session.reply`, `session.error` and an edit's diff. `trace.agency`'s callbacks print the rest.
-- **The line printed when a job ends** comes from the process's one job watcher, not the run's job table. The terminal driver subscribes to it with `onWatchedJobEnd` (from the jobs plan).
-- It saves at every pause with `saveRun`, holder `{ frontEnd: "terminal", pid }`, and reports to Herdr where `_sessionOnSubmit` did. Before each leg it checks `stillHeld`. When it is not, it stops with `This session was continued in <heldBy.frontEnd>. Reopen it with: agency agent --resume <id>` (Review Focus 3).
+- **The session's jobs** are on the session run, which exists only while a leg runs. Between legs they are in the pause's checkpoint, as `heldJobs`. Three functions go in `lib/stdlib/agentDriver/` (new file `jobs.ts`, exported from `index.ts`), so Perry can use them too:
+  - `heldJobsOf(interrupts: Interrupt[]): HeldJob[]`: the `heldJobs` of every interrupt's checkpoint, merged with `mergeHeldJobs` (`lib/runtime/jobs/heldJobs.ts`), or `[]`. Do not read only the first: two parallel tool calls can pause at different times, and a job the first started can be missing from an earlier checkpoint.
+  - **"The last pause" below means the newest interrupts the driver was given:** the approval queue's while a turn waits on an approval, and `phase.pause` otherwise. `phase.pause` alone is the pause the turn started from, a whole turn behind.
+  - `sessionJobs(host: Host, pause: Interrupt[]): Promise<JobSummary[]>`: one summary for each of those jobs, read from its record now, so the state is current and not the state at the pause. `lib/stdlib/jobs.ts` already builds this summary for a run (`heldSummary`, `summaryOf`, `statusOf`). Change those to take a host and a `HeldJob` in place of a run, export one function, and call it from both places. Do not write a second copy.
+  - `stopSessionJob(host: Host, pause: Interrupt[], id: string): Promise<JobSummary | null>`: stops one of those jobs with `requestStop`, after `heldJobStatus` has matched its token. Null for an id the session does not hold.
+  - A held job's token is never put in `PauseData` and never shown to the model.
+- **The line printed when a job ends.** When a session starts or resumes, `agentTerminalDriver.ts` calls `setReplJobsSource` (Task D1) with a function that returns `heldJobsOf` of the last pause plus the current turn's `turnJobs` (Task D0). So a job is watched from the moment it starts. No Agency code is involved.
+- **A dropped turn.** For each `turnJobsDropped` (Task D0) the driver calls `stopDroppedJobs` and prints nothing of its own: the watch prints each job's finish line.
+- **`/jobs`** prints `_sessionJobs()`, which is `sessionJobs` of the last pause, in the rows `listedJobs` in `AGENT/lib/slashCommands/jobs.agency` prints today. It runs no leg.
+- **`/jobs stop <id>`** calls `_stopSessionJob(id)`, which is `stopSessionJob` of the last pause, and adds a note to the user's next message with `addNote`, as it does today: "I stopped background job <id> myself: <command>". It runs no leg and needs no new answer. A job is a process outside the run, so stopping one changes nothing in the run, as `agency jobs stop` at a terminal changes nothing. The note no longer carries the job's output, because the shell run does not move the session's read position: the jobs message lists the job as "stopped, output not read yet", and the model reads the output with `jobOutput` if it wants it. What the command prints, so that one stop prints one line:
+  - stopped: nothing, since the watch's finish line is the report, and the note is added;
+  - already ended: `<id> had already ended (<status>).`, and no note;
+  - not held by this session: the message `stopJob` gives for an unknown id, and no note.
+- It saves at every pause with `saveRun`, holder `{ frontEnd: "terminal", pid, processId: thisProcessId() }`, and reports to Herdr where `_sessionOnSubmit` did. Before each leg it checks `stillHeld`. `saveRun` also refuses, under the record's lock, to write a session another holder took. Keep both: the check before a leg saves the work of a leg, and the one in `saveRun` is the backstop. When it is not, it stops with `This session was continued in <heldBy.frontEnd>. Reopen it with: agency agent --resume <id>` (Review Focus 3).
 - `agent.agency`'s `main`:
   - resolves the policy as now with `getPolicyForAgent`. When any policy flag was given, it saves the resolved policy as the new session's policy file (`saveCarriedPolicy`), and after a `fork` answer for the new id.
   - **On a resume of a session that has a policy file,** it installs `cliPolicyHandler` with the run policy, `sessionRunPolicy({ carried, saved, extra: <the flags given now, or null> })`, and the session's policy file, so "always" answers are saved there. So the shell run's own interrupts (`!cmd`, an MCP connect) are judged by the session's policy too.
   - calls `maybeLoadMcp` and the guided local picker as now, then `_startSession` or `_resumeSession`, prints the header from the first pause, and runs `repl()` with `onSubmit` → `_send`, and `status` and `tokens` from `_pause()` and `_usage()`.
-- **Two more answers land here,** since only the terminal sends them: `{ kind: "local"; model: string }` (`configureLocalModel`, then `reactToSlotChange`) and `{ kind: "capabilities"; settings: any }` (what `/settings` writes, then `refreshCapabilities`), with `PauseData.capabilities: any` for the `/settings` screen to read. Each gets a case in `tests/agency-js/session-core/test.js`: taken and reported at the next pause, and `local` refused when local models are off.
-- Each slash command sends its answer through `_send`, or reads `_pause()` or `_usage()`, as the table in Task C2 says.
+- **Two more answers land here,** since only the terminal sends them: `{ kind: "local"; model: string }` (`configureLocalModel`, then `reactToSlotChange`) and `{ kind: "capabilities"; settings: any }` (what `/settings` writes, then `refreshCapabilities`), with `PauseData.capabilities: any` for the `/settings` screen to read. Each gets a case in `tests/agency-js/session-core/test.js`: taken and reported at the next pause, and `local` refused when local models are off.- Each slash command sends its answer through `_send`, or reads `_pause()` or `_usage()`, as the table in Task C2 says.
 - `--continue`, `--resume` and the picker list `savedRun` records and resume with `_resumeSession`. The transcript shown is read with `checkpointIn`. `--resume <id>` on a `checkpoint` record prints `Session <id> was saved by an older version of the agent and can't be resumed.` and exits with 1.
 
 - [ ] **Step 1: Write the failing tests.** In `tests/agency-js/agent-terminal/`, with a stub model and scripted input:
@@ -412,7 +471,9 @@ One pull request. Until it merges, nothing above changes what `agency agent` doe
   - Esc at a prompt leaves the session at its last message, and the next message carries the cancel note;
   - a second holder's `takeHold` makes the next line print the "continued in" message, run no leg and write nothing;
   - a session whose policy file holds `minimal`'s rules, resumed with no flags while `policy.json` approves every read, asks about a read;
-  - `/rename x`, then `--resume` in a new process, shows the title and the transcript.
+  - `/rename x`, then `--resume` in a new process, shows the title and the transcript;
+  - a turn whose scripted reply calls `startJob("sleep 30", maxMinutes: 1)`: `/jobs` lists the job as running, `/jobs stop <id>` stops it, the finish line is printed once, and the next message carries the note. After `--resume` in a new process, `/jobs` still lists it, as stopped. The test stops every job it starts, since a job outlives its test;
+  - a turn that starts a job and is then cancelled with Esc: the job's finish line is printed, its record reads `stopped`, and `/jobs` does not list it.
 - [ ] **Step 2:** Run. Expected: FAIL.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Run them and every test in `AGENT/tests/`. Expected: PASS, apart from the tests of the old loop, which go in D4.
@@ -421,13 +482,16 @@ One pull request. Until it merges, nothing above changes what `agency agent` doe
 ### Task D3: One-shot runs
 
 **Files:**
-- Modify: `lib/stdlib/agentTerminalDriver.ts`, `AGENT/agent.agency`
-- Test: `tests/agency-js/agent-terminal-oneshot/`
+- Modify: `lib/stdlib/agentTerminalDriver.ts`, `AGENT/agent.agency`, `AGENT/program.agency`
+- Test: `tests/agency-js/agent-terminal-oneshot/`, `tests/agency-js/session-core/test.js`
 
 **Interfaces:**
 - `_runOnce(start: ProgramStart, message: Answer): Promise<{ reply: string; error: string }>`: starts with `oneShot: true` and a null record, sends the message, declines every approval no rule decides with the reason `std::policy` gives a non-interactive run today, and saves nothing.
+- A one-shot run is offered no job tools: its turn is the whole run, so its model could never read a job it started, and the job would outlive the run. `program.agency` turns them off today only when `start.trace.interactive` is false, and `trace` is optional: a start with `oneShot: true` and no `trace`, which is what Perry's `-p` will send, would get the job tools. So `program.agency`'s `main` calls `setJobToolsOn(!oneShot)` after it applies `trace`. `oneShot` already means "its turn is the whole run". `trace.interactive` then decides only what is shown.
 
-- [ ] **Step 1: Write the failing test.** A `-p` run whose scripted reply asks for a write no rule covers prints the reply, the model was sent the non-interactive reason, no session file exists, and stdout holds only the reply (Review Focus 6).
+- [ ] **Step 1: Write the failing tests.**
+  - A `-p` run whose scripted reply asks for a write no rule covers prints the reply, the model was sent the non-interactive reason, no session file exists, and stdout holds only the reply (Review Focus 6).
+  - In `tests/agency-js/session-core/test.js`: a start with `oneShot: true` and no `trace` offers no `startJob`.
 - [ ] **Step 2:** Run. Expected: FAIL.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Run it and `AGENT/tests/quietStartup.agency`. Expected: PASS.
@@ -439,7 +503,7 @@ One pull request. Until it merges, nothing above changes what `agency agent` doe
 - Delete: `AGENT/lib/runSession.agency`; `_sessionOnSubmit` and `_installSessionHooks` in `lib/stdlib/agentSessions.ts`; `saveSeedTurn` and the in-run `restore` in `AGENT/lib/resume.agency`; `approvingInstructionReads` in `AGENT/lib/projectContext.agency`; the tests of each
 - Modify: `lib/stdlib/agentSessionImports.test.ts` (the terminal list loses `runSession`)
 
-- [ ] **Step 1:** Delete them. The job tools and `/jobs` stay. `setJobToolsOn(false)` in `core.agency` is not removed here: the jobs plan removes it in its last task.
+- [ ] **Step 1:** Delete them. The job tools and `/jobs` stay. Nothing about jobs is deleted here: #1512 already removed the run's job table and the `setJobToolsOn(false)` call in `core.agency`. `setJobToolsOn` itself stays, for one-shot runs.
 - [ ] **Step 2:** Run the agent's tests in full once, and `pnpm vitest run`. Expected: PASS.
 - [ ] **Step 3:** Run `agency agent` by hand: a turn, an approval answered "always", Esc mid-turn, `/model`, `/compact`, `/fork`, `--continue`, `-p`, and one MCP tool call that asks for approval. Compare the order of an attachment line, a tool trace and the reply with the version before.
 - [ ] **Step 4:** Commit: `Remove the terminal's own session loop`.
@@ -460,7 +524,8 @@ Once the terminal saves the same format, Perry's sessions folder holds every ter
 - At startup the engine reads records only. A session it has not loaded is listed from its record: `id`, `title`, `cwd`, `created`, `lastActive`, `status: "saved"`, no items, no settings.
 - `POST /sessions/:id/open` loads it (as `loadSession` does today), calls `takeHold`, and answers its whole view. A `send` to a session that is not loaded opens it first.
 - `SessionStatus` gains `"saved"`. `PROTOCOL_VERSION` is raised, in `protocol.ts` and `Protocol.swift`.
-- The engine's saves use holder `{ frontEnd: "perry", pid }`. Before a leg it checks `stillHeld`. When another front-end took the session, the engine drops its copy back to `"saved"` and the request is refused with a 409 that names the holder from `heldBy.frontEnd`: "This session was continued in the terminal. Open it again to pick it up." (or "in another Perry", for another engine's pid).
+- **Jobs in Perry.** Since #1512 a Perry session's model can start jobs. The engine calls `stopDroppedJobs` for every `turnJobsDropped` (Task D0), so a cancelled turn leaves none running. Perry still shows no job list and no finish line, and cannot stop a job; that is Linear ADI-345, which can use `sessionJobs` and `stopSessionJob` (Task D2).
+- The engine's saves use holder `{ frontEnd: "perry", pid, processId: thisProcessId() }`. Before a leg it checks `stillHeld`. When another front-end took the session, the engine drops its copy back to `"saved"` and the request is refused with a 409 that names the holder from `heldBy.frontEnd`: "This session was continued in the terminal. Open it again to pick it up." (or "in another Perry", for another engine's pid).
 
 - [ ] **Step 1: Write the failing tests.**
   - An engine over a home with three saved sessions starts no run and lists three with `status: "saved"`. Opening one gives its conversation.
@@ -475,6 +540,7 @@ Once the terminal saves the same format, Perry's sessions folder holds every ter
 
 - [ ] **Step 1:** Start a session with `agency agent --reject std::bash`, send a message, and quit in the middle of an approval. Open it in the Mac app: the approval is asked again, bash is still rejected, and the conversation is there. Send a message. Run `agency agent --resume <id>`: the Perry turn is in the transcript.
 - [ ] **Step 2:** With the session open in both, send a message in the terminal, then one in the app. The app says the session moved.
+- [ ] **Step 2b:** In the terminal, ask for a background job (`sleep 600`). `/jobs` lists it. Ask for a second one and press Esc while the model works: the second job's finish line prints and `agency jobs` shows it stopped. `/jobs stop <id>` stops the first.
 - [ ] **Step 3:** Rewrite for what is true now: `docs/dev/agents/agent-brains.md`, `agent-sessions.md`, `session-core.md`; the user guide's pages on the agent; `perry/docs/idea.md` and `perry/CLAUDE.md`, which say the two cannot continue each other's sessions.
 - [ ] **Step 4:** Commit in each repo: `Docs: a session moves between the terminal and Perry`.
 
@@ -484,4 +550,5 @@ Once the terminal saves the same format, Perry's sessions folder holds every ter
 - **The first turn after a resume in a fresh process.** The terminal has never resumed in the middle of a turn. #1506 was found this way.
 - **Output order.** Today a notice prints when the code reaches it. After the switch, `trace.agency` prints from callbacks and the driver prints the reply. D4's hand check compares them.
 - **The size of a saved session.** A pause in the middle of a turn holds every frame of the turn, and it is written at every approval. Measure the files A1 writes before D2. If a long session's file is many megabytes, saving at every approval needs a second look.
+- **Jobs and a session's other copies.** A `fork` copies the checkpoint, so the fork and the original both hold the jobs started before it, and either can stop them. That is accepted. A job started in a dropped turn is the case to get right (Task D0).
 - **MCP tools held across a pause** in the middle of a turn. Not checked. D4's hand check includes one.

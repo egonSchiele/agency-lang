@@ -86,6 +86,30 @@ export async function readCarriedPolicy(args: {
   }
 }
 
+/** Removes session `id`'s policy file. A front-end calls it for a session
+ *  it started with policy flags and closed before its first turn: such a
+ *  session is never saved, so its policy file would belong to nothing.
+ *  No file is not a failure. */
+export async function removeCarriedPolicy(args: {
+  home: string;
+  id: string;
+}): Promise<Result<null>> {
+  const file = policyFile(args.id);
+  if (!file.success) {
+    return file;
+  }
+  const host = currentHost();
+  try {
+    const root = await host.files.root(args.home);
+    if ((await host.files.stat(root, file.value)) !== null) {
+      await host.files.remove(root, file.value);
+    }
+    return success(null);
+  } catch (error) {
+    return failure(`Could not remove session ${args.id}'s policy: ${messageOf(error)}`);
+  }
+}
+
 /** Carries session `from`'s policy to its fork `to`. A front-end calls it
  *  on the driver's `forked` event. Without it a session started with
  *  `--policy minimal` would run its fork under the saved policy. No file

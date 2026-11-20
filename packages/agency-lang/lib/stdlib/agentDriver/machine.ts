@@ -2,6 +2,7 @@
 // not build a transcript: it reports what happened, and each front-end
 // shows that its own way. See docs/dev/agents/session-driver.md.
 import type { Interrupt, InterruptResponse } from "../../runtime/interrupts.js";
+import { mergeHeldJobs, type HeldJob } from "../../runtime/jobs/heldJobs.js";
 import type { Policy } from "../../runtime/policy.js";
 import { approve } from "../../runtime/interruptResponse.js";
 import type { Result } from "../../types/result.js";
@@ -17,6 +18,7 @@ import {
 import {
   messageAnswer,
   pauseData,
+  type MessageAnswer,
   type Answer,
   type PauseData,
   type SettingsAnswer,
@@ -38,12 +40,28 @@ export type DroppedTexts = { cancelledTexts: string[]; failedTexts?: string[] };
  *
  *  `answering` is a settings change on its way into the run. It is not a
  *  turn: the run applies it and pauses again. Only a `compact` calls a
- *  model, for its summary. */
+ *  model, for its summary.
+ *
+ *  `turnJobs` is every background job the turn has started so far. The
+ *  pause the turn started from does not hold them, so a turn that is
+ *  dropped reports them (`turnJobsDropped`) for the front-end to stop. */
 export type DriverPhase =
   | { kind: "starting" }
   | ({ kind: "waitingForUser"; pause: Interrupt[] } & DroppedTexts)
-  | ({ kind: "working"; pause: Interrupt[]; text: string; leg: Leg } & DroppedTexts)
-  | ({ kind: "approving"; pause: Interrupt[]; text: string; queue: ApprovalQueue } & DroppedTexts)
+  | ({
+      kind: "working";
+      pause: Interrupt[];
+      text: string;
+      leg: Leg;
+      turnJobs: HeldJob[];
+    } & DroppedTexts)
+  | ({
+      kind: "approving";
+      pause: Interrupt[];
+      text: string;
+      queue: ApprovalQueue;
+      turnJobs: HeldJob[];
+    } & DroppedTexts)
   | ({ kind: "answering"; pause: Interrupt[]; answer: Answer; leg: Leg } & DroppedTexts)
   | { kind: "ended"; reason: string };
 
@@ -55,6 +73,11 @@ export type Happened =
   // change that comes back reports `answered` instead.
   | { type: "turnFinished" }
   | { type: "legFailed"; error: string }
+  // A turn was cancelled or failed after it started background jobs. The
+  // session goes back to a pause that does not hold them, so the
+  // front-end stops them (`stopDroppedJobs` in jobs.ts). Comes right after
+  // `turnCancelled` or `legFailed`.
+  | { type: "turnJobsDropped"; jobs: HeldJob[] }
   | { type: "startFailed"; error: string }
   // An approval answered without asking. `by` says what answered it.
   | { type: "settled"; interrupt: Interrupt; response: InterruptResponse; by: "rule" }
@@ -67,7 +90,9 @@ export type Happened =
   | { type: "carriedPolicy"; policy: Policy };
 
 export type DriverAction =
-  | { type: "submitted"; text: string }
+  // A message. `notes` and `target` are `MessageAnswer`'s; absent are none
+  // and the main agent.
+  | { type: "submitted"; text: string; notes?: string[]; target?: string }
   // A change to the chat's settings, as the answer the core takes for it.
   // Taken only while the run waits for a message.
   | { type: "answered"; answer: SettingsAnswer }
@@ -77,8 +102,14 @@ export type DriverAction =
   // approvals after it that a rule decides.
   | { type: "decided"; response: InterruptResponse; interruptId: string; settle: Settle }
   // A call into the run came back. `settle` answers the approvals of a
-  // new pause that a rule decides.
-  | { type: "legFinished"; result: Result<AgentStep>; settle: Settle }
+  // new pause that a rule decides. `startedJobs` is `LegOutcome`'s: the
+  // jobs the call started. Absent is none.
+  | {
+      type: "legFinished";
+      result: Result<AgentStep>;
+      settle: Settle;
+      startedJobs?: HeldJob[];
+    }
   // The person cancelled at an approval prompt. No leg is running, so
   // nothing is aborted: the turn is dropped, as an aborted one is.
   | { type: "approvalCancelled" }
@@ -98,7 +129,7 @@ type ApprovingPhase = Extract<DriverPhase, { kind: "approving" }>;
 type WaitingPhase = Extract<DriverPhase, { kind: "waitingForUser" }>;
 /** A turn in progress: running a leg, or paused at an approval. */
 type TurnPhase = WorkingPhase | ApprovingPhase;
-type Turn = Pick<TurnPhase, "pause" | "text" | "cancelledTexts" | "failedTexts">;
+type Turn = Pick<TurnPhase, "pause" | "text" | "cancelledTexts" | "failedTexts" | "turnJobs">;
 
 export const initialPhase: DriverPhase = { kind: "starting" };
 
@@ -120,15 +151,25 @@ function settledHappened(step: QueueStep): Happened[] {
   }));
 }
 
-function submit(phase: WaitingPhase, text: string): DriverStep {
+function submit(
+  phase: WaitingPhase,
+  action: Extract<DriverAction, { type: "submitted" }>,
+): DriverStep {
+  const { text } = action;
   const message = withCancelNote({ message: text, ...droppedOf(phase) });
+  const answer: MessageAnswer = {
+    ...messageAnswer(message),
+    notes: action.notes ?? [],
+    target: action.target ?? "",
+  };
   return {
     phase: {
       kind: "working",
       pause: phase.pause,
       text,
       ...droppedOf(phase),
-      leg: { interrupts: phase.pause, responses: [approve(messageAnswer(message))] },
+      leg: { interrupts: phase.pause, responses: [approve(answer)] },
+      turnJobs: [],
     },
     happened: [{ type: "submitted", text }],
   };
@@ -194,7 +235,12 @@ function toApprovalOrWork(turn: Turn, step: QueueStep): DriverStep {
 }
 
 function turnOf(phase: TurnPhase): Turn {
-  return { pause: phase.pause, text: phase.text, ...droppedOf(phase) };
+  return { pause: phase.pause, text: phase.text, ...droppedOf(phase), turnJobs: phase.turnJobs };
+}
+
+/** `turnJobsDropped` for a turn that is dropped, when it started any. */
+function droppedJobs(turnJobs: HeldJob[]): Happened[] {
+  return turnJobs.length === 0 ? [] : [{ type: "turnJobsDropped", jobs: turnJobs }];
 }
 
 /** Drops the turn: the run goes back to the pause it started from, and the
@@ -203,7 +249,7 @@ function cancelTurn(phase: TurnPhase): DriverStep {
   const cancelledTexts = [...phase.cancelledTexts, phase.text];
   return {
     phase: { kind: "waitingForUser", pause: phase.pause, ...droppedOf(phase), cancelledTexts },
-    happened: [{ type: "turnCancelled" }],
+    happened: [{ type: "turnCancelled" }, ...droppedJobs(phase.turnJobs)],
   };
 }
 
@@ -231,8 +277,10 @@ function legFinished(args: {
   phase: WorkingPhase;
   result: Result<AgentStep>;
   settle: Settle;
+  startedJobs: HeldJob[];
 }): DriverStep {
-  const { phase, result, settle } = args;
+  const { result, settle } = args;
+  const phase = { ...args.phase, turnJobs: mergeHeldJobs(args.phase.turnJobs, args.startedJobs) };
   if (result.success) {
     return legSucceeded({ phase, step: result.value, settle });
   }
@@ -242,7 +290,10 @@ function legFinished(args: {
     cancelledTexts: phase.cancelledTexts,
     failedTexts: [...(phase.failedTexts ?? []), phase.text],
   };
-  return { phase: back, happened: [{ type: "legFailed", error: result.error }] };
+  return {
+    phase: back,
+    happened: [{ type: "legFailed", error: result.error }, ...droppedJobs(phase.turnJobs)],
+  };
 }
 
 function startFinished(result: Result<AgentStep>): DriverStep {
@@ -291,7 +342,12 @@ function finished(
     case "answering":
       return answerFinished(phase, action.result);
     case "working":
-      return legFinished({ phase, result: action.result, settle: action.settle });
+      return legFinished({
+        phase,
+        result: action.result,
+        settle: action.settle,
+        startedJobs: action.startedJobs ?? [],
+      });
     default:
       return unchanged(phase);
   }
@@ -303,7 +359,7 @@ function finished(
 export function reduceDriver(phase: DriverPhase, action: DriverAction): DriverStep {
   switch (action.type) {
     case "submitted":
-      return phase.kind === "waitingForUser" ? submit(phase, action.text) : unchanged(phase);
+      return phase.kind === "waitingForUser" ? submit(phase, action) : unchanged(phase);
     case "answered":
       return phase.kind === "waitingForUser" ? answerWith(phase, action.answer) : unchanged(phase);
     case "decided":

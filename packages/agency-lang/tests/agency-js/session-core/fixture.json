@@ -1,4 +1,5 @@
 {
+  "lastSettingsAfterStart": false,
   "firstPauseEffect": "agent::sessionInput",
   "firstPauseBrain": "simple",
   "firstPauseModules": [
@@ -42,6 +43,7 @@
   },
   "effortBeforeAnyChoice": "",
   "effortAfterLow": "low",
+  "flagSessionNotRemembered": true,
   "effortSentAfterLow": "low",
   "effortAfterAModelSwitch": "low",
   "effortSentAfterDefault": "none",
@@ -100,6 +102,22 @@
     "maxCost": 3,
     "maxTime": 1000
   },
+  "lastSettingsAfterEffort": {
+    "preset": "",
+    "choices": {
+      "pin": "",
+      "slots": {},
+      "effort": "low"
+    }
+  },
+  "noPromptForRemembering": "agent::sessionInput",
+  "presetRemembered": {
+    "preset": "big",
+    "choices": {
+      "pin": "",
+      "slots": {}
+    }
+  },
   "presetSwitch": {
     "preset": "big",
     "mainModel": "claude-opus-4-8",
@@ -111,6 +129,13 @@
     "presetKept": "big",
     "mainModelKept": "claude-opus-4-8"
   },
+  "badAnswerLeavesIt": true,
+  "noOptionsKept": [
+    "pin",
+    "slots",
+    "effort"
+  ],
+  "unsavedNotRemembered": true,
   "fixedProviderWithNoPreset": "",
   "localProviderInAModelSpec": {
     "level": "error",

@@ -158,9 +158,23 @@ function startData(overrides = {}) {
   };
 }
 
+const noModelFlags = { pin: "", slots: {}, provider: "", local: null, effort: null };
+
+// The settings a new session starts from, which a model, effort or preset
+// answer writes. Each session starts without them unless a check keeps
+// them, so one section's choices never decide another's start.
+const lastSettingsFile = path.join(process.env.AGENCY_AGENT_HOME, "last-settings.json");
+const lastSettingsText = () =>
+  existsSync(lastSettingsFile) ? readFileSync(lastSettingsFile, "utf8") : null;
+const lastSettings = () => {
+  const text = lastSettingsText();
+  return text === null ? null : JSON.parse(text);
+};
+
 /** One session, as a front-end holds it: the pause it waits at, and
  *  everything it emitted. */
-async function startSession(overrides = {}, policy = PIN) {
+async function startSession(overrides = {}, policy = PIN, { keepLastSettings = false } = {}) {
+  if (!keepLastSettings) rmSync(lastSettingsFile, { force: true });
   const emitted = [];
   const callbacks = { onEmit: (event) => void emitted.push(event) };
   const first = await main(startData(overrides), { callbacks, policy });
@@ -194,6 +208,8 @@ const result = {};
 
 // A turn.
 const chat = await startSession();
+// Starting a session writes no last settings.
+result.lastSettingsAfterStart = existsSync(lastSettingsFile);
 result.firstPauseEffect = chat.pause[0].effect;
 result.firstPauseBrain = pauseData(chat).brain;
 result.firstPauseModules = Object.keys(chat.pause[0].checkpoint?.moduleFingerprints ?? {});
@@ -270,6 +286,9 @@ result.overBudgetTurn = {
 result.effortBeforeAnyChoice = pauseData(chat).effort;
 await chat.answer({ kind: "effort", effort: "low" });
 result.effortAfterLow = pauseData(chat).effort;
+// This session started with a model flag, so it is a one-off: its
+// settings are not remembered for new chats.
+result.flagSessionNotRemembered = !existsSync(lastSettingsFile);
 await chat.answer(message("with low effort"));
 result.effortSentAfterLow = effortSent["with low effort"];
 // It outlasts a model switch, as --effort does.
@@ -413,11 +432,15 @@ writeFileSync(
     },
   }),
 );
-const noModelFlags = { pin: "", slots: {}, provider: "", local: null, effort: null };
 _setLocalModelsAllowed(false);
 const preset = await startSession({ models: noModelFlags });
 await preset.answer({ kind: "effort", effort: "low" });
+// A saved session started with no flags remembers each change for new
+// chats, and no one is asked: the pause after it is the next one.
+result.lastSettingsAfterEffort = lastSettings();
+result.noPromptForRemembering = preset.pause[0].effect;
 await preset.answer({ kind: "preset", name: "big" });
+result.presetRemembered = lastSettings();
 result.presetSwitch = {
   preset: pauseData(preset).preset,
   mainModel: pauseData(preset).models.main?.model,
@@ -425,6 +448,7 @@ result.presetSwitch = {
   effort: pauseData(preset).effort,
 };
 // A local preset, where the process cannot host a local model.
+const lastBeforeRefusal = lastSettingsText();
 await preset.answer({ kind: "preset", name: "mine" });
 const localNotice = eventsOf(preset, "session.notice").pop();
 result.localPresetWhereNoneCanRun = {
@@ -433,6 +457,23 @@ result.localPresetWhereNoneCanRun = {
   presetKept: pauseData(preset).preset,
   mainModelKept: pauseData(preset).models.main?.model,
 };
+// A refused answer changes nothing, the last settings included.
+result.badAnswerLeavesIt = lastBeforeRefusal !== null && lastSettingsText() === lastBeforeRefusal;
+
+// The session's options are never kept for new chats: they can name a
+// server, and the coordinator can set them.
+const optioned = await startSession({ models: noModelFlags });
+await optioned.answer({ kind: "options", options: { temperature: 0.3 } });
+await optioned.answer({ kind: "effort", effort: "high" });
+result.noOptionsKept = Object.keys(lastSettings()?.choices ?? { missing: true });
+
+// A session that is not saved remembers nothing.
+const unsavedChoice = await startSession({
+  models: noModelFlags,
+  session: { ...startData().session, record: null },
+});
+await unsavedChoice.answer({ kind: "effort", effort: "low" });
+result.unsavedNotRemembered = !existsSync(lastSettingsFile);
 
 // A model named with the provider a person sees. The agent runs every
 // OpenAI model through its `openai-responses` client, and reports that.

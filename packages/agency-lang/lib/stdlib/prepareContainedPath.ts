@@ -81,3 +81,27 @@ export async function resolveRedirectTarget(
   const resolved = await currentHost().files.realDir(absolute);
   return { dir: path.dirname(resolved), filename: path.basename(resolved) };
 }
+
+/**
+ * Where a path that does not exist yet would be, resolved the way a
+ * redirect to it is, so a read of a file and a write of the same file name
+ * one place. Throws unless nothing is there and the parent is a folder
+ * that exists: the walk keeps every step after the first missing one as
+ * written, so a missing parent would otherwise resolve too.
+ */
+export async function missingTarget(
+  target: string,
+  cwd: string,
+  tildeMode: TildeMode,
+): Promise<ContainedPath> {
+  const where = await resolveRedirectTarget(target, cwd, tildeMode);
+  const host = currentHost();
+  const parent = await host.files.root(where.dir);
+  if ((await host.files.stat(parent, "."))?.kind !== "dir") {
+    throw new Error(`No folder at ${where.dir}.`);
+  }
+  if ((await host.files.stat(parent, where.filename)) !== null) {
+    throw new Error(`${target} exists.`);
+  }
+  return where;
+}

@@ -16,9 +16,9 @@
     },
     {
       "nodeName": "programsWithNoRuleAskTheirOwnQuestion",
-      "description": "sed has no rule, so a read of saved output with it asks std::exec and nothing more, and prints the right lines. A line that only names a saved output still asks std::bash, because no read of saved output was dropped.",
+      "description": "awk has no rule, so a read of saved output with it asks std::exec and nothing more, and prints the right lines. A line that only names a saved output still asks a question, std::bash::readonly, because no read of saved output was dropped.",
       "input": "",
-      "expectedOutput": "[\"line2\\nline3\\n\",true,[\"std::exec\",\"std::bash\"]]",
+      "expectedOutput": "[\"line2\\nline3\\n\",true,[\"std::exec\",\"std::bash::readonly\"]]",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
@@ -37,7 +37,7 @@
     },
     {
       "nodeName": "aLineThatWritesKeepsItsReadQuestion",
-      "description": "In `ln -sf <file> <saved output>; cat <saved output>`, the line does more than read, so the cat keeps its std::read question. With std::read rejected the line fails, so an approved link cannot turn into an unasked read.",
+      "description": "In `touch <file>; cat <saved output>`, the line does more than read, so the cat keeps its std::read question. With std::read rejected the line fails, so an approved write cannot turn into an unasked read.",
       "input": "",
       "expectedOutput": "[true,true]",
       "evaluationCriteria": [{ "type": "exact" }]
@@ -65,9 +65,9 @@
     },
     {
       "nodeName": "lookalikesAndRefusals",
-      "description": "A path that continues past a saved-output name is not a saved output. A look-alike folder reads the store in process and fails before a real program runs. A redirect into the folder, a delete of a saved output, and a listing of the folder are refused.",
+      "description": "A path that continues past a saved-output name is not a saved output: the ordinary rules decide, and a missing file whose folder exists asks std::read for it. A look-alike folder reads the store in process and fails before a real program runs. A redirect into the folder, a delete of a saved output, and a listing of the folder are refused.",
       "input": "",
-      "expectedOutput": "[[\"std::bash\"],\"line1\\n\",true,\"refuse\",\"refuse\",\"refuse\",\"refuse\"]",
+      "expectedOutput": "[[\"std::read\"],\"line1\\n\",true,\"refuse\",\"refuse\",\"refuse\",\"refuse\"]",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {

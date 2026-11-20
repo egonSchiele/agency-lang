@@ -8,6 +8,7 @@ import { expandPath } from "./expandPath.js";
 
 export { prepareContainedPath as _prepareContainedPath } from "./prepareContainedPath.js";
 export { resolveRedirectTarget as _resolveRedirectTarget } from "./prepareContainedPath.js";
+export { missingTarget as _missingTarget } from "./prepareContainedPath.js";
 
 /** The real spelling of a directory, for an interrupt payload. */
 export async function _realDir(dir: string): Promise<string> {

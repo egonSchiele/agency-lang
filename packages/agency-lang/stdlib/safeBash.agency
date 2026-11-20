@@ -29,6 +29,7 @@ import {
   execEffect,
   ExecPayload,
   removeEffect,
+  mkdirEffect,
   gitStatusEffect,
   gitLogEffect,
   gitDiffEffect,
@@ -70,7 +71,7 @@ import {
 import { _prepareSpillFiles, _grepSaved, _readSpill, _spillPathParts, _savedPathsInText, _inSpillFolder } from "agency-lang/stdlib-lib/spill.js"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
-import { _removeRefusal, _removeTargetIn, _unparsedRemoveRefusal } from "agency-lang/stdlib-lib/safeBashRemove.js"
+import { _removeRefusal, _realPathIn, _unparsedRemoveRefusal } from "agency-lang/stdlib-lib/safeBashRemove.js"
 import { _gitHardeningFlags } from "agency-lang/stdlib-lib/git.js"
 import { _ghParseTarget, _ghParseRepoFlag, _ghSearchQuery, _ghParseApiPath, _ghApiPath } from "agency-lang/stdlib-lib/safeBashGh.js"
 import { _ghResolveRepo } from "agency-lang/stdlib-lib/github/repo.js"
@@ -78,7 +79,7 @@ import { _ghHasScopeQualifier } from "agency-lang/stdlib-lib/github/issues.js"
 import { GITHUB_MAX_PER_PAGE } from "agency-lang/stdlib-lib/github/args.js"
 import { _addLine, _write, _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
-import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
+import { _resolveRedirectTarget, _missingTarget } from "agency-lang/stdlib-lib/fs.js"
 import { _searchTargetIn, _bash, _grep, _skipDirNames } from "agency-lang/stdlib-lib/shell.js"
 import { _launchJob, _jobStartRefusal } from "agency-lang/stdlib-lib/jobs.js"
 import { basename as lastSegment, dirname as parentOf } from "std::path"
@@ -343,8 +344,9 @@ def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   // prepareRedirectWrite stays strict on purpose: the shell-free write
   // path computes the bytes it writes, and a dup changes which stream
   // echo's output goes to.
-  // A redirect to /dev/null writes no file either.
-  const fileRedirects = [redirect for redirect in redirects if redirect.op != ">&" && !discardsOutput(redirect)]
+  // A redirect to /dev/null writes no file either. Input from /dev/null is
+  // an empty stdin, which is what safeBash gives every line anyway.
+  const fileRedirects = [redirect for redirect in redirects if redirect.op != ">&" && !discardsOutput(redirect) && !emptyInput(redirect)]
   const inputs = [redirect for redirect in fileRedirects if redirect.op == "<"]
   const outputs = [redirect for redirect in fileRedirects if redirect.op != "<"]
   if (inputs.length > 1) {
@@ -385,14 +387,23 @@ def redirectsStdoutOrStderr(redirect: Redirect): boolean {
 
 def discardsOutput(redirect: Redirect): boolean {
   """
-  Check for an output redirect of standard output or standard error to /dev/null.
+  Check for an output redirect of standard output or standard error, or of both with `&>`, to /dev/null.
   """
-  if (redirect.op != ">" && redirect.op != ">>") {
+  if (redirect.op != ">" && redirect.op != ">>" && redirect.op != "&>") {
     return false
   }
   if (!redirectsStdoutOrStderr(redirect)) {
     return false
   }
+  return targetIsNull(redirect)
+}
+
+/* `< /dev/null`, with no descriptor: an empty stdin. */
+def emptyInput(redirect: Redirect): boolean {
+  return redirect.op == "<" && redirect.fd == null && targetIsNull(redirect)
+}
+
+def targetIsNull(redirect: Redirect): boolean {
   return match(literalTarget(redirect.target)) {
     success(text) => text == "/dev/null"
     failure(_) => false
@@ -411,7 +422,7 @@ def inputRedirectRead(redirect: Redirect, cwd: string): Result<ReadPayload> {
   if (isFailure(target)) {
     return target
   }
-  const path = resolveReadPath(target.value, redirect.target, cwd, "an input redirect")
+  const path = resolveReadPath(target.value, redirect.target, strictLine(freshLine(cwd)), "an input redirect")
   if (isFailure(path)) {
     return path
   }
@@ -460,7 +471,7 @@ export def effectsFor(
   @param readsStdin - Whether a pipe supplies this command's input.
   @param origin - The repository a `gh` command acts on when it names none. Left null, such a command's std::github effects name no repository.
   """
-  const rule = simpleCommandRule(command, cwd, origin, readsStdin)?
+  const rule = simpleCommandRule(command, freshLine(cwd), origin, readsStdin)?
   return success(rule.effects)
 }
 
@@ -468,10 +479,11 @@ export def effectsFor(
 // the verb apply to every verb, git included, which is why `gitEffects`
 // has no other caller: a second path would have to repeat them.
 @capabilities(fileRead)
-def simpleCommandRule(command: SimpleCommand, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<SimpleRule> {
+def simpleCommandRule(command: SimpleCommand, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<SimpleRule> {
   """
   Classify one simple command: the approvals it needs and the command to run for it.
   """
+  const cwd = line.cwd
   const name = command.command
   if (name == null) {
     return failure("an assignment with no command")
@@ -482,18 +494,14 @@ def simpleCommandRule(command: SimpleCommand, cwd: string, origin: GhRepo | null
   if (name.tag != "literal") {
     return failure("the command word is not a literal")
   }
-  // Leading assignments can change the repository or other behavior beyond
-  // what a narrow payload describes, as with GIT_DIR=/elsewhere git status.
-  if (command.assignments.length > 0) {
-    return failure("a leading assignment changes what the command does")
-  }
+  quietAssignments(command.assignments)?
   const redirect = redirectEffect(command.redirects, cwd)?
   if (name.text == "git") {
     const git = gitEffects(command, cwd)?
-    return success({ effects: [...git.effects, ...redirect], command: git.command })
+    return success({ effects: [...git.effects, ...redirect], command: withAssignments(git.command, command.assignments) })
   }
   if (name.text == "grep") {
-    return grepRule(command, cwd, readsStdin, redirect)
+    return grepRule(command, line, readsStdin, redirect)
   }
   // A gh read raises std::github. Every other gh line falls through to
   // verbEffects and asks std::exec. The glob and --jq checks cover both.
@@ -506,11 +514,72 @@ def simpleCommandRule(command: SimpleCommand, cwd: string, origin: GhRepo | null
     }
     if (ghOwns(command)) {
       const gh = ghEffects(command, cwd, origin)?
-      return success({ effects: [...gh.effects, ...redirect], command: gh.command })
+      return success({ effects: [...gh.effects, ...redirect], command: withAssignments(gh.command, command.assignments) })
     }
   }
-  const effects = verbEffects(name.text, command, cwd, readsStdin, redirect)?
+  const effects = verbEffects(name.text, command, line, readsStdin, redirect)?
   return success({ effects: effects, command: command })
+}
+
+/** The variables a command may be given in front of it. Each changes how
+ output looks, not what the program reads, writes, or runs. Every other
+ name can make an approved program run other code (`PATH`,
+ `NODE_OPTIONS`, `GIT_SSH_COMMAND`), and no payload has a field for the
+ environment. `NODE_ENV` changes which config a program loads, and `CI`
+ changes what programs do (`pnpm install` uses the frozen lockfile), so
+ neither is here. */
+static const QUIET_ASSIGNMENTS: string[] = ["TERM", "NO_COLOR", "FORCE_COLOR", "CLICOLOR", "CLICOLOR_FORCE", "COLUMNS", "LINES", "LC_ALL", "LANG", "TZ"]
+
+/** The characters a quiet assignment's value may hold. A `/` is left out:
+ the C library reads `TZ=/some/path`, and a locale name with a slash, as
+ a file to open. */
+static const QUIET_VALUE_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-:"
+
+def quietAssignments(assignments: Assignment[]): Result {
+  """
+  Refuse a leading assignment that can change what a command does.
+  """
+  for (assignment in assignments) {
+    if (!QUIET_ASSIGNMENTS.includes(assignment.name)) {
+      return failure("a leading assignment of `${assignment.name}` changes what the command does")
+    }
+    const value = assignmentText(assignment)
+    if (value is failure(why)) {
+      return failure("the value of `${assignment.name}` is not literal")
+    }
+    const others = [char for char in value.value.split("") if !QUIET_VALUE_CHARS.includes(char)]
+    if (others.length > 0) {
+      return failure("the value of `${assignment.name}` holds a character it does not need")
+    }
+  }
+  return success(null)
+}
+
+def assignmentText(assignment: Assignment): Result<string> {
+  const value = assignment.value
+  if (value == null) {
+    return success("")
+  }
+  return literalWordText(value)
+}
+
+// A command safeBash writes, for git, gh, and grep, starts with no
+// assignments of the model's. They are put back in front, before any
+// safeBash adds (`GH_HOST`), on each simple command the rule wrote.
+def withAssignments(command: Command, assignments: Assignment[]): Command {
+  if (assignments.length == 0) {
+    return command
+  }
+  if (command is { tag: "simpleCommand" }) {
+    return { ...command, assignments: [...assignments, ...command.assignments] }
+  }
+  if (command is { tag: "parens" }) {
+    return { tag: "parens", command: withAssignments(command.command, assignments) }
+  }
+  if (command is { tag: "and" }) {
+    return { tag: "and", left: withAssignments(command.left, assignments), right: withAssignments(command.right, assignments) }
+  }
+  return command
 }
 
 // `echo` contributes nothing on its own, whatever its arguments: bash
@@ -518,38 +587,201 @@ def simpleCommandRule(command: SimpleCommand, cwd: string, origin: GhRepo | null
 // are both fine on this path. The flag and literal-argument restrictions
 // belong to the shell-free path, which computes the output itself.
 @capabilities(fileRead)
-def verbEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
+def verbEffects(verb: string, command: SimpleCommand, line: LineState, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   """
   Classify a command that bash runs as written, by its verb.
   """
   return match(verb) {
     "echo" => success(redirects)
     "tr" => trEffects(command, readsStdin, redirects)
-    "find" => findEffects(command, cwd, redirects)
-    _ => otherVerbEffects(verb, command, cwd, readsStdin, redirects)
+    "tee" => teeEffects(command, line.cwd, readsStdin, redirects)
+    "sed" => sedEffects(command, line, redirects)
+    "find" => findEffects(command, line.cwd, redirects)
+    _ => otherVerbEffects(verb, command, line, readsStdin, redirects)
   }
 }
 
 @capabilities(fileRead)
-def otherVerbEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
+def otherVerbEffects(verb: string, command: SimpleCommand, line: LineState, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   """
   Classify a file read, directory listing, or external program invocation.
   """
+  const cwd = line.cwd
+  const quiet = QUIET_VERBS[verb]
+  if (quiet != null) {
+    return quietEffects(verb, quiet, command, redirects)
+  }
   const listing = LIST_VERBS[verb]
   if (listing != null) {
-    return listEffects(verb, command, cwd, listing, redirects)
+    return listEffects(verb, command, line, listing, redirects)
   }
   const removal = REMOVE_VERBS[verb]
   if (removal != null) {
     return removeEffects(verb, command, cwd, removal, redirects)
   }
+  const making = MAKE_VERBS[verb]
+  if (making != null) {
+    return makeEffects(verb, command, cwd, making, redirects)
+  }
   const spec = READ_VERBS[verb]
   if (spec == null) {
     return execEffects(verb, command, cwd, readsStdin, redirects)
   }
-  return match(readFileVerb(verb, command, cwd, spec)) {
+  return match(readFileVerb(verb, command, line, spec)) {
     success(found) => fileReadEffects(verb, found, readsStdin, redirects)
     failure(why) => failure(why)
+  }
+}
+
+/** What a quiet verb's words may be. */
+type QuietWords = "none" | "any" | "literal" | "printf" | "digits" | "dateFormat" | "names"
+
+/** A command that reveals nothing and changes nothing: its flags, the
+ flags it must have, and what its words may be. */
+type QuietVerb = {
+  flags: FlagSpec;
+  required: string[];
+  words: QuietWords
+}
+
+static const NO_FLAGS: FlagSpec = { plain: [], valued: [], optionsFirst: true }
+
+/** Commands that reveal nothing and change nothing, so inside a line
+ they add no question, as `echo` does. Some are bash builtins and some
+ are programs; the table is checked before either rule. A spelling the
+ table does not accept has no rule: `date -s` sets the clock, `hostname
+ x` renames the machine, and `command ls` runs a program. `printf -v
+ NAME` sets a shell variable, `PATH` included, so its first word may not
+ start with `-`, whether it is a flag or a quoted word, which bash reads
+ as one once the quotes are gone. `which`, `type`, and `command -v` may
+ not look up `agency` (see `NO_EXEC_PROGRAMS`). `env` and `printenv` are
+ not here: they print the environment, which `std::env` guards. */
+static const QUIET_VERBS: Record<string, QuietVerb> = {
+  pwd: { flags: { plain: ["P", "L"], valued: [], optionsFirst: true }, required: [], words: "none" },
+  "true": { flags: NO_FLAGS, required: [], words: "any" },
+  "false": { flags: NO_FLAGS, required: [], words: "any" },
+  ":": { flags: NO_FLAGS, required: [], words: "any" },
+  printf: { flags: NO_FLAGS, required: [], words: "printf" },
+  basename: { flags: NO_FLAGS, required: [], words: "literal" },
+  dirname: { flags: NO_FLAGS, required: [], words: "literal" },
+  sleep: { flags: NO_FLAGS, required: [], words: "digits" },
+  date: { flags: { plain: ["u"], valued: [], optionsFirst: true }, required: [], words: "dateFormat" },
+  uname: { flags: { plain: ["a", "s", "r", "m"], valued: [], optionsFirst: true }, required: [], words: "none" },
+  whoami: { flags: NO_FLAGS, required: [], words: "none" },
+  hostname: { flags: NO_FLAGS, required: [], words: "none" },
+  which: { flags: { plain: ["a"], valued: [], optionsFirst: true }, required: [], words: "names" },
+  type: { flags: NO_FLAGS, required: [], words: "names" },
+  command: { flags: { plain: ["v"], valued: [], optionsFirst: true }, required: ["v"], words: "names" }
+}
+
+def quietEffects(verb: string, spec: QuietVerb, command: SimpleCommand, redirects: Effect[]): Result<Effect[]> {
+  """
+  Accept a command that only prints, when its flags and words fit its row.
+  """
+  const split = splitFlags(verb, command, spec.flags)?
+  for (flag in spec.required) {
+    if (!split.plain.includes(flag)) {
+      return failure("`${verb}` has a rule only with `-${flag}`")
+    }
+  }
+  quietWordsFit(verb, spec.words, split.positionals)?
+  return success(redirects)
+}
+
+def quietWordsFit(verb: string, kind: QuietWords, words: Word[]): Result {
+  const texts = [literalWordText(word) for word in words]
+  const known = [text for text in texts if !isFailure(text)]
+  const allLiteral = known.length == words.length
+  const oneNumber = allLiteral && words.length == 1 && isDigits(literalTextOf(words[0]))
+  return match(kind) {
+    "any" => success(null)
+    "none" => fitsWhen(words.length == 0, "`${verb}` takes no words here")
+    "literal" => fitsWhen(allLiteral && words.length > 0, "a `${verb}` word is not literal")
+    "printf" => printfWordsFit(words)
+    "digits" => fitsWhen(oneNumber, "`${verb}` takes one number")
+    "dateFormat" => dateWordsFit(words)
+    "names" => lookupNamesFit(verb, words)
+  }
+}
+
+def fitsWhen(fits: boolean, why: string): Result {
+  if (fits) {
+    return success(null)
+  }
+  return failure(why)
+}
+
+/* A word's text when it is literal, and "" otherwise. */
+def literalTextOf(word: Word): string {
+  return match(literalWordText(word)) {
+    success(text) => text
+    failure(_) => ""
+  }
+}
+
+// The first word is the format. It must be literal and must not start
+// with `-`: `printf -v PATH /tmp/evil` sets `PATH` for the rest of the
+// line. Every other word is literal or `$?`, so printf cannot print a
+// variable that no `std::env` question was asked about.
+def printfWordsFit(words: Word[]): Result {
+  if (words.length == 0) {
+    return failure("`printf` with no format")
+  }
+  const format = literalWordText(words[0])
+  if (format is failure(why)) {
+    return failure("the `printf` format is not literal")
+  }
+  if (format.value.startsWith("-")) {
+    return failure("a `printf` format that starts with `-` is an option")
+  }
+  for (word in words.slice(1)) {
+    if (!knownOrExitStatus(word)) {
+      return failure("a `printf` argument is not literal")
+    }
+  }
+  return success(null)
+}
+
+// `date +FORMAT` prints the time. Any other word sets the clock on BSD.
+def dateWordsFit(words: Word[]): Result {
+  if (words.length == 0) {
+    return success(null)
+  }
+  if (words.length == 1 && literalTextOf(words[0]).startsWith("+")) {
+    return success(null)
+  }
+  return failure("`date` takes only a `+FORMAT` word here")
+}
+
+// The names a lookup is for. A lookup of `agency`, by name or by path,
+// has no rule, so the model does not go looking for the binary.
+def lookupNamesFit(verb: string, words: Word[]): Result {
+  if (words.length == 0) {
+    return failure("`${verb}` with no name")
+  }
+  for (word in words) {
+    const text = literalWordText(word)
+    if (text is failure(why)) {
+      return failure("a `${verb}` name is not literal")
+    }
+    if (lastSegment(text.value) == "agency") {
+      return failure("a lookup of `agency` has no rule")
+    }
+  }
+  return success(null)
+}
+
+/* A word bash passes on as written (`isLiteralWord`), or one that holds
+ nothing but such text and `$?`, which is a number. */
+def knownOrExitStatus(word: Word): boolean {
+  if (isLiteralWord(word)) {
+    return true
+  }
+  return match(word) {
+    { tag: "variable", name } => name == "?"
+    { tag: "doubleQuoted", parts } => [part for part in parts if !knownOrExitStatus(part)].length == 0
+    { tag: "interpolatedVariable", parts } => [part for part in parts if !knownOrExitStatus(part)].length == 0
+    _ => false
   }
 }
 
@@ -575,8 +807,10 @@ static const NO_EXEC_PROGRAMS: string[] = [
   // Programs that exist to run another program. A payload for one would
   // name the wrapper, while what runs is in its arguments, so a rule
   // `{ command: "sh" }` would approve anything.
+  // `timeout N cmd` and `gtimeout N cmd` are read through instead (see
+  // `unwrapTimeout`); any other spelling of them lands here.
   "sh", "bash", "zsh", "dash", "fish", "xargs", "env", "sudo", "doas",
-  "nohup", "time", "timeout", "watch", "nice", "script",
+  "nohup", "time", "timeout", "gtimeout", "watch", "nice", "script",
   // Package runners. `npx -y foo` has subcommand `-y`, so a saved
   // `{ npx, -y }` would cover every package. (`pnpm dlx` and `npm exec`
   // are keyed on a subcommand that names the behaviour, so they stay.)
@@ -588,7 +822,15 @@ static const NO_EXEC_PROGRAMS: string[] = [
   // A lone `which agency` is refused by tryAgencyPlan, so that the model
   // does not go looking for the binary. A chain must not turn the same
   // lookup into a question a saved rule answers.
-  "which", "whereis"
+  "which", "whereis",
+  // Programs that do one narrow thing to files. std::exec pins only the
+  // first argument, so "always approve" for `mv -f a b` would cover every
+  // forced move, and one for `ln -sf` would let a later command in a line
+  // read a file swapped for a link under an approval that names neither.
+  // A new program that can replace a file goes here before it gets any
+  // rule. `sed -n 'w f'` writes a file and GNU `sed -n '1e cmd'` runs one,
+  // so a sed that is not a plain range read (see `sedEffects`) has no rule.
+  "cp", "mv", "ln", "sed"
 ]
 
 // A program no arm or table owns asks std::exec, the question the exec
@@ -1078,7 +1320,7 @@ def pipedProgram(verb: string, readsStdin: boolean, command: SimpleCommand): Res
   if (readsStdin) {
     return failure("`${verb}` reads a pipe, and std::exec cannot say what it reads")
   }
-  const inputs = [redirect for redirect in command.redirects if redirect.op == "<"]
+  const inputs = [redirect for redirect in command.redirects if redirect.op == "<" && !emptyInput(redirect)]
   if (inputs.length > 0) {
     return failure("`${verb}` reads an input redirect, and std::exec cannot say what it reads")
   }
@@ -1086,10 +1328,11 @@ def pipedProgram(verb: string, readsStdin: boolean, command: SimpleCommand): Res
 }
 
 @capabilities(fileRead)
-def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRead> {
+def readGrep(command: SimpleCommand, line: LineState, spec: FlagSpec): Result<GrepRead> {
   """
   Validate a grep command and resolve the pattern and the paths it searches.
   """
+  const cwd = line.cwd
   const split = splitFlags("grep", command, spec)
   if (isFailure(split)) {
     return split
@@ -1108,9 +1351,12 @@ def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRe
   if (paths.length == 0) {
     return searchHere(args, words.value.pattern, cwd)
   }
+  // A grep -r searches a folder, which must be real. Without -r it reads
+  // files, and a missing one resolves like any other read's.
+  const lookup: LineState = if (args.plain.includes("r")) then strictLine(line) else line
   let calls: GrepCall[] = []
   for (pathWord in paths) {
-    const call = grepCallFor(args, words.value.pattern, pathWord, cwd)
+    const call = grepCallFor(args, words.value.pattern, pathWord, lookup)
     if (isFailure(call)) {
       return call
     }
@@ -1120,7 +1366,7 @@ def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRe
 }
 
 @capabilities(fileRead)
-def grepCallFor(args: SplitArgs, pattern: string, pathWord: Word, cwd: string): Result<GrepCall> {
+def grepCallFor(args: SplitArgs, pattern: string, pathWord: Word, line: LineState): Result<GrepCall> {
   const text = literalWordText(pathWord)
   if (text is failure(why)) {
     return failure("the grep path is not literal")
@@ -1135,9 +1381,19 @@ def grepCallFor(args: SplitArgs, pattern: string, pathWord: Word, cwd: string): 
       word: pathWord
     })
   }
-  const target = resolveTarget(text.value, pathWord, cwd)
+  const target = resolveTarget(text.value, pathWord, line.cwd)
   if (isFailure(target)) {
-    return target
+    const missing = missingPath(text.value, pathWord, line)
+    if (missing == null) {
+      return target
+    }
+    return success({
+      split: args,
+      pattern: pattern,
+      target: { dir: missing.dir, file: missing.filename, argument: text.value },
+      saved: null,
+      word: pathWord
+    })
   }
   return success({
     split: args,
@@ -1239,11 +1495,11 @@ def grepPayload(call: GrepCall, pattern: string, flags: string, maxResults: numb
 // A grep through bash. One that reads a pipe runs as written. One that
 // searches paths runs the command `grepCommand` writes.
 @capabilities(fileRead)
-def grepRule(command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<SimpleRule> {
+def grepRule(command: SimpleCommand, line: LineState, readsStdin: boolean, redirects: Effect[]): Result<SimpleRule> {
   """
   Classify a grep that runs through bash: the approvals it needs and the command to run.
   """
-  const found = readGrep(command, cwd, GREP_FLAGS)?
+  const found = readGrep(command, line, GREP_FLAGS)?
   return match(found) {
     { kind: "stdin" } => match(stdinStage("grep", readsStdin, redirects)) {
       success(effects) => success({ effects: effects, command: command })
@@ -1283,7 +1539,7 @@ def grepSearchRule(calls: GrepCall[], command: SimpleCommand, redirects: Effect[
   const paths = [grepPathWord(call) for call in calls]
   return success({
     effects: [...effects, ...redirects],
-    command: grepCommand(calls[0].split, calls[0].pattern, paths, excludes, command.redirects)
+    command: withAssignments(grepCommand(calls[0].split, calls[0].pattern, paths, excludes, command.redirects), command.assignments)
   })
 }
 
@@ -1367,7 +1623,7 @@ def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
   if (command.assignments.length > 0 || command.redirects.length > 0) {
     return failure("not a lone grep")
   }
-  return match(readGrep(command, cwd, SHELL_FREE_GREP_FLAGS)) {
+  return match(readGrep(command, strictLine(freshLine(cwd)), SHELL_FREE_GREP_FLAGS)) {
     success(found) => shellFreeGrepRead(found, command)
     failure(why) => failure(why)
   }
@@ -1509,7 +1765,10 @@ export type ReadVerb = {
  (writes a file), -m, -c; uniq's second positional. tac is not on
  macOS; the line is recognized and the shell reports it missing. sort
  may spill a large input to files under $TMPDIR, which no payload
- names. */
+ names. The checksums read the whole file; `shasum -c` would read every
+ file a list names, so no flag is in their rows. `file` opens the file
+ and prints what its first bytes say, such as `OpenSSH private key`, so
+ it is a read too. */
 export static const READ_VERBS: Record<string, ReadVerb> = {
   cat: {
     flags: { plain: ["n", "b", "s"], valued: [], optionsFirst: true },
@@ -1570,6 +1829,26 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
     flags: { plain: [], valued: [], optionsFirst: true },
     paths: ANY_NUMBER,
     countFlags: []
+  },
+  md5sum: {
+    flags: { plain: [], valued: [], optionsFirst: true },
+    paths: ANY_NUMBER,
+    countFlags: []
+  },
+  shasum: {
+    flags: { plain: [], valued: [], optionsFirst: true },
+    paths: ANY_NUMBER,
+    countFlags: []
+  },
+  sha256sum: {
+    flags: { plain: [], valued: [], optionsFirst: true },
+    paths: ANY_NUMBER,
+    countFlags: []
+  },
+  file: {
+    flags: { plain: [], valued: [], optionsFirst: true },
+    paths: ANY_NUMBER,
+    countFlags: []
   }
 }
 
@@ -1626,12 +1905,130 @@ def trEffects(command: SimpleCommand, readsStdin: boolean, redirects: Effect[]):
   return stdinStage("tr", readsStdin, redirects)
 }
 
+static const TEE_FLAGS: FlagSpec = { plain: ["a"], valued: [], optionsFirst: true }
+
+// `cmd | tee out.log` writes the pipe into each file it names, as `>` does,
+// and appends under `-a` as `>>` does. Each file asks std::write, resolved
+// by the resolver `>` uses. A tee outside a pipe reads a closed stdin.
+@capabilities(fileRead)
+def teeEffects(command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
+  """
+  Ask std::write for each file a tee fed by a pipe writes.
+  """
+  const split = splitFlags("tee", command, TEE_FLAGS)?
+  const piped = stdinStage("tee", readsStdin, redirects)?
+  const op = if (split.plain.includes("a")) then ">>" else ">"
+  const mode = writeMode(op)
+  let writes: Effect[] = []
+  for (word in split.positionals) {
+    const target = newFileTarget("tee", word, cwd)?
+    writes.push(writeEffect({ dir: target.dir, filename: target.filename, content: "", mode: mode }))
+  }
+  return success([...writes, ...piped])
+}
+
+/** Where a file a command writes will land: its real parent and its name. */
+type NewFile = {
+  dir: string;
+  filename: string
+}
+
+// The resolver `>` uses, so a write by `tee` or `touch` names the same
+// file a redirect to it would.
+@capabilities(fileRead)
+def newFileTarget(verb: string, word: Word, cwd: string): Result<NewFile> {
+  const text = literalWordText(word)
+  if (text is failure(why)) {
+    return failure("the ${verb} path is not literal")
+  }
+  const resolved = try _resolveRedirectTarget(text.value, cwd, tildeModeFor(word))
+  if (resolved is failure(why)) {
+    return failure("${why}")
+  }
+  return success({ dir: resolved.value.dir, filename: resolved.value.filename })
+}
+
+static const SED_FLAGS: FlagSpec = { plain: ["n"], valued: [], optionsFirst: true }
+
+// `sed -n 10,20p file` is how models read a range of lines, so that one
+// shape is a read: `-n`, a script of digits, an optional comma and digits,
+// then `p`, and one file. Every other sed has no rule: `w` in a script
+// writes a file, and GNU sed's `e` runs a command.
+@capabilities(fileRead)
+def sedEffects(command: SimpleCommand, line: LineState, redirects: Effect[]): Result<Effect[]> {
+  """
+  Ask std::read for a sed that prints a range of a file's lines, and refuse every other sed.
+  """
+  const split = splitFlags("sed", command, SED_FLAGS)
+  if (isFailure(split) || !split.value.plain.includes("n") || split.value.positionals.length != 2) {
+    return failure("no rule for `sed`")
+  }
+  const words = split.value.positionals
+  if (!isLineRange(literalTextOf(words[0]))) {
+    return failure("no rule for `sed`")
+  }
+  const text = literalWordText(words[1])
+  if (text is failure(why)) {
+    return failure("the sed path is not literal")
+  }
+  const path = resolveReadPath(text.value, words[1], line, "sed")?
+  return success([readEffect(readPayloadOf(path.source)), ...redirects])
+}
+
+/* `Np` or `N,Mp`. */
+def isLineRange(script: string): boolean {
+  if (!script.endsWith("p")) {
+    return false
+  }
+  const range = script.slice(0, script.length - 1).split(",")
+  return range.length <= 2 && [part for part in range if !isDigits(part)].length == 0
+}
+
+/** Commands that make a file or folder, with the flags each takes. */
+static const MAKE_VERBS: Record<string, FlagSpec> = {
+  mkdir: { plain: ["p", "v"], valued: [], optionsFirst: true },
+  touch: { plain: [], valued: [], optionsFirst: true }
+}
+
+// `mkdir` asks std::mkdir for each folder, with the real path the mkdir
+// tool puts in its own payload, missing steps included. `touch` asks
+// std::write for an empty append, which is what touching a file does to
+// its contents. `mkdir -m` and `touch -t` are not in the table.
+@capabilities(fileRead)
+def makeEffects(verb: string, command: SimpleCommand, cwd: string, spec: FlagSpec, redirects: Effect[]): Result<Effect[]> {
+  """
+  Ask std::mkdir for each folder a mkdir makes, or std::write for each file a touch makes.
+  """
+  const split = splitFlags(verb, command, spec)?
+  if (split.positionals.length == 0) {
+    return failure("`${verb}` names no path")
+  }
+  let effects: Effect[] = []
+  for (word in split.positionals) {
+    if (verb == "touch") {
+      const target = newFileTarget(verb, word, cwd)?
+      effects.push(writeEffect({ dir: target.dir, filename: target.filename, content: "", mode: "append" }))
+    } else {
+      const text = literalWordText(word)
+      if (text is failure(why)) {
+        return failure("the ${verb} path is not literal")
+      }
+      const dir = try _realPathIn(text.value, cwd, tildeModeFor(word), verb)
+      if (isFailure(dir)) {
+        return dir
+      }
+      effects.push(mkdirEffect({ dir: dir.value }))
+    }
+  }
+  return success([...effects, ...redirects])
+}
+
 // A folder is refused because the program would read what no payload names
 // (`diff a b` of two folders reads every file under both, links followed).
 // A FIFO or a device is refused because a read of it may never return. A
-// missing path is refused too, so any doubt asks std::bash.
+// missing path has a rule only through `missingPath`.
 @capabilities(fileRead)
-def resolveReadPath(text: string, word: Word, cwd: string, subject: string): Result<ReadPath> {
+def resolveReadPath(text: string, word: Word, line: LineState, subject: string): Result<ReadPath> {
   """
   Resolve a literal read path to a regular file, failing for directories or special files.
   """
@@ -1642,9 +2039,16 @@ def resolveReadPath(text: string, word: Word, cwd: string, subject: string): Res
       argument: text
     })
   }
-  const target = resolveTarget(text, word, cwd)
+  const target = resolveTarget(text, word, line.cwd)
   if (isFailure(target)) {
-    return target
+    const missing = missingPath(text, word, line)
+    if (missing == null) {
+      return target
+    }
+    return success({
+      source: { kind: "disk", dir: missing.dir, filename: missing.filename },
+      argument: text
+    })
   }
   const file = target.value.file
   if (file == null) {
@@ -1671,6 +2075,94 @@ def resolveTarget(text: string, word: Word, cwd: string): Result<PathTarget> {
   return try _searchTargetIn(text, cwd, tildeModeFor(word))
 }
 
+/** What the classifier knows about a line as it walks it, command by
+ command: the working directory after each `cd`; the `std::write`
+ payloads the line has asked for so far; and whether it has run a command
+ safeBash cannot see into. `strict` is false for a lookup that may name a
+ path that does not exist yet. */
+type LineState = {
+  cwd: string;
+  written: WritePayload[];
+  opaque: boolean;
+  strict: boolean
+}
+
+/* The state of a line before its first command. */
+def freshLine(cwd: string): LineState {
+  return { cwd: cwd, written: [], opaque: false, strict: false }
+}
+
+/* The same line, for a lookup where a missing path has no rule: `find`,
+ `tree`, `grep`, `diff`, `cmp`, an input redirect, and the shell-free
+ paths, which each need a real folder or real files. */
+def strictLine(line: LineState): LineState {
+  return { ...line, strict: true }
+}
+
+/** The effects that read, list, or search and change nothing, by name.
+ Every other effect makes the rest of the line opaque. The list is by
+ name, never by prefix: `git checkout` and `git stash pop` are `std::git`
+ effects too, and either can put a symlink that a commit holds into the
+ working folder. An effect added to safeBash later makes the line opaque
+ until someone adds it here. */
+static const SEE_THROUGH_EFFECTS: string[] = [
+  "std::read", "std::grep", "std::ls", "std::glob",
+  "std::git::status", "std::git::log", "std::git::diff", "std::git::show",
+  "std::git::blame", "std::git::branchList", "std::git::remoteList", "std::git::stashList",
+  "std::github::prList", "std::github::prGet", "std::github::prDiff", "std::github::prFiles",
+  "std::github::prReviewList", "std::github::prReviewCommentList", "std::github::prChecks",
+  "std::github::issueList", "std::github::issueGet", "std::github::issueCommentList",
+  "std::github::issueSearch"
+]
+
+// The line after a command that asked these effects. A `std::write` is
+// remembered, so a later read of the same file has a rule (`missingPath`).
+// A command that asked anything that is not a read or a write makes the
+// line opaque: it ran a program safeBash cannot see into, which may have
+// made any path into something else.
+def afterCommand(line: LineState, effects: Effect[]): LineState {
+  let written = line.written
+  let opaque = line.opaque
+  for (effect in effects) {
+    if (effect.name == "std::write") {
+      written = [...written, effect.payload]
+    } else if (!SEE_THROUGH_EFFECTS.includes(effect.name)) {
+      opaque = true
+    }
+  }
+  return { ...line, written: written, opaque: opaque }
+}
+
+// A path that does not exist when the plan is made, and its parent folder
+// does. When an earlier command in the line asked std::write for that very
+// file, it will exist, made by the redirect as its command started. When
+// nothing opaque has run yet, nothing can have made it into something
+// else, such as a link to a key: `ln -s ~/.ssh/id_rsa x; cat x`. A file
+// the line wrote can still be swapped by a program run after the write,
+// as in `ln -sf <key> out.txt > out.txt; cat out.txt`. That adds nothing
+// for a general program such as `pnpm test`, whose approval already lets
+// it read any file itself; `ln`, `cp`, and `mv` ask std::bash, so the line
+// above has no rule (see `NO_EXEC_PROGRAMS`).
+@capabilities(fileRead)
+def missingPath(text: string, word: Word, line: LineState): WritePayload | null {
+  if (line.strict) {
+    return null
+  }
+  const found = try _missingTarget(text, line.cwd, tildeModeFor(word))
+  if (found is failure(why)) {
+    return null
+  }
+  const where = found.value
+  const wrote = [entry for entry in line.written if entry.dir == where.dir && entry.filename == where.filename]
+  if (wrote.length > 0) {
+    return wrote[0]
+  }
+  if (line.opaque) {
+    return null
+  }
+  return { dir: where.dir, filename: where.filename, content: "", mode: "overwrite" }
+}
+
 /** A listing's path, resolved, with whether its last step is a symlink. */
 type ListTarget = {
   target: PathTarget;
@@ -1678,7 +2170,7 @@ type ListTarget = {
 }
 
 @capabilities(fileRead)
-def resolveTargets(verb: string, words: Word[], cwd: string): Result<ListTarget[]> {
+def resolveTargets(verb: string, words: Word[], line: LineState): Result<ListTarget[]> {
   """
   Resolve listing operands and record whether each final component is a symlink.
   """
@@ -1688,17 +2180,23 @@ def resolveTargets(verb: string, words: Word[], cwd: string): Result<ListTarget[
     if (text is failure(why)) {
       return failure("the ${verb} path is not literal")
     }
-    const target = resolveTarget(text.value, word, cwd)
-    if (isFailure(target)) {
-      return target
-    }
-    const linked = lastStepIsLink(target.value, cwd)
-    if (isFailure(linked)) {
-      return linked
-    }
-    out.push({ target: target.value, linked: linked.value })
+    out.push(listTargetOf(text.value, word, line)?)
   }
   return success(out)
+}
+
+@capabilities(fileRead)
+def listTargetOf(text: string, word: Word, line: LineState): Result<ListTarget> {
+  const target = resolveTarget(text, word, line.cwd)
+  if (isFailure(target)) {
+    const missing = missingPath(text, word, line)
+    if (missing == null) {
+      return target
+    }
+    return success({ target: { dir: missing.dir, file: missing.filename, argument: text }, linked: false })
+  }
+  const linked = lastStepIsLink(target.value, line.cwd)?
+  return success({ target: target.value, linked: linked })
 }
 
 /** Last segments that can never be a link: `.`, `..`, and the empty one
@@ -1794,7 +2292,9 @@ export type ListVerb = {
  that the ls tool's walk leaves out, and no file's contents. Given a
  file, ls prints that one entry and du that one file's size, so both
  ask for the folder that holds it, with no walk even though du always
- walks a folder. tree prints the name and an error, so it refuses. */
+ walks a folder. tree prints the name and an error, so it refuses.
+ `stat` prints a file's or folder's size, owner, and times, which `ls
+ -l` prints too, so it asks what `ls -l` asks and never walks. */
 export static const LIST_VERBS: Record<string, ListVerb> = {
   ls: {
     flags: { plain: ["l", "a", "A", "h", "1", "t", "r", "S", "R", "d", "p", "F", "--color=never"], valued: [], optionsFirst: true },
@@ -1812,6 +2312,12 @@ export static const LIST_VERBS: Record<string, ListVerb> = {
     flags: { plain: ["s", "h", "a", "c"], valued: ["d"], optionsFirst: true },
     countFlags: ["d"],
     recursive: "always",
+    files: "folder"
+  },
+  stat: {
+    flags: { plain: [], valued: [], optionsFirst: true },
+    countFlags: [],
+    recursive: "withR",
     files: "folder"
   }
 }
@@ -1861,7 +2367,7 @@ def findEffects(command: SimpleCommand, cwd: string, redirects: Effect[]): Resul
   if (leadingPositionals(command) != positionals.length) {
     return failure("find takes its paths before its tests")
   }
-  const entries = resolveTargets("find", positionals, cwd)
+  const entries = resolveTargets("find", positionals, strictLine(freshLine(cwd)))
   if (isFailure(entries)) {
     return entries
   }
@@ -1909,7 +2415,7 @@ def findPattern(split: SplitArgs): string {
 static const CURRENT_DIR_WORD: Word = { tag: "literal", text: "." }
 
 @capabilities(fileRead)
-def listEffects(verb: string, command: SimpleCommand, cwd: string, spec: ListVerb, redirects: Effect[]): Result<Effect[]> {
+def listEffects(verb: string, command: SimpleCommand, line: LineState, spec: ListVerb, redirects: Effect[]): Result<Effect[]> {
   """
   Build one listing approval for each directory a supported listing command inspects.
   """
@@ -1923,7 +2429,10 @@ def listEffects(verb: string, command: SimpleCommand, cwd: string, spec: ListVer
   }
   const named = split.value.positionals
   const words: Word[] = if (named.length == 0) then [CURRENT_DIR_WORD] else named
-  const entries = resolveTargets(verb, words, cwd)
+  // A verb that asks for the folder a file is in can name a missing file
+  // the same way; `tree` refuses a file, so it needs a real folder.
+  const lookup: LineState = if (spec.files == "folder") then line else strictLine(line)
+  const entries = resolveTargets(verb, words, lookup)
   if (isFailure(entries)) {
     return entries
   }
@@ -2025,10 +2534,12 @@ def findFolders(entries: ListTarget[]): Result<string[]> {
 }
 
 @capabilities(fileRead)
-def readFileVerb(verb: string, command: SimpleCommand, cwd: string, spec: ReadVerb): Result<FileRead> {
+def readFileVerb(verb: string, command: SimpleCommand, line: LineState, spec: ReadVerb): Result<FileRead> {
   """
   Validate a file-reading command and resolve its operands, or identify stdin input.
   """
+  // `diff` and `cmp` compare two files, and both must be real.
+  const lookup: LineState = if (spec.paths.least >= 2) then strictLine(line) else line
   const split = splitFlags(verb, command, spec.flags)
   if (isFailure(split)) {
     return split
@@ -2050,7 +2561,7 @@ def readFileVerb(verb: string, command: SimpleCommand, cwd: string, spec: ReadVe
     if (text is failure(why)) {
       return failure("the ${verb} path is not literal")
     }
-    const path = resolveReadPath(text.value, word, cwd, verb)
+    const path = resolveReadPath(text.value, word, lookup, verb)
     if (isFailure(path)) {
       return path
     }
@@ -3835,7 +4346,9 @@ def tryShellFreeRead(command: SimpleCommand, cwd: string): Result<Plan> {
   if (spec == null) {
     return failure("not a lone read")
   }
-  return match(readFileVerb(verb, command, cwd, spec)) {
+  // The read tool reads a file that exists, so a missing one goes to bash,
+  // which runs real cat and gives the model cat's own error.
+  return match(readFileVerb(verb, command, strictLine(freshLine(cwd)), spec)) {
     success(found) => shellFreeReadOf(verb, found, command)
     failure(why) => failure(why)
   }
@@ -4031,6 +4544,29 @@ static const BASH_EFFECT: Effect = {
   name: "std::bash"
 }
 
+static const READONLY_EFFECT: Effect = {
+  name: "std::bash::readonly"
+}
+
+// The check for std::bash::readonly: `isLiteralWord` with `$?` allowed,
+// through `knownOrExitStatus`, so `isLiteralWord`, which the saved-output
+// rules rely on, is unchanged. An assignment's value counts too.
+def everyWordKnown(commands: Command[]): boolean {
+  for (entry in flattenCommands(commands)) {
+    for (word in commandWords(entry.command)) {
+      if (!knownOrExitStatus(word)) {
+        return false
+      }
+    }
+    for (assignment in entry.command.assignments) {
+      if (isFailure(assignmentText(assignment))) {
+        return false
+      }
+    }
+  }
+  return true
+}
+
 def refusePlan(reason: string, verbs: string[]): Plan {
   return {
     effects: [],
@@ -4125,8 +4661,10 @@ def flattenCommands(commands: Command[]): FlatCommand[] {
 
 def flattenOne(command: Command): FlatCommand[] {
   // Keep this exhaustive so a new command shape cannot skip refusal checks.
+  // A `timeout` is read through, every layer of it, so the wall sees
+  // `rm` in `timeout 5 timeout 5 rm -rf /`.
   return match(command) {
-    { tag: "simpleCommand" } => [{ command: command, readsStdin: false }]
+    { tag: "simpleCommand" } => [{ command: innermostCommand(command), readsStdin: false }]
     { tag: "pipeline", stages } => pipelineCommands(stages)
     { tag: "and", left, right } => [...flattenOne(left), ...flattenOne(right)]
     { tag: "or", left, right } => [...flattenOne(left), ...flattenOne(right)]
@@ -4597,10 +5135,19 @@ def planLine(source: string, parsed: Result<BashAST>, cwd: string, origin: GhRep
   const narrow: Effect[] = classified.value.effects
   if (narrow.length == 0) {
     // Everything recognized but nothing contributed an effect: a string
-    // of nothing but echoes, or a `cd` with nothing after it that asks a
-    // question. The audit rule makes this a std::bash question, so by
-    // the same rule it runs the original text.
-    return broadPlan(source, verbs, { kind: "noEffects", detail: "" })
+    // of nothing but quiet commands, a filter fed by one, or a `cd` with
+    // nothing after it that asks a question. Every shell start raises an
+    // effect, so this asks std::bash::readonly when every word is known
+    // now, and std::bash, for the original text, when one is not: `echo
+    // $GITHUB_TOKEN` would print a variable no std::env question named.
+    if (!everyWordKnown(commands)) {
+      return broadPlan(source, verbs, { kind: "noEffects", detail: "" })
+    }
+    const quiet = rebuild(classified.value.commands)
+    if (quiet is failure(why)) {
+      return broadPlan(source, verbs, { kind: "unrenderable", detail: why })
+    }
+    return bashPlan(quiet.value, [READONLY_EFFECT], verbs, null)
   }
   // One line gets one lookup, so its payloads all come from one answer.
   if (pendingLookups(narrow).length > 1) {
@@ -4617,13 +5164,13 @@ def planLine(source: string, parsed: Result<BashAST>, cwd: string, origin: GhRep
   return bashPlan(rebuilt.value, narrow, verbs, null)
 }
 
-/** The effects of a command, the working directory once it has run, and
-  the command as bash will run it. That is the command as written, except
-  that each recognized `cd` names the directory the classifier resolved,
-  and each recognized git command is the one `gitCommand` built. */
+/** The effects of a command, the line once it has run, and the command as
+  bash will run it. That is the command as written, except that each
+  recognized `cd` names the directory the classifier resolved, and each
+  command safeBash writes, such as git's, is the one it built. */
 type Classified = {
   effects: Effect[];
-  cwd: string;
+  line: LineState;
   command: Command
 }
 
@@ -4653,67 +5200,167 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
   """
   let effects: Effect[] = []
   let rewritten: Command[] = []
-  // The directory the next command is classified in.
-  let dir = cwd
+  // The line the next command is classified in.
+  let line = freshLine(cwd)
   for (command, index in commands) {
     const cd = asCd(command)
     if (cd != null) {
-      const moved = cdTarget(cd, dir)?
+      const moved = cdTarget(cd, line.cwd)?
       rewritten.push(cdOrExit(cd, moved))
-      dir = moved
+      line = { ...line, cwd: moved }
       continue
     }
-    const classified = classify(command, dir, origin, false)?
+    const classified = classify(command, line, origin, false)?
     // `cd x && a; b`: `b` runs in `x` only when the `cd` worked, so no
     // payload for `b` would be true in both cases.
-    if (classified.cwd != dir && index < commands.length - 1) {
+    if (classified.line.cwd != line.cwd && index < commands.length - 1) {
       return failure("a command after `;` follows a `cd`, and its directory depends on whether the `cd` worked")
     }
     effects = [...effects, ...classified.effects]
     rewritten.push(classified.command)
+    line = classified.line
   }
   return success({ effects: effects, commands: rewritten })
 }
 
 @capabilities(fileRead)
-def classify(command: Command, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+def classify(command: Command, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   // Keep this exhaustive, like flattenOne, so a new command shape cannot
   // be classified by accident.
   return match(command) {
-    { tag: "simpleCommand" } => classifySimple(command, cwd, origin, readsStdin)
-    { tag: "pipeline", stages } => classifyPipeline(stages, cwd, origin, readsStdin)
-    { tag: "and", left, right } => classifyAnd(left, right, cwd, origin, readsStdin)
-    { tag: "or", left, right } => classifyOr(left, right, cwd, origin, readsStdin)
-    { tag: "parens", command as inner } => classifyGroup(inner, cwd, origin, readsStdin)
+    { tag: "simpleCommand" } => classifySimple(command, line, origin, readsStdin)
+    { tag: "pipeline", stages } => classifyPipeline(stages, line, origin, readsStdin)
+    { tag: "and", left, right } => classifyAnd(left, right, line, origin, readsStdin)
+    { tag: "or", left, right } => classifyOr(left, right, line, origin, readsStdin)
+    { tag: "parens", command as inner } => classifyGroup(inner, line, origin, readsStdin)
   }
 }
 
 @capabilities(fileRead)
-def classifySimple(command: SimpleCommand, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
-  const rule = simpleCommandRule(command, cwd, origin, readsStdin)?
-  return success({ effects: rule.effects, cwd: cwd, command: rule.command })
+def classifySimple(command: SimpleCommand, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+  const timed = unwrapTimeout(command)
+  if (timed == null) {
+    const rule = simpleCommandRule(command, line, origin, readsStdin)?
+    return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: rule.command })
+  }
+  const rule = simpleCommandRule(timed.inner, line, origin, readsStdin)?
+  const wrapped = withTimeout(timed, rule.command)?
+  return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: wrapped })
+}
+
+/** A `timeout <duration> <command>` line: the wrapper's words, and the
+ command it runs, with the wrapper's assignments and redirects, which
+ reach that command unchanged. */
+type Timed = {
+  word: LiteralWord;
+  duration: Word;
+  inner: SimpleCommand
+}
+
+static const TIMEOUT_VERBS: string[] = ["timeout", "gtimeout"]
+static const DURATION_UNITS: string[] = ["", "s", "m", "h"]
+
+// `timeout 60 pnpm test` runs `pnpm test` and stops it after a minute, so
+// it asks what `pnpm test` asks. Only a number with an optional unit is
+// read through: a flag on `timeout`, such as `-s KILL`, has no rule.
+// `gtimeout` is the name coreutils gives it on macOS.
+def unwrapTimeout(command: SimpleCommand): Timed | null {
+  """
+  Return the command a `timeout <duration>` runs, or null for any other command.
+  """
+  const name = command.command
+  if (name == null || name.tag != "literal" || !TIMEOUT_VERBS.includes(name.text)) {
+    return null
+  }
+  if (command.args.length < 2) {
+    return null
+  }
+  const duration = command.args[0]
+  const verb = command.args[1]
+  if (!isDuration(literalTextOf(duration)) || verb.tag != "literal") {
+    return null
+  }
+  return {
+    word: name,
+    duration: duration,
+    inner: {
+      tag: "simpleCommand",
+      assignments: command.assignments,
+      command: verb,
+      args: command.args.slice(2),
+      redirects: command.redirects
+    }
+  }
+}
+
+def isDuration(text: string): boolean {
+  for (unit in DURATION_UNITS) {
+    if (text.endsWith(unit) && isDigits(text.slice(0, text.length - unit.length))) {
+      return true
+    }
+  }
+  return false
+}
+
+/* The command every `timeout` in front of it runs, for the refuse wall. */
+def innermostCommand(command: SimpleCommand): SimpleCommand {
+  const timed = unwrapTimeout(command)
+  if (timed == null) {
+    return command
+  }
+  return innermostCommand(timed.inner)
+}
+
+// The wrapper goes back in front of the command the rule returned. Its
+// assignments, the model's and any the rule added such as `GH_HOST`, go
+// in front of `timeout`: after it, `timeout` would take `GH_HOST=x` for
+// the program to run. A rule that returned more than one command, as a
+// git diff does, has no place to put the wrapper.
+def withTimeout(timed: Timed, ran: Command): Result<Command> {
+  if (!(ran is { tag: "simpleCommand" })) {
+    return failure("`${timed.word.text}` in front of a command safeBash runs as more than one")
+  }
+  const verb = ran.command
+  if (verb == null) {
+    return failure("`${timed.word.text}` with no command")
+  }
+  return success({
+    tag: "simpleCommand",
+    assignments: ran.assignments,
+    command: timed.word,
+    args: [timed.duration, verb, ...ran.args],
+    redirects: ran.redirects
+  })
 }
 
 // The first stage reads what the pipeline itself reads, and every later
 // stage reads a pipe. Each stage runs in a subshell of its own, so a `cd`
-// inside one moves nothing outside it.
+// inside one moves nothing outside it. The stages run at the same time,
+// so each is classified in the line as it was before the pipeline, and
+// what the line knows afterwards takes in every stage. Because they run at
+// the same time, another stage may make a path before this one reads it,
+// as in `pnpm test | cat nope.txt`, so inside a pipeline a missing path
+// has a rule only when the line wrote it before the pipeline began.
 @capabilities(fileRead)
-def classifyPipeline(stages: PipelineStage[], cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   let effects: Effect[] = []
   let rewritten: any[] = []
+  const together = { ...line, opaque: true }
   for (stage, index in stages) {
-    const classified = classify(stage, cwd, origin, readsStdin || index > 0)?
+    const classified = classify(stage, together, origin, readsStdin || index > 0)?
     effects = [...effects, ...classified.effects]
     rewritten.push(classified.command)
   }
-  return success({ effects: effects, cwd: cwd, command: { tag: "pipeline", stages: rewritten } })
+  return success({ effects: effects, line: afterCommand(line, effects), command: { tag: "pipeline", stages: rewritten } })
 }
 
-// Parentheses run a subshell, so a `cd` inside them ends with them.
+// Parentheses run a subshell, so a `cd` inside them ends with them. A file
+// the subshell wrote is still there afterwards, and so is anything a
+// program in it did, so the rest of what the line knows carries on.
 @capabilities(fileRead)
-def classifyGroup(inner: Command, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
-  const classified = classify(inner, cwd, origin, readsStdin)?
-  return success({ effects: classified.effects, cwd: cwd, command: { tag: "parens", command: classified.command } })
+def classifyGroup(inner: Command, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+  const classified = classify(inner, line, origin, readsStdin)?
+  return success({ effects: classified.effects, line: { ...classified.line, cwd: line.cwd }, command: { tag: "parens", command: classified.command } })
 }
 
 // `cd dir && rest`: when the `cd` fails, bash runs nothing to its right, so
@@ -4724,22 +5371,22 @@ def classifyGroup(inner: Command, cwd: string, origin: GhRepo | null, readsStdin
 // directory after the left side is carried to the right side, which is how
 // `b` is classified in `x` as well.
 @capabilities(fileRead)
-def classifyAnd(left: Command, right: Command, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+def classifyAnd(left: Command, right: Command, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   const cd = asCd(left)
   if (cd != null) {
-    const moved = cdTarget(cd, cwd)?
-    const rest = classify(right, moved, origin, readsStdin)?
+    const moved = cdTarget(cd, line.cwd)?
+    const rest = classify(right, { ...line, cwd: moved }, origin, readsStdin)?
     return success({
       effects: rest.effects,
-      cwd: rest.cwd,
+      line: rest.line,
       command: { tag: "and", left: cdTo(cd, moved), right: rest.command }
     })
   }
-  const first = classify(left, cwd, origin, readsStdin)?
-  const second = classify(right, first.cwd, origin, readsStdin)?
+  const first = classify(left, line, origin, readsStdin)?
+  const second = classify(right, first.line, origin, readsStdin)?
   return success({
     effects: [...first.effects, ...second.effects],
-    cwd: second.cwd,
+    line: second.line,
     command: { tag: "and", left: first.command, right: second.command }
   })
 }
@@ -4747,16 +5394,18 @@ def classifyAnd(left: Command, right: Command, cwd: string, origin: GhRepo | nul
 // `cd x && a || b`: `b` runs when the `cd` failed and also when `a` failed,
 // and the working directory differs between the two. No payload for `b`
 // would be true in both cases, so the string asks the broad question.
+// `b` runs after `a` failed, which may be partway through, so it sees
+// what the line knows after all of `a`.
 @capabilities(fileRead)
-def classifyOr(left: Command, right: Command, cwd: string, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
-  const first = classify(left, cwd, origin, readsStdin)?
-  if (first.cwd != cwd) {
+def classifyOr(left: Command, right: Command, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+  const first = classify(left, line, origin, readsStdin)?
+  if (first.line.cwd != line.cwd) {
     return failure("a command after `||` follows a `cd`, and its directory depends on whether the `cd` worked")
   }
-  const second = classify(right, cwd, origin, readsStdin)?
+  const second = classify(right, first.line, origin, readsStdin)?
   return success({
     effects: [...first.effects, ...second.effects],
-    cwd: second.cwd,
+    line: second.line,
     command: { tag: "or", left: first.command, right: second.command }
   })
 }
@@ -4931,7 +5580,7 @@ def removeEffects(verb: string, command: SimpleCommand, cwd: string, spec: FlagS
     if (whyNot != "") {
       return failure("the ${verb} target is refused from this folder: ${whyNot}")
     }
-    const target = try _removeTargetIn(text.value, cwd, tildeModeFor(word))
+    const target = try _realPathIn(text.value, cwd, tildeModeFor(word), verb)
     if (isFailure(target)) {
       return target
     }
@@ -5115,7 +5764,7 @@ def resolvedPlan(first: Plan, source: string, cwd: string): Result<Plan> {
 
 /** Every effect `safeBash` can raise. `startJob` raises the same ones,
   since both ask through `approvedPlan`, so both signatures name this set. */
-export effectSet SafeBashEffects = <std::bash, std::write, std::remove, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::github::prGet, std::github::prDiff, std::github::issueGet, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueCommentList, std::github::prList, std::github::issueList, std::github::issueSearch, std::read, std::ls, std::glob, std::exec, std::run, std::guard>
+export effectSet SafeBashEffects = <std::bash, std::bash::readonly, std::write, std::remove, std::mkdir, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::github::prGet, std::github::prDiff, std::github::issueGet, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueCommentList, std::github::prList, std::github::issueList, std::github::issueSearch, std::read, std::ls, std::glob, std::exec, std::run, std::guard>
 
 export def safeBash(
   command: string,
@@ -5489,6 +6138,13 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string, timeoutMs: number
       })
       return success(null)
     }
+    "std::bash::readonly" => {
+      raise std::bash::readonly("Run this line${where}, which reads and changes no file?", {
+        command: fullCommand,
+        cwd: cwd
+      })
+      return success(null)
+    }
     "std::write" => {
       raise std::write("Are you sure you want to write to this file?", {
         dir: effect.payload.dir,
@@ -5557,6 +6213,13 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string, timeoutMs: number
     "std::remove" => {
       raise std::remove("Are you sure you want to delete this file or directory? This cannot be undone.", {
         target: effect.payload.target,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::mkdir" => {
+      raise std::mkdir("Are you sure you want to create this directory?", {
+        dir: effect.payload.dir,
         command: fullCommand
       })
       return success(null)

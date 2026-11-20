@@ -148,6 +148,9 @@ export const recommendedAutoApprovePolicy: Policy = {
   // A sandboxed subprocess: the code it runs raises its own effects back
   // through this same policy, so approving the launch grants nothing more.
   "std::run": approve,
+  // A shell line whose commands read no file and change nothing, such as
+  // `pwd`, with every word known before it runs (stdlib/safeBash.agency).
+  "std::bash::readonly": approve,
   // `writeSettingsFile` creates the agent home when it is missing. An
   // empty directory decides nothing, and the write into it still asks.
   "std::mkdir": [{ match: { dir: AGENT_HOME }, action: "approve" }],

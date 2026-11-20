@@ -64,6 +64,7 @@ export const BUILTIN_EFFECT_SETS: Record<string, EffectSetInfo> = {
     "doc": "Shell commands, program execution, and Agency subprocess runs. These can\nrun any program, so approve them with care.",
     "members": [
       "std::bash",
+      "std::bash::readonly",
       "std::exec",
       "std::run"
     ],

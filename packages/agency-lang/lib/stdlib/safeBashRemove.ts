@@ -93,15 +93,19 @@ export async function _unparsedRemoveRefusal(source: string, cwd: string): Promi
 }
 
 /**
- * The real whole path of one literal `rm` operand, for the `std::remove`
- * payload: the spelling the remove tool puts in its own payload, so one
- * policy rule covers both. `tildeMode` is "expand" for an unquoted word,
- * because bash expands `~` only there.
+ * The real whole path of one literal operand, for a `std::remove` or
+ * `std::mkdir` payload: the spelling the remove and mkdir tools put in
+ * their own payloads, so one policy rule covers both. Steps that exist
+ * are resolved through links; every step after the first missing one is
+ * kept as written, and a dangling link fails. `tildeMode` is "expand"
+ * for an unquoted word, because bash expands `~` only there. `verb` names
+ * the command in an error.
  */
-export async function _removeTargetIn(
+export async function _realPathIn(
   text: string,
   cwd: string,
   tildeMode: TildeMode,
+  verb: string,
 ): Promise<string> {
-  return currentHost().files.realPath(resolveAgainstCwd(text, cwd, tildeMode, "rm"));
+  return currentHost().files.realPath(resolveAgainstCwd(text, cwd, tildeMode, verb));
 }

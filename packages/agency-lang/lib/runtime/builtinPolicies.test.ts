@@ -148,6 +148,13 @@ describe("builtinPolicy", () => {
     }
   });
 
+  it("approves a shell line that only prints under 'recommended' and not under 'minimal'", () => {
+    expect(builtinPolicy("recommended", "/tmp/base")!["std::bash::readonly"]).toEqual([
+      { action: "approve" },
+    ]);
+    expect(builtinPolicy("minimal", "/tmp/base")!["std::bash::readonly"]).toBeUndefined();
+  });
+
   it("leaves the toolbox review and save to the prompt", () => {
     expect(builtinPolicy("recommended", "/tmp/base")!["std::toolbox::review"]).toBeUndefined();
     expect(builtinPolicy("recommended", "/tmp/base")!["std::toolbox::save"]).toBeUndefined();

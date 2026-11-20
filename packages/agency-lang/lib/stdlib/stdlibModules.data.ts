@@ -626,6 +626,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "grepEffect",
     "readEffect",
     "removeEffect",
+    "mkdirEffect",
     "lsEffect",
     "globEffect",
     "execEffect",

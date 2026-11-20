@@ -13,9 +13,9 @@
     },
     {
       "nodeName": "endOfFlagsAndInnerTilde",
-      "description": "What tarsec 0.5.7 lets through. `--` is a flag no table lists, so ls, echo, and cd with one are broad. A program with no rule takes `--` as an argument, so `pnpm test -- --watch` asks std::exec. A `~` or `^` inside a word is plain text: a redirect to `a~b` writes a file of that name. A `~` after `=` is still not parsed.",
+      "description": "What tarsec 0.5.7 lets through. `--` is a flag no table lists, so ls and cd with one are broad; echo asks nothing whatever its words, so `echo -- hi` alone asks the quiet question. A program with no rule takes `--` as an argument, so `pnpm test -- --watch` asks std::exec. A `~` or `^` inside a word is plain text: a redirect to `a~b` writes a file of that name. A `~` after `=` is still not parsed.",
       "input": "",
-      "expectedOutput": "[[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"broad\",[\"std::bash\"]],[\"narrow\",[\"std::exec\"]],[\"test\",\"--\",\"--watch\"],[\"write\",\"hi\\n\",\"a~b\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"HEAD^\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"narrow\",[\"std::git::diff\"]],[\"broad\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"broad\",[\"std::bash\"]],[\"narrow\",[\"std::bash::readonly\"]],[\"broad\",[\"std::bash\"]],[\"narrow\",[\"std::exec\"]],[\"test\",\"--\",\"--watch\"],[\"write\",\"hi\\n\",\"a~b\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"HEAD^\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"narrow\",[\"std::git::diff\"]],[\"broad\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -46,9 +46,9 @@
     },
     {
       "nodeName": "stderrAndDevNullRedirects",
-      "description": "A redirect of standard output or standard error to /dev/null writes no file, so it adds no effect. 2>file asks std::write for that file, with the same overwrite and append modes as >file, and descriptor 1 means the same as no descriptor. &>/dev/null is still broad. Any other descriptor, a second output file, or a variable target stays broad. The rebuilt text keeps the redirect.",
+      "description": "A redirect of standard output or standard error to /dev/null writes no file, so it adds no effect. 2>file asks std::write for that file, with the same overwrite and append modes as >file, and descriptor 1 means the same as no descriptor. &>/dev/null discards both streams and adds no effect either. Any other descriptor, a second output file, or a variable target stays broad. The rebuilt text keeps the redirect.",
       "input": "",
-      "expectedOutput": "[[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"build.log\",\"overwrite\"],[\"build.log\",\"append\"],\"pnpm test 2> /dev/null\"]",
+      "expectedOutput": "[[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"build.log\",\"overwrite\"],[\"build.log\",\"append\"],\"pnpm test 2> /dev/null\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -79,9 +79,9 @@
     },
     {
       "nodeName": "shellFreeEcho",
-      "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a sequence, a flag other than -n, a flag after the first word, or a quoted word that starts with a dash sends it to bash, because bash reads the quoted dash as the option too.",
+      "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a sequence, a flag other than -n, a flag after the first word, or a quoted word that starts with a dash sends it to bash, because bash reads the quoted dash as the option too. There it asks std::bash::readonly when every word is known, and std::bash when one is an expansion.",
       "input": "",
-      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"echo\",\"hi\",[]],[\"chain\",\"\",[]],[\"echo\",\"\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"hi\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"echo\",\"hi\",[]],[\"chain\",\"\",[]],[\"echo\",\"\",[]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"echo\",\"hi\",[]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"bash\",\"\",[\"std::bash::readonly\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -228,13 +228,13 @@
     },
     {
       "nodeName": "sequenceRunsThroughBash",
-      "description": "A sequence runs in one bash call, so its output is bash's — including the newline behavior v2 got wrong.",
+      "description": "A sequence runs in one bash call, so its output is bash's — including the newline behavior v2 got wrong. Every word is known, so it asks std::bash::readonly.",
       "input": "",
       "expectedOutput": "\"hi\\nbye\\n\"",
       "interruptHandlers": [
         {
           "action": "approve",
-          "expectedMessage": "Are you sure you want to run this shell command?"
+          "expectedMessage": "Run this line, which reads and changes no file?"
         }
       ],
       "evaluationCriteria": [
@@ -251,7 +251,7 @@
       "interruptHandlers": [
         {
           "action": "approve",
-          "expectedMessage": "Are you sure you want to run this shell command?"
+          "expectedMessage": "Run this line, which reads and changes no file?"
         }
       ],
       "evaluationCriteria": [
@@ -371,9 +371,9 @@
     },
     {
       "nodeName": "planReasons",
-      "description": "A broad plan records why: the parser message, the first unrecognized command, the audit rule, or an unrenderable tree. A narrow or refused plan has no reason.",
+      "description": "A broad plan records why: the parser message, the first unrecognized command, the audit rule, or an unrenderable tree. A narrow or refused plan has no reason, and `echo hi | cat` asks the quiet question, which is narrow.",
       "input": "",
-      "expectedOutput": "[null,[\"unrecognized\",\"no rule for `xargs`\"],[\"noEffects\",\"\"],[\"unparseable\",\"Unexpected input after commands: \\\"$(date)\\\"\"],null,[\"unrecognized\",\"no rule for `xargs`\"]]",
+      "expectedOutput": "[null,[\"unrecognized\",\"no rule for `xargs`\"],null,[\"unparseable\",\"Unexpected input after commands: \\\"$(date)\\\"\"],null,[\"unrecognized\",\"no rule for `xargs`\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -395,7 +395,7 @@
       "nodeName": "planOutcomes",
       "description": "outcomeOf names the decision: refuse, shellFree, agency, narrow, or broad.",
       "input": "",
-      "expectedOutput": "[\"narrow\",\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"broad\"]",
+      "expectedOutput": "[\"narrow\",\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"narrow\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -476,9 +476,9 @@
     },
     {
       "nodeName": "newShapes",
-      "description": "Pipelines, dup redirects, and glob words after the tarsec bump. A pipeline of recognized stages is narrow and runs the rebuilt text, and a read verb with no path after a pipe is a filter that adds nothing; an unrecognized stage makes the whole string broad; 2>&1 contributes no effect, so an echo with one still asks std::bash by the audit rule; a glob is never literal, so echo cannot be shell-free with one; the wall sees through a pipe.",
+      "description": "Pipelines, dup redirects, and glob words after the tarsec bump. A pipeline of recognized stages is narrow and runs the rebuilt text, and a read verb with no path after a pipe is a filter that adds nothing; an unrecognized stage makes the whole string broad; 2>&1 contributes no effect, so an echo with one asks the quiet question, std::bash::readonly; a glob is never literal, so echo cannot be shell-free with one, and a line with one asks std::bash; the wall sees through a pipe.",
       "input": "",
-      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::exec\"]],null,\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks status | git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log --\"]",
+      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::bash::readonly\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::exec\"]],null,\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks status | git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log --\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -487,15 +487,147 @@
     },
     {
       "nodeName": "pipelineRunsThroughBash",
-      "description": "A pipe in a broad string reaches bash as one string and produces bash's output.",
+      "description": "A pipe reaches bash as one string and produces bash's output.",
       "input": "",
       "expectedOutput": "\"HI\\n\"",
       "interruptHandlers": [
         {
           "action": "approve",
-          "expectedMessage": "Are you sure you want to run this shell command?"
+          "expectedMessage": "Run this line, which reads and changes no file?"
         }
       ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "quietCommandsAskNothing",
+      "description": "Commands that only print add no question inside a line: pwd, which, command -v, uname, whoami, hostname, date with a +FORMAT, basename, dirname, sleep, true, false, :, type, and printf with a literal format. A spelling the table does not accept has no rule: a lookup of agency by name or path, command without -v, hostname or date with a word that sets something, sleep of a variable, and printf with -v (as a flag or as a quoted word), with a format that is not literal, or with a variable argument. A lone `which agency` is refused. A redirect still asks std::write.",
+      "input": "",
+      "expectedOutput": "[[\"pwd; ls lib\",\"narrow\",[\"std::ls\"]],[\"which node && node --version\",\"narrow\",[\"std::exec\"]],[\"command -v gtimeout; ls\",\"narrow\",[\"std::ls\"]],[\"uname -a; whoami; hostname; date -u '+%s'; ls\",\"narrow\",[\"std::ls\"]],[\"basename a/b.txt; dirname a/b.txt; sleep 1; true; false; :; type git; ls\",\"narrow\",[\"std::ls\"]],[\"which agency\",\"refuse\",[]],[\"which agency; ls\",\"broad\",[\"std::bash\"]],[\"which node_modules/.bin/agency; ls\",\"broad\",[\"std::bash\"]],[\"command ls\",\"broad\",[\"std::bash\"]],[\"hostname x; ls\",\"broad\",[\"std::bash\"]],[\"date -s 1; ls\",\"broad\",[\"std::bash\"]],[\"date 0101; ls\",\"broad\",[\"std::bash\"]],[\"sleep $N; ls\",\"broad\",[\"std::bash\"]],[\"printf -v PATH x; ls\",\"broad\",[\"std::bash\"]],[\"printf \\\"-v\\\" PATH x; ls\",\"broad\",[\"std::bash\"]],[\"printf $F x; ls\",\"broad\",[\"std::bash\"]],[\"printf \\\"$GITHUB_TOKEN\\\"; ls\",\"broad\",[\"std::bash\"]],[\"printf 'a\\\\n'; ls\",\"narrow\",[\"std::ls\"]],[\"printf '%s\\\\n' a b; ls\",\"narrow\",[\"std::ls\"]],[\"pwd -P > out.txt\",\"narrow\",[\"std::write\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "timeoutReadsThrough",
+      "description": "`timeout N` and `gtimeout N` in front of a command ask what the command asks, with the exec payload naming the command, not timeout. A flag on timeout, a second timeout, a command safeBash runs as more than one (a git diff), a duration that is not a number with one unit, and a timeout with no command have no rule. The text that runs puts every assignment in front of timeout, the model's and gh's GH_HOST alike, and keeps a redirect. The refuse wall sees the command inside every timeout.",
+      "input": "",
+      "expectedOutput": "[[\"timeout 60 pnpm test\",\"narrow\",[\"std::exec\"]],[\"test\"],[\"timeout 5 cat one.txt\",\"narrow\",[\"std::read\"]],[\"gtimeout 60s pnpm test\",\"narrow\",[\"std::exec\"]],[\"timeout 120 pnpm run typecheck 2>&1 | tail -20\",\"narrow\",[\"std::exec\"]],[\"timeout -s KILL 5 pnpm test\",\"broad\",[\"std::bash\"]],[\"timeout 5 timeout 5 ls\",\"broad\",[\"std::bash\"]],[\"timeout 5 git diff\",\"broad\",[\"std::bash\"]],[\"timeout 5s5 ls\",\"broad\",[\"std::bash\"]],[\"timeout 5\",\"broad\",[\"std::bash\"]],\"TERM=dumb timeout 60 pnpm test\",\"GH_HOST=github.com timeout 5 gh search issues crash --repo o/r\",\"timeout 5 git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks status > out.txt\",\"refuse\",\"refuse\",\"refuse\",\"refuse\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "quietAssignmentsAndNull",
+      "description": "TERM, NO_COLOR, LC_ALL, and the other names that only change how output looks may come in front of a command with a plain value. PATH, NODE_OPTIONS, CI, a variable value, and a value with a `/` have no rule. `< /dev/null` and `&> /dev/null` add no effect; `&>` to a file and a cat of an empty stdin have no rule. Each command safeBash writes (git, the repository check in front of a diff, gh, and grep) keeps the model's assignments in front, before gh's own.",
+      "input": "",
+      "expectedOutput": "[[\"TERM=dumb pnpm test\",\"narrow\",[\"std::exec\"]],[\"NO_COLOR=1 LC_ALL=C pnpm test\",\"narrow\",[\"std::exec\"]],[\"tv --help </dev/null\",\"narrow\",[\"std::exec\"]],[\"pnpm test &>/dev/null\",\"narrow\",[\"std::exec\"]],[\"PATH=/tmp pnpm test\",\"broad\",[\"std::bash\"]],[\"TERM=$X pnpm test\",\"broad\",[\"std::bash\"]],[\"NODE_OPTIONS=x pnpm test\",\"broad\",[\"std::bash\"]],[\"CI=1 pnpm test\",\"broad\",[\"std::bash\"]],[\"TZ=/etc/passwd date\",\"broad\",[\"std::bash\"]],[\"pnpm test &>out.txt\",\"broad\",[\"std::bash\"]],[\"cat < /dev/null\",\"broad\",[\"std::bash\"]],[\"git status < /dev/null\",\"narrow\",[\"std::git::status\"]],\"TERM=dumb git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks status\",\"(TERM=dumb git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks rev-parse --show-toplevel > /dev/null && TERM=dumb git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks diff --)\",\"NO_COLOR=1 GH_HOST=github.com gh search issues crash --repo o/r\",\"LC_ALL=C grep -r -n --exclude-dir=node_modules --exclude=node_modules --exclude-dir=.git --exclude=.git --exclude-dir=dist --exclude=dist --exclude-dir=build --exclude=build --exclude-dir=.next --exclude=.next --exclude-dir=.cache --exclude=.cache -e 'hello' -- . | head\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "quietLinesAskTheQuietQuestion",
+      "description": "A line whose commands raise no question asks std::bash::readonly when every word is known now, and runs the rebuilt text, a cd included. A variable makes it ask std::bash. A lone literal echo still runs in process. A filter fed by an echo and a quiet assignment ask the quiet question too.",
+      "input": "",
+      "expectedOutput": "[[\"pwd\",\"narrow\",[\"std::bash::readonly\"],\"pwd\"],[\"echo \\\"---\\\"\",\"narrow\",[\"std::bash::readonly\"],\"echo \\\"---\\\"\"],[\"which node; date\",\"narrow\",[\"std::bash::readonly\"],\"which node; date\"],[\"echo $HOME\",\"broad\",[\"std::bash\"],\"echo $HOME\"],[\"echo ~\",\"shellFree\",[],\"NOT-BASH\"],[\"cd lib\",\"narrow\",[\"std::bash::readonly\"],\"cd '<dir>/lib' || exit 1\"],[\"echo hi | grep h\",\"narrow\",[\"std::bash::readonly\"],\"echo hi | grep h\"],[\"TERM=dumb pwd\",\"narrow\",[\"std::bash::readonly\"],\"TERM=dumb pwd\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "quietLineRunsUnderRecommended",
+      "description": "A lone pwd asks std::bash::readonly, recommended approves it, and the line runs and prints the folder, with no other question.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "makeAsksLikeTheTools",
+      "description": "mkdir asks std::mkdir for each folder, with the real path the mkdir tool names, missing steps included. touch asks std::write for each file, with empty content in append mode. A flag outside the table, a variable, and no path have no rule. Under with-writes for the fixture folder, a mkdir inside it is approved and one in /usr/local is not.",
+      "input": "",
+      "expectedOutput": "[[\"mkdir -p a/b\",\"narrow\",[[\"std::mkdir\",\"<fix>/a/b\"]]],[\"mkdir a b\",\"narrow\",[[\"std::mkdir\",\"<fix>/a\"],[\"std::mkdir\",\"<fix>/b\"]]],[\"mkdir -p sub/x\",\"narrow\",[[\"std::mkdir\",\"<fix>/sub/x\"]]],[\"touch x.txt\",\"narrow\",[[\"std::write\",\"<fix>/x.txt\"]]],[\"\",\"append\"],[\"touch one.txt sub/two.txt\",\"narrow\",[[\"std::write\",\"<fix>/one.txt\"],[\"std::write\",\"<fix>/sub/two.txt\"]]],[\"mkdir -m 700 a\",\"broad\",[[\"std::bash\",\"\"]]],[\"mkdir $X\",\"broad\",[[\"std::bash\",\"\"]]],[\"touch -t 0101 x\",\"broad\",[[\"std::bash\",\"\"]]],[\"mkdir\",\"broad\",[[\"std::bash\",\"\"]]],\"approve\",\"propagate\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "fileProgramsAskBash",
+      "description": "cp, mv, ln, and sed do one narrow thing to files, and std::exec pins only their first argument, so none of them asks std::exec: a saved rule for `mv -f` would cover every forced move, and one for `sed -n` would cover `sed -n '1e cmd'` and `sed -n 'w file'`. Each asks std::bash.",
+      "input": "",
+      "expectedOutput": "[[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `cp`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `mv`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `ln`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sed`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sed`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sed`\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "teeWritesLikeARedirect",
+      "description": "A tee fed by a pipe asks std::write for each file it names, overwrite by default and append under -a, as a redirect does. A tee outside a pipe reads a closed stdin, and a variable file name has no rule.",
+      "input": "",
+      "expectedOutput": "[[\"pnpm test 2>&1 | tee out.log | tail -30\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::write\",\"<fix>/out.log\"]]],[\"pnpm test | tee a.log sub/b.log\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::write\",\"<fix>/a.log\"],[\"std::write\",\"<fix>/sub/b.log\"]]],\"append\",[\"tee out.log\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm test | tee $F\",\"broad\",[[\"std::bash\",\"\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readsByOtherNames",
+      "description": "`sed -n Np` and `sed -n N,Mp` of one file ask std::read; every other sed, including one fed by a pipe, has no rule. stat asks std::ls for the folder that holds a file, or for a folder it names, as ls -l does. The checksums and file read the file, so they ask std::read; a flag such as `shasum -c` and a folder have no rule.",
+      "input": "",
+      "expectedOutput": "[[\"sed -n 10,20p one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"sed -n '5p' one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"sed -n '1,5p;7p' one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"sed -n p one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git log | sed -n 1,5p\",\"broad\",[[\"std::bash\",\"\"]]],[\"stat one.txt\",\"narrow\",[[\"std::ls\",\"<fix>\"]]],[\"stat sub\",\"narrow\",[[\"std::ls\",\"<fix>/sub\"]]],[\"shasum one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"sha256sum one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"md5sum one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"file one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"shasum -c sums.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"file sub\",\"broad\",[[\"std::bash\",\"\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "missingPathsResolveByParent",
+      "description": "A missing path whose folder exists asks the question for that name in the folder: std::read for a read, std::ls of the folder for ls. A lone cat of a missing file runs through bash, so the model reads cat's own error. A missing folder, find, tree, diff, an input redirect, a grep of a missing file, and a read after a program safeBash cannot see into have no rule. A git read before it is not such a program.",
+      "input": "",
+      "expectedOutput": "[[\"cat nope.txt\",\"narrow\",[[\"std::read\",\"<fix>/nope.txt\"]]],\"bash\",[\"ls nope 2>/dev/null || echo missing\",\"narrow\",[[\"std::ls\",\"<fix>\"]]],[\"ls -la one.txt nope.txt\",\"narrow\",[[\"std::ls\",\"<fix>\"]]],[\"wc -l nope.txt sub/nope.txt\",\"narrow\",[[\"std::read\",\"<fix>/nope.txt\"],[\"std::read\",\"<fix>/sub/nope.txt\"]]],[\"cat nodir/nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"find nope -name x\",\"broad\",[[\"std::bash\",\"\"]]],[\"tree nope\",\"broad\",[[\"std::bash\",\"\"]]],[\"diff one.txt nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"wc -l < nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"grep x nope.txt | head\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git status; cat nope.txt\",\"narrow\",[[\"std::git::status\",\"<fix>\"],[\"std::read\",\"<fix>/nope.txt\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "missingPathAfterAProgramIsBroad",
+      "description": "After a command that ran a program safeBash cannot see into, or in a pipeline beside one, a missing path has no rule: the program may have made it into a link to a secret. ln, cp, and mv ask std::bash anyway, so a line that swaps the file its own redirect wrote, `ln -sf <file> out.txt > out.txt; cat out.txt`, asks std::bash.",
+      "input": "",
+      "expectedOutput": "[[\"ln -s /etc/hosts x; cat x\",\"broad\",[[\"std::bash\",\"\"]]],[\"mkdir x; ls x\",\"broad\",[[\"std::bash\",\"\"]]],[\"cp one.txt y; cat y\",\"broad\",[[\"std::bash\",\"\"]]],[\"ln -sf /etc/hosts out.txt > out.txt; cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm test; cat nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm test | cat nope.txt\",\"broad\",[[\"std::bash\",\"\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readsOfFilesTheLineWrote",
+      "description": "A read of a file the same line asked to write resolves to it, even after a program safeBash cannot see into, and asks std::read for the same path std::write named: with gh and with a test run, after a subshell, in a later pipeline, and with grep after a tee. A read before the write follows the missing-path rule. A write and a read in the same pipeline run at the same time, so that read has no rule.",
+      "input": "",
+      "expectedOutput": "[[\"gh pr diff 1 --repo o/r > x.diff 2>&1; wc -l x.diff\",\"narrow\",[[\"std::github::prDiff\",\"\"],[\"std::write\",\"<fix>/x.diff\"],[\"std::read\",\"<fix>/x.diff\"]]],[\"pnpm test > out.txt 2>&1; tail -50 out.txt\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::write\",\"<fix>/out.txt\"],[\"std::read\",\"<fix>/out.txt\"]]],[\"tail -5 out.txt; pnpm test > out.txt\",\"narrow\",[[\"std::read\",\"<fix>/out.txt\"],[\"std::exec\",\"<fix>\"],[\"std::write\",\"<fix>/out.txt\"]]],[\"pnpm test > out.txt | cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"(pnpm test > out.txt); cat out.txt\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::write\",\"<fix>/out.txt\"],[\"std::read\",\"<fix>/out.txt\"]]],[\"pnpm test > out.txt 2>&1 && cat out.txt | tail -5\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::write\",\"<fix>/out.txt\"],[\"std::read\",\"<fix>/out.txt\"]]],[\"pnpm test 2>&1 | tee out.txt; grep FAIL out.txt\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::write\",\"<fix>/out.txt\"],[\"std::grep\",\"<fix>\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -770,9 +902,9 @@
     },
     {
       "nodeName": "grepFilterStages",
-      "description": "A grep with no path in a later stage of a pipe searches the previous stage's output and reads no file, so it contributes nothing beyond its redirects. -r still wins (it searches the working directory, and asks std::grep for it), a named path wins over the pipe, a grep outside the pipe still reads stdin, the flag table still applies, a flag after the pattern is refused because a grep that reads a pipe runs as written, and a line of recognized commands with no effect asks std::bash by the audit rule.",
+      "description": "A grep with no path in a later stage of a pipe searches the previous stage's output and reads no file, so it contributes nothing beyond its redirects. -r still wins (it searches the working directory, and asks std::grep for it), a named path wins over the pipe, a grep outside the pipe still reads stdin, the flag table still applies, a flag after the pattern is refused because a grep that reads a pipe runs as written, and a line of recognized commands with no effect asks the quiet question, std::bash::readonly.",
       "input": "",
-      "expectedOutput": "[[[\"std::git::status\"],null],[[\"std::git::status\"],null],[[\"std::git::status\",\"std::grep\"],null],[[\"std::git::status\",\"std::grep\"],null],[[\"std::git::status\",\"std::write\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash\"],{\"kind\":\"noEffects\",\"detail\":\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::git::status\"],null]]",
+      "expectedOutput": "[[[\"std::git::status\"],null],[[\"std::git::status\"],null],[[\"std::git::status\",\"std::grep\"],null],[[\"std::git::status\",\"std::grep\"],null],[[\"std::git::status\",\"std::write\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash::readonly\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::git::status\"],null]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -825,9 +957,9 @@
     },
     {
       "nodeName": "filtersInAPipe",
-      "description": "A filter in a later pipe stage reads the previous stage's output and adds nothing; a filter that names a file asks std::read for it, in a pipe or not. tr takes only literal sets, as many as its flags allow. tee and xargs have no rule, and sort -o is refused. A comma joined to a flag parses, so `cut -d, -f1 one.txt` asks std::read like any other spelling.",
+      "description": "A filter in a later pipe stage reads the previous stage's output and adds nothing; a filter that names a file asks std::read for it, in a pipe or not. tr takes only literal sets, as many as its flags allow. tee asks std::write for the file it writes, xargs has no rule, and sort -o is refused. A comma joined to a flag parses, so `cut -d, -f1 one.txt` asks std::read like any other spelling.",
       "input": "",
-      "expectedOutput": "[[[\"std::git::log\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes 2 sets here\"}],[[\"std::read\",\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"sort does not take `-o`\"}],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`tee` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `xargs`\"}],[[\"std::git::log\",\"std::write\"],null],[[\"std::git::log\"],null],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a tr set is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes `-d` and `-s` once each\"}]]",
+      "expectedOutput": "[[[\"std::git::log\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes 2 sets here\"}],[[\"std::read\",\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"sort does not take `-o`\"}],[[\"std::read\"],null],[[\"std::git::log\",\"std::write\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `xargs`\"}],[[\"std::git::log\",\"std::write\"],null],[[\"std::git::log\"],null],[[\"std::read\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a tr set is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tr takes `-d` and `-s` once each\"}]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -836,9 +968,9 @@
     },
     {
       "nodeName": "punctuationInWords",
-      "description": "A comma joined to a flag is read by the read tables, a reflog revision with braces is a git ref, and a date format is an argument. A brace expansion is unparseable.",
+      "description": "A comma joined to a flag is read by the read tables, a reflog revision with braces is a git ref, and a date format is a word `date` takes, so a lone `date +%Y` asks the quiet question. A brace expansion is unparseable.",
       "input": "",
-      "expectedOutput": "[[\"narrow\",[[\"std::read\",\"one.txt\"]],null],[\"narrow\",[[\"std::read\",\"one.txt\"]],null],[\"narrow\",[[\"std::git::show\",{\"cwd\":\"/repo\",\"ref\":\"HEAD@{1}\"}]],null],[\"narrow\",[[\"std::exec\",{\"command\":\"date\",\"args\":[\"+%Y\"],\"subcommand\":\"+%Y\",\"cwd\":\"/repo\",\"timeout\":0,\"stdin\":\"\"}]],null],[\"broad\",[[\"std::bash\",null]],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"a{b,c}\\\"\"}]]",
+      "expectedOutput": "[[\"narrow\",[[\"std::read\",\"one.txt\"]],null],[\"narrow\",[[\"std::read\",\"one.txt\"]],null],[\"narrow\",[[\"std::git::show\",{\"cwd\":\"/repo\",\"ref\":\"HEAD@{1}\"}]],null],[\"narrow\",[[\"std::bash::readonly\",null]],null],[\"broad\",[[\"std::bash\",null]],{\"kind\":\"unparseable\",\"detail\":\"Unexpected input after commands: \\\"a{b,c}\\\"\"}]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -907,9 +1039,9 @@
     },
     {
       "nodeName": "loneReadIsShellFree",
-      "description": "A lone cat of any number of files, or a lone cat -n, head -n N, or tail -n N of one file, runs shell-free. Another flag, a count of 0, cat -n or head of two files, a redirect, a pipe, or another verb goes through bash, and a missing file asks std::bash. A count given twice is refused on every path, because splitFlags takes a valued flag once.",
+      "description": "A lone cat of any number of files, or a lone cat -n, head -n N, or tail -n N of one file, runs shell-free. Another flag, a count of 0, cat -n or head of two files, a redirect, a pipe, or another verb goes through bash, and so does a missing file, which asks std::read for it so the model reads cat's own error. A count given twice is refused on every path, because splitFlags takes a valued flag once.",
       "input": "",
-      "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"narrow\"]",
+      "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"broad\",\"broad\",\"broad\",\"narrow\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -990,7 +1122,7 @@
       "interruptHandlers": [
         {
           "action": "approve",
-          "expectedMessage": "Are you sure you want to run this shell command?"
+          "expectedMessage": "Run this line, which reads and changes no file?"
         }
       ],
       "evaluationCriteria": [
@@ -1023,9 +1155,9 @@
     },
     {
       "nodeName": "chainsOfInProcessCommands",
-      "description": "A line of in-process commands joined by ;, &&, or || plans as one chain that asks only the steps' own questions. A command no lone planner takes, a parenthesized group, a pipeline, a missing file, or a refused command sends the line down the general path.",
+      "description": "A line of in-process commands joined by ;, &&, or || plans as one chain that asks only the steps' own questions. A command no lone planner takes, a parenthesized group, a pipeline, a missing file, or a refused command sends the line down the general path, where a missing file asks std::read for it, and so does a file the line wrote.",
       "input": "",
-      "expectedOutput": "[[\"shellFree\",\"chain\",[]],[\"shellFree\",\"chain\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"chain\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"chain\",[\"std::grep\"]],[\"shellFree\",\"chain\",[]],[\"narrow\",\"bash\",[\"std::git::status\"]],[\"broad\",\"bash\",[\"std::bash\"]],[\"broad\",\"bash\",[\"std::bash\"]],[\"narrow\",\"bash\",[\"std::read\"]],[\"broad\",\"bash\",[\"std::bash\"]],[\"broad\",\"bash\",[\"std::bash\"]],[\"refuse\",\"refuse\",[]],[\"broad\",\"bash\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"shellFree\",\"chain\",[]],[\"shellFree\",\"chain\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"chain\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"chain\",[\"std::grep\"]],[\"shellFree\",\"chain\",[]],[\"narrow\",\"bash\",[\"std::git::status\"]],[\"narrow\",\"bash\",[\"std::bash::readonly\"]],[\"narrow\",\"bash\",[\"std::bash::readonly\"]],[\"narrow\",\"bash\",[\"std::read\"]],[\"narrow\",\"bash\",[\"std::read\"]],[\"narrow\",\"bash\",[\"std::write\",\"std::read\"]],[\"refuse\",\"refuse\",[]],[\"broad\",\"bash\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1138,9 +1270,9 @@
     },
     {
       "nodeName": "cdOnItsOwnLineStaysStrict",
-      "description": "These lines still ask std::bash: a cd on its own line to a missing folder, with -, or with a variable, a later command that moves again and is not last, a cd followed only by an echo, which raises no effect, cd x && a; b, and an ls followed by a trailing cd to a missing folder.",
+      "description": "These lines still ask std::bash: a cd on its own line to a missing folder, with -, or with a variable, a later command that moves again and is not last, cd x && a; b, and an ls followed by a trailing cd to a missing folder. A cd followed only by an echo raises no effect, so it asks the quiet question.",
       "input": "",
-      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
+      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"narrow\",[[\"std::bash::readonly\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1149,9 +1281,9 @@
     },
     {
       "nodeName": "cdAnywhereElseIsBroad",
-      "description": "cd alone, before ||, last in a chain, in a pipeline, to a missing folder, to a file, with no argument, with -, with a variable, with two arguments, with a redirect, followed by a second cd, or on the right of || asks std::bash.",
+      "description": "cd before ||, last in a chain, in a pipeline, to a missing folder, to a file, with no argument, with -, with a variable, with two arguments, with a redirect, followed by a second cd, or on the right of || asks std::bash. A cd alone raises no effect, so it asks the quiet question.",
       "input": "",
-      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
+      "expectedOutput": "[[\"narrow\",[[\"std::bash::readonly\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1238,7 +1370,7 @@
     },
     {
       "nodeName": "listingOfAMissingPath",
-      "description": "A listing of a path that does not exist asks std::bash, with the resolver's message.",
+      "description": "A listing of a path whose folder does not exist either asks std::bash, with the resolver's message.",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [
@@ -1388,9 +1520,9 @@
     },
     {
       "nodeName": "programsAskStdExec",
-      "description": "A program safeBash has no rule for asks std::exec, the question the exec tool asks. A verb a rule owns (git, find, tail) keeps its own answer, a bash builtin or a program that runs other programs asks std::bash, and so does a program fed by a pipe or an input redirect, and a `which` in a chain, which a lone line refuses. A lone `cd ..` asks std::bash because the line raises no effect.",
+      "description": "A program safeBash has no rule for asks std::exec, the question the exec tool asks. A verb a rule owns (git, find, tail) keeps its own answer, a bash builtin or a program that runs other programs asks std::bash, and so does a program fed by a pipe or an input redirect, and a lookup of `agency` in a chain, which a lone line refuses. A lone `cd ..` and a lone `true` raise no effect, so they ask the quiet question.",
       "input": "",
-      "expectedOutput": "[[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\",\"std::write\"],null],[[\"std::exec\"],null],[[\"std::git::status\",\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `git push`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-delete`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tail does not take `-f`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sh`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `env`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sudo`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a leading assignment changes what the command does\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the pnpm arguments are not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the command word is not a literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`python3` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`pnpm` reads an input redirect, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `agency`\"}],[[\"std::bash\"],{\"kind\":\"noEffects\",\"detail\":\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`hash` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`export` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`true` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `npx`\"}],[[\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`pnpm` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `which`\"}]]",
+      "expectedOutput": "[[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\"],null],[[\"std::exec\",\"std::write\"],null],[[\"std::exec\"],null],[[\"std::git::status\",\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `git push`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"find does not take `-delete`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"tail does not take `-f`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sh`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `env`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `sudo`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a leading assignment of `FOO` changes what the command does\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the pnpm arguments are not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the command word is not a literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`python3` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`pnpm` reads an input redirect, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `agency`\"}],[[\"std::bash::readonly\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`hash` is a bash builtin, not a program\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`export` is a bash builtin, not a program\"}],[[\"std::bash::readonly\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"no rule for `npx`\"}],[[\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`pnpm` reads a pipe, and std::exec cannot say what it reads\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a lookup of `agency` has no rule\"}]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1731,9 +1863,9 @@
     },
     {
       "nodeName": "ghLinesACoderWrites",
-      "description": "Three gh lines a coding agent writes to review a pull request. The pr view is narrow and asks only std::github reads. The diff line is broad because wc reads a file the line makes, though its gh half alone is narrow. The commits line uses --jq, which has no rule.",
+      "description": "Three gh lines a coding agent writes to review a pull request. The pr view is narrow and asks only std::github reads. The diff line is narrow: wc reads the file the line's redirect asked to write. The commits line uses --jq, which has no rule.",
       "input": "",
-      "expectedOutput": "[[\"narrow\",[[\"std::github::prGet\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451}],[\"std::github::prFiles\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}]],\"gh pr view 1451 --json=title,body,author,baseRefName,headRefName,state,additions,deletions,changedFiles,files --repo github.com/egonSchiele/agency-lang\",[],null],[\"broad\",[\"unrecognized\",true]],[\"narrow\",[\"std::github::prDiff\",\"std::write\"]],[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]]]",
+      "expectedOutput": "[[\"narrow\",[[\"std::github::prGet\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451}],[\"std::github::prFiles\",{\"owner\":\"egonSchiele\",\"repo\":\"agency-lang\",\"number\":1451,\"perPage\":0,\"page\":1}]],\"gh pr view 1451 --json=title,body,author,baseRefName,headRefName,state,additions,deletions,changedFiles,files --repo github.com/egonSchiele/agency-lang\",[],null],[\"narrow\",null],[\"narrow\",[\"std::github::prDiff\",\"std::write\"]],[\"broad\",[\"unrecognized\",\"gh's --jq runs a program that can read the environment\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"

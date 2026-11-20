@@ -58,6 +58,13 @@ effect std::bash {
   timeout: number;
   stdin: string
 }
+/** A shell line whose commands read no file and change nothing, such as
+ `pwd` or `which node; date`. Every word in it is known before it runs. */
+@always(command, cwd)
+effect std::bash::readonly {
+  command: string;
+  cwd: string
+}
 @alwaysUnder(dir)
 effect std::ls {
   dir: string;

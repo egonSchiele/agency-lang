@@ -1,0 +1,95 @@
+/** @module
+  @summary The last settings: what a new session starts with. The preset
+  and the model choices the person last chose, in any session, kept in
+  `last-settings.json` in the agent home. The session core writes them
+  after a model, effort or preset answer, and a run that names no preset,
+  model or effort flag starts from them. They replace the default preset:
+  a preset marked default only seeds the start until the first change.
+  See "The last settings" in docs/dev/agents/agent-presets.md.
+*/
+import { _readLastSettings, _writeLastSettings } from "agency-lang/stdlib-lib/agentLastSettings.js"
+
+import { POLICY_DIR } from "./config.agency"
+import { EFFORT_CHOICES, EffortChoice } from "./effort.agency"
+import { ModelChoices, ModelFlags, hasModelFlags, noModelChoices } from "./modelRequest.agency"
+import { notice } from "./notice.agency"
+import { PresetTable, defaultNames } from "./presets.agency"
+import { currentRecord } from "./record.agency"
+import { startedWithModelFlags } from "./session.agency"
+
+/** What a new session starts with. `preset` is a saved preset's name, or
+  "" for none. `choices` never holds `llmOptions`. The file's own type is
+  `LastSettings` in lib/stdlib/agentLastSettings.ts. */
+export type LastSettings = {
+  preset: string;
+  choices: ModelChoices
+}
+
+/** The settings to keep for new chats. The options are dropped: they can
+  name a server, and the coordinator's useLlmOptions tool can set them. */
+export def lastSettingsOf(preset: string, choices: ModelChoices): LastSettings {
+  let kept: ModelChoices = {
+    pin: choices.pin,
+    slots: choices.slots
+  }
+  if (choices.effort != null) {
+    kept = { ...kept, effort: choices.effort }
+  }
+  return {
+    preset: preset,
+    choices: kept
+  }
+}
+
+/** The kept choices, with an effort the start can't use dropped. The file
+  may have been edited by hand. */
+export def checkedChoices(last: LastSettings): ModelChoices {
+  const choices: ModelChoices = {
+    pin: last.choices.pin,
+    slots: last.choices.slots
+  }
+  const effort = last.choices.effort
+  if (effort != null && EFFORT_CHOICES.includes(effort)) {
+    return { ...choices, effort: effort as EffortChoice }
+  }
+  return choices
+}
+
+/** Whether a run starts from the last settings: it names no preset, no
+  model flag and no effort flag. Any of those means it is choosing now. */
+export def usesLastSettings(preset: string, flags: ModelFlags): boolean {
+  return preset == "" && !hasModelFlags(flags) && flags.effort == null
+}
+
+/** For someone upgrading from the default preset: the one preset marked
+  `"default": true`, as last settings with no choices. Null when none or
+  more than one is marked. */
+export def seedFromDefault(table: PresetTable): LastSettings | null {
+  const marked = defaultNames(table)
+  if (marked.length != 1) {
+    return null
+  }
+  return {
+    preset: marked[0],
+    choices: noModelChoices()
+  }
+}
+
+/** The last settings in the agent home, or null when there are none. */
+export def readLastSettings(): LastSettings | null {
+  return _readLastSettings(POLICY_DIR)
+}
+
+/** Keep this session's preset and choices for new chats. Only a session
+  that is saved, and that started with no model or effort flag, writes
+  them. An incognito session has no record, so it writes nothing. A write
+  that fails is a warning: the change it follows still counts. */
+export def rememberSettings(preset: string, choices: ModelChoices) {
+  if (currentRecord() == null || startedWithModelFlags()) {
+    return
+  }
+  const problem = _writeLastSettings(POLICY_DIR, lastSettingsOf(preset, choices))
+  if (problem != "") {
+    notice("Could not remember these settings for new chats: ${problem}", "warning")
+  }
+}

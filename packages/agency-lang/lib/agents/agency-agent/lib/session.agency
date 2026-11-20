@@ -27,6 +27,7 @@ import {
   ModelChoices,
   ModelFlags,
   ModelRequest,
+  hasModelFlags,
   localModelOf,
   modelFlagsFromArgs,
   noModelChoices,
@@ -112,6 +113,13 @@ export def setStartupModelFlags(
   _startupFlags = flags
   _startupModelSettings = settings
   _startupDefaultSlots = defaults
+}
+
+/** Whether the run started with a model flag or `--effort`. Such a run is
+  a one-off: those flags are not session choices, so its settings are not
+  remembered for new chats (lastSettings.agency). */
+export def startedWithModelFlags(): boolean {
+  return hasModelFlags(_startupFlags) || _startupFlags.effort != null
 }
 
 // A session saved before the default router existed restores this global

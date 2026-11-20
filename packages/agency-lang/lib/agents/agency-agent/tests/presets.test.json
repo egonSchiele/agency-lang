@@ -22,9 +22,9 @@
       ]
     },
     {
-      "nodeName": "oneDefaultIsUsed",
+      "nodeName": "noFlagNoPreset",
       "input": "",
-      "expectedOutput": "\"opus\"",
+      "expectedOutput": "\"[]\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -35,16 +35,6 @@
       "nodeName": "badPresetIsAWarning",
       "input": "",
       "expectedOutput": "[\"Warning: preset 'broken': maxToolCallRounds must be a whole number above zero, in <path>; ignoring it.\"]",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "twoDefaultsMeanNoPreset",
-      "input": "",
-      "expectedOutput": "\"|Warning: presets opus and cheap are both marked default in <path>; using no preset.\"",
       "evaluationCriteria": [
         {
           "type": "exact"

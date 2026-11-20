@@ -172,14 +172,6 @@ def tableWarnings(table: PresetTable): string[] {
   return ["Warning: ${table.fileProblem} in ${SETTINGS_PATH}; ignoring it.", ...perPreset]
 }
 
-def sayNames(names: string[]): string {
-  if (names.length == 2) {
-    return "${names[0]} and ${names[1]} are both"
-  }
-  const allButLast = names.slice(0, names.length - 1).join(", ")
-  return "${allButLast}, and ${names[names.length - 1]} are all"
-}
-
 def namedChoice(name: string, table: PresetTable, warnings: string[]): Result<PresetChoice> {
   const problem = savedEntry(table.problems, name)
   if (problem != null) {
@@ -196,26 +188,19 @@ def namedChoice(name: string, table: PresetTable, warnings: string[]): Result<Pr
 
 export def choosePreset(flag: string, table: PresetTable): Result<PresetChoice> {
   """
-  Pick the preset a run starts with: the --preset value, else the one
-  default preset, else none. Two or more defaults mean none, with a warning.
+  Pick the preset a run starts with: the named one, else none. A preset
+  marked default does not decide it: a run with no preset flag starts
+  from the last settings (lastSettings.agency), which name the preset.
 
-  @param flag - The --preset value, or "" when it was not given
+  @param flag - The preset's name, or "" for none
   @param table - The saved presets
   """
   const warnings = tableWarnings(table)
   if (flag != "") {
     return namedChoice(flag, table, warnings)
   }
-  const defaults = defaultNames(table)
-  if (defaults.length > 1) {
-    const warning = "Warning: presets ${sayNames(defaults)} marked default in ${SETTINGS_PATH}; using no preset."
-    return success({
-      name: "",
-      warnings: [...warnings, warning]
-    })
-  }
   return success({
-    name: defaults[0] ?? "",
+    name: "",
     warnings: warnings
   })
 }

@@ -716,16 +716,26 @@ export def pickModelsForAgent(args: Record<string, any>) {
   `saveSearchChoice` is whether the search backend picked for this
   session is also saved to settings.json. The terminal saves it. An app
   does not: its environment often lacks the search keys a terminal has,
-  and a choice saved from there would follow the user back. */
-export def startModels(flags: ModelFlags, saveSearchChoice: boolean = true): Result<boolean> {
+  and a choice saved from there would follow the user back.
+
+  `choices` are the session's own choices to start with: the last
+  settings' (lastSettings.agency), or null for none. They become the
+  session's choices when the request resolves. */
+export def startModels(
+  flags: ModelFlags,
+  saveSearchChoice: boolean = true,
+  choices: ModelChoices | null = null,
+): Result<boolean> {
   // A one-shot run gets the default slots too: this runs before the
   // agent branches on one-shot.
   setStartupModelFlags(flags, getModelSettings(loadSettings()), defaultSlots())
-  const request = currentModelRequest(noModelChoices())
+  const chosen = choices ?? noModelChoices()
+  const request = currentModelRequest(chosen)
   const applied = applyModelRequest(request, _startupModelSettings)
   if (isFailure(applied)) {
     return applied
   }
+  _choices = chosen
   configureSearch(requestIsLocal(request), saveSearchChoice)
   return success(true)
 }

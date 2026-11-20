@@ -1,6 +1,14 @@
-import { checkedChoices, lastSettingsOf, seedFromDefault, usesLastSettings } from "../lib/lastSettings.agency"
+import { setEnv } from "std::system"
+
+import {
+  checkedChoices,
+  lastSettingsOf,
+  seedFromDefault,
+  startWith,
+  usesLastSettings,
+ } from "../lib/lastSettings.agency"
 import { noModelChoices, noModelFlags } from "../lib/modelRequest.agency"
-import { readPresetTable } from "../lib/presets.agency"
+import { activePresetName, readPresetTable } from "../lib/presets.agency"
 
 static const BIG = { provider: "anthropic", pin: "claude-opus-4-8" }
 static const SMALL = { provider: "anthropic", pin: "claude-sonnet-4-6" }
@@ -43,4 +51,20 @@ node seedNeedsOneDefault(): string {
     return "no seed"
   }
   return "${one.preset}|${JSON.stringify(one.choices)}|${none == null}|${two == null}"
+}
+
+// A remembered preset that was deleted is dropped with one warning, and
+// the run starts with no preset.
+node startFallsBackOnGonePreset(): string {
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  const started = startWith({ preset: "deleted", choices: noModelChoices() }, {
+    preset: "",
+    flags: noModelFlags(),
+    saveSearchChoice: false,
+    settings: { presets: { big: BIG } }
+  })
+  if (started is failure(reason)) {
+    return "failed: ${reason}"
+  }
+  return "${started.value.join("|")}|[${activePresetName()}]"
 }

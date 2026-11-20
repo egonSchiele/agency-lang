@@ -72,6 +72,16 @@
       ]
     },
     {
+      "nodeName": "choicesComeFirstInDetection",
+      "input": "",
+      "expectedOutput": "\"openrouter/moonshotai/kimi-k3|choice-main|preset-reasoning claude-opus-4-8\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "localPresetRunsLocal",
       "input": "",
       "expectedOutput": "\"qwen3.5-2b|mlx/nomic-embed\"",

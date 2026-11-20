@@ -4,6 +4,7 @@
     { "nodeName": "keepsNoOptions", "input": "", "expectedOutput": "\"{\\\"preset\\\":\\\"big\\\",\\\"choices\\\":{\\\"pin\\\":\\\"opus\\\",\\\"slots\\\":{},\\\"effort\\\":\\\"high\\\"}}\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "badEffortDropped", "input": "", "expectedOutput": "\"true|low\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "flagsTurnItOff", "input": "", "expectedOutput": "\"true|false|false|false\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "seedNeedsOneDefault", "input": "", "expectedOutput": "\"big|{\\\"pin\\\":\\\"\\\",\\\"slots\\\":{}}|true|true\"", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "seedNeedsOneDefault", "input": "", "expectedOutput": "\"big|{\\\"pin\\\":\\\"\\\",\\\"slots\\\":{}}|true|true\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "startFallsBackOnGonePreset", "input": "", "expectedOutput": "\"The preset 'deleted' your last chat used is gone or not valid; starting without it.|[]\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

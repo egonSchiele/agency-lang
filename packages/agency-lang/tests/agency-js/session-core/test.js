@@ -475,6 +475,84 @@ const unsavedChoice = await startSession({
 await unsavedChoice.answer({ kind: "effort", effort: "low" });
 result.unsavedNotRemembered = !existsSync(lastSettingsFile);
 
+// A run that names no preset, model or effort flag starts from the last
+// settings. Ones that can't be used here are dropped with a warning.
+const presetsSettings = readFileSync(settingsFile, "utf8");
+const writeLast = (value) => writeFileSync(lastSettingsFile, JSON.stringify(value));
+const startFromLast = (overrides = {}) =>
+  startSession({ models: noModelFlags, ...overrides }, PIN, { keepLastSettings: true });
+const warningsOf = (session) =>
+  eventsOf(session, "session.notice")
+    .filter((event) => event.level === "warning")
+    .map((event) => event.text);
+const startedOn = (session) => ({
+  running: !session.ended,
+  preset: session.ended ? null : pauseData(session).preset,
+});
+const BIG_AT_LOW = { preset: "big", choices: { pin: "", slots: {}, effort: "low" } };
+
+writeLast(BIG_AT_LOW);
+const fromLast = await startFromLast();
+result.startsFromLast = { preset: pauseData(fromLast).preset, effort: pauseData(fromLast).effort };
+
+writeLast(BIG_AT_LOW);
+// startData's own models name a model: a flag, so the file is not read.
+const flagged = await startSession({}, PIN, { keepLastSettings: true });
+result.flagIgnoresLast = pauseData(flagged).preset;
+
+writeLast({ preset: "deleted", choices: { pin: "", slots: {} } });
+const gone = await startFromLast();
+result.rememberedPresetGone = { ...startedOn(gone), warnings: warningsOf(gone) };
+
+writeLast({ preset: "mine", choices: { pin: "", slots: {} } });
+const localLast = await startFromLast();
+result.localPresetFallsBack = { ...startedOn(localLast), warnings: warningsOf(localLast) };
+
+// A model picked where its key was set, started where it isn't.
+const openRouterKey = process.env.OPENROUTER_API_KEY;
+delete process.env.OPENROUTER_API_KEY;
+writeLast({ preset: "", choices: { pin: "openrouter/moonshotai/kimi-k3", slots: {} } });
+const keyless = await startFromLast();
+result.lastModelWithoutKeyFallsBack = {
+  ...startedOn(keyless),
+  warned: warningsOf(keyless).some((text) => text.startsWith("Your last settings could not be used:")),
+};
+if (openRouterKey !== undefined) process.env.OPENROUTER_API_KEY = openRouterKey;
+
+// Someone upgrading: no file, and a preset marked default seeds the start
+// without writing anything. Their first change replaces the mark.
+const savedPresets = JSON.parse(presetsSettings).presets;
+const SMALL = { provider: "anthropic", pin: "claude-sonnet-4-6" };
+rmSync(lastSettingsFile, { force: true });
+writeFileSync(
+  settingsFile,
+  JSON.stringify({ presets: { ...savedPresets, big: { ...savedPresets.big, default: true }, small: SMALL } }),
+);
+const seeded = await startFromLast();
+result.seedFromDefaultMark = {
+  preset: pauseData(seeded).preset,
+  fileWritten: existsSync(lastSettingsFile),
+};
+await seeded.answer({ kind: "effort", effort: "low" });
+const afterTheChange = lastSettings();
+writeFileSync(
+  settingsFile,
+  JSON.stringify({ presets: { ...savedPresets, small: { ...SMALL, default: true } } }),
+);
+const afterSeed = await startFromLast();
+result.changeReplacesSeed = {
+  file: afterTheChange,
+  preset: pauseData(afterSeed).preset,
+  effort: pauseData(afterSeed).effort,
+};
+
+// A one-shot run reads them too: no default preset is left to lean on.
+writeFileSync(settingsFile, presetsSettings);
+writeLast(BIG_AT_LOW);
+const oneShotFromLast = await startFromLast({ oneShot: true });
+result.oneShotReadsLast = pauseData(oneShotFromLast).preset;
+rmSync(lastSettingsFile, { force: true });
+
 // A model named with the provider a person sees. The agent runs every
 // OpenAI model through its `openai-responses` client, and reports that.
 process.env.OPENAI_API_KEY = "test-key";

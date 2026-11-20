@@ -36,12 +36,14 @@ node flagWins(): string {
   return choice.value.name
 }
 
-node oneDefaultIsUsed(): string {
+// A preset marked default no longer decides the start: the last settings
+// do (lastSettings.agency), and the mark only seeds them.
+node noFlagNoPreset(): string {
   const choice = choosePreset("", table())
   if (isFailure(choice)) {
     return "failed: ${choice.error}"
   }
-  return choice.value.name
+  return "[${choice.value.name}]"
 }
 
 node badPresetIsAWarning(): string[] {
@@ -50,19 +52,6 @@ node badPresetIsAWarning(): string[] {
     return ["failed"]
   }
   return map(choice.value.warnings, \warning -> warning.replaceAll(SETTINGS_PATH, "<path>"))
-}
-
-node twoDefaultsMeanNoPreset(): string {
-  const both = readPresetTable({
-    opus: { default: true, provider: "anthropic" },
-    cheap: { default: true, provider: "openrouter" }
-  })
-  const choice = choosePreset("", both)
-  if (isFailure(choice)) {
-    return "failed: ${choice.error}"
-  }
-  const text = "${choice.value.name}|${choice.value.warnings.join("|")}"
-  return text.replaceAll(SETTINGS_PATH, "<path>")
 }
 
 node noPresetsMeansNoPreset(): string {

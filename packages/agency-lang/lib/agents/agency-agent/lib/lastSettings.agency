@@ -13,9 +13,10 @@ import { POLICY_DIR } from "./config.agency"
 import { EFFORT_CHOICES, EffortChoice } from "./effort.agency"
 import { ModelChoices, ModelFlags, hasModelFlags, noModelChoices } from "./modelRequest.agency"
 import { notice } from "./notice.agency"
-import { PresetTable, defaultNames } from "./presets.agency"
+import { PresetTable, defaultNames, readPresetTable, startPresetQuiet } from "./presets.agency"
 import { currentRecord } from "./record.agency"
-import { startedWithModelFlags } from "./session.agency"
+import { startModels, startedWithModelFlags } from "./session.agency"
+import { Settings } from "./settings.agency"
 
 /** What a new session starts with. `preset` is a saved preset's name, or
   "" for none. `choices` never holds `llmOptions`. The file's own type is
@@ -78,6 +79,72 @@ export def seedFromDefault(table: PresetTable): LastSettings | null {
 /** The last settings in the agent home, or null when there are none. */
 export def readLastSettings(): LastSettings | null {
   return _readLastSettings(POLICY_DIR)
+}
+
+/** What a run starts with, from its `ProgramStart`. */
+export type StartRequest = {
+  preset: string;
+  flags: ModelFlags;
+  saveSearchChoice: boolean;
+  settings: Settings
+}
+
+/** Pick the preset and the models a run starts with, from the last
+  settings when it names no preset, model or effort flag. Returns the
+  warnings to show. A preset marked default seeds the last settings
+  until there are any. */
+export def startPresetAndModels(start: StartRequest): Result<string[]> {
+  let last: LastSettings | null = null
+  if (usesLastSettings(start.preset, start.flags)) {
+    last = readLastSettings() ?? seedFromDefault(readPresetTable(start.settings.presets))
+  }
+  return startWith(last, start)
+}
+
+/** Start with `last`, or as the request says when it is null. Last
+  settings that can't be used here are dropped with one warning, and the
+  run starts with no preset and no choices. If that start fails too, the
+  failure is returned. */
+export def startWith(last: LastSettings | null, start: StartRequest): Result<string[]> {
+  if (last == null) {
+    return startAsRequested(start)
+  }
+  const preset = startPresetQuiet(last.preset, start.settings)
+  if (isFailure(preset)) {
+    return startWithout(start, "The preset '${last.preset}' your last chat used is gone or not valid; starting without it.")
+  }
+  const models = startModels(start.flags, start.saveSearchChoice, checkedChoices(last))
+  if (models is failure(reason)) {
+    // The reason is a sentence; the warning gives it its own full stop.
+    let said = "${reason}"
+    if (said.endsWith(".")) {
+      said = said.slice(0, said.length - 1)
+    }
+    return startWithout(start, "Your last settings could not be used: ${said}. Starting without them.")
+  }
+  return preset
+}
+
+def startAsRequested(start: StartRequest): Result<string[]> {
+  const preset = startPresetQuiet(start.preset, start.settings)
+  if (isFailure(preset)) {
+    return preset
+  }
+  const models = startModels(start.flags, start.saveSearchChoice)
+  if (models is failure(reason)) {
+    return failure(reason)
+  }
+  return preset
+}
+
+// Only the fallback's own warnings are shown, so a table warning the
+// first attempt also gave is not said twice.
+def startWithout(start: StartRequest, warning: string): Result<string[]> {
+  const started = startAsRequested(start)
+  if (isFailure(started)) {
+    return started
+  }
+  return success([...started.value, warning])
 }
 
 /** Keep this session's preset and choices for new chats. Only a session

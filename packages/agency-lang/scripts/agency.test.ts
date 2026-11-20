@@ -154,6 +154,11 @@ describe("runCli", () => {
 });
 
 describe("agency CLI command tree", () => {
+  it("--version prints the package's version", () => {
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8"));
+    expect(createProgram().version()).toBe(packageJson.version);
+  });
+
   it("exposes optimize only at the top level, not as `eval optimize`", () => {
     const program = createProgram();
     const topLevelCommands = program.commands.map((command) => command.name());

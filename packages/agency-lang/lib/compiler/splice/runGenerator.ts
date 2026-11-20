@@ -304,7 +304,7 @@ function execute(
   const wallClockMs = options.wallClockMs ?? WALL_CLOCK_MS;
   const memoryMb = options.memoryMb ?? MEMORY_MB;
   try {
-    execFileSync("node", [`--max-old-space-size=${memoryMb}`, scriptPath], {
+    execFileSync(process.execPath, [`--max-old-space-size=${memoryMb}`, scriptPath], {
       timeout: wallClockMs,
       cwd,
       encoding: "utf-8",

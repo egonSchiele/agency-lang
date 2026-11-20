@@ -1394,7 +1394,7 @@ async function runTsTestDir(
 
     const testFile = "test.js";
     try {
-      const { stdout, stderr } = await execFileAsync("node", [testFile], {
+      const { stdout, stderr } = await execFileAsync(process.execPath, [testFile], {
         cwd: dir,
         maxBuffer: 10 * 1024 * 1024,
         env: { ...process.env, ...mocksEnv },

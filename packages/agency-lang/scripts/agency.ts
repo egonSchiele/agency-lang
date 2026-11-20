@@ -104,7 +104,7 @@ import { repeatsDecoratorStage } from "@/preprocessors/decoratorDesugar.js";
 import { withSourcePath } from "@/compiler/typecheck.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { ImportResolutionError, formatImportResolutionError } from "@/importResolutionError.js";
-import { importKind } from "@/importPaths.js";
+import { getPackageRoot, importKind } from "@/importPaths.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import { Command, InvalidArgumentError, Option } from "@/vendor/commander/index.js";
 import type { Platform } from "@/host/host.js";
@@ -296,6 +296,12 @@ function printAstResults(results: { file: string; program: unknown }[]): void {
   console.log(JSON.stringify(results, null, 2));
 }
 
+/** The version in agency-lang's own package.json, for `--version`. */
+function packageVersion(): string {
+  const packageJson = path.join(getPackageRoot(), "package.json");
+  return JSON.parse(fs.readFileSync(packageJson, "utf8")).version;
+}
+
 export function createProgram(deps: CliDependencies = {}): Command {
   const loadLspStartServer = deps.loadLspStartServer ?? defaultLoadLspStartServer;
   const loadMcpStartServer = deps.loadMcpStartServer ?? defaultLoadMcpStartServer;
@@ -305,7 +311,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   program
     .name("agency")
     .description("Agency Language CLI")
-    .version("0.0.105")
+    .version(packageVersion())
     .option("-v, --verbose", "Enable verbose logging during parsing")
     .option(
       "-c, --config <path>",

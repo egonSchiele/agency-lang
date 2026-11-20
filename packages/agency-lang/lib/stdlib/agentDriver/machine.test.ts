@@ -42,6 +42,7 @@ function reported(model: string): PauseData {
     context: "",
     brain: "simple",
     search: "hosted",
+    capabilities: null,
   };
 }
 

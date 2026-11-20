@@ -220,5 +220,19 @@
   "toolRounds": {
     "oneShot": "Of the 100 tool rounds for this ",
     "session": "Of the 50 tool rounds for this r"
+  },
+  "local": {
+    "refused": { "level": "error", "text": "Local models are not available here." },
+    "kept": true
+  },
+  "capabilities": {
+    "reported": 1234,
+    "notice": { "level": "info", "text": "Saved." },
+    "saved": 1234,
+    "removed": {
+      "notice": { "level": "info", "text": "Override removed." },
+      "saved": "none"
+    },
+    "refused": { "level": "error", "text": "Can't set maxTokens to lots." }
   }
 }

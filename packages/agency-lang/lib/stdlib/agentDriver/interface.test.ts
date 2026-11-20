@@ -14,6 +14,7 @@ const REPORTED: PauseData = {
   context: "10%",
   brain: "simple",
   search: "hosted",
+  capabilities: { model: "sonnet", provider: "anthropic" },
 };
 
 function raised(effect: string, data: unknown): Interrupt {
@@ -56,6 +57,11 @@ describe("pauseData", () => {
   it("reads a pause from a core that reports no search backend as an empty one", () => {
     const { search: _none, ...noSearchField } = REPORTED;
     expect(pauseData([raised("agent::sessionInput", noSearchField)])?.search).toBe("");
+  });
+
+  it("reads a pause from a core that reports no capabilities as null", () => {
+    const { capabilities: _none, ...noCapabilities } = REPORTED;
+    expect(pauseData([raised("agent::sessionInput", noCapabilities)])?.capabilities).toBeNull();
   });
 });
 

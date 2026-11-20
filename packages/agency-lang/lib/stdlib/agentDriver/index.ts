@@ -7,6 +7,7 @@ export {
   messageAnswer,
   pauseData,
   type Answer,
+  type CapabilityChange,
   type LimitFlags,
   type MessageAnswer,
   type ModelFlags,

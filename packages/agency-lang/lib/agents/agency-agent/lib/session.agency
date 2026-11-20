@@ -68,6 +68,7 @@ import {
   overrideFromResolved,
   configureLocalModel,
   defaultSlots,
+  explicitRouterSpec,
   getResolvedSlots,
   getCapabilities,
   getCapabilitiesResolved,
@@ -545,6 +546,23 @@ export def reactToSlotChange(change: SlotChange): boolean {
     }
   }
   return false
+}
+
+/** `/local`: run the session on a local model, as the `local` answer asks.
+  The router the user set keeps routing; the default router stays out of a
+  local session. Refused where the process cannot host a local model. */
+export def useLocalModel(model: string): Result<boolean> {
+  if (!_localModelsAllowed()) {
+    return failure(LOCAL_MODELS_OFF)
+  }
+  const before = getResolvedSlots()
+  const router = explicitRouterSpec()
+  configureLocalModel(model, "", router)?
+  configureSearch(true)
+  for (change in diffResolved(before, getResolvedSlots())) {
+    reactToSlotChange(change)
+  }
+  return success(true)
 }
 
 // ChoiceItem list for the model pickers: the hosted catalog, filtered, each

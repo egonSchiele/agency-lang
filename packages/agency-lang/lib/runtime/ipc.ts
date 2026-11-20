@@ -112,6 +112,8 @@ const RUN_DIR_PREFIX = "run-";
 const PROGRAM_DIR = "program";
 /** The link's name in a run folder's `node_modules`: the package's name. */
 const PACKAGE_LINK = "agency-lang";
+/** The temp root's name under the Agency home. */
+const RUN_TEMP_DIR = "tmp";
 
 /** Where `run()` writes a compiled program before it starts the child:
  *  `<agency home>/tmp`. Not the package's own folder, which an install may
@@ -122,8 +124,6 @@ const PACKAGE_LINK = "agency-lang";
 export function runTempRoot(host: Pick<Host, "settings" | "system">): string {
   return path.join(agencyHomeDir(host), RUN_TEMP_DIR);
 }
-
-const RUN_TEMP_DIR = "tmp";
 
 /** Makes the temp root, private to this user, or checks that an existing
  *  one is, and returns its path: the child runs code from it, so nobody

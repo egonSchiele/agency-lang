@@ -214,7 +214,7 @@ export idempotent def compile(source: string, dir: string = "", strict: boolean 
   hosts should verify checkpoint integrity before resuming saved code; see
   [checkpoint integrity](https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/docs/dev/runtime/checkpoint-integrity.md).
 */
-@capabilities(fileWrite, subprocess)
+@capabilities(fileRead, fileWrite, subprocess)
 export def run(
   compiled: CompiledProgram,
   node: string,
@@ -251,7 +251,7 @@ export def run(
 
 // Only the prepared-function path supplies a source identity. An arbitrary
 // program with a node called invokeLearned remains an ordinary run.
-@capabilities(fileWrite, subprocess)
+@capabilities(fileRead, fileWrite, subprocess)
 def _runProgram(
   compiled: CompiledProgram,
   node: string,

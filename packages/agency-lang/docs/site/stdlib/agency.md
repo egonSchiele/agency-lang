@@ -534,7 +534,7 @@ Run a compiled program in a child process. Parent handlers and guards
 
 **Throws:** `std::run`, `std::guard`
 
-**Needs:** `fileWrite`, `subprocess`
+**Needs:** `fileRead`, `fileWrite`, `subprocess`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency.agency#L218))
 

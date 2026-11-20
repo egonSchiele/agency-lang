@@ -87,7 +87,7 @@ On the parent side, `_run` — a `runBatch` adopter with a single child (`subpro
 
 **Resume:** `respondToInterrupts` replays the parent; `_run` re-runs, finds the payload plus a response for every pending interrupt id (`collectSubprocessResponses` — order-preserving, ids are the routing keys), and forks a fresh child with a `resume` instruction. The bootstrap re-attaches the shared checkpoint to each interrupt and calls the compiled module's own `respondToInterrupts` export — the exact machinery in-process resumes use. Replay re-registers handlers on BOTH sides before any interrupt site resolves (handlers are safety infrastructure; covered by `pause-then-child-handler` and `pause-then-parent-handler` tests). A resumed child that pauses again re-enters the same cycle (multi-cycle). A rejection response is not an abort: the interrupt site returns the failure into the child's code, which continues.
 
-**Durability:** the parent checkpoint is fully self-contained. The compiled value carries its own code: `{ moduleId, code, modules?, entryPath? }`, where `modules` and `entryPath` carry the rest of a multi-file closure. The Agency-level `CompiledProgram` type declares only `moduleId`, so a hand-built value typechecks and `materializeCompiledScript` fails it with a pointed message. `compile()` does not touch disk. `_run` materializes the script into `.agency-tmp/<nanoid>/` at every fork and deletes it at every settle. The surfaced `Interrupt[]` survives a JSON round-trip and resumes in a fresh process after wiping `.agency-tmp` (see `tests/agency-js/subprocess-durable-resume`).
+**Durability:** the parent checkpoint is fully self-contained. The compiled value carries its own code: `{ moduleId, code, modules?, entryPath? }`, where `modules` and `entryPath` carry the rest of a multi-file closure. The Agency-level `CompiledProgram` type declares only `moduleId`, so a hand-built value typechecks and `materializeCompiledScript` fails it with a pointed message. `compile()` does not touch disk. `_run` materializes the script into a run folder under `<agency home>/tmp/` at every fork and deletes it at every settle. The surfaced `Interrupt[]` survives a JSON round-trip and resumes in a fresh process after wiping that folder (see `tests/agency-js/subprocess-durable-resume`).
 
 ## Message protocol
 
@@ -129,9 +129,28 @@ the nesting cap down the tree.
 ## How compiled code gets executed in the subprocess
 
 1. `_compile()` runs the Agency compilation pipeline and returns `{ moduleId, code, modules?, entryPath? }`, with no disk writes. The `modules` and `entryPath` fields carry the rest of a multi-file closure, so resume can re-materialize a multi-file program.
-2. `_run()` writes the code to `.agency-tmp/<nanoid>/<moduleId>.js` under the agency-lang package root, so Node resolves `agency-lang/runtime` against the installed `node_modules`. It then forks `subprocess-bootstrap.js` with `AGENCY_IPC=1` and sends the `run` (or `resume`) instruction. `materializeCompiledScript` re-checks containment for every path it writes, and `cleanupTempDir` deletes only a strict descendant of `.agency-tmp/`.
+2. `_run()` writes the code under the Agency home, in `<agency home>/tmp/run-<nanoid>/program/` (see "Where the compiled program is written" below). It then forks `subprocess-bootstrap.js` with `AGENCY_IPC=1` and sends the `run` (or `resume`) instruction. `materializeCompiledScript` re-checks containment for every path it writes, and `cleanupTempDir` deletes only a run folder.
 3. The bootstrap imports the compiled script, runs the node (or resumes via the module's `respondToInterrupts`), and reports the terminal outcome.
 4. `_run()` deletes the temp dir when the session settles — including the interrupted settle; resume re-materializes from `CompiledProgram.code`.
+
+### Where the compiled program is written
+
+```
+<agency home>/tmp/                          private to the user (0700)
+  run-<nanoid>/
+    node_modules/agency-lang  ->  the agency-lang package this process runs from
+    program/<moduleId>.js                   the compiled program, and its modules
+```
+
+- **Not in the package's own folder.** It used to be `<package root>/.agency-tmp/`. An install cannot always write there: a global install owned by root, a read-only image, or a signed Mac app that carries agency-lang inside it, where a write also breaks the app's signature. The Agency home (`agencyHomeDir`, `~/.agency` or `AGENCY_HOME`) is always the user's.
+- **The link is how imports resolve.** A compiled program imports only `agency-lang/...` (the runtime and the stdlib modules it uses) and, for a trusted module, a file by absolute path. Node looks up from `program/` for `node_modules/agency-lang` and finds the link. Node follows a link to the real file, so the child loads the same runtime files its bootstrap did, and the package's own dependencies resolve from the package.
+- **One link per run folder, not one for the home.** Two installs of agency-lang can share a home, such as an app with its own copy and a global install. Each run links to the install that started it.
+- **The link is beside `program/`, not inside it.** Every path a compiled value names is kept inside `program/`, so a hand-built value cannot write through the link into the package.
+- **The folder is checked as private on every use** (`privateDir` in `lib/host/node/nodeFiles.ts`). The child runs code from it, so a folder another user can write is refused, with an error that names `AGENCY_HOME`.
+- **`cleanupTempDir` deletes only a direct child of the temp root whose name starts with `run-`.** `rmSync` removes the link as a link and does not follow it.
+- A run folder is left behind only when the process dies between the write and the settle. Nothing sweeps them yet.
+
+Other code still uses `.agency-tmp/` in the project (`lib/utils/agencyTempDir.ts`: the type checker, splices, evals). That folder is the project's and is writable, so it is unchanged.
 
 ### Import restrictions
 

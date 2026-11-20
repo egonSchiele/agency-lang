@@ -10,9 +10,11 @@ import path from "path";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { fork } from "child_process";
-import { requireCapabilities } from "../host/host.js";
+import { requireCapabilities, type Host } from "../host/host.js";
+import { privateDir, root as nodeRoot } from "../host/node/nodeFiles.js";
+import { agencyHomeDir } from "./agencyHome.js";
 import type { ForkOptions } from "child_process";
-import { rmSync, writeFileSync, mkdirSync, lstatSync } from "fs";
+import { rmSync, writeFileSync, mkdirSync, lstatSync, symlinkSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config/config.js";
 import { effectiveTrustedModules, type TrustedModules } from "../compiler/trustedModules.js";
@@ -98,11 +100,43 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const subprocessBootstrapPath = path.join(__dirname, "subprocess-bootstrap.js");
 
 /** The agency-lang package root (this file lives at <root>/dist/lib/runtime).
- * The compiled child script is materialized under here — not `process.cwd()` —
- * so its `import "agency-lang"` always resolves via node_modules regardless of
- * the caller's cwd (a temp dir, or `/app` under a global install). The child's
- * file writes follow the fork cwd (buildForkOptions), which is separate. */
+ * A compiled child script imports `agency-lang/...`, and each run folder
+ * gets a link to this folder so those imports resolve to this install. */
 const agencyPackageRoot = path.resolve(__dirname, "..", "..", "..");
+
+/** The start of a run folder's name under the temp root. `cleanupTempDir`
+ *  deletes nothing whose name does not start with it. */
+const RUN_DIR_PREFIX = "run-";
+/** The folder inside a run folder that holds the compiled program. The
+ *  link to the package is beside it, not inside it, so no path a compiled
+ *  value names can reach through the link. */
+const PROGRAM_DIR = "program";
+
+/** Where `run()` writes a compiled program before it starts the child:
+ *  `<agency home>/tmp`. Not the package's own folder, which an install may
+ *  not be able to write: a global install owned by root, a read-only
+ *  image, or a signed app that carries agency-lang inside it. The Agency
+ *  home is the user's, and `AGENCY_HOME` moves it. See
+ *  docs/dev/runtime/subprocess-ipc.md. */
+export function runTempRoot(host: Pick<Host, "settings" | "system">): string {
+  return path.join(agencyHomeDir(host), "tmp");
+}
+
+/** Makes the temp root, private to this user, or checks that an existing
+ *  one is: the child runs code from it, so nobody else may write there. */
+function openRunTempRoot(tempRoot: string): void {
+  try {
+    const home = path.dirname(tempRoot);
+    mkdirSync(home, { recursive: true });
+    privateDir(nodeRoot(home), path.basename(tempRoot));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `run() writes its compiled program under ${tempRoot}, and that folder cannot be used: ${reason} ` +
+        "Set AGENCY_HOME to a folder this user can write.",
+    );
+  }
+}
 
 // ── Resource limits ──
 // Hardcoded ceilings clamp any user-supplied limit value to a safe maximum.
@@ -462,18 +496,25 @@ export function buildForkOptions(args: { limits: RunLimits; cwd?: string }): For
   };
 }
 
-/** Write the compiled JS to a fresh .agency-tmp/<nanoid>/ dir (under the
- * agency-lang package root so Node resolves agency-lang package imports via
- * the project's node_modules)
- * and return the script path. Called at every fork — initial run and resume
- * alike — and paired with cleanupTempDir when the session settles. */
-export function materializeCompiledScript(compiled: {
-  moduleId: string;
-  code: string;
-  modules?: Record<string, string>;
-  entryPath?: string;
-  trustedModules?: string[];
-}): string {
+/** Write the compiled JS to a fresh run folder under `tempRoot` and return
+ * the script path. The layout is
+ *
+ *   <tempRoot>/run-<id>/node_modules/agency-lang   a link to this install
+ *   <tempRoot>/run-<id>/program/<entry>            the compiled program
+ *
+ * so Node, looking up from the program for `agency-lang`, finds the link.
+ * Called at every fork — initial run and resume alike — and paired with
+ * cleanupTempDir when the session settles. */
+export function materializeCompiledScript(
+  compiled: {
+    moduleId: string;
+    code: string;
+    modules?: Record<string, string>;
+    entryPath?: string;
+    trustedModules?: string[];
+  },
+  tempRoot: string,
+): string {
   // The user-facing CompiledProgram type only declares moduleId, so a
   // hand-built `{ moduleId: "x" }` (or an old `{ moduleId, path }` value
   // persisted before code-in-value) typechecks and reaches here. Fail with
@@ -500,7 +541,9 @@ export function materializeCompiledScript(compiled: {
       );
     }
   }
-  const tempDir = path.join(agencyPackageRoot, ".agency-tmp", nanoid());
+  openRunTempRoot(tempRoot);
+  const runDir = path.join(tempRoot, `${RUN_DIR_PREFIX}${nanoid()}`);
+  const tempDir = path.join(runDir, PROGRAM_DIR);
   // Every path below is re-checked for containment before writing: the
   // values were derived from validated relative paths, but compiled
   // values can be hand-built.
@@ -523,6 +566,12 @@ export function materializeCompiledScript(compiled: {
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, code, "utf-8");
   }
+  // A junction on Windows, which needs no special right; elsewhere the
+  // type is ignored. Node follows the link to the real package, so the
+  // child loads the same runtime files its bootstrap did.
+  const packages = path.join(runDir, "node_modules");
+  mkdirSync(packages);
+  symlinkSync(agencyPackageRoot, path.join(packages, "agency-lang"), "junction");
   return scriptPath;
 }
 
@@ -537,28 +586,25 @@ function isRegularFile(file: string): boolean {
 /**
  * Best-effort delete of the per-run compile output directory.
  *
- * SAFETY: we only delete `tempDir` if it resolves to a *strict descendant*
- * of `<agency-lang package root>/.agency-tmp/`. The `path.resolve` collapses any `..` segments,
+ * SAFETY: we only delete a run folder: a direct child of `tempRoot` whose
+ * name starts with `run-`. The `path.resolve` collapses any `..` segments,
  * so a malicious `compiledPath` like `/anything/../../../etc/passwd` ends
- * up outside the allowed prefix and the rmSync is skipped. The trailing
- * `+ path.sep` on the prefix prevents two attacks:
- *   - deleting `.agency-tmp/` itself (tempDir == allowedPrefix would fail
- *     the strict-prefix check),
- *   - matching a sibling directory like `.agency-tmpevil/` that shares
- *     the prefix string but is a different path.
- * Even if a malicious caller bypassed everything else, the worst they can
- * do is recursively rm a subdirectory of `<agency-lang package root>/.agency-tmp/` — never
- * `~`, `/`, or anything outside the project's tmp area.
+ * up outside `tempRoot` and the rmSync is skipped. The name check keeps
+ * the delete off `tempRoot` itself, off `..`, and off anything else that
+ * shares the Agency home's temp folder. Even if a malicious caller
+ * bypassed everything else, the worst they can do is remove another run's
+ * folder, never `~`, `/`, or anything outside `tempRoot`. The link inside
+ * a run folder is removed as a link: `rmSync` does not follow it into the
+ * package.
  */
-function cleanupTempDir(compiledPath: string): void {
+export function cleanupTempDir(compiledPath: string, tempRoot: string): void {
   try {
-    const allowedPrefix = path.resolve(agencyPackageRoot, ".agency-tmp");
-    // The per-run dir is the first segment under .agency-tmp; the script
-    // itself may sit deeper (a nested entry keeps its layout). Anything
-    // not strictly inside the prefix is left alone.
+    const allowedPrefix = path.resolve(tempRoot);
+    // The run folder is the first segment under the temp root; the script
+    // itself sits deeper. Anything not inside a run folder is left alone.
     const rel = path.relative(allowedPrefix, path.resolve(compiledPath));
     const first = rel.split(path.sep)[0];
-    if (first === "" || first === "." || first === ".." || path.isAbsolute(rel)) return;
+    if (path.isAbsolute(rel) || !first.startsWith(RUN_DIR_PREFIX)) return;
     const tempDir = path.join(allowedPrefix, first);
     if (tempDir.startsWith(allowedPrefix + path.sep)) {
       rmSync(tempDir, { recursive: true, force: true });
@@ -1202,8 +1248,10 @@ async function invokeSubprocess(args: {
   childDepth?: number;
   cappedMaxDepth?: number;
   trustedModules: TrustedModules[];
+  /** Where the compiled program is written: `runTempRoot` of the run's host. */
+  tempRoot: string;
 }): Promise<any> {
-  const scriptPath = materializeCompiledScript(args.compiled);
+  const scriptPath = materializeCompiledScript(args.compiled, args.tempRoot);
   const startedAt = performance.now();
   let subprocessSessionId = "";
   try {
@@ -1285,7 +1333,7 @@ async function invokeSubprocess(args: {
     });
     throw err;
   } finally {
-    cleanupTempDir(scriptPath);
+    cleanupTempDir(scriptPath, args.tempRoot);
   }
 }
 
@@ -1443,6 +1491,7 @@ export async function _runFor(
               childDepth,
               cappedMaxDepth,
               trustedModules,
+              tempRoot: runTempRoot(ctx.host),
             }),
         },
       ],

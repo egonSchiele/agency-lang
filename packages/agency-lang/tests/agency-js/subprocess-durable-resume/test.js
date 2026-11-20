@@ -1,6 +1,7 @@
 import { main, hasInterrupts } from "./agent.js";
 import { writeFileSync, rmSync } from "fs";
 import { execFileSync } from "child_process";
+import path from "path";
 
 const first = await main();
 if (!hasInterrupts(first.data)) {
@@ -14,6 +15,8 @@ if (!hasInterrupts(first.data)) {
 // JSON. Then destroy every compiled artifact and this process's memory by
 // resuming in a FRESH Node process — the spec's durability claim.
 writeFileSync("persisted-interrupts.json", JSON.stringify(first.data));
-rmSync(".agency-tmp", { recursive: true, force: true });
+// run() writes a compiled program under `<agency home>/tmp`, and the test
+// runner gives every test a home of its own in AGENCY_HOME.
+rmSync(path.join(process.env.AGENCY_HOME, "tmp"), { recursive: true, force: true });
 
 execFileSync(process.execPath, ["./resume-stage.js"], { stdio: "inherit" });

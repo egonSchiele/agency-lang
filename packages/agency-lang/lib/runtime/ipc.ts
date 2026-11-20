@@ -11,10 +11,9 @@ import { dirname } from "path";
 import { fileURLToPath } from "url";
 import { fork } from "child_process";
 import { requireCapabilities, type Host } from "../host/host.js";
-import { privateDir, root as nodeRoot } from "../host/node/nodeFiles.js";
 import { agencyHomeDir } from "./agencyHome.js";
 import type { ForkOptions } from "child_process";
-import { rmSync, writeFileSync, mkdirSync, lstatSync, symlinkSync } from "fs";
+import { rmSync, writeFileSync, mkdirSync, lstatSync, symlinkSync, unlinkSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config/config.js";
 import { effectiveTrustedModules, type TrustedModules } from "../compiler/trustedModules.js";
@@ -111,6 +110,8 @@ const RUN_DIR_PREFIX = "run-";
  *  link to the package is beside it, not inside it, so no path a compiled
  *  value names can reach through the link. */
 const PROGRAM_DIR = "program";
+/** The link's name in a run folder's `node_modules`: the package's name. */
+const PACKAGE_LINK = "agency-lang";
 
 /** Where `run()` writes a compiled program before it starts the child:
  *  `<agency home>/tmp`. Not the package's own folder, which an install may
@@ -119,16 +120,22 @@ const PROGRAM_DIR = "program";
  *  home is the user's, and `AGENCY_HOME` moves it. See
  *  docs/dev/runtime/subprocess-ipc.md. */
 export function runTempRoot(host: Pick<Host, "settings" | "system">): string {
-  return path.join(agencyHomeDir(host), "tmp");
+  return path.join(agencyHomeDir(host), RUN_TEMP_DIR);
 }
 
+const RUN_TEMP_DIR = "tmp";
+
 /** Makes the temp root, private to this user, or checks that an existing
- *  one is: the child runs code from it, so nobody else may write there. */
-function openRunTempRoot(tempRoot: string): void {
+ *  one is, and returns its path: the child runs code from it, so nobody
+ *  else may write there. Through the host, as every folder under the
+ *  Agency home is made (`heldCheckpoint.ts`, `jobs/detachedJobs.ts`). */
+export async function openRunTempRoot(host: Host): Promise<string> {
+  const tempRoot = runTempRoot(host);
   try {
-    const home = path.dirname(tempRoot);
-    mkdirSync(home, { recursive: true });
-    privateDir(nodeRoot(home), path.basename(tempRoot));
+    const home = await host.files.root(agencyHomeDir(host));
+    await host.files.mkdir(home, "");
+    await host.files.privateDir(home, RUN_TEMP_DIR);
+    return tempRoot;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(
@@ -496,15 +503,26 @@ export function buildForkOptions(args: { limits: RunLimits; cwd?: string }): For
   };
 }
 
-/** Write the compiled JS to a fresh run folder under `tempRoot` and return
- * the script path. The layout is
+/** Where a compiled program is written, and the package it links to. */
+export type RunPlace = {
+  /** An existing folder, private to the user: `openRunTempRoot`'s. */
+  tempRoot: string;
+  /** The agency-lang package the program's imports resolve to. A test
+   *  passes a throwaway folder, so nothing it does can reach the real one. */
+  packageRoot: string;
+};
+
+/** Write the compiled JS to a fresh run folder under `where.tempRoot` and
+ * return the script path. The layout is
  *
- *   <tempRoot>/run-<id>/node_modules/agency-lang   a link to this install
+ *   <tempRoot>/run-<id>/package.json               { "type": "module" }
+ *   <tempRoot>/run-<id>/node_modules/agency-lang   a link to `where.packageRoot`
  *   <tempRoot>/run-<id>/program/<entry>            the compiled program
  *
- * so Node, looking up from the program for `agency-lang`, finds the link.
- * Called at every fork — initial run and resume alike — and paired with
- * cleanupTempDir when the session settles. */
+ * so Node, looking up from the program for `agency-lang`, finds the link,
+ * and looking up for a `package.json`, finds this one. Called at every
+ * fork — initial run and resume alike — and paired with cleanupTempDir
+ * when the session settles. */
 export function materializeCompiledScript(
   compiled: {
     moduleId: string;
@@ -513,8 +531,9 @@ export function materializeCompiledScript(
     entryPath?: string;
     trustedModules?: string[];
   },
-  tempRoot: string,
+  where: RunPlace,
 ): string {
+  const { tempRoot, packageRoot } = where;
   // The user-facing CompiledProgram type only declares moduleId, so a
   // hand-built `{ moduleId: "x" }` (or an old `{ moduleId, path }` value
   // persisted before code-in-value) typechecks and reaches here. Fail with
@@ -541,7 +560,6 @@ export function materializeCompiledScript(
       );
     }
   }
-  openRunTempRoot(tempRoot);
   const runDir = path.join(tempRoot, `${RUN_DIR_PREFIX}${nanoid()}`);
   const tempDir = path.join(runDir, PROGRAM_DIR);
   // Every path below is re-checked for containment before writing: the
@@ -566,12 +584,18 @@ export function materializeCompiledScript(
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, code, "utf-8");
   }
+  // The program is an ES module. It used to sit under agency-lang's own
+  // package.json, which says so. Here Node would take the nearest
+  // package.json above the Agency home: with none it guesses from the
+  // syntax, with one that has no "type" it warns on every start, and with
+  // `"type": "commonjs"` the program fails to load.
+  writeFileSync(path.join(runDir, "package.json"), '{ "type": "module" }\n', "utf-8");
   // A junction on Windows, which needs no special right; elsewhere the
   // type is ignored. Node follows the link to the real package, so the
   // child loads the same runtime files its bootstrap did.
   const packages = path.join(runDir, "node_modules");
   mkdirSync(packages);
-  symlinkSync(agencyPackageRoot, path.join(packages, "agency-lang"), "junction");
+  symlinkSync(packageRoot, path.join(packages, PACKAGE_LINK), "junction");
   return scriptPath;
 }
 
@@ -593,9 +617,12 @@ function isRegularFile(file: string): boolean {
  * the delete off `tempRoot` itself, off `..`, and off anything else that
  * shares the Agency home's temp folder. Even if a malicious caller
  * bypassed everything else, the worst they can do is remove another run's
- * folder, never `~`, `/`, or anything outside `tempRoot`. The link inside
- * a run folder is removed as a link: `rmSync` does not follow it into the
- * package.
+ * folder, never `~`, `/`, or anything outside `tempRoot`.
+ *
+ * The run folder holds a link to the whole install. The link is removed
+ * by itself first, so the recursive delete never meets it, whatever a
+ * platform's `rmSync` does with a link or a junction. If the link cannot
+ * be removed, nothing else is deleted.
  */
 export function cleanupTempDir(compiledPath: string, tempRoot: string): void {
   try {
@@ -607,6 +634,10 @@ export function cleanupTempDir(compiledPath: string, tempRoot: string): void {
     if (path.isAbsolute(rel) || !first.startsWith(RUN_DIR_PREFIX)) return;
     const tempDir = path.join(allowedPrefix, first);
     if (tempDir.startsWith(allowedPrefix + path.sep)) {
+      const link = path.join(tempDir, "node_modules", PACKAGE_LINK);
+      if (lstatSync(link, { throwIfNoEntry: false })?.isSymbolicLink()) {
+        unlinkSync(link);
+      }
       rmSync(tempDir, { recursive: true, force: true });
     }
   } catch (_) {
@@ -1248,10 +1279,12 @@ async function invokeSubprocess(args: {
   childDepth?: number;
   cappedMaxDepth?: number;
   trustedModules: TrustedModules[];
-  /** Where the compiled program is written: `runTempRoot` of the run's host. */
-  tempRoot: string;
 }): Promise<any> {
-  const scriptPath = materializeCompiledScript(args.compiled, args.tempRoot);
+  const tempRoot = await openRunTempRoot(args.ctx.host);
+  const scriptPath = materializeCompiledScript(args.compiled, {
+    tempRoot,
+    packageRoot: agencyPackageRoot,
+  });
   const startedAt = performance.now();
   let subprocessSessionId = "";
   try {
@@ -1333,7 +1366,7 @@ async function invokeSubprocess(args: {
     });
     throw err;
   } finally {
-    cleanupTempDir(scriptPath, args.tempRoot);
+    cleanupTempDir(scriptPath, tempRoot);
   }
 }
 
@@ -1491,7 +1524,6 @@ export async function _runFor(
               childDepth,
               cappedMaxDepth,
               trustedModules,
-              tempRoot: runTempRoot(ctx.host),
             }),
         },
       ],

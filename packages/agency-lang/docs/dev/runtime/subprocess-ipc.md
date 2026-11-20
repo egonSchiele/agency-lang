@@ -138,6 +138,7 @@ the nesting cap down the tree.
 ```
 <agency home>/tmp/                          private to the user (0700)
   run-<nanoid>/
+    package.json                            { "type": "module" }
     node_modules/agency-lang  ->  the agency-lang package this process runs from
     program/<moduleId>.js                   the compiled program, and its modules
 ```
@@ -146,8 +147,10 @@ the nesting cap down the tree.
 - **The link is how imports resolve.** A compiled program imports only `agency-lang/...` (the runtime and the stdlib modules it uses) and, for a trusted module, a file by absolute path. Node looks up from `program/` for `node_modules/agency-lang` and finds the link. Node follows a link to the real file, so the child loads the same runtime files its bootstrap did, and the package's own dependencies resolve from the package.
 - **One link per run folder, not one for the home.** Two installs of agency-lang can share a home, such as an app with its own copy and a global install. Each run links to the install that started it.
 - **The link is beside `program/`, not inside it.** Every path a compiled value names is kept inside `program/`, so a hand-built value cannot write through the link into the package.
-- **The folder is checked as private on every use** (`privateDir` in `lib/host/node/nodeFiles.ts`). The child runs code from it, so a folder another user can write is refused, with an error that names `AGENCY_HOME`.
-- **`cleanupTempDir` deletes only a direct child of the temp root whose name starts with `run-`.** `rmSync` removes the link as a link and does not follow it.
+- **The `package.json` says the program is an ES module.** The program used to sit under agency-lang's own `package.json`, which says so. Under the Agency home, Node takes the nearest `package.json` above the program. With none it guesses from the syntax. With a `~/package.json` that has no `"type"` it warns on every start and parses the file twice. With one that says `"commonjs"`, or with `AGENCY_HOME` inside a CommonJS project, the program fails to load. The run folder's own file settles it.
+- **The folder is checked as private on every use** (`openRunTempRoot`, through `host.files.privateDir`, as every other folder under the Agency home is made). The child runs code from it, so a folder another user can write is refused, with an error that names `AGENCY_HOME`.
+- **`cleanupTempDir` deletes only a direct child of the temp root whose name starts with `run-`.** It removes the link by itself first, so the recursive delete never meets it, whatever a platform's `rmSync` does with a link or a Windows junction. If the link cannot be removed, nothing else is deleted.
+- **`materializeCompiledScript` is told which package to link to** (`RunPlace.packageRoot`). `invokeSubprocess` passes the real one. Tests pass a throwaway folder: under vitest the real one works out to `packages/`, the folder of every package in the checkout, and no test should hold a link to that.
 - A run folder is left behind only when the process dies between the write and the settle. Nothing sweeps them yet.
 
 Other code still uses `.agency-tmp/` in the project (`lib/utils/agencyTempDir.ts`: the type checker, splices, evals). That folder is the project's and is writable, so it is unchanged.

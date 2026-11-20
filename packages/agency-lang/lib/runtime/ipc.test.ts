@@ -1,8 +1,17 @@
 import { describe, it as baseIt, expect, afterEach, vi } from "vitest";
 import path from "path";
 import os from "os";
-import { cleanupTempDir, materializeCompiledScript, runTempRoot } from "./ipc.js";
+import { spawnSync } from "child_process";
+import {
+  cleanupTempDir,
+  materializeCompiledScript,
+  openRunTempRoot,
+  runTempRoot,
+  type RunPlace,
+} from "./ipc.js";
 import * as fs from "fs";
+import { safeDeleteDirectoryWithin } from "../utils.js";
+import { memoryHost } from "../host/memoryHost.js";
 import {
   clampLimits,
   serializeInterruptsForIpc,
@@ -1071,25 +1080,42 @@ describe("resolveNodeCallArgs", () => {
   });
 });
 
-describe("materializeCompiledScript", () => {
-  // Each test gets an Agency home of its own, so nothing is written under
-  // the real one or under the package.
-  let home = "";
-  const tempRoot = (): string => {
-    home = fs.mkdtempSync(path.join(os.tmpdir(), "agency-run-temp-"));
-    return path.join(home, "tmp");
+// A throwaway home for one test: a temp root, and a folder that stands in
+// for the agency-lang package, with a marker file in it. No test links to
+// the real package or to this checkout, so a test that fails, or a cleanup
+// that one day follows the link, can delete only what is in this home.
+const MARKER = "marker.txt";
+let runHome = "";
+function throwawayPlace(): RunPlace {
+  runHome = fs.mkdtempSync(path.join(os.tmpdir(), "agency-run-temp-"));
+  const place = {
+    tempRoot: path.join(runHome, "tmp"),
+    packageRoot: path.join(runHome, "fake-package"),
   };
-  afterEach(() => {
-    if (home !== "") fs.rmSync(home, { recursive: true, force: true });
-    home = "";
-  });
+  fs.mkdirSync(place.tempRoot, { mode: 0o700 });
+  fs.mkdirSync(place.packageRoot);
+  fs.writeFileSync(path.join(place.packageRoot, MARKER), "still here");
+  return place;
+}
+function removeThrowawayHome(): void {
+  if (runHome === "") return;
+  // The real path: on macOS os.tmpdir() is a link into /private.
+  expect(
+    safeDeleteDirectoryWithin(fs.realpathSync(os.tmpdir()), fs.realpathSync(runHome)).success,
+  ).toBe(true);
+  runHome = "";
+}
+
+describe("materializeCompiledScript", () => {
+  const tempRoot = throwawayPlace;
+  afterEach(removeThrowawayHome);
 
   it("rejects a moduleId that is not a plain identifier, before writing anything", () => {
     const root = tempRoot();
     expect(() =>
       materializeCompiledScript({ moduleId: "../escape", code: "export {};" }, root),
     ).toThrow(/plain identifier/);
-    expect(fs.existsSync(root)).toBe(false);
+    expect(fs.readdirSync(root.tempRoot)).toEqual([]);
   });
 
   it("refuses an entryPath or module path that escapes the script directory", () => {
@@ -1132,75 +1158,107 @@ describe("materializeCompiledScript", () => {
     expect(fs.existsSync(path.join(path.dirname(scriptPath), "helper.js"))).toBe(true);
   });
 
-  it("writes the program in a run folder under the temp root, private to the user", () => {
+  it("writes the program in a run folder under the temp root", () => {
     const root = tempRoot();
     const scriptPath = materializeCompiledScript(
       { moduleId: "agency_x", code: "export {};" },
       root,
     );
     const runDir = path.dirname(path.dirname(scriptPath));
-    expect(path.dirname(runDir)).toBe(root);
+    expect(path.dirname(runDir)).toBe(root.tempRoot);
     expect(path.basename(runDir)).toMatch(/^run-/);
     expect(path.basename(path.dirname(scriptPath))).toBe("program");
-    expect(fs.statSync(root).mode & 0o777).toBe(0o700);
   });
 
-  it("links the run folder to the agency-lang package, so the program's imports resolve", () => {
+  it("links the run folder to the package it was given, so the program's imports resolve", () => {
+    const root = tempRoot();
     const scriptPath = materializeCompiledScript(
       { moduleId: "agency_x", code: "export {};" },
-      tempRoot(),
+      root,
     );
     const link = path.join(path.dirname(path.dirname(scriptPath)), "node_modules", "agency-lang");
     expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
-    // The link is to the folder three above this file's own, as ipc.ts
-    // works it out for itself.
-    expect(fs.realpathSync(link)).toBe(fs.realpathSync(path.resolve(__dirname, "..", "..", "..")));
+    expect(fs.realpathSync(link)).toBe(fs.realpathSync(root.packageRoot));
   });
 
   it("keeps a path that names node_modules inside the program folder, away from the link", () => {
+    const root = tempRoot();
     const scriptPath = materializeCompiledScript(
       {
         moduleId: "agency_x",
         code: "export {};",
         modules: { "node_modules/agency-lang/planted.js": "export {};" },
       },
-      tempRoot(),
+      root,
     );
     const programDir = path.dirname(scriptPath);
     expect(fs.existsSync(path.join(programDir, "node_modules/agency-lang/planted.js"))).toBe(true);
-    expect(fs.existsSync(path.resolve(__dirname, "..", "..", "..", "planted.js"))).toBe(false);
+    expect(fs.readdirSync(root.packageRoot)).toEqual([MARKER]);
   });
 
-  it("refuses a temp root that other users can write", () => {
+  // The program used to sit under agency-lang's own package.json. Under
+  // the Agency home, Node takes the nearest package.json above it, and one
+  // that says "commonjs" would make every program fail to load.
+  it("loads as an ES module under a home whose package.json says commonjs", () => {
     const root = tempRoot();
-    fs.mkdirSync(root, { mode: 0o777 });
-    fs.chmodSync(root, 0o777);
-    expect(() =>
-      materializeCompiledScript({ moduleId: "agency_x", code: "export {};" }, root),
-    ).toThrow(/cannot be used.*Set AGENCY_HOME/s);
+    fs.writeFileSync(path.join(runHome, "package.json"), '{ "type": "commonjs" }');
+    const scriptPath = materializeCompiledScript(
+      {
+        moduleId: "agency_x",
+        code: 'import { h } from "./helper.js";\nprocess.stdout.write(String(h));',
+        modules: { "helper.js": "export const h = 41 + 1;" },
+      },
+      root,
+    );
+    const runDir = path.dirname(path.dirname(scriptPath));
+    expect(JSON.parse(fs.readFileSync(path.join(runDir, "package.json"), "utf-8"))).toEqual({
+      type: "module",
+    });
+    const ran = spawnSync(process.execPath, [scriptPath], { encoding: "utf-8" });
+    expect({ status: ran.status, stdout: ran.stdout, stderr: ran.stderr }).toEqual({
+      status: 0,
+      stdout: "42",
+      stderr: "",
+    });
+  });
+});
+
+describe("openRunTempRoot", () => {
+  it("makes tmp under the host's Agency home, through the host, and returns it", async () => {
+    const host = memoryHost({ variables: { AGENCY_HOME: "/elsewhere" } });
+    const tempRoot = await openRunTempRoot(host);
+    expect(tempRoot).toBe(path.join("/elsewhere", "tmp"));
+    const home = await host.files.root("/elsewhere");
+    expect((await host.files.stat(home, "tmp"))?.kind).toBe("dir");
+  });
+
+  it("says which folder and names AGENCY_HOME when the host cannot make it", async () => {
+    const host = memoryHost({ variables: { AGENCY_HOME: "/elsewhere" } });
+    host.files.privateDir = async () => {
+      throw new Error("/elsewhere/tmp is writable by other users.");
+    };
+    await expect(openRunTempRoot(host)).rejects.toThrow(
+      /under \/elsewhere\/tmp, and that folder cannot be used: \/elsewhere\/tmp is writable by other users\. Set AGENCY_HOME/,
+    );
   });
 });
 
 describe("cleanupTempDir", () => {
-  let home = "";
-  afterEach(() => {
-    if (home !== "") fs.rmSync(home, { recursive: true, force: true });
-    home = "";
-  });
-  const materialized = (): { root: string; scriptPath: string } => {
-    home = fs.mkdtempSync(path.join(os.tmpdir(), "agency-run-temp-"));
-    const root = path.join(home, "tmp");
+  afterEach(removeThrowawayHome);
+  const materialized = (): { root: string; packageRoot: string; scriptPath: string } => {
+    const place = throwawayPlace();
     return {
-      root,
-      scriptPath: materializeCompiledScript({ moduleId: "agency_x", code: "export {};" }, root),
+      root: place.tempRoot,
+      packageRoot: place.packageRoot,
+      scriptPath: materializeCompiledScript({ moduleId: "agency_x", code: "export {};" }, place),
     };
   };
 
-  it("deletes the run folder and leaves the package the link points at", () => {
-    const { root, scriptPath } = materialized();
+  it("deletes the run folder and leaves what the link points at", () => {
+    const { root, packageRoot, scriptPath } = materialized();
     cleanupTempDir(scriptPath, root);
     expect(fs.readdirSync(root)).toEqual([]);
-    expect(fs.existsSync(path.resolve(__dirname, "..", "..", ".."))).toBe(true);
+    expect(fs.readFileSync(path.join(packageRoot, MARKER), "utf-8")).toBe("still here");
   });
 
   it("deletes nothing for a path outside the temp root or outside a run folder", () => {
@@ -1217,11 +1275,10 @@ describe("cleanupTempDir", () => {
 
 describe("runTempRoot", () => {
   it("is tmp under the Agency home, which AGENCY_HOME moves", () => {
-    const system = { cwd: () => "/work", homeDir: () => "/home/me" };
-    const withHome = (value: string | null) =>
-      ({ settings: { read: () => value }, system }) as unknown as Parameters<typeof runTempRoot>[0];
-    expect(runTempRoot(withHome(null))).toBe(path.join("/home/me", ".agency", "tmp"));
-    expect(runTempRoot(withHome("/elsewhere"))).toBe(path.join("/elsewhere", "tmp"));
+    const plain = memoryHost();
+    expect(runTempRoot(plain)).toBe(path.join(plain.system.homeDir(), ".agency", "tmp"));
+    const withHome = memoryHost({ variables: { AGENCY_HOME: "/elsewhere" } });
+    expect(runTempRoot(withHome)).toBe(path.join("/elsewhere", "tmp"));
   });
 });
 

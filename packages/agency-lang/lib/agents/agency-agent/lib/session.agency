@@ -666,6 +666,21 @@ def withGuidedLocal(flags: ModelFlags): ModelFlags {
   }
 }
 
+/** The model flags from the command line, for the session program's
+  start. A bare `--local` asks which local model first. Exits with a
+  message on bad flags. */
+export def startupModelFlags(args: Record<string, any>): ModelFlags {
+  const parsed = modelFlagsFromArgs(args)
+  if (parsed is failure(reason)) {
+    print(color.red(reason))
+    _exit(1)
+  }
+  if (parsed is success(flags)) {
+    return withGuidedLocal(flags)
+  }
+  return noModelFlags()
+}
+
 /** Resolve and apply the agent's models at startup from the CLI flags,
   the active preset, and settings.model. Exits with a message on bad
   flags or an unresolvable request. */

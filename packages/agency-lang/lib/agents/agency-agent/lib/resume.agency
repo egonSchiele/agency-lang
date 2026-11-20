@@ -1,30 +1,24 @@
 /** @module
   @summary The terminal's side of save and resume: which session this run
-  is (new, `--continue`, or `--resume`), the picker, and the restore. The
-  record itself is in record.agency, the files in sessions.agency and the
-  title in sessionTitle.agency.
+  is (new, `--continue`, or `--resume`), the picker, and the record of a
+  new session. The session itself is a run of the session program, which
+  the driver saves and loads (lib/stdlib/agentTerminalDriver.ts). The files
+  are in sessions.agency and the title in sessionTitle.agency.
 */
 import { _exit } from "agency-lang/stdlib-lib/system.js"
-import { _printAgentTrace } from "agency-lang/stdlib-lib/agentToolTrace.js"
 import { now } from "std::date"
 import { cwd } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui/cli"
 
-import { _isCheckpoint, _readTranscript } from "agency-lang/stdlib-lib/agentSessions.js"
-
-import { recordTurn, setCurrentRecord } from "./record.agency"
 import {
   SessionRecord,
   findSession,
-  isAnotherFrontEndsSession,
+  isOldLoopSession,
   listSessions,
   mostRecentSession,
   newSessionId,
-  readCheckpointFile,
-  saveSession,
   sessionLabel,
  } from "./sessions.agency"
-import { showTranscript } from "./transcript.agency"
 
 export def incognitoProblem(continueFlag: boolean, resumeArg: string | null, logging: boolean): string {
   """
@@ -47,15 +41,16 @@ export def incognitoProblem(continueFlag: boolean, resumeArg: string | null, log
 
 /** Which saved session, if any, this run continues. `resumeArg` is the
   `--resume` value: null when absent, "" for a bare `--resume` (open the
-  picker), else an id. Exits on an unknown id. */
+  picker), else an id. Exits on an unknown id, and on a session the old
+  terminal loop saved, which this version can't resume. */
 export def chooseSession(
   continueFlag: boolean,
   resumeArg: string | null,
 ): SessionRecord | null {
   if (resumeArg != null && resumeArg != "") {
     const found = findSession(resumeArg)
-    if (found == null && isAnotherFrontEndsSession(resumeArg)) {
-      print(color.red("Session ${resumeArg} was saved by another app and can't be opened here yet."))
+    if (found == null && isOldLoopSession(resumeArg)) {
+      print(color.red("Session ${resumeArg} was saved by an older version of the agent and can't be resumed."))
       _exit(1)
     }
     if (found == null) {
@@ -109,52 +104,17 @@ def pickSession(): SessionRecord | null {
   return findSession(choice)
 }
 
-/** Start this run's session. A new one gets a fresh record. A saved one
-  is restored right here: the Agency execution state becomes the saved
-  one and the program continues from the saved point. The saved
-  conversation is printed before the restore, since nothing after
-  `restore` runs. */
-export def startSession(chosen: SessionRecord | null, brainName: string) {
-  if (chosen == null) {
-    const t = now()
-    setCurrentRecord({
-      id: newSessionId(),
-      cwd: cwd(),
-      brain: brainName,
-      created: t,
-      lastActive: t,
-      turns: 0,
-      title: ""
-    })
-    return
-  }
-  const cp = readCheckpointFile(chosen.id)
-  if (cp == null) {
-    print(color.red("The checkpoint file for session ${chosen.id} is missing or malformed."))
-    _exit(1)
-  }
-  // The record says the file is a checkpoint. Another front-end's record
-  // that left `runFormat` out would say so too.
-  if (!_isCheckpoint(cp)) {
-    print(color.red("The file for session ${chosen.id} is not a checkpoint this agent can resume."))
-    _exit(1)
-  }
-  print(color.dim("Resuming: ${chosen.title}"))
-  showTranscript(_readTranscript(cp, chosen.conversationThread ?? ""))
-  restore(cp, {})
-}
-
-/** Save after the `-i` seed turn, which runs before the REPL. This is
-  Agency code with no REPL frame above it, so on resume execution
-  continues at the line after `checkpoint()` and then starts the REPL. */
-export def saveSeedTurn(userMsg: string) {
-  const target = recordTurn(userMsg)
-  if (target == null) {
-    return
-  }
-  const id = checkpoint()
-  const saved = saveSession(target.record, getCheckpoint(id))
-  if (isFailure(saved)) {
-    _printAgentTrace({ kind: "sessionSaveFailure", message: saved.error })
+/** The record of a new session, which the session program reports and the
+  driver saves after its first turn. */
+export def newSessionRecord(brainName: string): SessionRecord {
+  const t = now()
+  return {
+    id: newSessionId(),
+    cwd: cwd(),
+    brain: brainName,
+    created: t,
+    lastActive: t,
+    turns: 0,
+    title: ""
   }
 }

@@ -23,6 +23,7 @@ export { sessionRunPolicy, withPauseLeftAlone } from "./policy.js";
 export {
   copyCarriedPolicy,
   POLICY_UNREADABLE,
+  SESSION_POLICIES_DIR,
   readCarriedPolicy,
   saveCarriedPolicy,
 } from "./sessionPolicy.js";
@@ -63,14 +64,8 @@ export {
   type Happened,
   type Leg,
 } from "./machine.js";
-export {
-  heldJobsOf,
-  jobsStartedBetween,
-  sessionJobs,
-  stopDroppedJobs,
-  stopSessionJob,
-  type SessionJobStop,
-} from "./jobs.js";
+// Reading and stopping the jobs is in jobControl.ts, which is Node-only.
+export { heldJobsOf, jobsStartedBetween } from "./jobs.js";
 export {
   CANNOT_CONTINUE,
   PROGRAM_NOT_LOADED,

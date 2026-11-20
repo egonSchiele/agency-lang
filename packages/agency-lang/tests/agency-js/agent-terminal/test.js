@@ -22,8 +22,10 @@ mkdirSync(dir, { recursive: true });
 const program = await import("../../../dist/lib/agents/agency-agent/program.js");
 const { approve, __setLLMClient } = program;
 const { terminalSession } = await import("../../../dist/lib/stdlib/agentTerminalSession.js");
-const { takeHold, thisProcessId, messageAnswer, sessionJobs, stopSessionJob } =
+const { takeHold, thisProcessId, messageAnswer } =
   await import("../../../dist/lib/stdlib/agentDriver/index.js");
+const { sessionJobs, stopSessionJob } =
+  await import("../../../dist/lib/stdlib/agentDriver/jobControl.js");
 const { AgencyCancelledError } = await import("../../../dist/lib/runtime/errors.js");
 const { _savedTranscript } = await import("../../../dist/lib/stdlib/agentTerminalDriver.js");
 const { currentHost } = await import("../../../dist/lib/runtime/currentHost.js");

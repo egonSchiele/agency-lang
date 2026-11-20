@@ -3,10 +3,9 @@ import { box, render } from "std::ui/layout"
 import { table } from "std::ui/table"
 
 import { figs } from "../images/images.agency"
-import { demoteProvider, getResolvedSlots } from "../shared.agency"
+import { demoteProvider } from "../shared.agency"
 import { parseAgentArgs } from "./args.agency"
 import { Resolved } from "./models.agency"
-import { activePresetName } from "./presets.agency"
 
 def sample(arr: any[]): any {
   return arr[Math.floor(Math.random() * arr.length)]
@@ -51,7 +50,9 @@ def heading(col: any, text: string) {
   col.text(text, bold: true, fgColor: "cyan")
 }
 
-export def getHeader(brainName: string): string {
+/** The splash header. `pause` is what the session reported at its first
+  pause: its models and preset, which the session run resolved. */
+export def getHeader(brainName: string, pause: any): string {
   const fig = sample(figs)
   const data = box(
     title: "Agency",
@@ -71,7 +72,7 @@ export def getHeader(brainName: string): string {
         left.hline()
         heading(left, "Getting Started")
         left.text("/help for commands · /exit to quit", dim: true)
-        extendedInfo(left, brainName: brainName)
+        extendedInfo(left, brainName: brainName, pause: pause)
       }
       r.vline()
       r.column(width: "30%", align: "center") as right {
@@ -89,8 +90,9 @@ def boolToString(b: boolean): string {
   return "false"
 }
 
-def extendedInfo(left, brainName: string) {
-  const slots = getResolvedSlots()
+def extendedInfo(left, brainName: string, pause: any) {
+  const reported: any = pause ?? {}
+  const slots = reported.models ?? {}
   const args = parseAgentArgs()
   left.hline()
   /*  if (modelLines.length > 0) {
@@ -102,7 +104,7 @@ def extendedInfo(left, brainName: string) {
  */
   const mainModel = slotModelLabel(slots["main"])
   const reasoningModel = slotModelLabel(slots["reasoning"])
-  const presetName = activePresetName()
+  const presetName = reported.preset ?? ""
 
   const argsTable = table(
     borderStyle: "none",

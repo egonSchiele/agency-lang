@@ -21,15 +21,13 @@ import {
 } from "./agentSessions.js";
 import {
   pauseData,
-  sessionJobs,
-  stopSessionJob,
   thisProcessId,
   type AgentModule,
   type Answer,
   type PauseData,
   type ProgramStart,
-  type SessionJobStop,
 } from "./agentDriver/index.js";
+import { sessionJobs, stopSessionJob, type SessionJobStop } from "./agentDriver/jobControl.js";
 import {
   terminalSession,
   type ShownLine,

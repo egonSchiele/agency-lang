@@ -1,38 +1,16 @@
-import { jobOutput, listJobs } from "std::jobs"
-import { startJob } from "std::safeBash"
-
+// `/jobs stop` reads the session's jobs through the terminal's driver.
+// Stopping a job the session holds, and one that already ended, is tested
+// with a real session in tests/agency-js/agent-terminal.
 import { withPendingNotes } from "../lib/pendingNotes.agency"
-import { jobsSlashCommand } from "../lib/slashCommands/jobs.agency"
+import { jobsSlashCommand, stoppedNote } from "../lib/slashCommands/jobs.agency"
 
-// The user did not stop a job that had already ended, so the model is not
-// told they did.
-node stopAfterTheJobEndedLeavesNoNote(): string {
-  handle {
-    startJob("true", maxMinutes: 1)
-  } with approve
-  const id = listJobs()[0].id
-  jobOutput(id, wait: 10)
-  jobsSlashCommand("stop ${id}")
+// A job the session does not hold was not stopped, so the model is not
+// told it was.
+node stopOfAJobTheSessionDoesNotHoldLeavesNoNote(): string {
+  jobsSlashCommand("stop job-000000")
   return withPendingNotes("next")
 }
 
-node stopOfARunningJobTellsTheModel(): boolean {
-  handle {
-    startJob("sleep 30", maxMinutes: 1)
-  } with approve
-  const id = listJobs()[0].id
-  jobsSlashCommand("stop ${id}")
-  return withPendingNotes("next").startsWith("I stopped background job ${id} myself")
-}
-
-// The stop reads the job's last output, so the note has to carry it. The
-// printf form keeps the expected text, A1, out of the command.
-node stopKeepsTheUnreadOutput(): boolean {
-  handle {
-    startJob("printf 'A%s\\n' 1; sleep 30", maxMinutes: 1)
-  } with approve
-  const id = listJobs()[0].id
-  sleep(1s)
-  jobsSlashCommand("stop ${id}")
-  return withPendingNotes("next").includes("A1")
+node theNoteSaysTheUserStoppedTheJob(): boolean {
+  return stoppedNote("job-abc123", "sleep 30") == "I stopped background job job-abc123 myself: sleep 30"
 }

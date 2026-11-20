@@ -26,7 +26,6 @@ import {
   savedRun,
   startRun,
   stillHeld,
-  stopDroppedJobs,
   takeHold,
   type AgentModule,
   type Answer,
@@ -39,6 +38,7 @@ import {
   type PauseData,
   type Settle,
 } from "./agentDriver/index.js";
+import { stopDroppedJobs } from "./agentDriver/jobControl.js";
 
 /** What the terminal's shell run does for the session. Each is an Agency
  *  function of the shell run, called back from TypeScript.
@@ -299,6 +299,7 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
       await onHappened(args, happened, shell);
     }
     if (phase.kind === "waitingForUser" || phase.kind === "approving") {
+      // run-read-ok: the save takes the record's lock on the host of whatever run is current, or on the process's lock host. One terminal session saves one step at a time, so the lock never contends.
       await saveTerminalRun(args, phase, shell);
     }
   };
@@ -351,6 +352,7 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
       if (run === null) {
         return `The file for session ${id} is missing or is not a saved session.`;
       }
+      // run-read-ok: takeHold locks the record as a save does (see `apply`), before this session has run any leg.
       const held = await takeHold({ dir: args.dir, id, holder: args.holder });
       if (!held.success) {
         return held.error;

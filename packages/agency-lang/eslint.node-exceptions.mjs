@@ -52,6 +52,10 @@ export const NODE_ONLY = {
   "lib/stdlib/cli.ts": "the terminal UI needs the terminal's size and raw mode",
   "lib/stdlib/agentTerminalDriver.ts":
     "agency agent's terminal: it runs the session program and names its process by pid",
+  "lib/stdlib/agentTerminalSession.ts":
+    "agency agent's terminal session, which stops and lists jobs through agentDriver/jobControl.ts",
+  "lib/stdlib/agentDriver/jobControl.ts":
+    "reads and stops a session's background jobs through lib/runtime/jobs/detachedJobs.ts",
   "lib/stdlib/cliEditor.ts": "hands the REPL's terminal to $EDITOR, which needs stdin's raw mode",
   "lib/stdlib/cliJobLine.ts":
     "prints a job's finish line above the REPL's readline prompt and redraws it",

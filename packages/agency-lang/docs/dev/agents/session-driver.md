@@ -94,7 +94,11 @@ So the driver keeps the jobs a turn starts:
   jobs.
 - A turn that is cancelled or fails reports `turnJobsDropped` right after
   `turnCancelled` or `legFailed`. The front-end stops each job with
-  `stopDroppedJobs(host, jobs)`. Esc means "stop what the agent is doing",
+  `stopDroppedJobs(host, jobs)`. It and the other two functions that read
+  or stop a job (`sessionJobs`, `stopSessionJob`) are in `jobControl.ts`,
+  which is Node-only like the job processes, so the driver's index does
+  not export them: a front-end imports
+  `agency-lang/stdlib-lib/agentDriver/jobControl.js`. Esc means "stop what the agent is doing",
   and the next message already says the turn's changes may be half made.
 - A loaded turn that waits on approvals gets its `turnJobs` from the
   approvals' checkpoints (`jobsStartedBetween`), so a cancel after the
@@ -316,6 +320,67 @@ reuses a pid after a crash. The pid is kept for messages.
   accepted. Outside a run, the lock is taken on one host kept for the
   process, since `currentHost()` builds a new host on each call there.
 
+## The terminal
+
+`agency agent` runs its interactive sessions through the driver. The
+process has two runs:
+
+- **The shell run** is `agent.agency`. It parses the flags, picks the
+  session, installs the policy handler, and runs `repl()`. It is never
+  saved. `lib/terminal.agency` is its side of the session, and
+  `lib/repl.agency` turns each line into an answer.
+- **The session run** is `program.agency`, started and resumed by
+  `lib/stdlib/agentTerminalSession.ts`. `agentTerminalDriver.ts` holds the
+  process's one session and gives the shell run its functions
+  (`_startSession`, `_resumeSession`, `_send`, `_pause`, ...). It imports
+  the program as `agency-lang/agent-session`, declared in
+  `lib/stdlib/agentSessionProgram.d.ts`.
+
+The session calls back into the shell run for three things, each an
+Agency function of `terminal.agency`:
+
+- **`ask`**: `askAbout(intr, currentPolicy(), file)` from `std::policy`.
+  It draws the same prompt the terminal always drew (the diff of an edit,
+  the typed value, the "what should the agent do instead?" follow-up), and
+  saves an "always" answer through the handler's own writer. Esc at the
+  prompt throws a cancellation, and the session drops the turn
+  (`approvalCancelled`).
+- **`policy`**: `currentPolicy()`, read before each leg and after each
+  answer. So an "always" answer settles the rest of its pause, and the
+  driver prints "Approved … by the rule just saved" for each.
+- **`show`**: prints the reply, an error, or a line of the driver's.
+  Notices (`session.notice`) and tool traces print from `trace.agency`'s
+  callbacks, which fire for every run in the process.
+
+Esc while the model works cancels the shell run's call. `_send` passes
+that run's abort signal to the leg, so it aborts the leg too.
+
+**The policy.** A new session started with policy flags saves what they
+resolve to as its own policy file (`saveCarriedPolicy`), and "always"
+answers go there. A resumed session that carries a policy file runs under
+`sessionRunPolicy({ carried, saved: policy.json, extra: <flags given now> })`.
+The shell installs `cliPolicyHandler` with that policy and file, so its
+own interrupts are judged the same way.
+
+**What the commands read.** The footer, `/cost`, `/model`, `/preset`,
+`/settings` and `/search` read the session's last pause (`_pause()`) and
+its usage (`_footerTokens`, `_costRows`). A command that changes the
+session sends an answer: `rename`, `fork`, `compact`, `model`, `preset`,
+`savePreset`, `search`, `local`, `capabilities`. A message carries the
+notes made since the last one (`!cmd`, `/image`).
+
+**Jobs.** The REPL's job watch reads `heldJobs()` through
+`setReplJobsSource`, so a job gets its finish line from the moment it
+starts. `/jobs` and `/jobs stop` read and stop the jobs through
+`sessionJobs` and `stopSessionJob` and run no leg. A stop changes nothing
+in the session run, so its note to the model carries no output; the jobs
+message lists the job as stopped and unread.
+
+**Saving.** The session is saved at every pause once it has a turn, with
+holder `{ frontEnd: "terminal", pid, processId }`. When another front-end
+takes it, the next line prints "This session was continued in …" and the
+REPL ends.
+
 ## Things that are easy to get wrong
 
 - **Every pause stays in the session program.** The driver adds no frame
@@ -341,5 +406,10 @@ reuses a pid after a crash. The pid is kept for messages.
 | `lib/stdlib/agentDriver/approvals.ts`    | The approval queue.                                         |
 | `lib/stdlib/agentDriver/machine.ts`      | `reduceDriver`, the phases, `Happened`.                     |
 | `lib/stdlib/agentDriver/savedRun.ts`     | Saving, loading, and the holder.                            |
-| `lib/stdlib/agentDriver/jobs.ts`         | The jobs a pause holds, and stopping a dropped turn's jobs. |
+| `lib/stdlib/agentDriver/jobs.ts`         | The jobs a pause holds.                                     |
+| `lib/stdlib/agentDriver/jobControl.ts`   | Listing and stopping jobs. Node-only, not in the index.     |
+| `lib/stdlib/agentTerminalSession.ts`     | The terminal's session: legs, approvals, saves, the holder. |
+| `lib/stdlib/agentTerminalDriver.ts`      | The process's one session, for the shell run's Agency code. |
+| `tests/agency-js/agent-terminal`         | The terminal's session driving the real program.            |
+| `tests/agency-js/agent-terminal-repl`    | `agency agent`'s REPL, typed into, end to end.              |
 | `tests/agency-js/agent-driver`           | A real run driven through the driver, with a small fixture. |

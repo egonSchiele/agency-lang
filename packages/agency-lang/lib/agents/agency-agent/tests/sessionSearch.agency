@@ -11,8 +11,9 @@ import {
   markTurnDone,
   recordTurn,
   setConversationThread,
+  setCurrentRecord,
  } from "../lib/record.agency"
-import { startSession } from "../lib/resume.agency"
+import { newSessionRecord } from "../lib/resume.agency"
 import { forkLine } from "../lib/slashCommands/session.agency"
 import { SessionRecord, displayTitle, saveSession, sessionLabel } from "../lib/sessions.agency"
 import { SessionHit, TimedHit, datedHit, searchSessions } from "../lib/sessionSearch.agency"
@@ -100,7 +101,7 @@ node aHitCarriesADateAndAnAge(): boolean {
 }
 
 node forkNeedsATurn(): boolean {
-  startSession(null, BRAIN)
+  setCurrentRecord(newSessionRecord(BRAIN))
   const before = currentSessionId()
   const forked = forkSession()
   const line = forkLine(forked)
@@ -112,7 +113,7 @@ node forkNeedsATurn(): boolean {
 }
 
 node forkWritesToANewSession(): boolean {
-  startSession(null, BRAIN)
+  setCurrentRecord(newSessionRecord(BRAIN))
   markTurnDone()
   recordTurn("hello")
   const original = currentSessionId()
@@ -133,7 +134,7 @@ node forkWritesToANewSession(): boolean {
 // A fork is saved with no turn behind it. The save still carries the
 // conversation's thread id, so the fork's transcript can be read on resume.
 node aForkKeepsTheConversationThread(): boolean {
-  startSession(null, BRAIN)
+  setCurrentRecord(newSessionRecord(BRAIN))
   setConversationThread("t7")
   markTurnDone()
   recordTurn("hello")
@@ -151,7 +152,7 @@ node findsAMessageInAnEarlierSession(): boolean {
   )) {
     return false
   }
-  startSession(null, BRAIN)
+  setCurrentRecord(newSessionRecord(BRAIN))
   const hits = search("GREP flags")
   if (hits.length != 2) {
     return false
@@ -169,7 +170,7 @@ node needsEveryWord(): boolean {
   )) {
     return false
   }
-  startSession(null, BRAIN)
+  setCurrentRecord(newSessionRecord(BRAIN))
   return search("kumquat ledger").length == 2 && search("kumquat banana").length == 0
 }
 
@@ -179,7 +180,7 @@ node newestSessionComesFirst(): boolean {
   if (!savedOld || !savedNew) {
     return false
   }
-  startSession(null, BRAIN)
+  setCurrentRecord(newSessionRecord(BRAIN))
   const ids = [hit.sessionId for hit in search("marmalade")]
   return ids[0] == "older-4" && ids.includes("older-3")
 }
@@ -188,7 +189,7 @@ node rejectedSearchReturnsAFailure(): boolean {
   if (!saveOlderSession("older-5", "Any", 100, "something to find")) {
     return false
   }
-  startSession(null, BRAIN)
+  setCurrentRecord(newSessionRecord(BRAIN))
   const hits = searchSessions("something") with reject
   return isFailure(hits)
 }

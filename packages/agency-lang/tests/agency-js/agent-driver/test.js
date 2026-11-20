@@ -18,9 +18,9 @@ import {
   saveRun,
   savedRun,
   startRun,
-  stopDroppedJobs,
   thisProcessId,
 } from "../../../dist/lib/stdlib/agentDriver/index.js";
+import { stopDroppedJobs } from "../../../dist/lib/stdlib/agentDriver/jobControl.js";
 import { currentHost } from "../../../dist/lib/runtime/currentHost.js";
 import { jobStatus } from "../../../dist/lib/runtime/jobs/detachedJobs.js";
 

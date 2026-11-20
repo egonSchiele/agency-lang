@@ -1,0 +1,5 @@
+// Unused: stage.js runs the agent's own program (dist/lib/agents/agency-agent/agent.js).
+// The test runner compiles a program for each test folder.
+node main() {
+  return "unused"
+}

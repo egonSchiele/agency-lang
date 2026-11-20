@@ -1,38 +1,19 @@
-/** @module The `/settings` command UI for the agency agent: render the
-  current capability profile and interactively edit it. This module sits
-  ABOVE the capability / shared / settings layers (it imports from them and
-  nothing imports back), so there is no import cycle. */
+/** @module The `/settings` command UI for the agency agent: show the
+  session's capability profile and pick one change to it. The profile is
+  the one the session reported at its last pause, and the change is sent to
+  the session as a `capabilities` answer, which saves and applies it
+  (capabilityChange.agency). */
 
-import { setLlmOptions } from "std::llm"
-import { disableMemory } from "std::memory"
+import { _pause, _send } from "agency-lang/stdlib-lib/agentTerminalDriver.js"
 import { ChoiceItem, chooseOption } from "std::ui/cli"
 import { pushMessage } from "std::ui/cli"
 
-import {
-  CAPABILITY_FIELDS,
-  CapabilityPatch,
-  mergeCapabilityOverride,
-  removeCapabilityField,
-  providerLacksEmbeddings,
- } from "./capabilities.agency"
-import {
-  getCapabilitySettings,
-  loadSettings,
-  saveSettings,
- } from "./settings.agency"
-import {
-  getCapabilities,
-  getCapabilitiesResolved,
-  getCapabilityModelKey,
-  getCapabilityProvider,
-  refreshCapabilities,
-  embeddingKeyStatus,
-  getResolvedSlots,
- } from "../shared.agency"
+import { CAPABILITY_FIELDS, providerLacksEmbeddings } from "./capabilities.agency"
+import { CapabilityChange, CapabilityReport } from "./capabilityChange.agency"
 
 /** Human label for a capability source layer. Interprets the source
   strings resolveCapabilities emits (capabilities.agency). */
-def capabilitySourceLabel(source: string): string {
+def capabilitySourceLabel(report: CapabilityReport, source: string): string {
   if (source == "default") {
     return "built-in default"
   }
@@ -40,105 +21,54 @@ def capabilitySourceLabel(source: string): string {
     return "the model's own limit"
   }
   if (source == "provider") {
-    return "provider default: ${getCapabilityProvider()}"
+    return "provider default: ${report.provider}"
   }
   if (source == "model") {
-    return "built-in for ${getCapabilityModelKey()}"
+    return "built-in for ${report.model}"
   }
   if (source == "user-global") {
     return "your global override"
   }
   if (source == "user-provider") {
-    return "your override for ${getCapabilityProvider()}"
+    return "your override for ${report.provider}"
   }
   if (source == "embedding-override") {
     return "on: the embedding slot names a model"
   }
-  return "your override for ${getCapabilityModelKey()}"
+  return "your override for ${report.model}"
 }
 
-/** One "value (source)" cell. The typed Capabilities shape cannot be
-  indexed by a dynamic key, so this is the renderer's per-field switch. */
-def capabilityRow(fieldKey: string): string {
-  const resolved = getCapabilitiesResolved()
-  const values = resolved.values
-  const sources = resolved.sources
+/** One "value (source)" cell. */
+def capabilityRow(report: CapabilityReport, fieldKey: string): string {
+  const values = report.values
+  const sources = report.sources
   if (fieldKey == "summarize") {
-    return "${values.summarize}   (${capabilitySourceLabel(sources.summarize)})"
+    return "${values.summarize}   (${capabilitySourceLabel(report, sources.summarize)})"
   }
   if (fieldKey == "memory") {
-    return "${values.memory}   (${capabilitySourceLabel(sources.memory)})"
+    return "${values.memory}   (${capabilitySourceLabel(report, sources.memory)})"
   }
   let cap = "none"
   if (values.maxTokens != null) {
     cap = "${values.maxTokens}"
   }
-  return "${cap}   (${capabilitySourceLabel(sources.maxTokens)})"
+  return "${cap}   (${capabilitySourceLabel(report, sources.maxTokens)})"
 }
 
-/** Render the current profile with per-field provenance. */
-export def showCapabilities() {
-  pushMessage(
-    "Capabilities for ${getCapabilityModelKey()} (${getCapabilityProvider()}):",
-  )
+/** Render the profile with per-field provenance. */
+export def showCapabilities(report: CapabilityReport) {
+  pushMessage("Capabilities for ${report.model} (${report.provider}):")
   for (field in CAPABILITY_FIELDS) {
-    pushMessage("  ${field.label}   ${capabilityRow(field.key)}")
+    pushMessage("  ${field.label}   ${capabilityRow(report, field.key)}")
   }
-}
-
-/** The settings.json key a scope writes under. Global's key is unused. */
-def scopeTargetName(scopeKey: string): string {
-  if (scopeKey == "provider") {
-    return getCapabilityProvider()
-  }
-  return getCapabilityModelKey()
-}
-
-/** Persist one override patch at a scope, then re-resolve. */
-def saveCapabilityOverride(scopeKey: string, patch: CapabilityPatch) {
-  let settings = loadSettings()
-  settings.capabilities = mergeCapabilityOverride(
-    getCapabilitySettings(settings),
-    scopeKey,
-    scopeTargetName(scopeKey),
-    patch,
-  )
-  saveSettings(settings)
-  refreshCapabilities(getCapabilityModelKey(), getCapabilityProvider())
-}
-
-/** Remove one field override at a scope, then re-resolve. */
-def removeCapabilityOverride(scopeKey: string, fieldKey: string) {
-  let settings = loadSettings()
-  settings.capabilities = removeCapabilityField(
-    getCapabilitySettings(settings),
-    scopeKey,
-    scopeTargetName(scopeKey),
-    fieldKey,
-  )
-  saveSettings(settings)
-  refreshCapabilities(getCapabilityModelKey(), getCapabilityProvider())
 }
 
 /** Ask which scope an override applies to. Returns "" on cancel. */
-def pickOverrideScope(): string {
+def pickOverrideScope(report: CapabilityReport): string {
   let scopeItems: ChoiceItem[] = []
-  scopeItems.push(
-    {
-    key: "model",
-    label: "this model (${getCapabilityModelKey()})"
-  },
-  )
-  scopeItems.push(
-    {
-    key: "provider",
-    label: "this provider (${getCapabilityProvider()})"
-  },
-  )
-  scopeItems.push({
-    key: "global",
-    label: "all models"
-  })
+  scopeItems.push({ key: "model", label: "this model (${report.model})" })
+  scopeItems.push({ key: "provider", label: "this provider (${report.provider})" })
+  scopeItems.push({ key: "global", label: "all models" })
   const scopeKey = chooseOption(
     "Scope",
     "Where should this apply?",
@@ -151,28 +81,86 @@ def pickOverrideScope(): string {
   return scopeKey
 }
 
-/** Re-apply the resolved cap as the branch default. After a reset the
-  resolved value falls back to a built-in layer, which is always numeric
-  for known providers, so live-apply covers removal too. */
-def applyLiveMaxTokens() {
-  const capValue = getCapabilities().maxTokens
-  if (capValue != null) {
-    setLlmOptions({
-      maxTokens: capValue
-    })
+/** On or off for a boolean field, or null on cancel. When memory is
+  turned on, says why it can't be, or notes what it lacks. */
+def pickOnOff(report: CapabilityReport, fieldKey: string): boolean | null {
+  let onOffItems: ChoiceItem[] = []
+  onOffItems.push({ key: "on", label: "on" })
+  onOffItems.push({ key: "off", label: "off" })
+  const picked = chooseOption(fieldKey, "Enable ${fieldKey}?", onOffItems, allowCancel: true)
+  if (picked == "" || picked == null) {
+    return null
   }
+  if (fieldKey == "memory" && picked == "on") {
+    const status = report.embedding
+    if (status.state == "key-missing") {
+      pushMessage(
+        color.red(
+        "Cannot enable memory: the embedding slot needs ${status.varName}, which is not set. Export it, or point the embedding slot elsewhere via /model.",
+      ),
+      )
+      return null
+    }
+    if (status.state == "no-override" && providerLacksEmbeddings(report.provider)) {
+      pushMessage(
+        color.dim(
+        "Note: ${report.provider} has no embeddings endpoint, so Tier-2 semantic recall stays off. Point the embedding slot at a provider that has one, e.g. /model embedding=openai/text-embedding-3-small, or a served local model, e.g. /model embedding=mlx/qwen3-embedding-4b-mlx.",
+      ),
+      )
+    }
+  }
+  return picked == "on"
 }
 
-/** Interactive edit: field → value → scope → save → live-apply. */
-export def editCapabilities() {
+/** The output-token cap: a positive number, "reset" to remove the
+  override, or "" on cancel. */
+def pickMaxTokens(): string {
+  let capItems: ChoiceItem[] = []
+  capItems.push({ key: "reset", label: "reset — remove my override, use the default" })
+  const picked = chooseOption(
+    "maxTokens",
+    "Default output-token cap. Type a number, or pick reset.",
+    capItems,
+    allowFreeText: true,
+    allowCancel: true,
+  )
+  if (picked == null) {
+    return ""
+  }
+  return picked
+}
+
+/** The value the person picked for a field: `{ value }`, with a null value
+  for a reset, or null when they cancelled or typed something unusable. */
+def pickValue(report: CapabilityReport, fieldKey: string): any {
+  if (fieldKey == "maxTokens") {
+    const picked = pickMaxTokens()
+    if (picked == "") {
+      return null
+    }
+    if (picked == "reset") {
+      return { value: null }
+    }
+    const parsed = parseInt(picked)
+    if (parsed <= 0) {
+      pushMessage(color.red("Not a positive number: ${picked}"))
+      return null
+    }
+    return { value: parsed }
+  }
+  const on = pickOnOff(report, fieldKey)
+  if (on == null) {
+    return null
+  }
+  return { value: on }
+}
+
+/** Interactive edit: field, value, scope. The change, or null when the
+  person stopped. */
+export def editCapabilities(report: CapabilityReport): CapabilityChange | null {
   let fieldItems: ChoiceItem[] = []
   for (field in CAPABILITY_FIELDS) {
-    fieldItems.push(
-      {
-      key: field.key,
-      label: "${field.label} — ${field.description}"
-    },
-    )
+    fieldItems.push({ key: field.key, label: "${field.label} — ${field.description}" })
   }
   const fieldKey = chooseOption(
     "Settings",
@@ -181,119 +169,35 @@ export def editCapabilities() {
     allowCancel: true,
   )
   if (fieldKey == "" || fieldKey == null) {
-    return
+    return null
   }
-
-  let patch: CapabilityPatch = {}
-  if (fieldKey == "summarize" || fieldKey == "memory") {
-    let onOffItems: ChoiceItem[] = []
-    onOffItems.push({
-      key: "on",
-      label: "on"
-    })
-    onOffItems.push({
-      key: "off",
-      label: "off"
-    })
-    const picked = chooseOption(fieldKey, "Enable ${fieldKey}?", onOffItems, allowCancel: true)
-    if (picked == "" || picked == null) {
-      return
-    }
-    if (fieldKey == "summarize") {
-      patch = {
-        summarize: picked == "on"
-      }
-    } else {
-      patch = {
-        memory: picked == "on"
-      }
-      if (picked == "on") {
-        const status = embeddingKeyStatus(getResolvedSlots())
-        if (status.state == "key-missing") {
-          pushMessage(
-            color.red(
-            "Cannot enable memory: the embedding slot needs ${status.varName}, which is not set. Export it, or point the embedding slot elsewhere via /model.",
-          ),
-          )
-          return
-        }
-        if (status.state == "no-override" && providerLacksEmbeddings(getCapabilityProvider())) {
-          pushMessage(
-            color.dim(
-            "Note: ${getCapabilityProvider()} has no embeddings endpoint, so Tier-2 semantic recall stays off. Point the embedding slot at a provider that has one, e.g. /model embedding=openai/text-embedding-3-small, or a served local model, e.g. /model embedding=mlx/qwen3-embedding-4b-mlx.",
-          ),
-          )
-        }
-      }
-    }
+  const picked = pickValue(report, fieldKey)
+  if (picked == null) {
+    return null
   }
-  if (fieldKey == "maxTokens") {
-    let capItems: ChoiceItem[] = []
-    capItems.push(
-      {
-      key: "reset",
-      label: "reset — remove my override, use the default"
-    },
-    )
-    const picked = chooseOption(
-      "maxTokens",
-      "Default output-token cap. Type a number, or pick reset.",
-      capItems,
-      allowFreeText: true,
-      allowCancel: true,
-    )
-    if (picked == "" || picked == null) {
-      return
-    }
-    if (picked == "reset") {
-      const scopeKey = pickOverrideScope()
-      if (scopeKey == "") {
-        return
-      }
-      removeCapabilityOverride(scopeKey, "maxTokens")
-      applyLiveMaxTokens()
-      pushMessage("Override removed.")
-      showCapabilities()
-      return
-    }
-    const parsed = parseInt(picked)
-    if (parsed <= 0) {
-      pushMessage(color.red("Not a positive number: ${picked}"))
-      return
-    }
-    patch = {
-      maxTokens: parsed
-    }
-  }
-
-  const scopeKey = pickOverrideScope()
+  const scopeKey = pickOverrideScope(report)
   if (scopeKey == "") {
-    return
+    return null
   }
-  saveCapabilityOverride(scopeKey, patch)
+  return { scope: scopeKey, field: fieldKey, value: picked.value }
+}
 
-  // Live-apply what can apply now; explain what can't.
-  if (fieldKey == "memory") {
-    if (getCapabilities().memory) {
-      // The ON direction cannot live-apply. enableAgentMemory's
-      // `with approve` cannot override the outer policy handler that
-      // startInteractive installed, so the memory-dir fs interrupts
-      // would surface as policy prompts mid-flow, or get denied and
-      // half-apply the toggle. The OFF direction stays live below:
-      // disableMemory raises no fs interrupts and already runs in-REPL
-      // from reactToSlotChange.
-      pushMessage(
-        color.dim(
-        "Memory turns on at next agent start (enabling mid-session would raise policy prompts).",
-      ),
-      )
-    } else {
-      disableMemory() with approve
-    }
+/** `/settings`: show the profile, pick a change, and send it to the
+  session, which saves it, applies it, and says so. */
+export def settingsSlashCommand(): boolean {
+  const before: any = _pause() ?? {}
+  const report = before.capabilities ?? null
+  if (report == null) {
+    pushMessage(color.red("This session reports no capability profile."))
+    return true
   }
-  if (fieldKey == "maxTokens") {
-    applyLiveMaxTokens()
+  showCapabilities(report)
+  const change = editCapabilities(report)
+  if (change == null) {
+    return true
   }
-  pushMessage("Saved.")
-  showCapabilities()
+  _send({ kind: "capabilities", settings: change })
+  const after: any = _pause() ?? {}
+  showCapabilities(after.capabilities ?? report)
+  return true
 }

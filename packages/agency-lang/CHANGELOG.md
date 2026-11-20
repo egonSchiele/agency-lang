@@ -1,3 +1,38 @@
+## Nov 19 2026 — v0.42.1
+
+### Breaking
+
+- **A job started with `startJob` keeps running after the program that started it ends.** It runs until it exits, reaches `maxMinutes` (60 by default), or is stopped with `stopJob` or `agency jobs stop`.
+- **`startJob` is refused inside a `run()` subprocess,** the same way `spawn` is.
+- **A job's output is saved in `~/.agency/jobs/` until you run `agency jobs clean`.** Before, it lived in memory and went away with the run.
+- **`getSecret` in `std::auth/keyring` fails when the keyring can't be read.** It used to return null.
+
+### Jobs
+
+- **Each job runs in a process of its own,** with its output saved in `~/.agency/jobs/<id>/`. A resume in another process picks up reading the output where it left off.
+- **New `agency jobs` command** lists, stops, and cleans up the jobs on the machine.
+- **`std::jobs` gains `shellJob`, `start`, `status`, `output`, and `stop`.**
+
+### Agent
+
+- **The agent reads model API keys from the system keyring.** Save a key under the service `agency-lang`, with the variable name (such as `ANTHROPIC_API_KEY`) as the account. A key in the environment still wins.
+- **New `--brain scripttest`,** a trial brain that adds tools for writing and running Agency programs to the minimal brain.
+- **The agent no longer asks before scanning its own learned skills and tools.**
+- **`/model` refuses a model whose provider it doesn't know.**
+
+### TypeScript API
+
+- **New session driver in `agency-lang/stdlib-lib/agentDriver`,** so other front-ends can start, resume, approve, save, and load an agent session the same way.
+- **A session keeps the policy it was started under,** even when another front-end resumes it.
+- **New `_resolveRunPolicy` in `agency-lang/stdlib-lib/runPolicy.js`** turns `--policy`, `--approve`, and `--reject` flags into a policy, the same way `agency run` does.
+
+### Fixes
+
+- **Security: saving a secret to the macOS keychain no longer puts it on the command line,** where other users could see it with `ps`.
+- **Reading a secret from the macOS keychain returns the exact value.** Before, some values came back as hex.
+- **A failed keyring read no longer replaces the OAuth encryption key.** Before, it made every saved token unreadable.
+- **`run()` writes compiled programs under `~/.agency/tmp/`,** not inside the agency-lang package, so it works when the package folder is read-only.
+
 ## Nov 19 2026 — v0.42.0
 
 Extract a common core from the agency agent for other agents to share.

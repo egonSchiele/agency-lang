@@ -41,5 +41,6 @@
   },
   "showFails": { "threw": true, "waiting": true, "nextReplied": 1 },
   "fork": { "told": true },
+  "escWithJob": { "threw": true, "noJobRunning": true, "savedWaiting": true },
   "otherBuild": { "refused": true, "stillHeldBy": "perry" }
 }

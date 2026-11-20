@@ -8,6 +8,7 @@
   force. See docs/dev/agents/session-driver.md, "The terminal".
 */
 import {
+  _pause,
   _resumeSession,
   _runOnce,
   _savedTranscript,
@@ -17,6 +18,7 @@ import {
 import {
   SESSION_POLICIES_DIR,
   readCarriedPolicy,
+  removeCarriedPolicy,
   saveCarriedPolicy,
   sessionRunPolicy,
  } from "agency-lang/stdlib-lib/agentDriver/index.js"
@@ -154,6 +156,20 @@ export def resumedSessionPolicy(id: string, flags: any): SessionPolicy {
     _exit(1)
   }
   return { policy: run.value, file: carriedPolicyPath(id) }
+}
+
+/** At the end of the REPL: a session that never had a turn was never
+  saved, so the policy file it was started with is removed too. */
+export def forgetUnsavedPolicy() {
+  const pause: any = _pause() ?? {}
+  const record = pause.record ?? null
+  if (record == null || record.turns > 0 || _policyFile != carriedPolicyPath(record.id)) {
+    return
+  }
+  const removed = removeCarriedPolicy({ home: POLICY_DIR, id: record.id })
+  if (removed is failure(reason)) {
+    print(color.yellow(reason))
+  }
 }
 
 /** Where "always" answers go from now on. Set before the session starts. */

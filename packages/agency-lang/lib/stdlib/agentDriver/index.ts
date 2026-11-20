@@ -25,6 +25,7 @@ export {
   POLICY_UNREADABLE,
   SESSION_POLICIES_DIR,
   readCarriedPolicy,
+  removeCarriedPolicy,
   saveCarriedPolicy,
 } from "./sessionPolicy.js";
 export {

@@ -10,6 +10,7 @@ import {
   copyCarriedPolicy,
   POLICY_UNREADABLE,
   readCarriedPolicy,
+  removeCarriedPolicy,
   saveCarriedPolicy,
 } from "./sessionPolicy.js";
 
@@ -26,6 +27,28 @@ function writePolicyFile(home: string, id: string, text: string): void {
   fs.mkdirSync(path.join(home, "session-policies"), { recursive: true });
   fs.writeFileSync(path.join(home, "session-policies", `${id}.json`), text);
 }
+
+describe("removing a session's policy file", () => {
+  it("removes it, so the session reads as having none", async () => {
+    await withHome(async (home) => {
+      await saveCarriedPolicy({ home, id: "s1", policy: minimalAutoApprovePolicy });
+      expect(await removeCarriedPolicy({ home, id: "s1" })).toEqual(success(null));
+      expect(await readCarriedPolicy({ home, id: "s1" })).toEqual(success(null));
+    });
+  });
+
+  it("removes nothing, and succeeds, for a session that has none", async () => {
+    await withHome(async (home) => {
+      expect(await removeCarriedPolicy({ home, id: "s1" })).toEqual(success(null));
+    });
+  });
+
+  it("refuses an id that is not a plain file name", async () => {
+    await withHome(async (home) => {
+      expect((await removeCarriedPolicy({ home, id: "../x" })).success).toBe(false);
+    });
+  });
+});
 
 describe("the session's policy file", () => {
   it("reads back the policy saved for the session", async () => {

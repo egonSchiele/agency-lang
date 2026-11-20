@@ -220,56 +220,49 @@ function heldJobsIn(phase: DriverPhase): HeldJob[] {
 }
 
 /** Saves the session as the phase has it. A session with no record, or
- *  no turn yet, is not saved. */
+ *  no turn yet, is not saved. Gives the line to show when the save
+ *  failed. */
 async function saveTerminalRun(
   args: TerminalSessionArgs,
   phase: DriverPhase,
-  shell: TerminalShell,
-): Promise<void> {
+): Promise<ShownLine[]> {
   const record = recordOf(phase);
   const run = savedRun(phase);
   if (record === null || run === null || record.turns === 0) {
-    return;
+    return [];
   }
   const saved = await saveRun({ dir: args.dir, record, run, holder: args.holder });
   if (!saved.success) {
-    await shell.show({ kind: "warning", text: `Could not save the session: ${saved.error}` });
-    return;
+    return [{ kind: "warning", text: `Could not save the session: ${saved.error}` }];
   }
   args.onSaved?.(record.id);
+  return [];
 }
 
-/** Shows, or acts on, one thing the driver reports. */
-async function onHappened(
-  args: TerminalSessionArgs,
-  happened: Happened,
-  shell: TerminalShell,
-): Promise<void> {
+/** Does what one thing the driver reports needs, without the shell, and
+ *  gives the lines to show for it. The shell is called only after this:
+ *  when Esc cancels the shell run, the shell can't run anything, and a
+ *  dropped turn's jobs must still be stopped. */
+async function actOn(args: TerminalSessionArgs, happened: Happened): Promise<ShownLine[]> {
   switch (happened.type) {
     case "settled":
-      await shell.show(settledLine(happened.interrupt, happened.response));
-      return;
+      return [settledLine(happened.interrupt, happened.response)];
     case "legFailed":
     case "startFailed":
-      await shell.show({ kind: "error", text: happened.error });
-      return;
+      return [{ kind: "error", text: happened.error }];
     case "turnJobsDropped":
       await stopDroppedJobs(args.host, happened.jobs);
-      return;
+      return [];
     case "forked": {
       const copied = await copyCarriedPolicy({
         home: args.home,
         from: happened.from,
         to: happened.to,
       });
-      if (!copied.success) {
-        await shell.show({ kind: "warning", text: copied.error });
-      }
-      await shell.forked?.(happened.from, happened.to);
-      return;
+      return copied.success ? [] : [{ kind: "warning", text: copied.error }];
     }
     default:
-      return;
+      return [];
   }
 }
 
@@ -368,14 +361,29 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
     return next.happened;
   };
 
-  /** Shows what happened, acts on it, and saves. */
-  const afterwards = async (happened: Happened[], shell: TerminalShell): Promise<void> => {
+  /** Acts on what happened and saves, then shows `first` (a leg's lines)
+   *  and what happened, and tells the shell of a fork. Nothing calls the
+   *  shell until the jobs are stopped and the session is saved. */
+  const afterwards = async (
+    happened: Happened[],
+    shell: TerminalShell,
+    first: ShownLine[] = [],
+  ): Promise<void> => {
+    const lines = [...first];
     for (const each of happened) {
-      await onHappened(args, each, shell);
+      lines.push(...(await actOn(args, each)));
     }
     if (phase.kind === "waitingForUser" || phase.kind === "approving") {
       // run-read-ok: the save takes the record's lock on the host of whatever run is current, or on the process's lock host. One terminal session saves one step at a time, so the lock never contends.
-      await saveTerminalRun(args, phase, shell);
+      lines.push(...(await saveTerminalRun(args, phase)));
+    }
+    for (const line of lines) {
+      await shell.show(line);
+    }
+    for (const each of happened) {
+      if (each.type === "forked") {
+        await shell.forked?.(each.from, each.to);
+      }
     }
   };
 
@@ -411,11 +419,7 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
       }
       const leg = await runLeg(args, phase.leg, shell, abortSignal);
       usage = leg.usage ?? usage;
-      const happened = advance(leg.action);
-      for (const line of leg.shown) {
-        await shell.show(line);
-      }
-      await afterwards(happened, shell);
+      await afterwards(advance(leg.action), shell, leg.shown);
       return true;
     }
     const showing = phase.kind === "approving" ? currentApproval(phase.queue) : null;
@@ -452,10 +456,7 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
         result: outcome.result,
         settle: settleUnder(policy, args.host),
       });
-      for (const line of linesToShow(reported, outcome.result)) {
-        await shell.show(line);
-      }
-      await afterwards(happened, shell);
+      await afterwards(happened, shell, linesToShow(reported, outcome.result));
       return endedReason();
     },
 
@@ -478,7 +479,9 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
       const restored = restoredPhase(run, { settle: settleUnder(await shell.policy(), args.host) });
       phase = restored.phase;
       for (const happened of restored.happened) {
-        await onHappened(args, happened, shell);
+        for (const line of await actOn(args, happened)) {
+          await shell.show(line);
+        }
       }
       if (endedReason() === "") {
         await drive(shell);

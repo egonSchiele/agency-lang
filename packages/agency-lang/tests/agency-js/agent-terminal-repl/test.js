@@ -2,7 +2,7 @@
 // line gets its reply, `/rename` and `/cost` work against the session, and
 // the session is saved where `--resume` finds it.
 import { spawn } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -42,6 +42,14 @@ await wait(4000);
 await typed("hello there", 4000);
 await typed("/rename smoke test", 2000);
 await typed("/cost", 1000);
+// Esc while the model works: the turn is dropped, and the next message
+// tells the model so.
+await typed("take your time", 1500);
+child.stdin.write("\u001b");
+await wait(3000);
+const beforeNext = printed.length;
+await typed("are you there", 7000);
+const afterEsc = stripAnsi(printed.slice(beforeNext));
 await typed("/exit", 2000);
 child.stdin.end();
 await Promise.race([exited, wait(5000)]);
@@ -55,6 +63,26 @@ const records = folders.flatMap((folder) =>
     .filter((file) => file.endsWith(".meta.json"))
     .map((file) => JSON.parse(readFileSync(path.join(sessionsDir, folder, file), "utf8"))),
 );
+
+// Started with `--policy minimal` and closed before any turn: the session
+// is never saved, so the policy file it was started with is gone too.
+const policiesDir = path.join(home, "session-policies");
+const closedAtOnce = spawn(process.execPath, ["./stage.js"], {
+  stdio: ["pipe", "ignore", "ignore"],
+  env: {
+    ...process.env,
+    AGENCY_AGENT_HOME: home,
+    ANTHROPIC_API_KEY: "test-key",
+    NO_COLOR: "1",
+    STAGE_FLAGS: "--policy minimal",
+  },
+});
+const closedExited = new Promise((resolve) => closedAtOnce.on("exit", resolve));
+await wait(4000);
+closedAtOnce.stdin.write("/exit\n");
+await Promise.race([closedExited, wait(5000)]);
+closedAtOnce.kill();
+const policyFilesLeft = existsSync(policiesDir) ? readdirSync(policiesDir) : [];
 writeFileSync(
   "__result.json",
   JSON.stringify(
@@ -62,7 +90,9 @@ writeFileSync(
       replied: shown.includes("stub reply"),
       renamed: shown.includes("Session renamed: smoke test"),
       cost: /Cost:\s+\$0\.00\d\d/.test(shown),
+      nextMessageCarriesTheNote: afterEsc.includes("noted the cancel"),
       goodbye: shown.includes("Goodbye!"),
+      policyFilesLeft,
       saved: records.map((record) => ({
         title: record.title,
         turns: record.turns,

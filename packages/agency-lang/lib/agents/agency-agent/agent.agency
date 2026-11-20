@@ -23,6 +23,7 @@ import { SessionRecord } from "./lib/sessions.agency"
 import { loadSettings } from "./lib/settings.agency"
 import {
   SessionPolicy,
+  forgetUnsavedPolicy,
   newSessionPolicy,
   programStartFor,
   resumeSessionRun,
@@ -128,6 +129,7 @@ def interactive(args: any, brainName: string, startAgent: string, seedPrompt: st
     }
     startInteractive(startAgent, seedPrompt, saveHistory: !incognito)
   } with handler
+  forgetUnsavedPolicy()
 }
 
 /* A seeded turn is if the user invokes the Agency agent with

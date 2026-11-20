@@ -203,9 +203,8 @@ of the files packaged with Agency, through `agentPrompt` and `agentSkill`,
 which is what every stdlib agent does. So the harness policy decides every
 interrupt a turn raises. `tests/turn.agency`
 (`sessionPolicyDecidesTheAgentsInterrupts`) runs a turn whose model writes a
-file under the CLI policy, and the write is rejected. With the terminal on
-the core, `tests/agency-js/agent-terminal-oneshot` checks the same for
-`-p`.
+file under the CLI policy, and the write is rejected.
+`tests/agency-js/agent-terminal-oneshot` checks the same for `-p`.
 
 Handlers in Agency are not try/catch. When a function raises an interrupt,
 every handler up the chain is consulted, and if any one of them rejects,

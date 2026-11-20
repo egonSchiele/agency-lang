@@ -340,46 +340,54 @@ The session calls back into the shell run for three things, each an
 Agency function of `terminal.agency`:
 
 - **`ask`**: `askAbout(intr, currentPolicy(), file)` from `std::policy`.
-  It draws the same prompt the terminal always drew (the diff of an edit,
-  the typed value, the "what should the agent do instead?" follow-up), and
-  saves an "always" answer through the handler's own writer. Esc at the
-  prompt throws a cancellation, and the session drops the turn
-  (`approvalCancelled`).
+  It draws the approval prompt (the diff of an edit, the typed value, the
+  "what should the agent do instead?" follow-up), and saves an "always"
+  answer through the handler's own writer. Esc at the prompt throws a
+  cancellation, and the session drops the turn (`approvalCancelled`).
 - **`policy`**: `currentPolicy()`, read before each leg and after each
   answer. So an "always" answer settles the rest of its pause, and the
   driver prints "Approved … by the rule just saved" for each.
-- **`show`**: prints the reply, an error, or a line of the driver's.
-  Notices (`session.notice`) and tool traces print from `trace.agency`'s
-  callbacks, which fire for every run in the process.
+- **`show`**: prints the reply, an error, an edit's diff, or a line of
+  the driver's. Notices (`session.notice`) and tool traces print from
+  `trace.agency`'s callbacks, which fire for every run in the process.
+- **`forked`**: the session was forked, so a session policy file the
+  shell saves "always" answers to moves to the new id.
 
-Esc while the model works cancels the shell run's call. `_send` passes
-that run's abort signal to the leg, so it aborts the leg too.
+**Esc while the model works** cancels the shell run's call. `_send` passes
+that run's abort signal to the leg, so it aborts the leg too. The shell
+run stays cancelled until the REPL resets it after the line, so the shell
+can't run anything until then. That is why, after each leg, the driver
+first does what needs no shell (stops a dropped turn's jobs, copies a
+fork's policy, saves) and only then shows lines. A line it can't show is
+lost.
 
-- **An edit a rule approved** inside the run gets no prompt, so the
-  terminal shows its diff from the core's `session.editDiff`, as its
-  policy handler always did for a rule's approval
-  (`lib/stdlib/agentTerminalDiff.ts`). An edit the new pause asks about
-  is drawn by the prompt and not shown twice.
-- **A leg's outcome is applied before anything is shown.** If the shell
-  fails in the middle of a turn, the turn is dropped (a turn waiting on
-  approvals as Esc drops it, one whose leg was not applied as a failed
-  leg), so the session never stays stuck in a turn that refuses every
-  later line. `send` says why when the session is not waiting.
-- **After a fork**, the driver tells the shell (`forked`), and a session
-  policy file the shell saves "always" answers to moves to the new id.
-- **The shell's handler saves answers only** (`cliPolicyHandler(...,
-  answersOnly: true)`): its policy can be layered from the session's own
-  policy, the saved policy's rejects and flags given now, and only the
-  rules a person answers "always" belong in the file.
-- **A resume checks the build first.** A session this build can't run is
-  refused before `takeHold`, so the front-end that has it open keeps it.
+**An edit's diff.** An edit a rule approves inside the run gets no prompt,
+so the terminal shows its diff from the core's `session.editDiff`
+(`lib/stdlib/agentTerminalDiff.ts`). An edit the new pause asks about is
+drawn by its prompt and not shown twice.
+
+**An error in the middle of a turn**, such as the shell failing, drops the
+turn: one waiting on approvals as Esc drops it, one whose leg was not
+applied as a failed leg. The session waits for a message again and its
+turn's jobs are stopped, but nothing is saved until the next pause. If
+the process exits first, the saved session still holds the turn as
+running, and a resume treats it as cancelled.
 
 **The policy.** A new session started with policy flags saves what they
 resolve to as its own policy file (`saveCarriedPolicy`), and "always"
-answers go there. A resumed session that carries a policy file runs under
+answers go there. If the session ends before its first turn, it is never
+saved, and the file is removed (`removeCarriedPolicy`). A resumed session
+that carries a policy file runs under
 `sessionRunPolicy({ carried, saved: policy.json, extra: <flags given now> })`.
-The shell installs `cliPolicyHandler` with that policy and file, so its
-own interrupts are judged the same way.
+A session started with no flags carries no policy, so flags given when it
+is resumed apply to that sitting only: the next resume, here or in
+another front-end, runs it under the saved policy again. The shell
+installs `cliPolicyHandler` with the session's policy and file, and with
+`answersOnly: true`, since the policy can be layered from the session's
+own, the saved policy's rejects and flags given now, and only what a
+person answers "always" belongs in the file. A resume of a session this
+build can't run is refused before `takeHold`, so the front-end that has
+it open keeps it.
 
 **What the commands read.** The footer, `/cost`, `/model`, `/preset`,
 `/settings` and `/search` read the session's last pause (`_pause()`) and

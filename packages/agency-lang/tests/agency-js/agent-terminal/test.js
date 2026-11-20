@@ -22,7 +22,7 @@ mkdirSync(dir, { recursive: true });
 const program = await import("../../../dist/lib/agents/agency-agent/program.js");
 const { approve, __setLLMClient } = program;
 const { terminalSession } = await import("../../../dist/lib/stdlib/agentTerminalSession.js");
-const { takeHold, thisProcessId, messageAnswer } =
+const { takeHold, thisProcessId, messageAnswer, readSavedRun } =
   await import("../../../dist/lib/stdlib/agentDriver/index.js");
 const { sessionJobs, stopSessionJob } =
   await import("../../../dist/lib/stdlib/agentDriver/jobControl.js");
@@ -81,6 +81,13 @@ __setLLMClient({
     }
     if (said.includes("edit one file")) {
       return toolRan(config) ? reply("edited") : reply(null, [editCall("a.txt")]);
+    }
+    if (said.includes("edit and start a job")) {
+      // One reply that edits a file and starts a job, so the leg reports
+      // the edit's diff, then a slow reply the test cancels.
+      if (!toolRan(config)) return reply(null, [editCall("a.txt"), jobCall]);
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      return reply("edited, and the job is running");
     }
     if (said.includes("start a job")) {
       if (!toolRan(config)) return reply(null, [jobCall]);
@@ -302,9 +309,8 @@ const result = {};
   };
 }
 
-// An edit a rule approves inside the run is shown as its diff, as the
-// terminal's handler always showed one. An edit that is asked about is
-// drawn by the prompt, so it is not shown twice.
+// An edit a rule approves inside the run is shown as its diff. An edit
+// that is asked about is drawn by the prompt, so it is not shown twice.
 {
   writeFiles();
   const ruled = standIn({ policy: { "std::edit": [{ action: "approve" }] } });
@@ -359,6 +365,37 @@ const result = {};
   const newId = session.pause()?.record?.id;
   result.fork = {
     told: s.forks.length === 1 && s.forks[0][0] === "s-fork" && s.forks[0][1] === newId,
+  };
+}
+
+// Esc while a turn that edited a file and started a job is still working.
+// Esc cancels the shell run too, so the shell can't show anything after
+// the leg: the turn's job is still stopped, and the session is saved
+// waiting for a message.
+{
+  writeFiles();
+  const controller = new AbortController();
+  const s = standIn({
+    policy: { "*": [{ action: "approve" }] },
+    showFails: () => controller.signal.aborted,
+  });
+  const session = await opened("s-esc-job", s, "coordinator");
+  await session.send(messageAnswer("hello"), s.shell);
+  setTimeout(() => controller.abort(), 1500);
+  let threw = false;
+  try {
+    await session.send(messageAnswer("edit and start a job"), s.shell, controller.signal);
+  } catch {
+    threw = true;
+  }
+  const saved = await readSavedRun(dir, "s-esc-job");
+  const states = (await listJobRecords(host))
+    .filter((record) => record.label === "sleep 30")
+    .map((record) => record.state);
+  result.escWithJob = {
+    threw,
+    noJobRunning: !states.includes("running"),
+    savedWaiting: saved !== null && saved.turn === null,
   };
 }
 

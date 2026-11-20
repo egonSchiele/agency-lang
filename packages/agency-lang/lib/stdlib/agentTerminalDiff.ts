@@ -1,7 +1,6 @@
 // An edit's diff, drawn for the terminal from the hunks the session core
 // reports (`session.editDiff`). The terminal shows it for an edit a rule
-// approved inside the session run, where no prompt drew it, as the
-// terminal's policy handler always did for a rule's approval.
+// approved inside the session run, where no prompt drew it.
 import { color } from "../utils/termcolors.js";
 import type { EditHunk, EditLine } from "./editDiff.js";
 

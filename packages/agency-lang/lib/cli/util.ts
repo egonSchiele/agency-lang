@@ -326,7 +326,7 @@ export async function runAgencyNode({
     // `process.argv.slice(2)`. Used by std::args smoke tests and any
     // other code that reads command-line flags.
     const nodeArgs = argv !== undefined ? [evaluateFile, ...argv] : [evaluateFile];
-    const { stdout, stderr } = await execFileAsync("node", nodeArgs, {
+    const { stdout, stderr } = await execFileAsync(process.execPath, nodeArgs, {
       maxBuffer: maxBufferBytes ?? 10 * 1024 * 1024,
       ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),
       ...(signal !== undefined ? { signal } : {}),
@@ -463,7 +463,7 @@ export function executeNode(args: ExecuteNodeArgs): {
     resultsFilename: "__evaluate.json",
   });
   fs.writeFileSync(evaluateFile, evaluateScript);
-  execFileSync("node", [evaluateFile], { stdio: "inherit" });
+  execFileSync(process.execPath, [evaluateFile], { stdio: "inherit" });
   const results = readFileSync("__evaluate.json", "utf-8");
   return JSON.parse(results);
 }
@@ -522,7 +522,7 @@ async function runAgencyJudge<TemplateData, RawResult>({
 
   fs.writeFileSync(judgeEvaluateFile, judgeScript);
   try {
-    const { stdout, stderr } = await execFileAsync("node", [judgeEvaluateFile], {
+    const { stdout, stderr } = await execFileAsync(process.execPath, [judgeEvaluateFile], {
       maxBuffer: 10 * 1024 * 1024,
     });
     const results = readFileSync(judgeResultsFile, "utf-8");

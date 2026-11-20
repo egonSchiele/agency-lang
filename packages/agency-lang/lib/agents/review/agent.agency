@@ -1,4 +1,5 @@
-import { exec } from "std::shell"
+import { typecheckFile } from "std::agency"
+import { basename, dirname } from "std::path"
 import { args } from "std::system"
 import { systemMessage } from "std::thread"
 systemPrompt = read("prompts/system.md", __dirname)
@@ -18,21 +19,44 @@ type ReviewResult = {
   strengths: string[]
 }
 
+// The type checker's errors in the file, one per line, or "" when it has
+// none. It runs in this process, so no second Node is started. Reading the
+// file is approved: it is the one the person asked to have reviewed.
+def typeErrorsIn(filePath: string): string {
+  const report = typecheckFile(dirname(filePath), basename(filePath)) with approve
+  if (report is failure(err)) {
+    return "${err}"
+  }
+  let lines = ""
+  for (diagnostic in report.value.errors) {
+    let where = ""
+    if (diagnostic.loc) {
+      where = "line ${diagnostic.loc.line + 1}: "
+    }
+    lines = lines + where + diagnostic.message + "\n"
+  }
+  return lines
+}
+
 node main() {
   let cliArgs = args()
   if (cliArgs.length < 2) {
     print("Usage: agency review <file.agency>")
     return end()
   }
-  let agencyScript = cliArgs[0]
   let filePath = cliArgs[1]
-  let code = read(filePath)
+  // review.ts passes an absolute path, which read refuses, so it is split
+  // into a folder and a name. Approved: it is the file the person named.
+  const readResult = read(basename(filePath), dirname(filePath)) with approve
+  if (readResult is failure(err)) {
+    print("Couldn't read ${filePath}: ${err}")
+    return end()
+  }
+  let code = readResult.value
   print("Reviewing: ${filePath}\n")
   print("Running type checker...")
-  let typeCheckResult = exec("node", [agencyScript, "typecheck", filePath])
-  let typeErrors = ""
-  if (typeCheckResult.exitCode != 0) {
-    typeErrors = typeCheckResult.stderr + typeCheckResult.stdout
+  let typeErrors = typeErrorsIn(filePath)
+  if (typeErrors != "") {
     print("Type checker found issues:\n${typeErrors}\n")
   } else {
     print("Type checker passed.\n")

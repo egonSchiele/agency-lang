@@ -2,11 +2,35 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
+import { execFile } from "child_process";
+import { pathToFileURL } from "url";
+import { promisify } from "util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { AgencyConfig } from "@/config/config.js";
+import { getPackageRoot } from "@/importPaths.js";
 import { BaseGrader } from "./baseGrader.js";
 import { loadGradingModule, loadGradingSnapshot, snapshotGradingModule } from "./gradingModule.js";
+
+const execFileAsync = promisify(execFile);
+const BUILT_MODULE = path.join(getPackageRoot(), "dist/lib/eval/grading/gradingModule.js");
+
+// Run in a child Node: records every path written or linked, then loads
+// argv[2] with the built loader at argv[1] and prints what it saw.
+const RECORD_AND_LOAD = `
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+const writes = [];
+const links = [];
+const write = fs.writeFileSync;
+const link = fs.symlinkSync;
+fs.writeFileSync = (target, ...rest) => { writes.push(String(target)); return write(target, ...rest); };
+fs.symlinkSync = (target, linkPath, ...rest) => { links.push(String(linkPath)); return link(target, linkPath, ...rest); };
+syncBuiltinESMExports();
+const { loadGradingModule } = await import(process.argv[1]);
+const graders = await loadGradingModule(process.argv[2], {});
+console.log(JSON.stringify({ graders: graders.length, writes, links }));
+`;
 
 const cfg: AgencyConfig = {};
 
@@ -62,6 +86,35 @@ describe("loadGradingModule", () => {
       /two graders named "fn".*distinct name/,
     );
   });
+
+  // Vitest resolves a test's dynamic imports itself, so Node's resolve hook
+  // never runs here: the fallback is checked in a real Node, on the build.
+  it.skipIf(!fs.existsSync(BUILT_MODULE))(
+    "the fallback never writes into agency-lang's own folder (requires build)",
+    async () => {
+      // A temp folder has no node_modules, so `agency-lang` can't resolve
+      // next to the module and the loader falls back.
+      const file = write(
+        "grading.ts",
+        `import * as agency from "agency-lang";
+        export default ({ output }: any) => (typeof agency === "object" && output === "Paris" ? 1 : 0);`,
+      );
+      const { stdout } = await execFileAsync(process.execPath, [
+        "--input-type=module",
+        "-e",
+        RECORD_AND_LOAD,
+        pathToFileURL(BUILT_MODULE).href,
+        file,
+      ]);
+      const seen: { graders: number; writes: string[]; links: string[] } = JSON.parse(stdout);
+      expect(seen.graders).toBe(1);
+      expect(seen.writes.length).toBeGreaterThan(0);
+      expect(seen.writes.filter((target) => target.startsWith(getPackageRoot()))).toEqual([]);
+      // agency-lang resolves through its own resolve hook, as for `agency
+      // run`, not through a link, which Windows refuses without admin rights.
+      expect(seen.links).toEqual([]);
+    },
+  );
 
   it("throws a clear error when there is no default export", async () => {
     const file = write("grading.ts", `export const notDefault = () => 1;`);

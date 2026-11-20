@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { _listHostedModels } from "@/stdlib/llm.js";
+import { VERSION } from "@/stdlib/version.js";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -154,6 +155,12 @@ describe("runCli", () => {
 });
 
 describe("agency CLI command tree", () => {
+  it("--version prints the package's version, the one traces and servers report", () => {
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8"));
+    expect(VERSION).toBe(packageJson.version);
+    expect(createProgram().version()).toBe(VERSION);
+  });
+
   it("exposes optimize only at the top level, not as `eval optimize`", () => {
     const program = createProgram();
     const topLevelCommands = program.commands.map((command) => command.name());

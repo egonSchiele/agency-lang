@@ -4,6 +4,7 @@ import * as path from "path";
 import { describe, expect, it } from "vitest";
 
 import { writeRunDirectory, type FakeRun } from "@/eval/runDirectoryFixture.js";
+import { getPackageRoot } from "@/importPaths.js";
 import type { Test } from "@/eval/runTypes.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 
@@ -273,6 +274,11 @@ describe("grader files from the run row", () => {
     // goes through a module file.
     const live = path.join(dir, "live");
     fs.mkdirSync(live);
+    // The module imports agency-lang, so its folder needs one, as a project
+    // would have; vitest can't use the loader's fallback for a folder outside
+    // any project (gradingModule.test.ts checks that in a real Node).
+    fs.mkdirSync(path.join(dir, "node_modules"));
+    fs.symlinkSync(getPackageRoot(), path.join(dir, "node_modules", "agency-lang"), "dir");
     const modulePath = path.join(dir, "graders.ts");
     fs.writeFileSync(
       modulePath,

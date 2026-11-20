@@ -105,6 +105,7 @@ import { withSourcePath } from "@/compiler/typecheck.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { ImportResolutionError, formatImportResolutionError } from "@/importResolutionError.js";
 import { importKind } from "@/importPaths.js";
+import { VERSION } from "@/stdlib/version.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import { Command, InvalidArgumentError, Option } from "@/vendor/commander/index.js";
 import type { Platform } from "@/host/host.js";
@@ -305,7 +306,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   program
     .name("agency")
     .description("Agency Language CLI")
-    .version("0.0.105")
+    .version(VERSION)
     .option("-v, --verbose", "Enable verbose logging during parsing")
     .option(
       "-c, --config <path>",

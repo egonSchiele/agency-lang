@@ -13,6 +13,10 @@ import {
 import { PROGRAM_OUTPUT_LIMIT } from "../abortable.js";
 import { exited, failed, programRun, testDefaultHost, testPlatform } from "./fakeSubprocess.js";
 
+/** What `security` prints when the item doesn't exist. */
+const NOT_FOUND =
+  "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain.";
+
 /** What `security find-generic-password -g` prints on stderr for `value`. */
 function found(value: string) {
   return exited("", `keychain: "login"\npassword: "${value}"\n`);
@@ -87,6 +91,16 @@ describe("keyring (macOS)", () => {
       await expect(_setSecret("k", "v")).rejects.toThrow();
     });
 
+    it("a failed store never repeats the secret", async () => {
+      mockRun.mockImplementation(async () =>
+        failed('add-generic-password: bad input near "sk-secret"', 2),
+      );
+
+      const error = await _setSecret("k", "sk-secret").catch((caught: Error) => caught);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).not.toContain("sk-secret");
+    });
+
     it("throws on empty key", async () => {
       await expect(_setSecret("", "value")).rejects.toThrow("key must not be empty");
     });
@@ -105,9 +119,7 @@ describe("keyring (macOS)", () => {
     });
 
     it("returns null when secret not found", async () => {
-      mockRun.mockImplementation(async () =>
-        failed("security: SecKeychainSearchCopyNext: not found", 44),
-      );
+      mockRun.mockImplementation(async () => failed(NOT_FOUND, 44));
 
       const result = await _getSecret("nonexistent");
       expect(result).toBeNull();
@@ -243,13 +255,30 @@ describe("readSecret (macOS)", () => {
   });
 
   it("reads a missing item from exit 44", async () => {
-    mockRun.mockImplementation(async () => failed("could not be found", 44));
+    mockRun.mockImplementation(async () => failed(NOT_FOUND, 44));
     expect(await readSecret(testDefaultHost(), "k")).toEqual({ kind: "missing" });
   });
 
   it("reads the password from -g's stderr", async () => {
     mockRun.mockImplementation(async () => found("v"));
     expect(await readSecret(testDefaultHost(), "k")).toEqual({ kind: "found", value: "v" });
+  });
+
+  it("reads exit 44 with another error as a failure", async () => {
+    mockRun.mockImplementation(async () => failed("security: some other error", 44));
+    expect((await readSecret(testDefaultHost(), "k")).kind).toBe("failed");
+  });
+
+  it("a failure's reason never includes the password", async () => {
+    // Answered just as the deadline hit: the password is on stderr, but
+    // the lookup counts as timed out.
+    mockRun.mockImplementation(async () => ({
+      ...exited("", 'keychain: "login"\npassword: "sk-secret"\n'),
+      timedOut: true,
+    }));
+    const lookup = await readSecret(testDefaultHost(), "k", "svc", 10);
+    expect(lookup.kind).toBe("failed");
+    expect(JSON.stringify(lookup)).not.toContain("sk-secret");
   });
 
   it("reads any other exit as a failure", async () => {
@@ -343,6 +372,11 @@ describe("securityCommandLine", () => {
     expect(securityCommandLine(["a b", 'x"y', "c\\d", "$HOME"])).toBe(
       '"a b" "x\\"y" "c\\\\d" "$HOME"',
     );
+  });
+
+  it("refuses a line longer than security -i reads", () => {
+    expect(() => securityCommandLine(["x".repeat(4001)])).toThrow("too long");
+    expect(() => securityCommandLine(["x".repeat(3900)])).not.toThrow();
   });
 
   it("refuses an argument with a line break or NUL", () => {

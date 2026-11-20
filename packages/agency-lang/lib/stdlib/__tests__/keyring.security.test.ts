@@ -22,7 +22,13 @@ describe.runIf(process.platform === "darwin")("security, for real", () => {
     try {
       expect(security(["create-keychain", "-p", "test", keychain]).status).toBe(0);
       expect(security(["unlock-keychain", "-p", "test", keychain]).status).toBe(0);
-      const values = [`it's a "key" \\ with $HOME and ünïcode`, "-starts-with-a-dash", "616263"];
+      const values = [
+        `it's a "key" \\ with $HOME and ünïcode`,
+        "-starts-with-a-dash",
+        "616263",
+        // Long, but within the 4000 bytes securityCommandLine allows.
+        "k".repeat(3800),
+      ];
       values.forEach((value, index) => {
         const account = `k${index}`;
         const line = securityCommandLine([

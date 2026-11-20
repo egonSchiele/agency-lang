@@ -26,10 +26,17 @@ export type LoadedApiKeys = { loaded: string[]; failed: string | null };
 const NOTHING: LoadedApiKeys = { loaded: [], failed: null };
 
 /** Secret Service runs on the D-Bus session bus. With none, `secret-tool`
- *  can only hang until the timeout, on every start. */
+ *  can only hang until the timeout, on every start. GLib finds the bus
+ *  through `DBUS_SESSION_BUS_ADDRESS`, or `$XDG_RUNTIME_DIR/bus` when that
+ *  is unset (tmux, SSH, WSL with systemd), so only both missing means no
+ *  bus. */
 function hasNoSecretService(host: Host): boolean {
   const os = host.system.operatingSystem();
-  return (os === "linux" || os === "wsl") && !host.env.get("DBUS_SESSION_BUS_ADDRESS");
+  return (
+    (os === "linux" || os === "wsl") &&
+    !host.env.get("DBUS_SESSION_BUS_ADDRESS") &&
+    !host.env.get("XDG_RUNTIME_DIR")
+  );
 }
 
 /**

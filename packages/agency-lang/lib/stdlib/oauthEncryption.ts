@@ -22,6 +22,9 @@ export async function getEncryptionKey(host: Host): Promise<Buffer | null> {
   if (await isKeyringAvailable(host)) {
     // A key that couldn't be read is not a missing key: making a new one
     // would overwrite it, and every saved token would no longer decrypt.
+    // On Linux, `secret-tool` may answer a dismissed unlock prompt the way
+    // it answers a missing item (unchecked), so this holds for certain on
+    // macOS only.
     const stored = await readSecret(host, KEYRING_KEY);
     if (stored.kind === "failed") {
       throw new Error(`Couldn't read the OAuth key from the keyring: ${stored.reason}`);

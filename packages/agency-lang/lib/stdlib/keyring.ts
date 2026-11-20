@@ -46,7 +46,13 @@ export async function setSecret(
       "-w",
       value,
     ]);
-    await runProgram(host, "security", ["-i"], { input: `${command}\n` });
+    try {
+      await runProgram(host, "security", ["-i"], { input: `${command}\n` });
+    } catch (error) {
+      // What `security` printed may quote the line it was given.
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message.split(value).join("<secret>"));
+    }
   } else if (usesSecretTool(os)) {
     const result = await host.subprocess.run(
       program("secret-tool", ["store", "--label", `${svc}:${key}`, "service", svc, "account", key]),
@@ -67,6 +73,11 @@ function unsupported(os: OperatingSystem): Error {
   );
 }
 
+/** The longest line this module gives `security -i`. It reads at most
+ *  4096 bytes per line, and cuts a longer one short, running the rest as
+ *  a second command; this leaves a margin. */
+const SECURITY_LINE_LIMIT = 4000;
+
 /** One line for `security -i`, which reads one command per line. Every
  *  argument is in double quotes, where `\"` is a quote and `\\` a
  *  backslash; `$` and spaces need nothing. A line break would end the
@@ -75,7 +86,13 @@ export function securityCommandLine(args: string[]): string {
   if (args.some((arg) => /[\n\r\0]/.test(arg))) {
     throw new Error("Keyring values must be one line.");
   }
-  return args.map((arg) => `"${arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(" ");
+  const line = args.map((arg) => `"${arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`).join(" ");
+  if (new TextEncoder().encode(line).length > SECURITY_LINE_LIMIT) {
+    throw new Error(
+      `Keyring value is too long: the macOS keychain command reads at most ${SECURITY_LINE_LIMIT} bytes per line.`,
+    );
+  }
+  return line;
 }
 
 /** The text whose UTF-8 bytes `hex` spells. */
@@ -121,11 +138,14 @@ function isNotInstalled(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
-/** A missing item: `security` exits 44; `secret-tool` exits 1 and prints
- *  nothing. */
+/** A missing item: `security` exits 44 and says the item could not be
+ *  found (44 is the low byte of its error code, which other errors can
+ *  share); `secret-tool` exits 1 and prints nothing. */
 function isMissing(command: string, error: ProgramFailed): boolean {
   if (command === "security") {
-    return error.exitCode === SECURITY_ITEM_NOT_FOUND;
+    return (
+      error.exitCode === SECURITY_ITEM_NOT_FOUND && /could not be found|-25300/.test(error.stderr)
+    );
   }
   return error.exitCode === 1 && error.stdout === "" && error.stderr.trim() === "";
 }
@@ -137,7 +157,14 @@ function lookupFailure(command: string, error: unknown): SecretLookup {
   if (error instanceof ProgramFailed && isMissing(command, error)) {
     return { kind: "missing" };
   }
-  return { kind: "failed", reason: error instanceof Error ? error.message : String(error) };
+  const message = error instanceof Error ? error.message : String(error);
+  return { kind: "failed", reason: withoutPasswords(message) };
+}
+
+/** `message` with any password `security -g` printed hidden: a lookup
+ *  stopped at its deadline can have printed one already. */
+function withoutPasswords(message: string): string {
+  return message.replace(/password: .*$/gm, "password: <hidden>");
 }
 
 async function readFromKeychain(args: {

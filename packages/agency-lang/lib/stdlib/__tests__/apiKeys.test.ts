@@ -17,6 +17,10 @@ function memoryEnv(initial: Record<string, string> = {}): HostEnv {
 
 type Run = { args: string[]; input: string | undefined };
 
+/** What `security` prints when the item doesn't exist. */
+const NOT_FOUND =
+  "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain.";
+
 /** A host on `os` whose programs answer with `answer`, recording each run.
  *  Nothing reaches the real keyring. */
 function keyringHost(args: {
@@ -26,7 +30,7 @@ function keyringHost(args: {
 }): { host: Host; runs: Run[] } {
   const runs: Run[] = [];
   const real = hostOn(args.os ?? "macos");
-  const answer = args.answer ?? (async () => failed("not found", 44));
+  const answer = args.answer ?? (async () => failed(NOT_FOUND, 44));
   const run = async (command: Command, options?: { input?: string }): Promise<RunResult> => {
     const recorded = {
       args: command.kind === "program" ? command.args : [],
@@ -54,7 +58,7 @@ describe("loadApiKeys", () => {
       answer: async (run) =>
         accountOf(run) === "ANTHROPIC_API_KEY"
           ? exited("", 'password: "sk-1"\n')
-          : failed("not found", 44),
+          : failed(NOT_FOUND, 44),
     });
     const result = await loadApiKeys({ host });
     expect(env.get("ANTHROPIC_API_KEY")).toBe("sk-1");
@@ -85,7 +89,7 @@ describe("loadApiKeys", () => {
           // read one at a time, the second would never let the third start.
           await released;
         }
-        return failed("not found", 44);
+        return failed(NOT_FOUND, 44);
       },
     });
     const unset = apiKeyVariables().filter((variable) => variable !== "ANTHROPIC_API_KEY");
@@ -122,6 +126,16 @@ describe("loadApiKeys", () => {
     });
     expect(await loadApiKeys({ host })).toEqual({ loaded: [], failed: null });
     expect(runs).toHaveLength(1);
+  });
+
+  it("reads on Linux when the session bus is only in XDG_RUNTIME_DIR", async () => {
+    const { host, runs } = keyringHost({
+      os: "linux",
+      env: memoryEnv({ XDG_RUNTIME_DIR: "/run/user/1000" }),
+      answer: async () => failed("", 1),
+    });
+    await loadApiKeys({ host });
+    expect(runs.length).toBeGreaterThan(0);
   });
 
   it("reads nothing on Linux with no D-Bus session", async () => {

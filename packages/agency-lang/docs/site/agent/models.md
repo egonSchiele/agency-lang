@@ -8,7 +8,7 @@ You can also keep a key in your system keyring (the macOS Keychain, or the Secre
 security add-generic-password -s agency-lang -a ANTHROPIC_API_KEY -w
 ```
 
-The service is `agency-lang`, and the account is the variable's name. On Linux, use `secret-tool store --label agency-lang service agency-lang account ANTHROPIC_API_KEY`. Create it with these commands, not in Keychain Access: an entry made there doesn't trust the `security` command, so every start asks for permission, and the key isn't read. A key from the keyring becomes part of the agent's environment, just like one from your shell profile, so the commands the agent runs can see it.
+The service is `agency-lang`, and the account is the variable's name. On Linux, use `secret-tool store --label agency-lang service agency-lang account ANTHROPIC_API_KEY`. Create it with these commands, not in Keychain Access: an entry made there doesn't trust the `security` command, so reading it asks for permission each time, and the agent gives up on it after 2 seconds. A key from the keyring becomes part of the agent's environment, just like one from your shell profile, so the commands the agent runs can see it.
 
 You can also set an explicit model and provider:
 

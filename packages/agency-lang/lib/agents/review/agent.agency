@@ -45,7 +45,14 @@ node main() {
     return end()
   }
   let filePath = cliArgs[1]
-  let code = read(filePath)
+  // review.ts passes an absolute path, which read refuses, so it is split
+  // into a folder and a name. Approved: it is the file the person named.
+  const readResult = read(basename(filePath), dirname(filePath)) with approve
+  if (readResult is failure(err)) {
+    print("Couldn't read ${filePath}: ${err}")
+    return end()
+  }
+  let code = readResult.value
   print("Reviewing: ${filePath}\n")
   print("Running type checker...")
   let typeErrors = typeErrorsIn(filePath)

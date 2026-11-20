@@ -8,7 +8,7 @@ import { build, stop as stopEsbuild, type BuildOptions } from "esbuild";
 
 import type { AgencyConfig } from "@/config/config.js";
 import type { GradersIdentity } from "@/runDirectory/annotations.js";
-import { getPackageRoot } from "@/importPaths.js";
+import { compiledOutputRegisterUrl } from "@/cli/commands.js";
 import type { BaseGrader } from "./baseGrader.js";
 import { toGrader, type Grader } from "./functionGrader.js";
 
@@ -147,28 +147,39 @@ export async function loadGradingSnapshot(
 /** Write the bundle to a temp file and import it. The temp file goes in
  *  `nearDir` so the bundle's `agency-lang` import resolves from there; when
  *  that fails (a run directory copied outside any project), retry from a
- *  temp folder where the name resolves to this package. */
+ *  temp folder, with agency-lang's resolve hook registered. */
 async function importBundle(bundle: GradingBundle, nearDir: string): Promise<BaseGrader[]> {
   try {
     return await importBundleFrom(bundle, nearDir);
   } catch (err) {
     if (!isAgencyLangNotFound(err)) throw err;
-    return importBundleBesidePackage(bundle);
+    return importBundleOutsideProject(bundle);
   }
 }
 
-/** Import the bundle from a fresh temp folder whose `node_modules/agency-lang`
- *  links to this package. The package's own folder is never written: it may
- *  be read-only, or inside a signed app. */
-async function importBundleBesidePackage(bundle: GradingBundle): Promise<BaseGrader[]> {
+/** Import the bundle from a fresh temp folder. `agency-lang` resolves there
+ *  through the hook `agency run` loads for a program outside any project
+ *  (lib/cli/runShim), which also serves imports the graders make later.
+ *  The package's own folder is never written: it may be read-only, or
+ *  inside a signed app. */
+async function importBundleOutsideProject(bundle: GradingBundle): Promise<BaseGrader[]> {
+  await registerAgencyLangResolver();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-grading-"));
   try {
-    fs.mkdirSync(path.join(dir, "node_modules"));
-    fs.symlinkSync(getPackageRoot(), path.join(dir, "node_modules", "agency-lang"), "dir");
     return await importBundleFrom(bundle, dir);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+let resolverRegistered: Promise<unknown> | null = null;
+
+/** Registers the runShim hook in this process, once. It acts only on
+ *  `agency-lang` specifiers, and only after normal resolution fails. */
+function registerAgencyLangResolver(): Promise<unknown> {
+  // eslint-disable-next-line no-restricted-syntax -- loads agency-lang's own register shim, whose path is only known at runtime
+  resolverRegistered ??= import(compiledOutputRegisterUrl());
+  return resolverRegistered;
 }
 
 async function importBundleFrom(bundle: GradingBundle, dir: string): Promise<BaseGrader[]> {

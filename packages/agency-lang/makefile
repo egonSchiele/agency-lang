@@ -80,6 +80,7 @@ ci:
 # NOT re-emit if deleted behind its back.
 build:
 	@if [ ! -d dist/lib ]; then rm -f .agency-build/tsc.tsbuildinfo; fi
+	node ./scripts/generate-version.mjs
 	$(TSC)
 	# Vendored commander must be in dist BEFORE tsc-alias runs: tsc-alias only
 	# rewrites an @/ alias whose target exists on disk, so on a clean build the

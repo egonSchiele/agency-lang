@@ -20,16 +20,32 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
+/** The 1-based line of each call that starts node by name. The whole text
+ *  is matched at once, so a call prettier wraps across lines is found. */
+function linesStartingNode(text: string): number[] {
+  return [...text.matchAll(new RegExp(NODE_BY_NAME.source, "g"))].map(
+    (match) => text.slice(0, match.index).split("\n").length,
+  );
+}
+
 function nodeByName(file: string): string[] {
-  return fs
-    .readFileSync(file, "utf8")
-    .split("\n")
-    .flatMap((line, index) =>
-      NODE_BY_NAME.test(line) ? [`${path.relative(LIB, file)}:${index + 1}`] : [],
-    );
+  return linesStartingNode(fs.readFileSync(file, "utf8")).map(
+    (line) => `${path.relative(LIB, file)}:${line}`,
+  );
 }
 
 describe("starting Node", () => {
+  it("finds a call prettier wrapped onto several lines", () => {
+    const wrapped = [
+      "const x = 1;",
+      "const { stdout } = await execFileAsync(",
+      '  "node",',
+      "  [someLongPathVariableName, ...moreArgs],",
+      ");",
+    ].join("\n");
+    expect(linesStartingNode(wrapped)).toEqual([2]);
+  });
+
   it("nothing in lib/ starts node by name", () => {
     expect(sourceFiles(LIB).flatMap(nodeByName)).toEqual([]);
   });

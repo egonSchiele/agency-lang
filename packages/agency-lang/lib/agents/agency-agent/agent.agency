@@ -1,16 +1,12 @@
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { _isLogging } from "agency-lang/stdlib-lib/statelog.js"
-import { _pause } from "agency-lang/stdlib-lib/agentTerminalDriver.js"
-import { parseArgs } from "std::args"
+import { _cost, _pause } from "agency-lang/stdlib-lib/agentTerminalDriver.js"
 import { map } from "std::array"
-import { setLlmOptions } from "std::llm"
-import { disableMemory } from "std::memory"
 import { cliPolicyHandler } from "std::policy"
 import { evalOutput, evalValue, setAgentName } from "std::statelog"
-import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
-import { getCost } from "std::thread"
+import { cwd, isTTY, readStdin, setTitle } from "std::system"
 import { setSlashPalette } from "std::ui/cli"
-import { pushMessage, repl, clearScreen } from "std::ui/cli"
+import { clearScreen } from "std::ui/cli"
 
 import { agencyAgentBrains } from "std::agents/agency"
 
@@ -20,10 +16,9 @@ import { mergedPalette } from "./lib/commandPalette.agency"
 import { getHeader } from "./lib/header.agency"
 import { maybeLoadMcp } from "./lib/mcp.agency"
 import { getPolicyForAgent, printPolicyHelp } from "./lib/policy.agency"
-import { activePreset, presetTable, serverNotice, startPreset } from "./lib/presets.agency"
+import { presetTable, serverNotice } from "./lib/presets.agency"
 import { startInteractive } from "./lib/repl.agency"
 import { chooseSession, incognitoProblem, newSessionRecord } from "./lib/resume.agency"
-import { pickModelsForAgent } from "./lib/session.agency"
 import { SessionRecord } from "./lib/sessions.agency"
 import { loadSettings } from "./lib/settings.agency"
 import {
@@ -32,61 +27,41 @@ import {
   programStartFor,
   resumeSessionRun,
   resumedSessionPolicy,
+  runOneShot,
   setSessionPolicyFile,
   startSessionRun,
  } from "./lib/terminal.agency"
-import { applyToolLimits, limitFlagsFromArgs, setStartupLimitFlags } from "./lib/toolLimits.agency"
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
-import { runSession, setPolicyArg } from "./lib/runSession.agency"
 import {
   setBrainName,
-  runTurn,
   resolveBrainName,
   resolveStartTarget,
   startTargetsFor,
  } from "./lib/turn.agency"
-import { formatTurnFailure } from "./lib/utils.agency"
-import { getCapabilities } from "./shared.agency"
 
-def oneShotAgent(target: string, prompt: string): string {
+/** `agency agent -p`: one message to a session that saves nothing, with
+  no one to ask. What no rule decides is declined with a reason the model
+  reads. Its output is the reply, then the session's cost. */
+def oneShot(args: any, brainName: string, target: string, prompt: string) {
   setInteractive(false)
   // Mark the input and reply in the statelog so a one-shot run is gradable:
   // `agency eval grade` reads the agent's output from the trace's
   // `evalOutputRecorded` events, not from stdout.
   evalValue(prompt)
+  const resolved = getPolicyForAgent(args.flags.policy ?? "", args.flags.approve ?? "", args.flags.reject ?? "", false)
+  setSessionPolicyFile(resolved.policyFile)
+  const handler = cliPolicyHandler(
+    file: resolved.policyFile,
+    policy: resolved.startPolicy,
+    interactive: false,
+  )
   let reply = ""
-  runSession(false) {
-    const result = try runTurn(target, prompt)
-    // Not `match`: a match expression inside a block body keeps its value on
-    // the wrong stack, so `reply` would end up null (compiler bug).
-    if (result is success(r)) {
-      reply = r
-    } else if (result is failure(f)) {
-      reply = formatTurnFailure(f)
-    }
-  }
+  handle {
+    reply = runOneShot(args, brainName, prompt, target)
+  } with handler
   evalOutput(reply)
-  return reply
-}
-
-/** The process-level setup a one-shot run does in this run. An
-  interactive session does it in its own run, the session program's. */
-def setUpOneShot(args: any) {
-  // The preset must be chosen before models resolve: it is one of their layers.
-  startPreset(args.flags.preset ?? "", loadSettings())
-  pickModelsForAgent(args)
-  // Memory stays off for the agent. After every model reply it ran a fact
-  // extraction and a summary on another model, and the tool calls waited
-  // for both, often a minute or more per round.
-  disableMemory() with approve
-  setStartupLimitFlags(limitFlagsFromArgs(args))
-  applyToolLimits(activePreset(), true)
-  const capsMaxTokens = getCapabilities().maxTokens
-  if (capsMaxTokens != null) {
-    setLlmOptions({
-      maxTokens: capsMaxTokens
-    })
-  }
+  print(reply)
+  print(color.dim("\nSession cost: $${_cost().toFixed(4)}"))
 }
 
 /** The policy an incognito session runs under. It is not saved, so it
@@ -180,11 +155,6 @@ node main() {
     printPolicyHelp()
     _exit(0)
   }
-  setPolicyArg(
-    args.flags.policy ?? "",
-    approve: args.flags.approve ?? "",
-    reject: args.flags.reject ?? "",
-  )
 
   const brainName = resolveBrainName(args.flags.brain ?? null, loadSettings())
   const brainNames = map(agencyAgentBrains(), \entry -> entry.name)
@@ -259,7 +229,6 @@ node main() {
     return
   }
 
-  setUpOneShot(args)
   let prompt = positionalQuery
   if (!hasQuery) {
     const fromStdin = readStdin()
@@ -268,7 +237,5 @@ node main() {
     }
     prompt = fromStdin
   }
-  print(oneShotAgent(startAgent, prompt))
-  const roundedCost = "$${getCost().toFixed(4)}"
-  print(color.dim("\nSession cost: ${roundedCost}"))
+  oneShot(args, brainName, startAgent, prompt)
 }

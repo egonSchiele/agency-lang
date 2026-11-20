@@ -95,6 +95,7 @@
     "reply": "stub reply"
   },
   "jobToolsOffered": [true, true, true],
+  "oneShotJobToolsOffered": [false, false, false],
   "startingBudget": {
     "maxCost": 3,
     "maxTime": 1000

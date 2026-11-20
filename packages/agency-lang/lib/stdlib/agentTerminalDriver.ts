@@ -115,6 +115,48 @@ export async function _resumeSession(
   return session.resume(id, shellFor(run, functions));
 }
 
+/** What a one-shot run gives back: its reply, and its errors. */
+export type OneShotOutcome = { reply: string; error: string };
+
+/** `agency agent -p`: starts a session that saves nothing (`start` has
+ *  no record and `oneShot: true`), sends `message`, and runs it to its
+ *  end. `ask` and `policy` are the shell run's, under a non-interactive
+ *  policy handler, so what no rule decides is declined with the reason
+ *  `std::policy` gives a run with no one to ask. Nothing is printed: the
+ *  reply and the errors are returned. */
+export async function _runOnce(
+  start: ProgramStart,
+  message: Answer,
+  functions: { ask: unknown; policy: unknown },
+): Promise<OneShotOutcome> {
+  const run = currentRun();
+  const replies: string[] = [];
+  const errors: string[] = [];
+  const shell: TerminalShell = {
+    ...shellFor(run, { ...functions, show: null }),
+    show: async (line) => {
+      if (line.kind === "reply") {
+        replies.push(line.text);
+      } else if (line.kind === "error") {
+        errors.push(line.text);
+      }
+    },
+  };
+  const session = openSession({
+    run,
+    start,
+    dir: "",
+    home: "",
+    functions: { ...functions, show: null },
+  });
+  const problem = await session.start(shell);
+  if (problem !== "") {
+    return { reply: "", error: problem };
+  }
+  await session.send(message, shell, run.ctx.abortController.signal);
+  return { reply: replies.at(-1) ?? "", error: errors.join("\n") };
+}
+
 /** Sends an answer and runs the session until it waits for a message
  *  again. Esc while the model works cancels the shell run's call, and that
  *  aborts the leg. */

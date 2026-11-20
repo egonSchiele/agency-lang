@@ -52,6 +52,9 @@ export type ProgramStart = {
    *  terminal's trace callbacks. Left out: debug from AGENT_DEBUG, not
    *  verbose, and interactive. */
   trace?: TraceSettings;
+  /** Save the web search backend the run picks to settings.json, as the
+   *  terminal does. Left out, it is not saved. */
+  saveSearchChoice?: boolean;
 };
 
 /** The terminal's tracing flags, for one run. */

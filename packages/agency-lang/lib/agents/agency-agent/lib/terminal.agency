@@ -9,6 +9,7 @@
 */
 import {
   _resumeSession,
+  _runOnce,
   _savedTranscript,
   _send,
   _startSession,
@@ -151,12 +152,16 @@ export def setSessionPolicyFile(file: string) {
   _policyFile = file
 }
 
-/** What the session program starts with, from the command line. */
+/** What the session program starts with, from the command line. A
+  one-shot run (`-p`) has no record, no reply style, and no one at the
+  terminal. */
 export def programStartFor(
   args: any,
   brainName: string,
   record: SessionRecord | null,
+  oneShot: boolean = false,
 ): any {
+  const replyStyle = if oneShot then "" else REPL_STYLE
   return {
     brain: brainName,
     preset: args.flags.preset ?? "",
@@ -164,19 +169,36 @@ export def programStartFor(
     limits: limitFlagsFromArgs(args),
     session: {
       cwd: cwd(),
-      replyStyle: REPL_STYLE,
+      replyStyle: replyStyle,
       record: record,
       flags: args.flags,
       budget: { maxCost: -1, maxTime: -1 }
     },
     agentName: agentNameFor(brainName),
-    oneShot: false,
+    oneShot: oneShot,
+    saveSearchChoice: true,
     trace: {
       debug: args.flags.debug ?? false,
       verbose: args.flags.verbose ?? false,
-      interactive: true
+      interactive: !oneShot
     }
   }
+}
+
+/** `agency agent -p`: one message to a session that saves nothing. What
+  no rule decides is declined, with the reason the policy handler gives a
+  run with no one to ask, so the shell's handler must be non-interactive.
+  Returns the reply, or the error when there is none. */
+export def runOneShot(args: any, brainName: string, prompt: string, target: string): string {
+  const outcome = _runOnce(
+    programStartFor(args, brainName, null, true),
+    { kind: "message", text: prompt, notes: [], target: target },
+    { ask: askForSession, policy: policyForSession },
+  )
+  if (outcome.reply != "") {
+    return outcome.reply
+  }
+  return outcome.error
 }
 
 /** Starts the session run. Exits with the reason when it can't start. */

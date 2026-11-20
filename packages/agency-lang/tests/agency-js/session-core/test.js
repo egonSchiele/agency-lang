@@ -385,6 +385,15 @@ result.jobToolsOffered = ["startJob", "jobOutput", "stopJob"].map((name) =>
   (toolsSent[JOBS_TURN] ?? []).includes(name),
 );
 
+// A one-shot run offers none: its turn is the whole run. `oneShot` decides
+// it, with no `trace` given.
+const ONE_SHOT_JOBS_TURN = "a one-shot turn that could start a job";
+const oneShotJobber = await startSession({ brain: "coordinator", oneShot: true });
+await oneShotJobber.answer(message(ONE_SHOT_JOBS_TURN));
+result.oneShotJobToolsOffered = ["startJob", "jobOutput", "stopJob"].map((name) =>
+  (toolsSent[ONE_SHOT_JOBS_TURN] ?? []).includes(name),
+);
+
 // A session can start with a turn budget.
 const budgeted = await startSession({
   session: { ...startData().session, budget: { maxCost: 3, maxTime: 1000 } },

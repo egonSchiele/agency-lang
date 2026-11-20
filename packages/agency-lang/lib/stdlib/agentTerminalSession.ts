@@ -361,9 +361,12 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
     return next.happened;
   };
 
-  /** Acts on what happened and saves, then shows `first` (a leg's lines)
-   *  and what happened, and tells the shell of a fork. Nothing calls the
-   *  shell until the jobs are stopped and the session is saved. */
+  /** Acts on what happened and saves, then tells the shell of a fork, and
+   *  shows `first` (a leg's lines) and what happened. Nothing calls the
+   *  shell until the jobs are stopped and the session is saved. The fork
+   *  comes before the lines: it moves where the shell saves "always"
+   *  answers, and a line that can't be shown must not leave them going to
+   *  the original session's policy file. */
   const afterwards = async (
     happened: Happened[],
     shell: TerminalShell,
@@ -377,13 +380,13 @@ export function terminalSession(args: TerminalSessionArgs): TerminalSession {
       // run-read-ok: the save takes the record's lock on the host of whatever run is current, or on the process's lock host. One terminal session saves one step at a time, so the lock never contends.
       lines.push(...(await saveTerminalRun(args, phase)));
     }
-    for (const line of lines) {
-      await shell.show(line);
-    }
     for (const each of happened) {
       if (each.type === "forked") {
         await shell.forked?.(each.from, each.to);
       }
+    }
+    for (const line of lines) {
+      await shell.show(line);
     }
   };
 

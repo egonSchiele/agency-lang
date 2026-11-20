@@ -2,11 +2,19 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AgencyConfig } from "@/config/config.js";
+import { getPackageRoot } from "@/importPaths.js";
 import { BaseGrader } from "./baseGrader.js";
 import { loadGradingModule, loadGradingSnapshot, snapshotGradingModule } from "./gradingModule.js";
+
+// writeFileSync is wrapped, not replaced, so a test can see where the
+// loader writes its bundle.
+vi.mock("fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("fs")>();
+  return { ...actual, writeFileSync: vi.fn(actual.writeFileSync) };
+});
 
 const cfg: AgencyConfig = {};
 
@@ -61,6 +69,23 @@ describe("loadGradingModule", () => {
     await expect(loadGradingModule(file, cfg)).rejects.toThrow(
       /two graders named "fn".*distinct name/,
     );
+  });
+
+  it("the fallback never writes into agency-lang's own folder", async () => {
+    // A temp folder has no node_modules, so `agency-lang` can't resolve
+    // next to the module and the loader falls back.
+    const file = write(
+      "grading.ts",
+      `import * as agency from "agency-lang";
+      export default ({ output }: any) => (typeof agency === "object" && output === "Paris" ? 1 : 0);`,
+    );
+    const writes = vi.mocked(fs.writeFileSync);
+    writes.mockClear();
+    const graders = await loadGradingModule(file, cfg);
+    expect(graders).toHaveLength(1);
+    const written = writes.mock.calls.map(([target]) => String(target));
+    expect(written.length).toBeGreaterThan(0);
+    expect(written.filter((target) => target.startsWith(getPackageRoot()))).toEqual([]);
   });
 
   it("throws a clear error when there is no default export", async () => {

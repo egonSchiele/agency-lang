@@ -1,5 +1,6 @@
 import { sha256Text } from "@/utils/hash.js";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { pathToFileURL } from "url";
 
@@ -145,14 +146,28 @@ export async function loadGradingSnapshot(
 
 /** Write the bundle to a temp file and import it. The temp file goes in
  *  `nearDir` so the bundle's `agency-lang` import resolves from there; when
- *  that fails (a run directory copied outside any project), retry from this
- *  package's own root, where the name resolves to the package itself. */
+ *  that fails (a run directory copied outside any project), retry from a
+ *  temp folder where the name resolves to this package. */
 async function importBundle(bundle: GradingBundle, nearDir: string): Promise<BaseGrader[]> {
   try {
     return await importBundleFrom(bundle, nearDir);
   } catch (err) {
-    if (!isAgencyLangNotFound(err) || nearDir === getPackageRoot()) throw err;
-    return importBundleFrom(bundle, getPackageRoot());
+    if (!isAgencyLangNotFound(err)) throw err;
+    return importBundleBesidePackage(bundle);
+  }
+}
+
+/** Import the bundle from a fresh temp folder whose `node_modules/agency-lang`
+ *  links to this package. The package's own folder is never written: it may
+ *  be read-only, or inside a signed app. */
+async function importBundleBesidePackage(bundle: GradingBundle): Promise<BaseGrader[]> {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-grading-"));
+  try {
+    fs.mkdirSync(path.join(dir, "node_modules"));
+    fs.symlinkSync(getPackageRoot(), path.join(dir, "node_modules", "agency-lang"), "dir");
+    return await importBundleFrom(bundle, dir);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 

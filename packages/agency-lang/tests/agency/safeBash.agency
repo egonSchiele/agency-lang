@@ -15,7 +15,7 @@ import test { splitFlags, flattenCommands, readFileVerb, verbName, ghLongFlags }
 import { pendingLookups, GhRepo, Plan } from "std::safeBash/actions"
 import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
 import { resolve } from "std::path"
-import { bash, glob } from "std::shell"
+import { bash, glob, grep } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
 import { cwd, env, setEnv } from "std::system"
 
@@ -719,6 +719,21 @@ node splitGrepFlags() {
     split("grep -e \"-x\" one.txt"),
     split("grep -n hello one.txt -s"),
     split("grep --color=always x one.txt"),
+    split("grep -rn x lib --include=\"*.ts\" --include=\"*.md\""),
+    split("grep -e a -e b f"),
+  ]
+}
+
+// A long flag joined to a quoted value is that flag, but only for a table
+// that asks for it: gh and find do not, and plan as before.
+node joinedFlagWords() {
+  return [
+    split("grep --include=\"*.ts\" x lib"),
+    split("grep --include='*.ts' x lib"),
+    split("grep --include=\"$X\" x lib"),
+    split("grep \"-R\" src"),
+    grepNames("gh pr list --label=\"bug,urgent\""),
+    grepNames("find . -name=\"*.ts\""),
   ]
 }
 
@@ -782,13 +797,17 @@ def grepPayloadOf(source: string): any {
 
 node grepThroughBash() {
   // Not lone (a pipe or a redirect), or a flag the tool lacks: the
-  // command runs through bash, narrow only for one file.
+  // command runs through bash, with one std::grep per path.
   return [
     grepNames("grep -c hello one.txt"),
     grepNames("grep -A 1 hello one.txt"),
     grepNames("grep -n \"a+b\" one.txt"),
     grepNames("grep -n hello one.txt > out.txt"),
     grepNames("git status && grep -n hello one.txt"),
+    grepNames("grep -rn hello one.txt two.txt"),
+    grepNames("grep -rn hello --include='*.txt' ."),
+    grepNames("git status && grep -rn hello ."),
+    grepNames("git status && grep -n hello one.txt -s"),
   ]
 }
 
@@ -802,12 +821,8 @@ node grepUnrecognized() {
     grepNames("grep --filter=x hello ."),
     grepNames("grep -rn $PAT ."),
     grepNames("grep -rn hello *.txt"),
-    grepNames("grep -rn hello one.txt two.txt"),
-    grepNames("grep -rn hello --include='*.txt' ."),
     grepNames("grep -c hello ."),
-    grepNames("git status && grep -rn hello ."),
     grepNames("rg hello ."),
-    grepNames("git status && grep -n hello one.txt -s"),
     grepNames("grep -e \"-x\" one.txt"),
     grepNames("grep --include=*.txt -rn hello ."),
   ]
@@ -1026,6 +1041,106 @@ node grepFilterStages() {
     grepNames("git status | grep hello -i"),
     grepNames("git status | grep -e hello"),
   ]
+}
+
+/** A tree for the grep-through-bash tests. Each of the folders and files
+ the grep tool skips holds `needle`, as do a file named `build` and a
+ `.git` file, which is what a git worktree has. `outside` sits beside
+ `tree`, and links in `tree/src` point at it. */
+static const GREP_TREE = __dirname + "/stdlib/__safebash_grep_tree__"
+static const GREP_TREE_ROOT = GREP_TREE + "/tree"
+
+def makeGrepTree() {
+  remove(GREP_TREE) with approve
+  mkdir(GREP_TREE) with approve
+  const folders = "mkdir -p tree/.git tree/node_modules/p tree/src/dist tree/src/sub/build tree/lib outside"
+  const needles = "for f in tree/.git/config tree/node_modules/p/i.js tree/src/a.ts tree/src/dist/b.js tree/src/sub/build/c.js tree/src/build tree/src/sub/.git outside/s.txt; do echo needle > $f; done"
+  const others = "echo hello > tree/one.txt && echo hello > tree/lib/l.ts"
+  const links = "ln -s ../../outside/s.txt tree/src/link.txt && ln -s ../../outside tree/src/linkdir"
+  bash("${folders} && ${needles} && ${others} && ${links}", cwd: GREP_TREE) with approve
+}
+
+def treeRow(source: string, dir: string): any {
+  const plan = planFor(source, dir)
+  return [source, outcomeOf(plan), [effect.name for effect in plan.effects]]
+}
+
+node grepThroughBashAsksStdGrep() {
+  makeGrepTree()
+  const rows = [
+    treeRow("grep -rn hello . | head -20", GREP_TREE_ROOT),
+    treeRow("grep -rn \"a\\|b\" src", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src lib", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src --include=\"*.ts\"", GREP_TREE_ROOT),
+    treeRow("grep -n hello one.txt -A 5", GREP_TREE_ROOT),
+    treeRow("grep -rn hello node_modules | head", GREP_TREE_ROOT),
+    treeRow("grep -rn hello node_modules/p | head", GREP_TREE_ROOT),
+    treeRow("grep -n hello src", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src/dist | head", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src/dist/ | head", GREP_TREE_ROOT),
+    treeRow("grep -rn hello . | head", GREP_TREE_ROOT + "/src/sub/build"),
+    treeRow("grep -rn hello | head", GREP_TREE_ROOT),
+    treeRow("pnpm test | grep FAIL -v", GREP_TREE_ROOT),
+    treeRow("git status | grep -v deleted -c", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src -e x | head", GREP_TREE_ROOT),
+  ]
+  remove(GREP_TREE) with approve
+  return rows
+}
+
+// The exact text bash runs. The six names are the grep tool's skip list.
+// If a name is added to that list, this fails until the text here agrees,
+// which is the check that real grep still skips what the tool skips.
+node grepRunsWhatItAsked() {
+  makeGrepTree()
+  const rows = [
+    executionCommandIn("grep -rn hello . | head -20", GREP_TREE_ROOT),
+    executionCommandIn("grep -rn hello src --include=\"*.ts\"", GREP_TREE_ROOT),
+    executionCommandIn("grep -n hello one.txt -A 5", GREP_TREE_ROOT),
+    executionCommandIn("grep -n hello one.txt lib/l.ts | head", GREP_TREE_ROOT),
+    executionCommandIn("grep -rn hello | head", GREP_TREE_ROOT),
+  ]
+  remove(GREP_TREE) with approve
+  return rows
+}
+
+/* What safeBash prints for a line, approving only std::grep. */
+def grepOnly(source: string, dir: string): string {
+  let out = ""
+  handle {
+    const result = safeBash(source, cwd: dir)
+    if (result is success(text)) {
+      out = text
+    } else {
+      out = "FAILED"
+    }
+  } with (intr) {
+    if (intr.effect == "std::grep") {
+      return approve()
+    }
+    return reject()
+  }
+  return out
+}
+
+// Real grep through bash reads no file the grep tool skips, follows no
+// link out of the folder, and reads the same files the tool reads. This
+// runs BSD grep on macOS and GNU grep in CI; a difference is a finding.
+node grepThroughBashReadsWhatTheToolReads() {
+  makeGrepTree()
+  const withPath = grepOnly("grep -rn needle . | sort", GREP_TREE_ROOT)
+  const noPath = grepOnly("grep -rn needle | sort", GREP_TREE_ROOT)
+  const skipped = outcomeOf(planFor("grep -rn needle src/dist | sort", GREP_TREE_ROOT))
+  let toolFiles: string[] = []
+  handle {
+    const found = grep("needle", GREP_TREE_ROOT, filesOnly: true, respectGitignore: false)
+    if (found is success(names)) {
+      toolFiles = names
+    }
+  } with approve
+  remove(GREP_TREE) with approve
+  return [withPath, noPath, skipped, toolFiles]
 }
 
 def filesOf(found: any): any {
@@ -2149,13 +2264,100 @@ node gitStaysBroad() {
     planOutcome("git status src"),
     planOutcome("git switch -- main"),
     planOutcome("git restore --staged"),
-    planOutcome("git -C /tmp status"),
+    planOutcome("git -C $X status"),
+    planOutcome("git -c a=b status"),
+    planOutcome("git --git-dir=x status"),
     planOutcome("GIT_DIR=/x git status"),
     planOutcome("/usr/bin/git status"),
     planOutcome("git push"),
-    planOutcome("git log --format=%h"),
-    planOutcome("git log --author=\"Dana X\""),
+    planOutcome("git log --format=\"$F\""),
+    planOutcome("git rev-parse --show-toplevel HEAD"),
+    planOutcome("git rev-parse --git-path x"),
+    planOutcome("git worktree add x"),
+    planOutcome("git grep --no-index x"),
+    planOutcome("git grep -O x"),
+    planOutcome("git grep x a b"),
+    planOutcome("git ls-files --others"),
+    planOutcome("git ls-files --exclude-standard"),
+    planOutcome("git merge-base a"),
     planOutcome("git"),
+  ]
+}
+
+/** A plan in the package folder: each effect's name and its ref, or its
+ folder relative to the package folder. */
+def mappedRow(source: string): any {
+  const plan = planFor(source, PACKAGE_DIR)
+  const effects: any[] = plan.effects
+  return [source, outcomeOf(plan), [[effect.name, effect.payload.ref ?? underPackage(effect.payload.dir ?? effect.payload.cwd)] for effect in effects]]
+}
+
+def underPackage(dir: string): string {
+  // A git payload names the folder as planFor was given it, unresolved.
+  const base = resolve(PACKAGE_DIR)
+  if (dir == base || dir == PACKAGE_DIR) {
+    return "."
+  }
+  return dir.split(base + "/").join("")
+}
+
+// The git reads that map onto an existing effect, one row per line of the
+// plan's table: each asks a question whose payload names what it prints.
+node gitMappedReads() {
+  return [
+    mappedRow("git rev-parse HEAD"),
+    mappedRow("git rev-parse --short HEAD"),
+    mappedRow("git rev-parse --abbrev-ref HEAD"),
+    mappedRow("git rev-parse --show-toplevel"),
+    mappedRow("git merge-base HEAD main"),
+    mappedRow("git ls-files lib"),
+    mappedRow("git ls-files --others --exclude-standard"),
+    mappedRow("git grep -n planFor -- lib"),
+    mappedRow("git grep -n planFor lib stdlib"),
+    mappedRow("git grep -n planFor main -- lib"),
+    mappedRow("git grep -n planFor"),
+    mappedRow("git worktree list"),
+    mappedRow("git worktree list --porcelain"),
+    mappedRow("git --no-pager log --oneline -5"),
+    mappedRow("git -C lib status"),
+    mappedRow("git -C lib -C stdlib status"),
+    mappedRow("git log -5 --format=%s"),
+    mappedRow("git log --format=\"%h %s\" -3"),
+    mappedRow("git show --pretty=fuller HEAD"),
+    mappedRow("git log --author=\"Dana X\""),
+  ]
+}
+
+// The flags before a git subcommand do not hide a destructive one from
+// the refuse wall.
+node gitLeadingFlagRefusals() {
+  return [
+    refusedFor("git --no-pager checkout ."),
+    refusedFor("git -C sub reset --hard"),
+    refusedFor("git -C sub --no-pager clean -fd"),
+    refusedFor("git -C sub status"),
+    refusedFor("git --no-pager log"),
+  ]
+}
+
+/* The text a plan in the package folder runs, with that folder's path
+ replaced by `<pkg>`. */
+def packageCommand(source: string): string {
+  return match(planFor(source, PACKAGE_DIR).execution) {
+    { kind: "bash", command } => command.split(resolve(PACKAGE_DIR)).join("<pkg>")
+    _ => "NOT-BASH"
+  }
+}
+
+node gitLeadingFlagsRun() {
+  return [
+    packageCommand("git --no-pager log --oneline -5"),
+    packageCommand("git -C lib status"),
+    packageCommand("git -C lib diff --stat"),
+    packageCommand("git log --format=\"%h %s\" -3"),
+    packageCommand("git grep -n x main -- src"),
+    packageCommand("git grep -n planFor"),
+    packageCommand("git ls-files lib"),
   ]
 }
 
@@ -2363,6 +2565,14 @@ node gitRunsSafely() {
     gitFolder[1].includes("must be run in a work tree"),
     gitFolder[1].includes(GIT_MARKER),
   ]
+  // A repository may track files under a folder the grep tool skips. The
+  // exclude pathspecs safeBash writes keep git grep out of it, on this git.
+  const tracked = "mkdir dist && printf 'NEEDLE\\n' > dist/x.js && printf 'NEEDLE\\n' > c.py && git add dist/x.js c.py && git -c user.name=Test -c user.email=test@example.com commit -q -m 'Add dist'"
+  bash(tracked, cwd: GIT_FIXTURE) with approve
+  const gitGrep = runNarrow("git grep -n NEEDLE", GIT_FIXTURE)
+  seen.push(gitGrep[0])
+  seen.push(gitGrep[1].includes("c.py:1:NEEDLE"))
+  seen.push(gitGrep[1].includes("dist/x.js"))
   remove(GIT_FIXTURE) with approve
   remove(GIT_NO_REPO) with approve
   remove(GIT_BARE) with approve

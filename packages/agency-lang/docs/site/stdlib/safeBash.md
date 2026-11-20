@@ -334,11 +334,18 @@ export type FlagSpec = {
   /** A single-dash flag is one word, listed with its dash (`-name`), and
    never a run of letters. True for find. No verb mixes the two kinds,
    so a table holds letters or words, not both. */
-  wholeWords?: boolean
+  wholeWords?: boolean;
+  /** Read a long flag joined to a quoted value, `--include="*.ts"`, as
+   that flag. Off unless a table turns it on: a quoted value can hold a
+   space, a comma, or a glob character, which a bare value cannot, and
+   each table's checks were written for bare values. */
+  quotedValues?: boolean;
+  /** The valued flags that may be given more than once. */
+  repeatable?: string[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L677))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L676))
 
 ### FlagValue
 
@@ -354,7 +361,7 @@ export type FlagValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L700))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L706))
 
 ### SplitArgs
 
@@ -365,11 +372,14 @@ A command's arguments checked against a FlagSpec.
 export type SplitArgs = {
   plain: string[];
   values: FlagValue[];
-  positionals: Word[]
+  positionals: Word[];
+  /** Whether a flag came after the first positional, which a table
+   without `optionsFirst` allows. */
+  lateFlag: boolean
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L706))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L712))
 
 ### ReadVerb
 
@@ -390,7 +400,7 @@ export type ReadVerb = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1327))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1493))
 
 ### ListWalk
 
@@ -401,7 +411,7 @@ Whether a listing walks the tree always, or only when given -R.
 export type ListWalk = "always" | "withR"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1605))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1771))
 
 ### FileArgument
 
@@ -414,7 +424,7 @@ What a listing verb does with a path that names a file: list the
 export type FileArgument = "folder" | "refuse"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1609))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1775))
 
 ### ListVerb
 
@@ -434,7 +444,7 @@ export type ListVerb = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1613))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1779))
 
 ### FlatCommand
 
@@ -448,7 +458,7 @@ export type FlatCommand = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L3672))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4108))
 
 ### SafeBashEffects
 
@@ -461,7 +471,7 @@ Every effect `safeBash` can raise. `startJob` raises the same ones,
 export effectSet SafeBashEffects = <std::bash, std::write, std::remove, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::github::prGet, std::github::prDiff, std::github::issueGet, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueCommentList, std::github::prList, std::github::issueList, std::github::issueSearch, std::read, std::ls, std::glob, std::exec, std::run, std::guard>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4679))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5118))
 
 ### JobHandle
 
@@ -483,7 +493,7 @@ export type JobHandle = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4847))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5286))
 
 ### ShellStart
 
@@ -498,7 +508,7 @@ export type ShellStart =
   | { ran: "foreground"; output: string }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4856))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5295))
 
 ## Constants
 
@@ -511,14 +521,15 @@ The grep flags safeBash can describe exactly. An allowlist: it has to
  one asks std::bash:
  - `-R`: GNU grep follows every symlink below the path.
  - `-f`, `--exclude-from`, `--include-from` read another file.
- - `--include`, `--exclude`, `--exclude-dir`: the shell-free path cannot
-   carry them out, and the bash path is narrow only for one named file,
-   where they change nothing.
  - `-m` counts per file, and the payload's maxResults is a total.
  - `-P` is missing from BSD grep.
  - `-z`, `-d`, `-D` mean different things in different greps.
  - ugrep's `--filter` runs a program and `--save-config` writes a file.
  - The long spellings of short flags (`--recursive`, `--ignore-case`).
+ `--include`, `--exclude`, and `--exclude-dir` only narrow what grep
+ reads. A flag may come after a path because safeBash writes a search's
+ flags first; a grep that reads a pipe runs as written, so `readGrep`
+ refuses a late flag there.
 
 ```ts
 /** The grep flags safeBash can describe exactly. An allowlist: it has to
@@ -528,14 +539,15 @@ The grep flags safeBash can describe exactly. An allowlist: it has to
  one asks std::bash:
  - `-R`: GNU grep follows every symlink below the path.
  - `-f`, `--exclude-from`, `--include-from` read another file.
- - `--include`, `--exclude`, `--exclude-dir`: the shell-free path cannot
-   carry them out, and the bash path is narrow only for one named file,
-   where they change nothing.
  - `-m` counts per file, and the payload's maxResults is a total.
  - `-P` is missing from BSD grep.
  - `-z`, `-d`, `-D` mean different things in different greps.
  - ugrep's `--filter` runs a program and `--save-config` writes a file.
- - The long spellings of short flags (`--recursive`, `--ignore-case`). */
+ - The long spellings of short flags (`--recursive`, `--ignore-case`).
+ `--include`, `--exclude`, and `--exclude-dir` only narrow what grep
+ reads. A flag may come after a path because safeBash writes a search's
+ flags first; a grep that reads a pipe runs as written, so `readGrep`
+ refuses a late flag there. */
 export static const GREP_FLAGS: FlagSpec = {
   plain: [
     "n",
@@ -553,14 +565,16 @@ export static const GREP_FLAGS: FlagSpec = {
     "s",
     "--color=never",
   ],
-  valued: ["e", "A", "B", "C"],
-  optionsFirst: true
+  valued: ["e", "A", "B", "C", "--include", "--exclude", "--exclude-dir"],
+  optionsFirst: false,
+  quotedValues: true,
+  repeatable: ["--include", "--exclude", "--exclude-dir"]
 }
 ```
 
 **Type:** [FlagSpec](#flagspec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L735))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L745))
 
 ### READ_VERBS
 
@@ -702,7 +716,7 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
 
 **Type:** `Record<string, ReadVerb>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1347))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1513))
 
 ### LIST_VERBS
 
@@ -778,7 +792,7 @@ export static const LIST_VERBS: Record<string, ListVerb> = {
 
 **Type:** `Record<string, ListVerb>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1632))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1798))
 
 ## Functions
 
@@ -827,7 +841,7 @@ Name a plan's outcome: refuse, shellFree, agency, narrow, or broad.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L3648))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4084))
 
 ### planFor
 
@@ -849,7 +863,7 @@ Plan approvals and execution for Bash source without running the command.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L3948))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4384))
 
 ### removeRefusal
 
@@ -870,7 +884,7 @@ Why an rm or rmdir is refused, or an empty string when it is not: a target that 
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4445))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4881))
 
 ### isRefused
 
@@ -888,7 +902,7 @@ Check whether a command matches an explicitly refused destructive spelling.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4515))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4951))
 
 ### bashParser
 
@@ -906,7 +920,7 @@ Parse a string of bash code into an AST.
 
 **Returns:** `Result<BashAST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4610))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5049))
 
 ### resolveCwd
 
@@ -924,7 +938,7 @@ Use the requested directory, then the agent directory, then the process director
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4634))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5073))
 
 ### safeBash
 
@@ -962,7 +976,7 @@ Run Bash commands after approval of the actions they perform.
 
 **Needs:** `fileRead`, `subprocess`, `env`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4681))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5120))
 
 ### startJob
 
@@ -990,7 +1004,7 @@ Start a shell command in the background and return its job id at once, while the
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4824))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5263))
 
 ### startShellJob
 
@@ -1022,4 +1036,4 @@ Start a shell command as a detached job, after asking the approvals running it i
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4861))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5300))

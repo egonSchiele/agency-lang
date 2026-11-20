@@ -377,6 +377,12 @@ export type GrepMatch = {
 
 export const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", ".cache"]);
 
+/** The names the walk skips, for safeBash to write into a grep it runs
+ *  through bash, so real grep skips them too. */
+export function _skipDirNames(): string[] {
+  return [...SKIP_DIRS];
+}
+
 type Visitor = (rel: string, entry: Entry) => Promise<boolean>;
 
 type WalkOptions = {

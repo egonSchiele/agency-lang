@@ -79,7 +79,7 @@ import { GITHUB_MAX_PER_PAGE } from "agency-lang/stdlib-lib/github/args.js"
 import { _addLine, _write, _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
-import { _searchTargetIn, _bash, _grep } from "agency-lang/stdlib-lib/shell.js"
+import { _searchTargetIn, _bash, _grep, _skipDirNames } from "agency-lang/stdlib-lib/shell.js"
 import { _launchJob, _jobStartRefusal } from "agency-lang/stdlib-lib/jobs.js"
 import { basename as lastSegment, dirname as parentOf } from "std::path"
 import { _grepPatternToRegex, _renderGrepOutput, _skippedDirsNote } from "agency-lang/stdlib-lib/grepDialect.js"
@@ -492,6 +492,9 @@ def simpleCommandRule(command: SimpleCommand, cwd: string, origin: GhRepo | null
     const git = gitEffects(command, cwd)?
     return success({ effects: [...git.effects, ...redirect], command: git.command })
   }
+  if (name.text == "grep") {
+    return grepRule(command, cwd, readsStdin, redirect)
+  }
   // A gh read raises std::github. Every other gh line falls through to
   // verbEffects and asks std::exec. The glob and --jq checks cover both.
   if (name.text == "gh") {
@@ -521,10 +524,6 @@ def verbEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: b
   """
   return match(verb) {
     "echo" => success(redirects)
-    "grep" => match(readGrep(command, cwd, GREP_FLAGS)) {
-      success(found) => grepReadEffects(found, readsStdin, redirects)
-      failure(why) => failure(why)
-    }
     "tr" => trEffects(command, readsStdin, redirects)
     "find" => findEffects(command, cwd, redirects)
     _ => otherVerbEffects(verb, command, cwd, readsStdin, redirects)
@@ -692,7 +691,14 @@ export type FlagSpec = {
   /** A single-dash flag is one word, listed with its dash (`-name`), and
    never a run of letters. True for find. No verb mixes the two kinds,
    so a table holds letters or words, not both. */
-  wholeWords?: boolean
+  wholeWords?: boolean;
+  /** Read a long flag joined to a quoted value, `--include="*.ts"`, as
+   that flag. Off unless a table turns it on: a quoted value can hold a
+   space, a comma, or a glob character, which a bare value cannot, and
+   each table's checks were written for bare values. */
+  quotedValues?: boolean;
+  /** The valued flags that may be given more than once. */
+  repeatable?: string[]
 }
 
 /** One valued flag and its value. `flag` is the letter for a short flag
@@ -706,7 +712,10 @@ export type FlagValue = {
 export type SplitArgs = {
   plain: string[];
   values: FlagValue[];
-  positionals: Word[]
+  positionals: Word[];
+  /** Whether a flag came after the first positional, which a table
+   without `optionsFirst` allows. */
+  lateFlag: boolean
 }
 
 /** What one flag word contributed, and how many words it used: 2 when
@@ -724,18 +733,21 @@ type FlagRead = {
  one asks std::bash:
  - `-R`: GNU grep follows every symlink below the path.
  - `-f`, `--exclude-from`, `--include-from` read another file.
- - `--include`, `--exclude`, `--exclude-dir`: the shell-free path cannot
-   carry them out, and the bash path is narrow only for one named file,
-   where they change nothing.
  - `-m` counts per file, and the payload's maxResults is a total.
  - `-P` is missing from BSD grep.
  - `-z`, `-d`, `-D` mean different things in different greps.
  - ugrep's `--filter` runs a program and `--save-config` writes a file.
- - The long spellings of short flags (`--recursive`, `--ignore-case`). */
+ - The long spellings of short flags (`--recursive`, `--ignore-case`).
+ `--include`, `--exclude`, and `--exclude-dir` only narrow what grep
+ reads. A flag may come after a path because safeBash writes a search's
+ flags first; a grep that reads a pipe runs as written, so `readGrep`
+ refuses a late flag there. */
 export static const GREP_FLAGS: FlagSpec = {
   plain: ["n", "r", "i", "w", "l", "v", "E", "F", "c", "h", "H", "o", "s", "--color=never"],
-  valued: ["e", "A", "B", "C"],
-  optionsFirst: true
+  valued: ["e", "A", "B", "C", "--include", "--exclude", "--exclude-dir"],
+  optionsFirst: false,
+  quotedValues: true,
+  repeatable: ["--include", "--exclude", "--exclude-dir"]
 }
 
 def splitFlags(verb: string, command: SimpleCommand, spec: FlagSpec): Result<SplitArgs> {
@@ -746,14 +758,19 @@ def splitFlags(verb: string, command: SimpleCommand, spec: FlagSpec): Result<Spl
   let plain: string[] = []
   let values: FlagValue[] = []
   let positionals: Word[] = []
+  let lateFlag = false
+  const repeatable = spec.repeatable ?? []
   let index = 0
   while (index < args.length) {
-    const word = args[index]
+    const word = flagWordFor(args[index], spec)
     if (word is { tag: "flag" }) {
       // Checked before the table, so a late flag is reported the same way
       // whether or not the table knows it.
-      if (spec.optionsFirst && positionals.length > 0) {
-        return failure("an option after the first argument is a file name to some versions of ${verb}")
+      if (positionals.length > 0) {
+        if (spec.optionsFirst) {
+          return failure(lateOptionRefusal(verb))
+        }
+        lateFlag = true
       }
       const next: Word | null = if (index + 1 < args.length) then args[index + 1] else null
       const read = readFlagWord(verb, word, next, spec)
@@ -762,7 +779,7 @@ def splitFlags(verb: string, command: SimpleCommand, spec: FlagSpec): Result<Spl
       }
       for (entry in read.value.values) {
         const earlier = [seen for seen in values if seen.flag == entry.flag]
-        if (earlier.length > 0) {
+        if (earlier.length > 0 && !repeatable.includes(entry.flag)) {
           return failure("${verb} takes `${flagDisplay(entry.flag)}` only once")
         }
       }
@@ -781,8 +798,59 @@ def splitFlags(verb: string, command: SimpleCommand, spec: FlagSpec): Result<Spl
   return success({
     plain: plain,
     values: values,
-    positionals: positionals
+    positionals: positionals,
+    lateFlag: lateFlag
   })
+}
+
+def lateOptionRefusal(verb: string): string {
+  return "an option after the first argument is a file name to some versions of ${verb}"
+}
+
+/* The word as a flag when the table reads a joined quoted value and the
+ word is one, and otherwise the word itself. */
+def flagWordFor(word: Word, spec: FlagSpec): Word {
+  if (spec.quotedValues != true) {
+    return word
+  }
+  const joined = joinedFlag(word)
+  if (joined == null) {
+    return word
+  }
+  return joined
+}
+
+// The parser reads `--include="*.ts"` as one word of two parts: the text
+// `--include=` and a quoted part. Bash removes the quotes and hands the
+// program `--include=*.ts`. Every part after the first must be quoted
+// text with no variable, so the value is known now.
+def joinedFlag(word: Word): FlagWord | null {
+  """
+  Read a long flag joined to a quoted value as that flag, or return null.
+  """
+  if (!(word is { tag: "interpolatedVariable" })) {
+    return null
+  }
+  const parts = word.parts
+  const first = parts[0]
+  if (!(first is { tag: "literal" })) {
+    return null
+  }
+  if (!first.text.startsWith("--") || !first.text.endsWith("=") || first.text.indexOf("=") != first.text.length - 1) {
+    return null
+  }
+  let value = ""
+  for (part in parts.slice(1)) {
+    if (part.tag != "singleQuoted" && part.tag != "doubleQuoted") {
+      return null
+    }
+    const text = literalWordText(part)
+    if (text is failure(why)) {
+      return null
+    }
+    value = value + text.value
+  }
+  return { tag: "flag", flagName: first.text.slice(0, first.text.length - 1), flagValue: value }
 }
 
 def readFlagWord(verb: string, word: FlagWord, next: Word | null, spec: FlagSpec): Result<FlagRead> {
@@ -966,7 +1034,9 @@ type GrepCall = {
    output, `dir` is the folder as written and `file` the name. */
   target: PathTarget;
   /** The saved output's name when the path is one, else null. */
-  saved: string | null
+  saved: string | null;
+  /** The path word as the model wrote it, or null when there was none. */
+  word: Word | null
 }
 
 /** The pattern, and the words after it that name paths. */
@@ -978,9 +1048,9 @@ type GrepWords = {
 /** grep's context flags, whose values are line counts. */
 static const CONTEXT_FLAGS: string[] = ["A", "B", "C"]
 
-/** What a grep command reads: the path it names (or `.` with -r), or
- its stdin when it names no path. */
-type GrepRead = { kind: "stdin" } | { kind: "search"; call: GrepCall }
+/** What a grep command reads: the paths it names (or `.` with -r), one
+ call each, or its stdin when it names no path. */
+type GrepRead = { kind: "stdin" } | { kind: "search"; calls: GrepCall[] }
 
 // A command that names no file and reads its stdin. Fed by a pipe, it reads
 // only the previous command's output, so it adds nothing beyond its
@@ -1018,7 +1088,7 @@ def pipedProgram(verb: string, readsStdin: boolean, command: SimpleCommand): Res
 @capabilities(fileRead)
 def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRead> {
   """
-  Validate a grep command and resolve the pattern and path it searches.
+  Validate a grep command and resolve the pattern and the paths it searches.
   """
   const split = splitFlags("grep", command, spec)
   if (isFailure(split)) {
@@ -1035,13 +1105,22 @@ def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRe
     }
   }
   const paths = words.value.paths
-  if (paths.length > 1) {
-    return failure("grep with more than one path")
-  }
   if (paths.length == 0) {
     return searchHere(args, words.value.pattern, cwd)
   }
-  const pathWord = paths[0]
+  let calls: GrepCall[] = []
+  for (pathWord in paths) {
+    const call = grepCallFor(args, words.value.pattern, pathWord, cwd)
+    if (isFailure(call)) {
+      return call
+    }
+    calls.push(call.value)
+  }
+  return success({ kind: "search", calls: calls })
+}
+
+@capabilities(fileRead)
+def grepCallFor(args: SplitArgs, pattern: string, pathWord: Word, cwd: string): Result<GrepCall> {
   const text = literalWordText(pathWord)
   if (text is failure(why)) {
     return failure("the grep path is not literal")
@@ -1049,13 +1128,11 @@ def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRe
   const saved = savedPathOf(text.value)
   if (saved != null) {
     return success({
-      kind: "search",
-      call: {
-        split: args,
-        pattern: words.value.pattern,
-        target: { dir: saved.folder, file: saved.name, argument: text.value },
-        saved: saved.name
-      }
+      split: args,
+      pattern: pattern,
+      target: { dir: saved.folder, file: saved.name, argument: text.value },
+      saved: saved.name,
+      word: pathWord
     })
   }
   const target = resolveTarget(text.value, pathWord, cwd)
@@ -1063,22 +1140,25 @@ def readGrep(command: SimpleCommand, cwd: string, spec: FlagSpec): Result<GrepRe
     return target
   }
   return success({
-    kind: "search",
-    call: {
-      split: args,
-      pattern: words.value.pattern,
-      target: target.value,
-      saved: null
-    }
+    split: args,
+    pattern: pattern,
+    target: target.value,
+    saved: null,
+    word: pathWord
   })
 }
 
 /* With no path, `-r` searches the working directory and grep prints bare
  names. That check comes first: a pipe does not stop `-r` from reading
- files (ugrep reads both). Without `-r`, grep reads its stdin. */
+ files (ugrep reads both). Without `-r`, grep reads its stdin, and runs as
+ written, so a flag after the pattern is refused: some greps read it as
+ a file name. */
 @capabilities(fileRead)
 def searchHere(args: SplitArgs, pattern: string, cwd: string): Result<GrepRead> {
   if (!args.plain.includes("r")) {
+    if (args.lateFlag) {
+      return failure(lateOptionRefusal("grep"))
+    }
     return success({ kind: "stdin" })
   }
   const here = try _searchTargetIn(".", cwd, "literal")
@@ -1087,16 +1167,19 @@ def searchHere(args: SplitArgs, pattern: string, cwd: string): Result<GrepRead> 
   }
   return success({
     kind: "search",
-    call: {
-      split: args,
-      pattern: pattern,
-      target: {
-        dir: here.value.dir,
-        file: here.value.file,
-        argument: ""
+    calls: [
+      {
+        split: args,
+        pattern: pattern,
+        target: {
+          dir: here.value.dir,
+          file: here.value.file,
+          argument: ""
+        },
+        saved: null,
+        word: null
       },
-      saved: null
-    }
+    ]
   })
 }
 
@@ -1153,26 +1236,101 @@ def grepPayload(call: GrepCall, pattern: string, flags: string, maxResults: numb
   }
 }
 
-/* The effects of a grep that runs through bash, by what it reads. */
-def grepReadEffects(found: GrepRead, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
+// A grep through bash. One that reads a pipe runs as written. One that
+// searches paths runs the command `grepCommand` writes.
+@capabilities(fileRead)
+def grepRule(command: SimpleCommand, cwd: string, readsStdin: boolean, redirects: Effect[]): Result<SimpleRule> {
+  """
+  Classify a grep that runs through bash: the approvals it needs and the command to run.
+  """
+  const found = readGrep(command, cwd, GREP_FLAGS)?
   return match(found) {
-    { kind: "stdin" } => stdinStage("grep", readsStdin, redirects)
-    { kind: "search", call } => grepSearchEffects(call, redirects)
+    { kind: "stdin" } => match(stdinStage("grep", readsStdin, redirects)) {
+      success(effects) => success({ effects: effects, command: command })
+      failure(why) => failure(why)
+    }
+    { kind: "search", calls } => grepSearchRule(calls, command, redirects)
   }
 }
 
-// The grep tool skips files such as .git and ignored directories. A real
-// directory grep could read them, so it cannot reuse the tool's narrow approval.
-def grepSearchEffects(call: GrepCall, redirects: Effect[]): Result<Effect[]> {
+// One std::grep per path, with the payload the grep tool raises for it.
+// A folder is searched with `-r` only, and never one whose own name the
+// tool's walk skips: with `--exclude-dir=dist`, `grep -r x dist` searches
+// nothing, while the tool searches a folder it is given.
+def grepSearchRule(calls: GrepCall[], command: SimpleCommand, redirects: Effect[]): Result<SimpleRule> {
   """
-  Describe a Bash grep of one named file, refusing directory searches.
+  Describe a grep through bash of files and folders, and write the command that runs.
   """
-  if (call.target.file == null) {
-    return failure("grep through bash would search a directory, and reads files the grep tool skips")
+  const skipped = skipNames()
+  let effects: Effect[] = []
+  let searchesFolder = false
+  for (call in calls) {
+    if (call.target.file == null) {
+      if (!call.split.plain.includes("r")) {
+        return failure("grep without -r does not search a folder")
+      }
+      const written = lastSegment(call.target.argument)
+      const real = lastSegment(call.target.dir)
+      if (skipped.includes(written) || skipped.includes(real)) {
+        return failure("grep of a folder named `${real}`, which the grep tool's search skips")
+      }
+      searchesFolder = true
+    }
+    // 0 means no cap, which is true of grep without -m.
+    effects.push(grepEffect(grepPayload(call, call.pattern, "", 0)))
   }
-  // 0 means no cap, which is true of grep without -m.
-  return success([grepEffect(grepPayload(call, call.pattern, "", 0)), ...redirects])
+  const excludes: string[] = if (searchesFolder) then skipped else []
+  const paths = [grepPathWord(call) for call in calls]
+  return success({
+    effects: [...effects, ...redirects],
+    command: grepCommand(calls[0].split, calls[0].pattern, paths, excludes, command.redirects)
+  })
 }
+
+/* The names the grep tool's walk skips, files and folders alike. */
+def skipNames(): string[] {
+  return _skipDirNames()
+}
+
+/* The path as the model wrote it, or `.` for a grep -r that named none:
+ GNU grep then searches the working folder, and BSD grep reads stdin. */
+def grepPathWord(call: GrepCall): Word {
+  const word = call.word
+  if (word == null) {
+    return CURRENT_DIR_WORD
+  }
+  return word
+}
+
+// The command that runs: the checked flags, an exclude of every name the
+// grep tool skips, as a folder and as a file (in a git worktree `.git` is
+// a file), then `-e` and the pattern, so a pattern that starts with `-` is
+// never read as a flag, then `--` and the paths. Written in this order,
+// every grep reads a flag the model put after a path as a flag.
+def grepCommand(split: SplitArgs, pattern: string, paths: Word[], excludes: string[], redirects: Redirect[]): SimpleCommand {
+  """
+  Build the grep command to run for a search through bash.
+  """
+  const kept = [entry for entry in split.values if entry.flag != "e"]
+  let excluded: FlagValue[] = []
+  for (name in excludes) {
+    excluded = [...excluded, { flag: "--exclude-dir", value: name }, { flag: "--exclude", value: name }]
+  }
+  return {
+    tag: "simpleCommand",
+    assignments: [],
+    command: GREP_WORD,
+    args: [
+      ...flagWords(split.plain, [...kept, ...excluded]),
+      ...valuedFlagWords({ flag: "e", value: pattern }),
+      END_OF_FLAGS_WORD,
+      ...paths,
+    ],
+    redirects: redirects
+  }
+}
+
+static const GREP_WORD: LiteralWord = { tag: "literal", text: "grep" }
 
 /** The flags the grep tool's search can carry out exactly. A lone grep
  that uses only these runs shell-free. -c, -o, -A, -B, and -C have no
@@ -1218,8 +1376,16 @@ def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
 def shellFreeGrepRead(found: GrepRead, command: SimpleCommand): Result<Plan> {
   return match(found) {
     { kind: "stdin" } => failure("a lone grep with no path reads stdin")
-    { kind: "search", call } => shellFreeGrepPlan(call, command)
+    { kind: "search", calls } => shellFreeGrepOf(calls, command)
   }
+}
+
+/* The grep tool searches one path. */
+def shellFreeGrepOf(calls: GrepCall[], command: SimpleCommand): Result<Plan> {
+  if (calls.length != 1) {
+    return failure("the grep tool searches one path")
+  }
+  return shellFreeGrepPlan(calls[0], command)
 }
 
 @capabilities(fileRead)
@@ -1944,13 +2110,13 @@ static const AT_LEAST_ONE: CountRange = { least: 1, most: null }
  - `--all` on log shows every branch, and the payload has one `ref`.
  - `--no-index` on diff compares two files outside the repository.
  - `--output` on diff writes a file.
- - `--format` and `--pretty`: the value is nearly always quoted, and a
-   flag with a quoted value is not read as a flag yet.
  - `-u` on add stages tracked changes only, and the payload cannot say so.
  - A path on show or status, and a ref on blame: the effect has no field
    for it.
  diff takes at most one path, and that is a safety rule: with two paths
- after `--` git compares the two files, wherever they are. */
+ after `--` git compares the two files, wherever they are. `merge-base`
+ prints one commit from the history of both refs, so it asks the log
+ question for each. */
 static const GIT_VERBS: Record<string, GitVerb> = {
   status: {
     flags: { plain: ["s", "b", "--short", "--branch", "--porcelain", "--porcelain=v1"], valued: [], optionsFirst: false },
@@ -1962,9 +2128,10 @@ static const GIT_VERBS: Record<string, GitVerb> = {
   log: {
     flags: {
       plain: ["p", "--patch", "--oneline", "--stat", "--name-only", "--name-status", "--graph", "--decorate", "--no-color", "--reverse", "--no-merges", "--follow"],
-      valued: ["n", "S", "G", "--max-count", "--author", "--grep", "--since", "--until"],
+      valued: ["n", "S", "G", "--max-count", "--author", "--grep", "--since", "--until", "--format", "--pretty"],
       optionsFirst: false,
-      digitFlag: "n"
+      digitFlag: "n",
+      quotedValues: true
     },
     words: "refsAndPaths",
     refs: AT_MOST_ONE,
@@ -1983,7 +2150,12 @@ static const GIT_VERBS: Record<string, GitVerb> = {
     names: NONE
   },
   show: {
-    flags: { plain: ["s", "--no-patch", "--stat", "--name-only", "--name-status", "--oneline", "--no-color"], valued: [], optionsFirst: false },
+    flags: {
+      plain: ["s", "--no-patch", "--stat", "--name-only", "--name-status", "--oneline", "--no-color"],
+      valued: ["--format", "--pretty"],
+      optionsFirst: false,
+      quotedValues: true
+    },
     words: "refsAndPaths",
     refs: AT_MOST_ONE,
     paths: NONE,
@@ -1995,6 +2167,13 @@ static const GIT_VERBS: Record<string, GitVerb> = {
     refs: NONE,
     paths: EXACTLY_ONE,
     names: NONE
+  },
+  "merge-base": {
+    flags: { plain: [], valued: [], optionsFirst: false },
+    words: "names",
+    refs: NONE,
+    paths: NONE,
+    names: EXACTLY_TWO
   },
   remote: {
     flags: { plain: ["v"], valued: [], optionsFirst: false },
@@ -2096,26 +2275,128 @@ def gitEffects(command: SimpleCommand, cwd: string): Result<SimpleRule> {
   Classify a git command: the effects it asks and the git command to run for it.
   Fail for a subcommand, flag, or word without an exact rule.
   """
-  if (command.args.length == 0) {
+  const lead = gitLeadingFlags(command.args, cwd)?
+  if (lead.rest.length == 0) {
     return failure("git with no subcommand")
   }
-  const first = command.args[0]
+  const first = lead.rest[0]
   if (first.tag != "literal") {
     return failure("the git subcommand is not a plain word")
   }
-  const sub = first.text
-  const words = command.args.slice(1)
+  const rule = gitSubcommandRule(first.text, lead.rest.slice(1), lead.cwd, command.redirects)?
+  if (lead.cwd == cwd) {
+    return success(rule)
+  }
+  return success({ effects: rule.effects, command: inGitFolder(rule.command, lead.cwd) })
+}
+
+@capabilities(fileRead)
+def gitSubcommandRule(sub: string, words: Word[], cwd: string, redirects: Redirect[]): Result<SimpleRule> {
   const verb = GIT_VERBS[sub]
   if (verb != null) {
-    return gitRowRule(sub, verb, words, cwd, command.redirects)
+    return gitRowRule(sub, verb, words, cwd, redirects)
   }
   return match(sub) {
-    "branch" => gitBranchRule(words, cwd, command.redirects)
-    "stash" => gitStashRule(words, cwd, command.redirects)
-    "commit" => gitCommitRule(words, cwd, command.redirects)
-    "checkout" => gitCheckoutRule(words, cwd, command.redirects)
+    "branch" => gitBranchRule(words, cwd, redirects)
+    "stash" => gitStashRule(words, cwd, redirects)
+    "commit" => gitCommitRule(words, cwd, redirects)
+    "checkout" => gitCheckoutRule(words, cwd, redirects)
+    "rev-parse" => gitRevParseRule(words, cwd, redirects)
+    "ls-files" => gitLsFilesRule(words, cwd, redirects)
+    "worktree" => gitWorktreeRule(words, cwd, redirects)
+    "grep" => gitGrepRule(words, cwd, redirects)
     _ => failure("no rule for `git ${sub}`")
   }
+}
+
+/** Where a git command runs, and its words after the leading flags. */
+type GitLead = {
+  cwd: string;
+  rest: Word[]
+}
+
+// Two flags may come before the subcommand. `--no-pager` changes nothing,
+// because safeBash already sets `core.pager=cat`, so it is dropped.
+// `-C <dir>` runs git in that folder: it is `cd <dir> && git ...`, so the
+// folder is resolved by `cdTarget`'s rules, and each `-C` is read from the
+// folder the one before it named, as git does. Any other leading flag,
+// such as `-c` or `--git-dir`, has no rule.
+@capabilities(fileRead)
+def gitLeadingFlags(words: Word[], cwd: string): Result<GitLead> {
+  """
+  Read `--no-pager` and `-C <dir>` from the front of a git command's words.
+  """
+  let dir = cwd
+  let index = 0
+  while (index < words.length && words[index].tag == "flag") {
+    const name = bareFlagName(words[index])
+    if (name == "--no-pager") {
+      index = index + 1
+    } else if (name == "-C" && index + 1 < words.length) {
+      dir = cdTarget(cdCommandOf(words[index + 1]), dir)?
+      index = index + 2
+    } else {
+      return failure("the git subcommand is not a plain word")
+    }
+  }
+  return success({ cwd: dir, rest: words.slice(index) })
+}
+
+/* A flag's name when it has no `=value`, and "" for any other word. */
+def bareFlagName(word: Word): string {
+  if (word is { tag: "flag" }) {
+    if (word.flagValue == null) {
+      return word.flagName
+    }
+  }
+  return ""
+}
+
+/* The words of a git command after its leading `--no-pager` and `-C
+ <dir>`, read without the disk, for the refuse wall. */
+def afterGitLead(words: Word[]): Word[] {
+  let index = 0
+  while (index < words.length) {
+    const name = bareFlagName(words[index])
+    if (name == "--no-pager") {
+      index = index + 1
+    } else if (name == "-C") {
+      index = index + 2
+    } else {
+      return words.slice(index)
+    }
+  }
+  return []
+}
+
+static const CD_WORD: LiteralWord = { tag: "literal", text: "cd" }
+
+def cdCommandOf(word: Word): SimpleCommand {
+  return {
+    tag: "simpleCommand",
+    assignments: [],
+    command: CD_WORD,
+    args: [word],
+    redirects: []
+  }
+}
+
+// safeBash writes the resolved folder as `-C '<folder>'` right after its
+// fixed flags, in every git command a rule built, the repository check in
+// front of a diff included.
+def inGitFolder(command: Command, dir: string): Command {
+  if (command is { tag: "simpleCommand" }) {
+    const fixed = fixedFlagWords().length
+    const moved: Word[] = [{ tag: "flag", flagName: "-C" }, { tag: "singleQuoted", text: dir }]
+    return { ...command, args: [...command.args.slice(0, fixed), ...moved, ...command.args.slice(fixed)] }
+  }
+  if (command is { tag: "parens" }) {
+    return { tag: "parens", command: inGitFolder(command.command, dir) }
+  }
+  if (command is { tag: "and" }) {
+    return { tag: "and", left: inGitFolder(command.left, dir), right: inGitFolder(command.right, dir) }
+  }
+  return command
 }
 
 @capabilities(fileRead)
@@ -2302,6 +2583,7 @@ def gitPayloads(args: GitArgs): Result<Effect[]> {
     "show" => success([gitShowEffect({ cwd: cwd, ref: firstText(args.refs, SHOW_DEFAULT_REF) })])
     "blame" => success([gitBlameEffect({ cwd: cwd, path: args.paths[0].text })])
     "remote" => success([gitRemoteListEffect({ cwd: cwd })])
+    "merge-base" => success([gitLogEffect({ cwd: cwd, ref: name.text, path: "" }) for name in args.names])
     "add" => addEffects(args)
     "switch" => success(
       [gitSwitchEffect({ cwd: cwd, branch: args.names[0].text, create: hasAny(args.plain, ["c", "--create"]) })],
@@ -2467,6 +2749,160 @@ def gitCheckoutRef(words: Word[], cwd: string, redirects: Redirect[]): Result<Si
   }
   const effect = gitCheckoutEffect({ cwd: cwd, target: args.refs[0].text, force: false })
   return success({ effects: [effect], command: gitCommand(["checkout"], args, "refsAndPaths", redirects) })
+}
+
+static const REV_PARSE_REF_FLAGS: string[] = ["--short", "--abbrev-ref", "--verify"]
+static const REV_PARSE_REPO_FLAGS: string[] = ["--show-toplevel", "--git-dir", "--is-inside-work-tree"]
+static const GIT_REV_PARSE_FLAGS: FlagSpec = { plain: [...REV_PARSE_REF_FLAGS, ...REV_PARSE_REPO_FLAGS], valued: [], optionsFirst: false }
+
+// `git rev-parse` prints what other git reads print, so it asks their
+// questions. A commit's hash or name is what `git log <ref>` prints. Where
+// the repository is, is what `git status` reads. A mix of the two kinds of
+// flag, or any other flag, has no rule.
+@capabilities(fileRead)
+def gitRevParseRule(words: Word[], cwd: string, redirects: Redirect[]): Result<SimpleRule> {
+  """
+  Classify `git rev-parse` of one ref, or of where the repository is.
+  """
+  const args = gitArgsFor("rev-parse", words, GIT_REV_PARSE_FLAGS, "names", cwd)?
+  const forRef = [flag for flag in args.plain if REV_PARSE_REF_FLAGS.includes(flag)]
+  const forRepo = [flag for flag in args.plain if REV_PARSE_REPO_FLAGS.includes(flag)]
+  const built = gitCommand(["rev-parse"], args, "names", redirects)
+  if (forRepo.length == 0 && args.names.length == 1) {
+    return success({ effects: [gitLogEffect({ cwd: cwd, ref: args.names[0].text, path: "" })], command: built })
+  }
+  if (forRef.length == 0 && forRepo.length > 0 && args.names.length == 0) {
+    return success({ effects: [gitStatusEffect({ cwd: cwd })], command: built })
+  }
+  return failure("`git rev-parse` takes one ref, or only flags that ask where the repository is")
+}
+
+static const GIT_LS_FILES_FLAGS: FlagSpec = {
+  plain: ["--modified", "--deleted", "--cached", "--others", "--exclude-standard"],
+  valued: [],
+  optionsFirst: false
+}
+
+// `git ls-files` prints names under a folder, which `ls -R` of the folder
+// prints too, so it asks the recursive listing question. `--others` alone
+// lists every ignored file, `node_modules` included, so it is allowed only
+// with `--exclude-standard`, and that flag only with it.
+@capabilities(fileRead)
+def gitLsFilesRule(words: Word[], cwd: string, redirects: Redirect[]): Result<SimpleRule> {
+  """
+  Classify `git ls-files` of the working folder or of one folder in it.
+  """
+  const args = gitArgsFor("ls-files", words, GIT_LS_FILES_FLAGS, "paths", cwd)?
+  if (args.plain.includes("--others") != args.plain.includes("--exclude-standard")) {
+    return failure("`git ls-files` takes `--others` only with `--exclude-standard`")
+  }
+  if (!countFits(args.paths.length, AT_MOST_ONE)) {
+    return failure("`git ls-files` takes at most one folder")
+  }
+  const named: GitWord = if (args.paths.length == 0) then { text: ".", word: CURRENT_DIR_WORD } else args.paths[0]
+  const target = resolveTarget(named.text, named.word, cwd)?
+  const dir = requireFolder("git ls-files", target)?
+  return success({
+    effects: [lsEffect({ dir: dir, recursive: true, maxResults: 0 })],
+    command: gitCommand(["ls-files"], args, "paths", redirects)
+  })
+}
+
+static const GIT_WORKTREE_FLAGS: FlagSpec = { plain: ["--porcelain"], valued: [], optionsFirst: false }
+
+// `git worktree list` prints each branch checked out and where, which the
+// branch listing question covers. `add` and `remove` change the disk.
+@capabilities(fileRead)
+def gitWorktreeRule(words: Word[], cwd: string, redirects: Redirect[]): Result<SimpleRule> {
+  """
+  Classify `git worktree list`.
+  """
+  const args = gitArgsFor("worktree", words, GIT_WORKTREE_FLAGS, "names", cwd)?
+  const names = textsOf(args.names)
+  if (names.length != 1 || names[0] != "list") {
+    return failure("only `git worktree list` has a rule")
+  }
+  const flagsOnly: GitArgs = { ...args, names: [] }
+  return success({
+    effects: [gitBranchListEffect({ cwd: cwd })],
+    command: gitCommand(["worktree", "list"], flagsOnly, "names", redirects)
+  })
+}
+
+static const GIT_GREP_FLAGS: FlagSpec = { plain: ["n", "i", "l", "w", "E", "F", "c"], valued: [], optionsFirst: false }
+
+// `git grep` with no ref searches the tracked files under each path, and
+// asks std::grep for each, as grep does. A repository may track files
+// under a folder the grep tool skips, such as `dist`, so safeBash writes an
+// exclude pathspec for each skipped name, as a folder and as a file. With
+// a ref it reads files from that commit, which `git show <ref>:<path>`
+// already does, so it asks the show question. `--no-index` reads outside
+// the repository, and `-O` and `--open-files-in-pager` run a program, so
+// none of them is in the table.
+@capabilities(fileRead)
+def gitGrepRule(words: Word[], cwd: string, redirects: Redirect[]): Result<SimpleRule> {
+  """
+  Classify `git grep` of the working folder's tracked files, or of one ref.
+  """
+  const cut = endOfFlagsIndex(words)
+  const split = splitFlags("git grep", gitWordsCommand(words.slice(0, cut)), GIT_GREP_FLAGS)?
+  const front = gitWordsOf(split.positionals)?
+  const back = gitWordsOf(words.slice(cut + 1))?
+  if (front.length == 0) {
+    return failure("`git grep` with no pattern")
+  }
+  const pattern = front[0].text
+  const sorted = sortGitWords("grep", "refsAndPaths", cut < words.length, front.slice(1), back, cwd)?
+  if (!countFits(sorted.refs.length, AT_MOST_ONE)) {
+    return failure("`git grep` takes at most one ref")
+  }
+  const args: GitArgs = {
+    sub: "grep",
+    plain: split.plain,
+    values: [{ flag: "e", value: pattern }],
+    refs: sorted.refs,
+    paths: sorted.paths,
+    names: [],
+    cwd: cwd
+  }
+  if (sorted.refs.length == 1) {
+    return success({
+      effects: [gitShowEffect({ cwd: cwd, ref: sorted.refs[0].text })],
+      command: gitCommand(["grep"], args, "refsAndPaths", redirects)
+    })
+  }
+  // git needs one pathspec that is not an exclude, so `.` stands in for
+  // no path.
+  const searched: GitWord[] = if (sorted.paths.length == 0) then [{ text: ".", word: CURRENT_DIR_WORD }] else sorted.paths
+  let effects: Effect[] = []
+  for (path in searched) {
+    const target = resolveTarget(path.text, path.word, cwd)?
+    effects.push(grepEffect({
+      pattern: pattern,
+      dir: target.dir,
+      file: target.file,
+      flags: "",
+      maxResults: 0,
+      ignoreCase: split.plain.includes("i"),
+      wholeWord: split.plain.includes("w"),
+      filesOnly: split.plain.includes("l"),
+      invert: false
+    }))
+  }
+  const excluded: GitArgs = { ...args, paths: [...searched, ...gitGrepExcludes()] }
+  return success({ effects: effects, command: gitCommand(["grep"], excluded, "refsAndPaths", redirects) })
+}
+
+/* One exclude pathspec for each name the grep tool skips as a folder, and
+ one as a file. */
+def gitGrepExcludes(): GitWord[] {
+  let out: GitWord[] = []
+  for (name in skipNames()) {
+    for (text in [":(exclude,glob)**/${name}/**", ":(exclude,glob)**/${name}"]) {
+      out.push({ text: text, word: { tag: "singleQuoted", text: text } })
+    }
+  }
+  return out
 }
 
 static const GIT_WORD: LiteralWord = { tag: "literal", text: "git" }
@@ -3019,7 +3455,7 @@ def ghLongFlags(split: SplitArgs): Result<SplitArgs> {
       plain.push(long)
     }
   }
-  return success({ plain: plain, values: values, positionals: split.positionals })
+  return success({ plain: plain, values: values, positionals: split.positionals, lateFlag: split.lateFlag })
 }
 
 /* The checks on flag values that the payload relies on. */
@@ -4537,10 +4973,13 @@ export def isRefused(command: SimpleCommand): boolean {
 // `clean` is destructive by purpose. `restore`, `reset`, and `checkout`
 // are only destructive in particular spellings, and refusing the whole
 // subcommand would refuse `git checkout main`, which agents do constantly.
-def isDestructiveGit(command: SimpleCommand): boolean {
+def isDestructiveGit(whole: SimpleCommand): boolean {
   """
   Check the first argument and flags for explicitly refused destructive Git operations.
   """
+  // `git --no-pager checkout .` and `git -C x reset --hard` are read past
+  // the flags that come before the subcommand, as the git rule reads them.
+  const command: SimpleCommand = { ...whole, args: afterGitLead(whole.args) }
   if (command.args.length == 0) {
     return false
   }

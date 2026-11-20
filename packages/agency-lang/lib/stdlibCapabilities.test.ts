@@ -77,6 +77,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "hostedSearchTools",
     "mostCommon",
     "bashParser",
+    "skipNames",
     "s3PresignGet",
     "dateStrToEpochMs",
     "elapsedTime",

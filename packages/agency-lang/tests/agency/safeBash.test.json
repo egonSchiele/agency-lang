@@ -504,9 +504,9 @@
     },
     {
       "nodeName": "splitGrepFlags",
-      "description": "The grep flag table. Combined letters are checked one by one; a valued letter takes the rest of the word or the next word; unknown flags, -R, a repeated -e, a quoted word starting with a dash, a missing value, ugrep's --filter and --save-config, the file filters, and a flag after the first positional (a file name to BSD grep) are all refused.",
+      "description": "The grep flag table. Combined letters are checked one by one; a valued letter takes the rest of the word or the next word; unknown flags, -R, a repeated -e, a quoted word starting with a dash, a missing value, ugrep's --filter and --save-config, and a file filter whose value is a glob bash may expand are all refused. A flag after the first positional splits, because safeBash writes a search's flags first. The file filters may repeat, and take a quoted value.",
       "input": "",
-      "expectedOutput": "[[[\"r\",\"n\",\"i\"],[],2],[[],[\"A=3\"],2],[[],[\"A=3\"],2],[[],[\"e=hello\"],1],[[\"--color=never\"],[],2],[[\"n\"],[\"A=3\"],2],\"grep does not take `-z`\",\"grep does not take `-R`\",\"grep takes `-e` only once\",\"a quoted `-R` is still an option to grep\",\"grep's `-A` needs a value\",\"grep does not take `--filter=x`\",\"grep does not take `--save-config`\",\"grep does not take `--include=*.ts`\",\"a quoted `-x` is still an option to grep\",\"an option after the first argument is a file name to some versions of grep\",\"grep does not take `--color=always`\"]",
+      "expectedOutput": "[[[\"r\",\"n\",\"i\"],[],2],[[],[\"A=3\"],2],[[],[\"A=3\"],2],[[],[\"e=hello\"],1],[[\"--color=never\"],[],2],[[\"n\"],[\"A=3\"],2],\"grep does not take `-z`\",\"grep does not take `-R`\",\"grep takes `-e` only once\",\"a quoted `-R` is still an option to grep\",\"grep's `-A` needs a value\",\"grep does not take `--filter=x`\",\"grep does not take `--save-config`\",\"the value of `--include` is a glob bash may expand\",\"a quoted `-x` is still an option to grep\",[[\"n\",\"s\"],[],2],\"grep does not take `--color=always`\",[[\"r\",\"n\"],[\"--include=*.ts\",\"--include=*.md\"],2],\"grep takes `-e` only once\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -526,9 +526,9 @@
     },
     {
       "nodeName": "grepThroughBash",
-      "description": "A grep that runs through bash asks std::grep only for one named file: a flag the grep tool lacks (-c, -A), a pattern that does not translate, a redirect, or another command on the line. A redirect still adds std::write.",
+      "description": "A grep that runs through bash asks one std::grep per path: for a flag the grep tool lacks (-c, -A), a pattern that does not translate, a redirect, another command on the line, two paths, a file filter, or a flag after the pattern. A redirect still adds std::write.",
       "input": "",
-      "expectedOutput": "[[[\"std::grep\"],null],[[\"std::grep\"],null],[[\"std::grep\"],null],[[\"std::grep\",\"std::write\"],null],[[\"std::git::status\",\"std::grep\"],null]]",
+      "expectedOutput": "[[[\"std::grep\"],null],[[\"std::grep\"],null],[[\"std::grep\"],null],[[\"std::grep\",\"std::write\"],null],[[\"std::git::status\",\"std::grep\"],null],[[\"std::grep\",\"std::grep\"],null],[[\"std::grep\"],null],[[\"std::git::status\",\"std::grep\"],null],[[\"std::git::status\",\"std::grep\"],null]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -537,9 +537,9 @@
     },
     {
       "nodeName": "grepUnrecognized",
-      "description": "Every grep safeBash cannot describe exactly asks std::bash, with the reason: no path outside a pipe, an unknown or dangerous flag, a quoted dash, a repeated -e, a word that is not literal, two paths, a directory through bash, a flag after the first positional. rg is not grep and has no row, so it asks std::exec like any other program.",
+      "description": "Every grep safeBash cannot describe exactly asks std::bash, with the reason: no path outside a pipe, an unknown or dangerous flag, a quoted dash, a repeated -e, a word that is not literal, a folder without -r, a file filter whose value is a glob. rg is not grep and has no row, so it asks std::exec like any other program.",
       "input": "",
-      "expectedOutput": "[[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-z`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-R` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep takes `-e` only once\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--filter=x`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep pattern is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep path is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with more than one path\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with more than one path\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-x` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--include=*.txt`\"}]]",
+      "expectedOutput": "[[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-z`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-R` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep takes `-e` only once\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `--filter=x`\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep pattern is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the grep path is not literal\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep without -r does not search a folder\"}],[[\"std::exec\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"a quoted `-x` is still an option to grep\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the value of `--include` is a glob bash may expand\"}]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -725,10 +725,54 @@
       ]
     },
     {
-      "nodeName": "grepFilterStages",
-      "description": "A grep with no path in a later stage of a pipe searches the previous stage's output and reads no file, so it contributes nothing beyond its redirects. -r still wins (it reads the working directory), a named path wins over the pipe, a grep outside the pipe still reads stdin, the flag table still applies, and a line of recognized commands with no effect asks std::bash by the audit rule.",
+      "nodeName": "joinedFlagWords",
+      "description": "A long flag joined to a quoted value splits as that flag in a table that reads quoted values, with double or single quotes. A value with a variable in it does not, and is left as a word, which the grep rule then refuses. A wholly quoted `-R` is still refused. gh and find do not read quoted values, so `--label=\"a,b\"` and `-name=\"*.ts\"` plan as they did.",
       "input": "",
-      "expectedOutput": "[[[\"std::git::status\"],null],[[\"std::git::status\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep through bash would search a directory, and reads files the grep tool skips\"}],[[\"std::git::status\",\"std::grep\"],null],[[\"std::git::status\",\"std::write\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash\"],{\"kind\":\"noEffects\",\"detail\":\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::git::status\"],null]]",
+      "expectedOutput": "[[[],[\"--include=*.ts\"],2],[[],[\"--include=*.ts\"],2],[[],[],3],\"a quoted `-R` is still an option to grep\",[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"`gh pr list` takes no words besides its flags\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"the find path is not literal\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepThroughBashAsksStdGrep",
+      "description": "A grep through bash asks std::grep for each path, through a pipe, with two paths, with a file filter, and with a flag after the path. A folder the grep tool skips by name stays broad, whether named as written, with a trailing slash, or as `.` inside such a folder; the same folder's contents do not. A folder without -r is broad. A lone grep -r runs shell-free. A grep that reads a pipe runs as written, so a flag after its pattern is refused.",
+      "input": "",
+      "expectedOutput": "[[\"grep -rn hello . | head -20\",\"narrow\",[\"std::grep\"]],[\"grep -rn \\\"a\\\\|b\\\" src\",\"narrow\",[\"std::grep\"]],[\"grep -rn hello src lib\",\"narrow\",[\"std::grep\",\"std::grep\"]],[\"grep -rn hello src --include=\\\"*.ts\\\"\",\"narrow\",[\"std::grep\"]],[\"grep -n hello one.txt -A 5\",\"narrow\",[\"std::grep\"]],[\"grep -rn hello node_modules | head\",\"broad\",[\"std::bash\"]],[\"grep -rn hello node_modules/p | head\",\"narrow\",[\"std::grep\"]],[\"grep -n hello src\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src\",\"shellFree\",[\"std::grep\"]],[\"grep -rn hello src/dist | head\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src/dist/ | head\",\"broad\",[\"std::bash\"]],[\"grep -rn hello . | head\",\"broad\",[\"std::bash\"]],[\"grep -rn hello | head\",\"narrow\",[\"std::grep\"]],[\"pnpm test | grep FAIL -v\",\"broad\",[\"std::bash\"]],[\"git status | grep -v deleted -c\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src -e x | head\",\"broad\",[\"std::bash\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepRunsWhatItAsked",
+      "description": "The exact text a grep through bash runs: the checked flags first, then `--exclude-dir` and `--exclude` for each name the grep tool skips (only when a folder is searched), then `-e` and the pattern, then `--` and the paths, or `.` for a grep -r that named none. The six names are the grep tool's skip list, so a name added to it fails this row until the text here agrees.",
+      "input": "",
+      "expectedOutput": "[\"grep -r -n --exclude-dir=node_modules --exclude=node_modules --exclude-dir=.git --exclude=.git --exclude-dir=dist --exclude=dist --exclude-dir=build --exclude=build --exclude-dir=.next --exclude=.next --exclude-dir=.cache --exclude=.cache -e 'hello' -- . | head -20\",\"grep -r -n '--include=*.ts' --exclude-dir=node_modules --exclude=node_modules --exclude-dir=.git --exclude=.git --exclude-dir=dist --exclude=dist --exclude-dir=build --exclude=build --exclude-dir=.next --exclude=.next --exclude-dir=.cache --exclude=.cache -e 'hello' -- src\",\"grep -n -A '5' -e 'hello' -- one.txt\",\"grep -n -e 'hello' -- one.txt lib/l.ts | head\",\"grep -r -n --exclude-dir=node_modules --exclude=node_modules --exclude-dir=.git --exclude=.git --exclude-dir=dist --exclude=dist --exclude-dir=build --exclude=build --exclude-dir=.next --exclude=.next --exclude-dir=.cache --exclude=.cache -e 'hello' -- . | head\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepThroughBashReadsWhatTheToolReads",
+      "description": "Real grep, run through bash on a tree that holds the word in every folder and file the grep tool skips, in a `.git` file, in a file named build, and behind links to a folder beside the tree, prints only the one file the grep tool's own search finds, with a path and with none. A grep of a skipped folder by name stays broad. This runs BSD grep on macOS and GNU grep in CI.",
+      "input": "",
+      "expectedOutput": "[\"./src/a.ts:1:needle\\n\",\"./src/a.ts:1:needle\\n\",\"broad\",[\"src/a.ts\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "grepFilterStages",
+      "description": "A grep with no path in a later stage of a pipe searches the previous stage's output and reads no file, so it contributes nothing beyond its redirects. -r still wins (it searches the working directory, and asks std::grep for it), a named path wins over the pipe, a grep outside the pipe still reads stdin, the flag table still applies, a flag after the pattern is refused because a grep that reads a pipe runs as written, and a line of recognized commands with no effect asks std::bash by the audit rule.",
+      "input": "",
+      "expectedOutput": "[[[\"std::git::status\"],null],[[\"std::git::status\"],null],[[\"std::git::status\",\"std::grep\"],null],[[\"std::git::status\",\"std::grep\"],null],[[\"std::git::status\",\"std::write\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash\"],{\"kind\":\"noEffects\",\"detail\":\"\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::git::status\"],null]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1466,9 +1510,9 @@
     },
     {
       "nodeName": "gitStaysBroad",
-      "description": "Every git spelling with no rule asks std::bash: a flag that shows more or does something else, a second message, a bare `git add`, an unquoted `~`, a start point, a forced form, a glob, a path where the effect has no field for one, a leading flag or assignment, and a subcommand with no effect.",
+      "description": "Every git spelling with no rule asks std::bash: a flag that shows more or does something else, a second message, a bare `git add`, an unquoted `~`, a start point, a forced form, a glob, a path where the effect has no field for one, a leading flag other than `--no-pager` and `-C` with a literal folder, an assignment, a format that is not literal, rev-parse of a ref beside a repository flag or with a flag outside its table, `worktree add`, `grep --no-index` and `grep -O`, a git grep of two refs, `ls-files --others` without `--exclude-standard` and the other way round, a merge-base of one ref, and a subcommand with no effect.",
       "input": "",
-      "expectedOutput": "[\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\"]",
+      "expectedOutput": "[\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\",\"broad\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1502,6 +1546,39 @@
       "description": "`git checkout` with a second word beside the ref overwrites that file, so it is refused, whatever tag the parser gave the word. `-b` and `-B` take a start point and are not refused.",
       "input": "",
       "expectedOutput": "[true,true,true,false,false,false,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitMappedReads",
+      "description": "Git reads with no effect of their own ask an existing effect that covers what they print: rev-parse of a ref asks the log question for it, and rev-parse of where the repository is asks the status question; merge-base asks the log question for each ref; ls-files asks a recursive listing; git grep asks std::grep per path, or the show question for a ref; worktree list asks the branch listing. `--no-pager` is dropped, `-C` moves the payload's folder, read from the folder before it, and a format or a quoted author is a log read.",
+      "input": "",
+      "expectedOutput": "[[\"git rev-parse HEAD\",\"narrow\",[[\"std::git::log\",\"HEAD\"]]],[\"git rev-parse --short HEAD\",\"narrow\",[[\"std::git::log\",\"HEAD\"]]],[\"git rev-parse --abbrev-ref HEAD\",\"narrow\",[[\"std::git::log\",\"HEAD\"]]],[\"git rev-parse --show-toplevel\",\"narrow\",[[\"std::git::status\",\".\"]]],[\"git merge-base HEAD main\",\"narrow\",[[\"std::git::log\",\"HEAD\"],[\"std::git::log\",\"main\"]]],[\"git ls-files lib\",\"narrow\",[[\"std::ls\",\"lib\"]]],[\"git ls-files --others --exclude-standard\",\"narrow\",[[\"std::ls\",\".\"]]],[\"git grep -n planFor -- lib\",\"narrow\",[[\"std::grep\",\"lib\"]]],[\"git grep -n planFor lib stdlib\",\"narrow\",[[\"std::grep\",\"lib\"],[\"std::grep\",\"stdlib\"]]],[\"git grep -n planFor main -- lib\",\"narrow\",[[\"std::git::show\",\"main\"]]],[\"git grep -n planFor\",\"narrow\",[[\"std::grep\",\".\"]]],[\"git worktree list\",\"narrow\",[[\"std::git::branchList\",\".\"]]],[\"git worktree list --porcelain\",\"narrow\",[[\"std::git::branchList\",\".\"]]],[\"git --no-pager log --oneline -5\",\"narrow\",[[\"std::git::log\",\"\"]]],[\"git -C lib status\",\"narrow\",[[\"std::git::status\",\"lib\"]]],[\"git -C lib -C stdlib status\",\"narrow\",[[\"std::git::status\",\"lib/stdlib\"]]],[\"git log -5 --format=%s\",\"narrow\",[[\"std::git::log\",\"\"]]],[\"git log --format=\\\"%h %s\\\" -3\",\"narrow\",[[\"std::git::log\",\"\"]]],[\"git show --pretty=fuller HEAD\",\"narrow\",[[\"std::git::show\",\"HEAD\"]]],[\"git log --author=\\\"Dana X\\\"\",\"narrow\",[[\"std::git::log\",\"\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitLeadingFlagRefusals",
+      "description": "The refuse wall reads a git command past `--no-pager` and `-C <dir>`, so a destructive subcommand behind them is still refused, and a read behind them is not.",
+      "input": "",
+      "expectedOutput": "[true,true,true,false,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "gitLeadingFlagsRun",
+      "description": "The text each git read runs. `--no-pager` is not written. `-C` is written as the resolved folder after the fixed flags, in both commands of a diff. A quoted format runs as one quoted word. A git grep writes its pattern after `-e`, keeps a ref before the `--`, and with no ref writes `.` and an exclude pathspec for each name the grep tool skips, as a folder and as a file.",
+      "input": "",
+      "expectedOutput": "[\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log --oneline -n '5' --\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks -C '<pkg>/lib' status\",\"(git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks -C '<pkg>/lib' rev-parse --show-toplevel > /dev/null && git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks -C '<pkg>/lib' diff --stat --)\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log '--format=%h %s' -n '3' --\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks grep -n -e 'x' main -- src\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks grep -n -e 'planFor' -- . ':(exclude,glob)**/node_modules/**' ':(exclude,glob)**/node_modules' ':(exclude,glob)**/.git/**' ':(exclude,glob)**/.git' ':(exclude,glob)**/dist/**' ':(exclude,glob)**/dist' ':(exclude,glob)**/build/**' ':(exclude,glob)**/build' ':(exclude,glob)**/.next/**' ':(exclude,glob)**/.next' ':(exclude,glob)**/.cache/**' ':(exclude,glob)**/.cache'\",\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks ls-files -- lib\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1566,9 +1643,9 @@
     },
     {
       "nodeName": "gitRunsSafely",
-      "description": "Real git, in folders the test makes. A pathspec given to checkout fails with git's exit code and changes no file, and the failure shows none of the command safeBash built. A diff of a file outside the repository prints none of it, inside a repository, where there is none, in a bare repository, and inside a `.git` folder. A checkout, a log, and a redirected diff work.",
+      "description": "Real git, in folders the test makes. A pathspec given to checkout fails with git's exit code and changes no file, and the failure shows none of the command safeBash built. A diff of a file outside the repository prints none of it, inside a repository, where there is none, in a bare repository, and inside a `.git` folder. A checkout, a log, and a redirected diff work. A git grep of a word committed in `dist/x.js` and in `c.py` finds the second and not the first, because of the exclude pathspecs safeBash writes.",
       "input": "",
-      "expectedOutput": "[\"failure\",true,false,\"a = 2\\n\",\"b = 2\\n\",\"failure\",false,\"success\",\"success\",true,\"success\",true,\"failure\",true,false,\"failure\",true,false,\"failure\",true,false]",
+      "expectedOutput": "[\"failure\",true,false,\"a = 2\\n\",\"b = 2\\n\",\"failure\",false,\"success\",\"success\",true,\"success\",true,\"failure\",true,false,\"failure\",true,false,\"failure\",true,false,\"success\",true,false]",
       "evaluationCriteria": [
         {
           "type": "exact"

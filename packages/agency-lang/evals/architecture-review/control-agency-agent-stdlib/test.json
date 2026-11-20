@@ -1,0 +1,10 @@
+{
+  "description": "Control: the approved revision of the agency-agent-stdlib spec, with the CLI-only modes removed and one extraTools parameter.",
+  "tags": ["control"],
+  "files": "./files",
+  "input": {
+    "plan": "plan.md",
+    "commit": "f13bfe1db407b5872882e840de7c78ebe47d0d78",
+    "task": "It is a spec for moving the `agency agent` code into the standard library as a function programs can call, and making the CLI call that function. The owner has already decided that no stdlib agent will offer the `question` tool, so removing it is settled and not up for review."
+  }
+}

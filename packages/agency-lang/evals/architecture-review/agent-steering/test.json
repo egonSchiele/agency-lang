@@ -1,0 +1,10 @@
+{
+  "description": "A steering spec adds a new mark on the thread and a new gate in the tool loop, when Agency already has several ways to pause a run and change it.",
+  "tags": ["flawed", "already-exists"],
+  "files": "./files",
+  "input": {
+    "plan": "plan.md",
+    "commit": "c0f0f91acf0ae17dffeb535b9fe4fc4d252cc293",
+    "task": "It is a spec for letting the user steer `agency agent` while it works: pressing a key during a running turn to add a message."
+  }
+}

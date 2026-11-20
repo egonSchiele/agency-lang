@@ -1,0 +1,10 @@
+{
+  "description": "A plan adds tagValues to run metadata, a third way to tag a run beside the existing tags and custom fields.",
+  "tags": ["flawed", "already-exists"],
+  "files": "./files",
+  "input": {
+    "plan": "plan.md",
+    "commit": "0e5242d2e6eca6d3037192a04d1116995a490eb8",
+    "task": "It is a plan for tagging runs with key/value pairs and filtering traces by agent name and tag in the logs viewer."
+  }
+}

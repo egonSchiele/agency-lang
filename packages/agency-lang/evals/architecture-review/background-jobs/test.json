@@ -1,0 +1,10 @@
+{
+  "description": "A background-jobs proposal re-raises a parked job's interrupts in the parent, so whatever handlers surround resumeJob answer them.",
+  "tags": ["flawed", "wrong-layer", "safety"],
+  "files": "./files",
+  "input": {
+    "plan": "plan.md",
+    "commit": "f13bfe1db407b5872882e840de7c78ebe47d0d78",
+    "task": "It is a proposal, written as a chat reply, for running Agency code as a background job: starting it, answering its interrupts, checking on it, and sending it messages."
+  }
+}

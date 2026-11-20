@@ -1,0 +1,10 @@
+{
+  "description": "Control: an approved spec that makes glob and recursive ls skip ignored files the way grep already does.",
+  "tags": ["control"],
+  "files": "./files",
+  "input": {
+    "plan": "plan.md",
+    "commit": "d33eeca1259ee31e2e87464201283fc431639228",
+    "task": "It is a spec for making the glob tool and recursive ls skip what .gitignore ignores, and for searching a folder the caller names even when git ignores it."
+  }
+}

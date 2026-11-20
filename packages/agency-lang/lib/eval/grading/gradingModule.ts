@@ -8,7 +8,7 @@ import { build, stop as stopEsbuild, type BuildOptions } from "esbuild";
 
 import type { AgencyConfig } from "@/config/config.js";
 import type { GradersIdentity } from "@/runDirectory/annotations.js";
-import { compiledOutputRegisterUrl } from "@/cli/commands.js";
+import { registerAgencyLangResolver } from "@/cli/runShim/registerResolver.mjs";
 import type { BaseGrader } from "./baseGrader.js";
 import { toGrader, type Grader } from "./functionGrader.js";
 
@@ -163,7 +163,7 @@ async function importBundle(bundle: GradingBundle, nearDir: string): Promise<Bas
  *  The package's own folder is never written: it may be read-only, or
  *  inside a signed app. */
 async function importBundleOutsideProject(bundle: GradingBundle): Promise<BaseGrader[]> {
-  await registerAgencyLangResolver();
+  registerResolverOnce();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-grading-"));
   try {
     return await importBundleFrom(bundle, dir);
@@ -172,14 +172,14 @@ async function importBundleOutsideProject(bundle: GradingBundle): Promise<BaseGr
   }
 }
 
-let resolverRegistered: Promise<unknown> | null = null;
+let resolverRegistered = false;
 
 /** Registers the runShim hook in this process, once. It acts only on
  *  `agency-lang` specifiers, and only after normal resolution fails. */
-function registerAgencyLangResolver(): Promise<unknown> {
-  // eslint-disable-next-line no-restricted-syntax -- loads agency-lang's own register shim, whose path is only known at runtime
-  resolverRegistered ??= import(compiledOutputRegisterUrl());
-  return resolverRegistered;
+function registerResolverOnce(): void {
+  if (resolverRegistered) return;
+  registerAgencyLangResolver();
+  resolverRegistered = true;
 }
 
 async function importBundleFrom(bundle: GradingBundle, dir: string): Promise<BaseGrader[]> {

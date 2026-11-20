@@ -24,7 +24,7 @@ function makeFixture(): Fixture {
   const outside = path.join(root, "outside");
   mkdirSync(shimDir, { recursive: true });
   mkdirSync(outside);
-  for (const filename of ["register.mjs", "resolver.mjs"]) {
+  for (const filename of ["register.mjs", "registerResolver.mjs", "resolver.mjs"]) {
     copyFileSync(fileURLToPath(new URL(filename, import.meta.url)), path.join(shimDir, filename));
   }
   writeFileSync(

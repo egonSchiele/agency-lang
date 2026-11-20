@@ -18,6 +18,7 @@ import {
 import {
   messageAnswer,
   pauseData,
+  type MessageAnswer,
   type Answer,
   type PauseData,
   type SettingsAnswer,
@@ -89,7 +90,9 @@ export type Happened =
   | { type: "carriedPolicy"; policy: Policy };
 
 export type DriverAction =
-  | { type: "submitted"; text: string }
+  // A message. `notes` and `target` are `MessageAnswer`'s; absent are none
+  // and the main agent.
+  | { type: "submitted"; text: string; notes?: string[]; target?: string }
   // A change to the chat's settings, as the answer the core takes for it.
   // Taken only while the run waits for a message.
   | { type: "answered"; answer: SettingsAnswer }
@@ -148,15 +151,24 @@ function settledHappened(step: QueueStep): Happened[] {
   }));
 }
 
-function submit(phase: WaitingPhase, text: string): DriverStep {
+function submit(
+  phase: WaitingPhase,
+  action: Extract<DriverAction, { type: "submitted" }>,
+): DriverStep {
+  const { text } = action;
   const message = withCancelNote({ message: text, ...droppedOf(phase) });
+  const answer: MessageAnswer = {
+    ...messageAnswer(message),
+    notes: action.notes ?? [],
+    target: action.target ?? "",
+  };
   return {
     phase: {
       kind: "working",
       pause: phase.pause,
       text,
       ...droppedOf(phase),
-      leg: { interrupts: phase.pause, responses: [approve(messageAnswer(message))] },
+      leg: { interrupts: phase.pause, responses: [approve(answer)] },
       turnJobs: [],
     },
     happened: [{ type: "submitted", text }],
@@ -347,7 +359,7 @@ function finished(
 export function reduceDriver(phase: DriverPhase, action: DriverAction): DriverStep {
   switch (action.type) {
     case "submitted":
-      return phase.kind === "waitingForUser" ? submit(phase, action.text) : unchanged(phase);
+      return phase.kind === "waitingForUser" ? submit(phase, action) : unchanged(phase);
     case "answered":
       return phase.kind === "waitingForUser" ? answerWith(phase, action.answer) : unchanged(phase);
     case "decided":

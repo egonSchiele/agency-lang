@@ -62,7 +62,14 @@ export {
   type Happened,
   type Leg,
 } from "./machine.js";
-export { heldJobsOf, jobsStartedBetween, stopDroppedJobs } from "./jobs.js";
+export {
+  heldJobsOf,
+  jobsStartedBetween,
+  sessionJobs,
+  stopDroppedJobs,
+  stopSessionJob,
+  type SessionJobStop,
+} from "./jobs.js";
 export {
   CANNOT_CONTINUE,
   PROGRAM_NOT_LOADED,

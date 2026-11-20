@@ -50,6 +50,8 @@ export const NODE_ONLY = {
   "lib/stdlib/embedding.ts": "local models",
   "lib/stdlib/ffmpeg.ts": "probes for ffmpeg with spawnSync before any interrupt (std::speech)",
   "lib/stdlib/cli.ts": "the terminal UI needs the terminal's size and raw mode",
+  "lib/stdlib/agentTerminalDriver.ts":
+    "agency agent's terminal: it runs the session program and names its process by pid",
   "lib/stdlib/cliEditor.ts": "hands the REPL's terminal to $EDITOR, which needs stdin's raw mode",
   "lib/stdlib/cliJobLine.ts":
     "prints a job's finish line above the REPL's readline prompt and redraws it",

@@ -536,7 +536,7 @@ export async function _sessionOnSubmit(line: string): Promise<unknown> {
  *  Herdr restart, through the hook the line-mode REPL installs. Herdr runs
  *  the command in the pane's directory, which is the directory the session
  *  is saved under. */
-function reportHerdrSession(id: string): void {
+export function reportHerdrSession(id: string): void {
   const hook = (globalThis as any).__agencyHerdrSession;
   if (typeof hook === "function") {
     hook({ id, resumeArgv: ["agency", "agent", "--resume", id] });

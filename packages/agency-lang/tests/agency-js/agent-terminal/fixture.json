@@ -1,0 +1,36 @@
+{
+  "line": {
+    "replies": ["stub reply"],
+    "files": [true, true]
+  },
+  "threeEdits": {
+    "asked": 1,
+    "settledLines": 2,
+    "replies": ["edited all three"]
+  },
+  "escAtPrompt": {
+    "waiting": true,
+    "fileUnchanged": true,
+    "nextCarriesNote": true
+  },
+  "moved": {
+    "message": "This session was continued in perry. Reopen it with: agency agent --resume s-moved",
+    "ranNoLeg": true,
+    "wroteNothing": true
+  },
+  "renameThenResume": {
+    "problem": "",
+    "title": "x",
+    "transcript": ["user: hello again", "assistant: stub reply"]
+  },
+  "jobs": {
+    "listedRunning": ["running"],
+    "stop": "stopped",
+    "afterResume": ["stopped"],
+    "unknownId": "notHeld"
+  },
+  "cancelledJob": {
+    "held": 0,
+    "states": ["stopped", "stopped"]
+  }
+}

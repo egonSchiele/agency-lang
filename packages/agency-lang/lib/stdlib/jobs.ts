@@ -3,6 +3,7 @@
 // Agency home (lib/runtime/jobs/detachedJobs.ts), and the run holds a list
 // of the jobs it started on its context (`heldJobs`), saved in every
 // checkpoint. See docs/dev/stdlib/jobs.md.
+import type { Host } from "../host/host.js";
 import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { readCause } from "../runtime/errors.js";
 import { clockSleep } from "../runtime/jobs/clockSleep.js";
@@ -173,7 +174,7 @@ async function readHeldJob(run: Run, id: string): Promise<JobReportForAgency> {
       ? { stdout: "", stderr: "", positions: held.read }
       : await jobOutputSince(host, id, held.read);
   held.read = output.positions;
-  const summary = summaryOf(run, held, record);
+  const summary = summaryOf(host, held, record);
   // A job with no record here may be running on the machine that started
   // it, so it is not marked as read: handed back there, its real ending
   // still shows as unread.
@@ -249,14 +250,30 @@ function heldOrThrow(run: Run, id: string): HeldJob {
 }
 
 function noSuchHeldJobMessage(id: string, run: Run): string {
-  const ids = run.ctx.heldJobs.map((held) => held.handle.id);
-  const known = ids.length === 0 ? "This session has no jobs." : `Its jobs are ${ids.join(", ")}.`;
+  return noSuchJobMessage(
+    id,
+    run.ctx.heldJobs.map((held) => held.handle.id),
+  );
+}
+
+/** What a stop or a read says for an id the session does not hold.
+ *  `heldIds` are the ids it does. */
+export function noSuchJobMessage(id: string, heldIds: string[]): string {
+  const known =
+    heldIds.length === 0 ? "This session has no jobs." : `Its jobs are ${heldIds.join(", ")}.`;
   return `There is no job ${id} in this session. ${known}`;
 }
 
-async function heldSummary(run: Run, held: HeldJob): Promise<JobSummaryForAgency> {
-  const record = await statusOf(run, held);
-  return forAgency(summaryOf(run, held, record), run.ctx.host.clock.wallTime());
+function heldSummary(run: Run, held: HeldJob): Promise<JobSummaryForAgency> {
+  return heldJobSummary(run.ctx.host, held);
+}
+
+/** A held job's summary, read from its record now, as `listJobs` shows it.
+ *  Exported so a front-end that holds a session's jobs between its legs
+ *  (the session driver) shows them in the same words. */
+export async function heldJobSummary(host: Host, held: HeldJob): Promise<JobSummaryForAgency> {
+  const record = await heldJobStatus(host, { id: held.handle.id, token: held.token });
+  return forAgency(summaryOf(host, held, record), host.clock.wallTime());
 }
 
 /** The record of a job the run holds, or null when it is gone or its
@@ -266,7 +283,7 @@ function statusOf(run: Run, held: HeldJob): Promise<JobRecord | null> {
 }
 
 /** A held job as a summary. A job whose record is gone reads as ended. */
-function summaryOf(run: Run, held: HeldJob, record: JobRecord | null): JobSummary {
+function summaryOf(host: Host, held: HeldJob, record: JobRecord | null): JobSummary {
   const state = record?.state ?? "ended";
   return {
     id: held.handle.id,
@@ -274,7 +291,7 @@ function summaryOf(run: Run, held: HeldJob, record: JobRecord | null): JobSummar
     state,
     exitCode: record?.exitCode ?? null,
     startedAt: record?.startedAt ?? held.handle.startedAt,
-    endedAt: record?.endedAt ?? (record === null ? run.ctx.host.clock.wallTime() : null),
+    endedAt: record?.endedAt ?? (record === null ? host.clock.wallTime() : null),
     unread: state !== "running" && !held.finalRead,
   };
 }

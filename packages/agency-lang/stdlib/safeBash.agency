@@ -309,20 +309,31 @@ def resolveRedirectWrite(redirect: Redirect, cwd: string, content: string): Resu
   if (redirect.op != ">" && redirect.op != ">>") {
     return failure("`${redirect.op}` is not an output redirect")
   }
-  const target = literalTarget(redirect.target)
-  if (isFailure(target)) {
-    return target
-  }
-  const resolved = try _resolveRedirectTarget(target.value, cwd, tildeModeFor(redirect.target))
-  if (resolved is failure(why)) {
-    return failure("${why}")
-  }
+  const target = newFileTarget(redirect.target, cwd)?
   return success({
-    dir: resolved.value.dir,
-    filename: resolved.value.filename,
+    dir: target.dir,
+    filename: target.filename,
     content: content,
     mode: writeMode(redirect.op)
   })
+}
+
+/** Where a file a command writes will land: its real parent and its name. */
+type NewFile = {
+  dir: string;
+  filename: string
+}
+
+// The one resolver for a file a line writes, a redirect's, tee's, or
+// touch's, so each names the same file a redirect to it would.
+@capabilities(fileRead)
+def newFileTarget(word: Word, cwd: string): Result<NewFile> {
+  const text = literalTarget(word)?
+  const resolved = try _resolveRedirectTarget(text, cwd, tildeModeFor(word))
+  if (resolved is failure(why)) {
+    return failure("${why}")
+  }
+  return success({ dir: resolved.value.dir, filename: resolved.value.filename })
 }
 
 // A redirect reads or writes a file whatever the command is, so it is
@@ -1921,31 +1932,10 @@ def teeEffects(command: SimpleCommand, cwd: string, readsStdin: boolean, redirec
   const mode = writeMode(op)
   let writes: Effect[] = []
   for (word in split.positionals) {
-    const target = newFileTarget("tee", word, cwd)?
+    const target = newFileTarget(word, cwd)?
     writes.push(writeEffect({ dir: target.dir, filename: target.filename, content: "", mode: mode }))
   }
   return success([...writes, ...piped])
-}
-
-/** Where a file a command writes will land: its real parent and its name. */
-type NewFile = {
-  dir: string;
-  filename: string
-}
-
-// The resolver `>` uses, so a write by `tee` or `touch` names the same
-// file a redirect to it would.
-@capabilities(fileRead)
-def newFileTarget(verb: string, word: Word, cwd: string): Result<NewFile> {
-  const text = literalWordText(word)
-  if (text is failure(why)) {
-    return failure("the ${verb} path is not literal")
-  }
-  const resolved = try _resolveRedirectTarget(text.value, cwd, tildeModeFor(word))
-  if (resolved is failure(why)) {
-    return failure("${why}")
-  }
-  return success({ dir: resolved.value.dir, filename: resolved.value.filename })
 }
 
 static const SED_FLAGS: FlagSpec = { plain: ["n"], valued: [], optionsFirst: true }
@@ -2006,7 +1996,7 @@ def makeEffects(verb: string, command: SimpleCommand, cwd: string, spec: FlagSpe
   let effects: Effect[] = []
   for (word in split.positionals) {
     if (verb == "touch") {
-      const target = newFileTarget(verb, word, cwd)?
+      const target = newFileTarget(word, cwd)?
       effects.push(writeEffect({ dir: target.dir, filename: target.filename, content: "", mode: "append" }))
     } else {
       const text = literalWordText(word)

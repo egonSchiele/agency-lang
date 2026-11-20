@@ -288,7 +288,7 @@ Rules:
 
 This changes the first rule in the dev doc, "safeBash never expands a variable or a glob itself". Variables stay unexpanded.
 
-> **Decision 4.** Expand globs in safeBash and write the result, as above? I recommend yes. The size is about two days. The hard part is matching bash's rules closely enough that the model is not surprised.
+> **Decision 4, deferred 2026-11-20.** Globs wait for a follow-up. The design above is kept for it.
 
 ## 9. File commands that ask the wrong question
 
@@ -315,7 +315,7 @@ The `with-writes` policy already approves `std::mkdir`, `std::copy`, and `std::m
 
 `FileWrite` cannot simply be added to that list. The `as` answer needs every member to have the same scope, and they differ: `std::write`, `std::edit`, and `std::mkdir` pin `dir`, while `std::copy` and `std::move` pin `src` and `dest`, and `std::remove` pins `target`. The dev doc also warns against a folder step on `std::remove`.
 
-> **Decision 5.** Add a prompt answer "always approve all writes in this folder"?
+> **Decision 5, deferred 2026-11-20 with PR 7.** Add a prompt answer "always approve all writes in this folder"?
 >
 > - **A (recommended).** Yes, for the three effects that pin `dir`: `std::write`, `std::edit`, and `std::mkdir`. It gets the folder step, which stops at the launch folder. It never sets `matchDotFolders`, so a write under `.git` still asks. Copy, move, and remove keep their own questions.
 > - **B.** No new answer. A person who wants this starts the agent with `--policy with-writes`, which already does it for the launch folder and also covers copy, move, and remove.
@@ -371,8 +371,23 @@ Order is by how many lines each PR helps, with PR 3 pulled early because the tar
 | 3 | Quiet commands, wrappers, assignments, `/dev/null`, `$?` | PR T published, Decisions 2 and 3 | 2 days |
 | 4 | File commands raise file effects | none | 2 days |
 | 5 | Missing paths and files the line writes | none | 2 to 4 days |
-| 6 | Globs | Decision 4, PR 5 | 2 days |
-| 7 | "Always approve all writes in" | Decision 5 | 1 day |
+| 6 | Globs | follow-up, not built in this round | 2 to 3 days |
+| 7 | "Always approve all writes in" | follow-up, not built in this round | 1 day |
+
+## Scope, decided 2026-11-20
+
+The rule the owner set: a part that is easy stays, whether or not the logs show it in use, because adding commands one at a time later is more painful than adding them together now. A part that is hard and unused waits.
+
+| Part | Stays or waits | Why |
+|---|---|---|
+| All fifteen quiet commands | Stays | Each is one table row. |
+| `touch`, `stat`, `file`, checksums | Stays | Each is one table row on a rule that already exists. |
+| Every git read in Decision 7's table | Stays | Each is a row or a short function. See the note on `git grep` in PR 2. |
+| `cp` and `mv` (Task 4.2) | Waits | No logged use, and the rule has six separate things to get right. They are listed under Task 4.2. |
+| Globs (PR 6) | Waits | It is a second implementation of part of bash, and it changes the first rule of safeBash. The section stays in this document as the design for the follow-up. |
+| "Always approve all writes in" (PR 7) | Waits | It changes the approval prompt, not safeBash, and needs its own design. |
+
+After PR 5 merges, read the corpus test again. If lines with a glob or with `cp` and `mv` are a visible share of what is left, build the follow-up then.
 
 The sizes assume the decisions come back as recommended. The hardest open question in each PR is named in its section. PR 1 has a range because its four grep facts were checked on macOS only, and PR 5 has one because its first task changes the signature of every `classify` function.
 
@@ -493,7 +508,7 @@ This test runs on macOS locally and on GNU grep in CI. A difference between them
 
 ## PR 2: git reads
 
-**The hardest question:** whether `git grep` on a ref is truly covered by `std::git::show`. It reads every file in a commit, and `show { ref }` names one commit. The review recommends deferring that row.
+**The hardest question:** whether `git grep` on a ref is truly covered by `std::git::show`. The review doubted it, because the search reads every file in a commit. It is covered, by a rule that already exists: `git show main:src/index.ts` asks `std::git::show { ref: "main:src/index.ts" }` today, and an approval of `std::git::show` is scoped by `cwd`, not by `ref`. So an approval of `std::git::show` in a repository already covers reading any file of any commit there. The `git grep` row stays.
 
 **Files:**
 - Modify: `stdlib/safeBash.agency`: `gitEffects`, `GIT_VERBS`, `gitPayloads`, `gitCommand`
@@ -636,7 +651,20 @@ A saved policy does not follow `recommended`. A person who already has `~/.agenc
 - [ ] Test under the `with-writes` policy for the fixture folder: `mkdir -p tmp/x` is approved, and `mkdir -p /usr/local/x` is not.
 - [ ] Implement.
 
-### Task 4.2: `cp` and `mv`
+### Task 4.2: `cp` and `mv` (waits; only the first step below is built now)
+
+**Built now:** add `cp` and `mv` to `NO_EXEC_PROGRAMS`. Today "always approve" for `cp package.json /tmp/x` saves the pair `cp` and `package.json`, and the same answer for `mv -f a b` saves `mv` and `-f`, which covers every forced move on the machine. With both names in the list, a `cp` or `mv` line asks `std::bash`, which shows the whole line and saves only that exact line. Test rows: `cp a b` and `mv a b` are broad with the reason "no rule for `cp`".
+
+**Why the full rule waits.** It has six things to get right, and no logged session ran either command:
+
+1. Where the file lands depends on the disk. `cp a b` writes `b` when `b` is not a folder, and `b/a` when it is. The payload must name the file that is created.
+2. Several sources. `cp a b c` is valid only when `c` is a folder, and it is one effect per source.
+3. A symlink as the source. `cp` copies what the link points at, and `mv` moves the link itself.
+4. A folder that holds symlinks. What `cp -r` does with them has to be checked on BSD and GNU before the rule can claim a payload.
+5. `mv` deletes its source. So it needs the refusals `rm` has: `mv . /tmp/x` and `mv ~ x` must never get a `std::move` that a policy could approve.
+6. The payload has to match what the `copy` and `move` tools raise for the same paths, or a policy rule written for the tools means something else here.
+
+The design below is kept for the follow-up.
 
 **Interfaces:**
 - `static const COPY_VERBS: Record<string, FlagSpec>`: `cp` takes `-r -R -p -f -v`, `mv` takes `-f -v`. Left out, each with its reason in the comment: `-a` and `-L` change what happens to symlinks, `-n` and `-i` change whether the write happens, and `-t` reorders the operands.
@@ -741,7 +769,15 @@ The reason this is safe when the line is opaque: the redirect creates the file a
 - [ ] Delete the paragraph in the dev doc that says the read family refuses a missing path, and write the new rule under "Resolving the path when the plan is made".
 - [ ] Implement.
 
-## PR 6: globs
+## PR 6: globs (follow-up, not built in this round)
+
+This section is the design for later. What makes it more than a table row:
+
+1. safeBash has to do what bash does: `*`, `?`, and `[...]` per path segment, dot files, sort order, and what happens when nothing matches. That is a second implementation of part of bash, with a parity test to keep the two in step.
+2. Each file the glob names needs its own check, because one of them may be a symlink to a file outside the folder.
+3. The command that runs is rewritten with the file list in it.
+4. It changes the first rule in the dev doc, that safeBash never expands anything itself.
+5. It builds on PR 5's rule for a pattern that matches nothing.
 
 **The hardest question:** matching bash's expansion closely. Task 6.1's parity test is the answer.
 
@@ -773,9 +809,9 @@ The reason this is safe when the line is opaque: the redirect creates the file a
 - [ ] Rewrite the first rule in the dev doc: safeBash never expands a variable, and it expands a glob only to write the result into the command it runs.
 - [ ] Implement. Close ADI-247.
 
-## PR 7: "always approve all writes in" (after Decision 5)
+## PR 7: "always approve all writes in" (follow-up, not built in this round)
 
-This PR does not touch safeBash. It is here because point 9 asked for it.
+This PR does not touch safeBash. It is here because point 9 asked for it. It waits for its own design, and the notes below are a starting point.
 
 **Files:**
 - Modify: `stdlib/effectSets.agency`: a new set

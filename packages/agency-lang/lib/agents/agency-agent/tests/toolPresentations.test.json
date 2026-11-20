@@ -9,6 +9,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "noSetDefaultTool",
+      "input": "",
+      "expectedOutput": "\"false|false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

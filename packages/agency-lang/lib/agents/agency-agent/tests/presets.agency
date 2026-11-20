@@ -4,7 +4,6 @@ import {
   choosePreset,
   activePresetName,
   findPreset,
-  presetListing,
   setActivePreset,
   setPresetTable,
   presetListLines,
@@ -96,20 +95,6 @@ node replacingTheDefaultKeepsIt(): string {
   return JSON.stringify(edited.value.presets)
 }
 
-node setDefaultLeavesExactlyOne(): string {
-  const settings = { presets: { opus: { default: true, provider: "anthropic" }, cheap: { provider: "openrouter" } } }
-  const edited = applyPresetEdit(settings, { kind: "setDefault", name: "cheap", preset: null })
-  if (isFailure(edited)) {
-    return "failed: ${edited.error}"
-  }
-  return JSON.stringify(edited.value.presets)
-}
-
-node setDefaultRefusesABadPreset(): boolean {
-  const settings = { presets: { broken: { maxToolCallRounds: 0 } } }
-  return isFailure(applyPresetEdit(settings, { kind: "setDefault", name: "broken", preset: null }))
-}
-
 node deleteRemovesOnlyThatPreset(): string {
   const settings = { presets: { opus: { provider: "anthropic" }, cheap: { provider: "openrouter" } } }
   const edited = applyPresetEdit(settings, { kind: "delete", name: "opus", preset: null })
@@ -123,7 +108,9 @@ node deleteOfAnUnknownNameFails(): boolean {
   return isFailure(applyPresetEdit({}, { kind: "delete", name: "nope", preset: null }))
 }
 
-node listLinesMarkActiveAndDefault(): string[] {
+// A preset marked default is not marked in the list: it no longer decides
+// what a new chat starts with.
+node listLinesMarkTheActive(): string[] {
   return presetListLines(table(), "cheap")
 }
 
@@ -151,26 +138,7 @@ node activeNameClearsWithThePreset(): string {
   return "[${activePresetName()}]"
 }
 
-// Startup uses no preset when two are marked default, so the listing
-// reports none either.
-node listingHasNoDefaultWhenTwoAreMarked(): string {
-  const both = readPresetTable({
-    opus: { default: true, provider: "anthropic" },
-    cheap: { default: true, provider: "openrouter" }
-  })
-  return "[${presetListing(both, "").default}]"
-}
-
-// A hand-edited file can hold a null entry. It keeps its place.
-node setDefaultKeepsANullEntry(): string {
-  const settings = { presets: { broken: null, cheap: { provider: "openrouter" } } }
-  const edited = applyPresetEdit(settings, { kind: "setDefault", name: "cheap", preset: null })
-  if (isFailure(edited)) {
-    return "failed: ${edited.error}"
-  }
-  return JSON.stringify(edited.value.presets)
-}
-
+// A hand-edited file can hold a null entry. A delete clears it out.
 node deleteRemovesANullEntry(): string {
   const settings = { presets: { broken: null, cheap: { provider: "openrouter" } } }
   const edited = applyPresetEdit(settings, { kind: "delete", name: "broken", preset: null })

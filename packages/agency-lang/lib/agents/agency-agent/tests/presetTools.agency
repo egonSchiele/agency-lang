@@ -12,7 +12,7 @@ import {
   usingDefaultAgentHome,
  } from "../lib/config.agency"
 import { presetTable } from "../lib/presets.agency"
-import { deletePreset, savePreset, setDefaultPreset } from "../lib/presetTools.agency"
+import { deletePreset, savePreset } from "../lib/presetTools.agency"
 
 static const START = """{"search":{"backend":"tavily"},"model":{"slots":{"fast":"gpt-5.5"}},"presets":{"opus":{"default":true,"provider":"anthropic"}}}"""
 
@@ -50,17 +50,6 @@ node replaceKeepsTheDefault(): string {
   let reply = ""
   handle {
     reply = savePreset("opus", { provider: "anthropic", pin: "claude-opus-4-8" })
-  } with approve
-  return "${reply}\n${fileText()}"
-}
-
-node setDefaultMovesIt(): string {
-  if (!startFrom("""{"presets":{"opus":{"default":true,"provider":"anthropic"},"cheap":{"provider":"openrouter"}}}""")) {
-    return "not sandboxed"
-  }
-  let reply = ""
-  handle {
-    reply = setDefaultPreset("cheap")
   } with approve
   return "${reply}\n${fileText()}"
 }

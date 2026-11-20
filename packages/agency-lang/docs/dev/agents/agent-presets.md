@@ -104,7 +104,10 @@ one concept answers "what does a new chat start with".
   without `llmOptions`. Options can name a server (`baseUrl`), and the
   coordinator's `useLlmOptions` tool can set them, so keeping them would
   let text injected into one chat pick the server for every later one.
-  The budget and the tool limits aren't kept.
+  The budget and the tool limits aren't kept. With no provider fixed,
+  chat models are kept as `provider/model` from what they resolved to
+  (`portableChoices`, using `/preset save`'s `qualified`): a bare name
+  could be read against another provider at the next start.
 - **Only a person writes it.** The core calls `rememberSettings` after a
   `model`, `effort` or `preset` answer that worked. A front-end sends
   those; the model can't. A session with no record (incognito, one-shot)

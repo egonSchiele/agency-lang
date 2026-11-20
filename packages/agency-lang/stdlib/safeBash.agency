@@ -732,8 +732,10 @@ def literalTextOf(word: Word): string {
 
 // The first word is the format. It must be literal and must not start
 // with `-`: `printf -v PATH /tmp/evil` sets `PATH` for the rest of the
-// line. Every other word is literal or `$?`, so printf cannot print a
-// variable that no `std::env` question was asked about.
+// line. It must hold no `%n` either: `printf 'aaa%n' PATH` sets `PATH` to
+// 3, the count of characters printed so far. Every other word is literal
+// or `$?`, so printf cannot print a variable that no `std::env` question
+// was asked about.
 def printfWordsFit(words: Word[]): Result {
   if (words.length == 0) {
     return failure("`printf` with no format")
@@ -745,12 +747,43 @@ def printfWordsFit(words: Word[]): Result {
   if (format.value.startsWith("-")) {
     return failure("a `printf` format that starts with `-` is an option")
   }
+  if (formatAssigns(format.value)) {
+    return failure("a `printf` format with `%n` sets a shell variable")
+  }
   for (word in words.slice(1)) {
     if (!knownOrExitStatus(word)) {
       return failure("a `printf` argument is not literal")
     }
   }
   return success(null)
+}
+
+/** The characters that may stand between a `%` and its conversion letter:
+ flags, a width, a precision, and a length. */
+static const FORMAT_MODIFIER_CHARS = "-+ #0123456789.*'hjlLtqz"
+
+/* Whether a printf format holds a `%n` conversion, with or without
+ modifiers (`%5n`, `%ln`). `%%` is a percent sign and is passed over. A
+ `%n` inside `%(...)T` counts too, which only makes a date format ask
+ std::bash. */
+def formatAssigns(format: string): boolean {
+  const chars = format.split("")
+  let index = 0
+  while (index < chars.length) {
+    if (chars[index] != "%") {
+      index = index + 1
+      continue
+    }
+    index = index + 1
+    while (index < chars.length && FORMAT_MODIFIER_CHARS.includes(chars[index])) {
+      index = index + 1
+    }
+    if (index < chars.length && chars[index] == "n") {
+      return true
+    }
+    index = index + 1
+  }
+  return false
 }
 
 // `date +FORMAT` prints the time. Any other word sets the clock on BSD.
@@ -2109,18 +2142,20 @@ static const SEE_THROUGH_EFFECTS: string[] = [
 // remembered, so a later read of the same file has a rule (`missingPath`).
 // A command that asked anything that is not a read or a write makes the
 // line opaque: it ran a program safeBash cannot see into, which may have
-// made any path into something else.
+// made any path into something else. A written file stays remembered
+// after a `std::exec` program, whose approval already lets it read any
+// file itself. Any other opaque command forgets every written file, its
+// own redirect's included: `git checkout` and `git stash pop` can put a
+// link that a commit holds where the file was, and their approvals let
+// them read nothing outside the repository.
 def afterCommand(line: LineState, effects: Effect[]): LineState {
-  let written = line.written
-  let opaque = line.opaque
-  for (effect in effects) {
-    if (effect.name == "std::write") {
-      written = [...written, effect.payload]
-    } else if (!SEE_THROUGH_EFFECTS.includes(effect.name)) {
-      opaque = true
-    }
+  const writes: WritePayload[] = [effect.payload for effect in effects if effect.name == "std::write"]
+  const unseen = [effect for effect in effects if effect.name != "std::write" && !SEE_THROUGH_EFFECTS.includes(effect.name)]
+  const swappers = [effect for effect in unseen if effect.name != "std::exec"]
+  if (swappers.length > 0) {
+    return { ...line, written: [], opaque: true }
   }
-  return { ...line, written: written, opaque: opaque }
+  return { ...line, written: [...line.written, ...writes], opaque: line.opaque || unseen.length > 0 }
 }
 
 // A path that does not exist when the plan is made, and its parent folder
@@ -2132,7 +2167,9 @@ def afterCommand(line: LineState, effects: Effect[]): LineState {
 // as in `ln -sf <key> out.txt > out.txt; cat out.txt`. That adds nothing
 // for a general program such as `pnpm test`, whose approval already lets
 // it read any file itself; `ln`, `cp`, and `mv` ask std::bash, so the line
-// above has no rule (see `NO_EXEC_PROGRAMS`).
+// above has no rule (see `NO_EXEC_PROGRAMS`), and a narrow command that
+// can swap a file, such as `git checkout`, forgets the files the line
+// wrote (see `afterCommand`).
 @capabilities(fileRead)
 def missingPath(text: string, word: Word, line: LineState): WritePayload | null {
   if (line.strict) {
@@ -3395,11 +3432,13 @@ def gitGrepRule(words: Word[], cwd: string, redirects: Redirect[]): Result<Simpl
 }
 
 /* One exclude pathspec for each name the grep tool skips as a folder, and
- one as a file. */
+ one as a file. `top` reads each from the top of the repository: read from
+ the working folder, as a pathspec is otherwise, they would miss `../dist`
+ in `git grep x ..`. */
 def gitGrepExcludes(): GitWord[] {
   let out: GitWord[] = []
   for (name in skipNames()) {
-    for (text in [":(exclude,glob)**/${name}/**", ":(exclude,glob)**/${name}"]) {
+    for (text in [":(top,exclude,glob)**/${name}/**", ":(top,exclude,glob)**/${name}"]) {
       out.push({ text: text, word: { tag: "singleQuoted", text: text } })
     }
   }
@@ -6129,9 +6168,11 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string, timeoutMs: number
       return success(null)
     }
     "std::bash::readonly" => {
-      raise std::bash::readonly("Run this line${where}, which reads and changes no file?", {
+      const quietWhere = if (background) then ", in the background" else ""
+      raise std::bash::readonly("Run this line, which reads and changes no file${quietWhere}?", {
         command: fullCommand,
-        cwd: cwd
+        cwd: cwd,
+        timeout: timeoutMs
       })
       return success(null)
     }

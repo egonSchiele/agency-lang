@@ -63,7 +63,8 @@ effect std::bash {
 @always(command, cwd)
 effect std::bash::readonly {
   command: string;
-  cwd: string
+  cwd: string;
+  timeout: number
 }
 @alwaysUnder(dir)
 effect std::ls {

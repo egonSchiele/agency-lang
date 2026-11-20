@@ -705,6 +705,10 @@ node quietCommandsAskNothing() {
     treeRow("printf \"$GITHUB_TOKEN\"; ls", PACKAGE_DIR),
     treeRow("printf 'a\\n'; ls", PACKAGE_DIR),
     treeRow("printf '%s\\n' a b; ls", PACKAGE_DIR),
+    treeRow("printf 'a%n' PATH; ls", PACKAGE_DIR),
+    treeRow("printf '%5n' PATH; ls", PACKAGE_DIR),
+    treeRow("printf '%s%ln' a PATH; ls", PACKAGE_DIR),
+    treeRow("printf '100%%n\\n'; ls", PACKAGE_DIR),
     treeRow("pwd -P > out.txt", PACKAGE_DIR),
   ]
 }
@@ -945,6 +949,11 @@ node missingPathAfterAProgramIsBroad() {
     fileRow("ln -sf /etc/hosts out.txt > out.txt; cat out.txt"),
     fileRow("pnpm test; cat nope.txt"),
     fileRow("pnpm test | cat nope.txt"),
+    // A narrow command that can put a link where a file was forgets the
+    // files the line wrote.
+    fileRow("echo a > out.txt; rm out.txt; git checkout main; cat out.txt"),
+    fileRow("echo a > out.txt; git stash pop; cat out.txt"),
+    fileRow("git checkout main > out.txt; cat out.txt"),
   ]
   remove(FILES_FIXTURE) with approve
   return rows
@@ -2860,6 +2869,13 @@ node gitRunsSafely() {
   seen.push(gitGrep[0])
   seen.push(gitGrep[1].includes("c.py:1:NEEDLE"))
   seen.push(gitGrep[1].includes("dist/x.js"))
+  // From a subfolder, `..` reaches the same `dist`, and the excludes
+  // still hold because they are read from the top of the repository.
+  bash("mkdir sub && printf 'NEEDLE\\n' > sub/d.py && git add sub/d.py", cwd: GIT_FIXTURE) with approve
+  const fromBelow = runNarrow("git grep -n NEEDLE ..", GIT_FIXTURE + "/sub")
+  seen.push(fromBelow[0])
+  seen.push(fromBelow[1].includes("d.py:1:NEEDLE"))
+  seen.push(fromBelow[1].includes("dist/x.js"))
   remove(GIT_FIXTURE) with approve
   remove(GIT_NO_REPO) with approve
   remove(GIT_BARE) with approve

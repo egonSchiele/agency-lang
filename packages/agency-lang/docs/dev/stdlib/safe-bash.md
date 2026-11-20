@@ -749,11 +749,19 @@ name, makes the line opaque. The list is by name and never by prefix:
 can put a symlink a commit holds into the working folder. An effect added
 to safeBash later makes the line opaque until someone adds it here.
 
+An opaque effect other than `std::exec` also empties `written`. A
+`std::exec` program's approval already lets it read any file, so a file
+written before it stays remembered. `git checkout` and `git stash pop`
+are approved to change the repository only, yet either can put a link
+where the written file was, so after one of them `echo a > out.txt; rm
+out.txt; git checkout main; cat out.txt` asks `std::bash`.
+
 A path that does not exist when the plan is made has a rule
 (`missingPath`) when its parent folder exists:
 
-1. When the line wrote that very file earlier, it resolves to it, even
-   if the line is opaque: `pnpm test > out.txt 2>&1; tail -50 out.txt`
+1. When the line wrote that very file earlier, and `written` still holds
+   it, it resolves to it, even if the line is opaque: `pnpm test >
+   out.txt 2>&1; tail -50 out.txt`
    asks `std::exec`, `std::write`, and `std::read` for the same file.
 2. Otherwise, when nothing opaque has run, it resolves by its parent:
    `cat nope.txt` asks `std::read` for that name in the folder, and `ls
@@ -1193,7 +1201,7 @@ never reaches the builtin refusal or `NO_EXEC_PROGRAMS`.
 |---|---|---|
 | `pwd` | `-P -L` | none |
 | `true`, `false`, `:` | none | any |
-| `printf` | none | a literal format that does not start with `-`, then words that are literal or `$?` |
+| `printf` | none | a literal format that does not start with `-` and holds no `%n`, then words that are literal or `$?` |
 | `basename`, `dirname` | none | literal |
 | `sleep` | none | one number |
 | `date` | `-u` | at most one `+FORMAT` word |
@@ -1209,7 +1217,9 @@ renames the machine, and `command ls` runs a program. `printf -v NAME`
 sets a shell variable, `PATH` included, so the next command in the line
 would run a program from another folder under an approval for the real
 one. The parser reads `"-v"` as a quoted word, and bash still takes it as
-the option, so the check reads the format's text. A variable argument to
+the option, so the check reads the format's text. `%n` in a format sets
+a variable too: `printf 'aaa%n' PATH` leaves `PATH` as `3`, so a format
+with a `%n` conversion, modifiers or not, has no rule. A variable argument to
 `printf` would print what no `std::env` question named. `env` and
 `printenv` are not in the table, because they print the environment.
 
@@ -1220,8 +1230,10 @@ When every command in a line is recognized and none raises an effect,
 node; date`, a lone `cd lib`, and `echo hi | grep h` all end here. When
 every word in the line is known now (`everyWordKnown`: `isLiteralWord`,
 or a word made only of such text and `$?`), it asks
-`std::bash::readonly { command, cwd }` and runs the rebuilt text, so the
-plan is narrow. Otherwise, as in `echo $GITHUB_TOKEN`, it asks
+`std::bash::readonly { command, cwd, timeout }` and runs the rebuilt
+text, so the plan is narrow. `timeout` is the limit the line runs under,
+as in `std::bash`, so a job started with `startJob("sleep 600")` shows
+its limit. Otherwise, as in `echo $GITHUB_TOKEN`, it asks
 `std::bash` for the original text, with the reason `noEffects`.
 
 `std::bash::readonly` is declared in `stdlib/shell.agency`, with
@@ -1393,9 +1405,10 @@ program, so none of them has a rule.
 
 A repository can track files under a folder the grep tool skips, such as
 `dist`. For a `git grep` with no ref, `gitGrepRule` writes two exclude
-pathspecs per name in `SKIP_DIRS` after the paths, `':(exclude,glob)**/<name>/**'`
-and `':(exclude,glob)**/<name>'`, so git grep reads no file the tool
-would skip. With no path from the model it writes `.` first, because git
+pathspecs per name in `SKIP_DIRS` after the paths, `':(top,exclude,glob)**/<name>/**'`
+and `':(top,exclude,glob)**/<name>'`, so git grep reads no file the tool
+would skip. `top` reads each from the top of the repository, so `git grep
+x ..` from a subfolder does not reach a `dist` beside it. With no path from the model it writes `.` first, because git
 needs one pathspec that is not an exclude. `gitRunsSafely` commits a
 match under `dist` and checks git grep does not print it. The pattern is
 always written after `-e`, so a pattern that starts with `-` is never a

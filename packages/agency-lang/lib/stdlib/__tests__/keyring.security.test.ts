@@ -10,16 +10,23 @@ import path from "path";
 import { describe, expect, it } from "vitest";
 import { passwordFromSecurityOutput, securityCommandLine } from "../keyring.js";
 
-function security(args: string[], input?: string): { status: number | null; stderr: string } {
+function security(
+  args: string[],
+  input?: string,
+): { status: number | null; stdout: string; stderr: string } {
   const result = spawnSync("security", args, { input, encoding: "utf8" });
-  return { status: result.status, stderr: result.stderr };
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
 describe.runIf(process.platform === "darwin")("security, for real", () => {
   it("stores and returns exactly the value securityCommandLine quotes", () => {
-    const folder = fs.mkdtempSync(path.join(os.tmpdir(), "agency-keyring-"));
+    // The real path: `security` prints /private/var for macOS's /var.
+    const folder = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "agency-keyring-")));
     const keychain = path.join(folder, "test.keychain-db");
     try {
+      // This check keeps the test off the login keychain: given a keychain
+      // path that doesn't exist, `security -i` writes to the login
+      // keychain instead, and still exits 0.
       expect(security(["create-keychain", "-p", "test", keychain]).status).toBe(0);
       expect(security(["unlock-keychain", "-p", "test", keychain]).status).toBe(0);
       const values = [
@@ -53,6 +60,7 @@ describe.runIf(process.platform === "darwin")("security, for real", () => {
           keychain,
         ]);
         expect(read.status).toBe(0);
+        expect(read.stdout).toContain(`keychain: "${keychain}"`);
         expect(passwordFromSecurityOutput(read.stderr)).toBe(value);
       });
     } finally {

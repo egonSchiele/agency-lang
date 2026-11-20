@@ -263,10 +263,16 @@ async function saveTokens(host: Host, name: string, tokens: StoredTokens): Promi
 
 async function loadTokens(host: Host, name: string): Promise<StoredTokens | null> {
   const located = await tokenLocation(host, name);
+  let raw: string;
   try {
-    const raw = await host.files.readText(located.dir, located.file);
-
-    const key = await getEncryptionKey(host);
+    raw = await host.files.readText(located.dir, located.file);
+  } catch {
+    return null;
+  }
+  // Outside the try: a keyring that can't be read is not "no tokens", and
+  // its reason has to reach the person.
+  const key = await getEncryptionKey(host);
+  try {
     const json = key ? decrypt(raw, key) : raw;
 
     const parsed = JSON.parse(json) as Record<string, unknown>;

@@ -1,9 +1,7 @@
-// Model API keys kept in the system keyring. A key lives under the service
-// "agency-lang", with its environment variable's name as the account, so a
-// key saved once (by Perry, or with `security add-generic-password`) serves
-// every program that loads it. Loading fills in only the variables the
-// environment leaves unset: the keyring is one more place a variable can
-// come from. See docs/dev/agents/agent-presets.md, "Keys from the keychain".
+// Model API keys kept in the system keyring, under the service
+// "agency-lang", with the environment variable's name as the account.
+// Loading fills in only the variables the environment leaves unset. See
+// docs/dev/agents/agent-presets.md, "Keys from the keychain".
 import type { Host, HostEnv } from "../host/host.js";
 import { PROVIDER_KEY_VARIABLES } from "../runtime/llmClient.js";
 import { readSecret, setSecret, type SecretLookup } from "./keyring.js";
@@ -11,7 +9,7 @@ import { readSecret, setSecret, type SecretLookup } from "./keyring.js";
 export const API_KEY_SERVICE = "agency-lang";
 
 /** How long one lookup may take: a locked keychain waits on a prompt, and
- *  a broken Secret Service can hang, and a command can't start on either. */
+ *  a broken Secret Service can hang. */
 const LOOKUP_TIMEOUT_MS = 2000;
 
 /** The variables a model API key is read from, in `PROVIDER_KEY_VARIABLES`'

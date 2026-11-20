@@ -14,9 +14,12 @@ function makeLaunchHarness(
   const runFile = "/owned-temp/agency-agent-1/agent.js";
   const child = new EventEmitter();
   const cleanup = vi.fn();
-  const stage = vi.fn(() => ({ runFile, cleanup }));
   const calls: string[][] = [];
   const order: string[] = [];
+  const stage = vi.fn(() => {
+    order.push("stage");
+    return { runFile, cleanup };
+  });
   const spawn = vi.fn((_command: string, argv: string[]) => {
     order.push("spawn");
     if (options.spawnError !== undefined) {
@@ -168,6 +171,18 @@ describe("runBundledAgent and the keychain", () => {
     const harness = makeLaunchHarness();
     await runBundledAgent(harness.config, "agency-agent", ["-p", "hi"], {}, harness.deps);
     expect(harness.order).toEqual(["load", "spawn"]);
+  });
+
+  test("loads keys before it stages a config, so nothing staged waits on the keychain", async () => {
+    const harness = makeLaunchHarness();
+    await runBundledAgent(
+      harness.config,
+      "agency-agent",
+      ["-p", "hi", "--config", "child.json"],
+      {},
+      harness.deps,
+    );
+    expect(harness.order).toEqual(["load", "stage", "spawn"]);
   });
 
   test("launches even when the keychain can't be read", async () => {

@@ -238,6 +238,15 @@ export async function runBundledAgent(
     return;
   }
 
+  // A key in the keyring reaches the agent as an environment variable, as
+  // one from the shell profile would. This never fails the launch, and runs
+  // before anything is staged.
+  const host = currentHost();
+  const warning = keychainWarning({ result: await launcher.loadApiKeys({ host }), env: host.env });
+  if (warning !== null) {
+    console.error(warning);
+  }
+
   // An explicit config recompiles the agent in an isolated staged tree —
   // baked fields (model, limits) never cross the override-env transport, and
   // the shipped agent.js must never be overwritten. The forwarded
@@ -267,14 +276,6 @@ export async function runBundledAgent(
     console.error(`Failed to compile agent ${agentName}.`);
     launcher.exit(1);
     return;
-  }
-
-  // A key in the keyring reaches the agent as an environment variable, as
-  // one from the shell profile would. It never fails the launch.
-  const host = currentHost();
-  const warning = keychainWarning({ result: await launcher.loadApiKeys({ host }), env: host.env });
-  if (warning !== null) {
-    console.error(warning);
   }
 
   const env = withRootCarriers(process.env, { budget });

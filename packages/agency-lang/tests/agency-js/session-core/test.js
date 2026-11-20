@@ -515,9 +515,23 @@ writeLast({ preset: "", choices: { pin: "openrouter/moonshotai/kimi-k3", slots: 
 const keyless = await startFromLast();
 result.lastModelWithoutKeyFallsBack = {
   ...startedOn(keyless),
-  warned: warningsOf(keyless).some((text) => text.startsWith("Your last settings could not be used:")),
+  warned: warningsOf(keyless).some((text) =>
+    text.startsWith("Your last settings could not be used:"),
+  ),
 };
 if (openRouterKey !== undefined) process.env.OPENROUTER_API_KEY = openRouterKey;
+
+// A model the catalog doesn't list, picked in a chat whose provider came
+// from the keys. The next chat runs it on that same provider: a bare name
+// would be read against whatever a fresh start detects.
+const picker = await startSession({ models: noModelFlags });
+await picker.answer({ kind: "model", spec: "claude-future-9" });
+const nextChat = await startFromLast();
+result.lastModelChoiceKeepsItsProvider = {
+  inTheChat: pauseData(picker).models.main?.provider,
+  inTheNextChat: nextChat.ended ? "ended" : pauseData(nextChat).models.main?.provider,
+  model: nextChat.ended ? "ended" : pauseData(nextChat).models.main?.model,
+};
 
 // Someone upgrading: no file, and a preset marked default seeds the start
 // without writing anything. Their first change replaces the mark.
@@ -526,7 +540,9 @@ const SMALL = { provider: "anthropic", pin: "claude-sonnet-4-6" };
 rmSync(lastSettingsFile, { force: true });
 writeFileSync(
   settingsFile,
-  JSON.stringify({ presets: { ...savedPresets, big: { ...savedPresets.big, default: true }, small: SMALL } }),
+  JSON.stringify({
+    presets: { ...savedPresets, big: { ...savedPresets.big, default: true }, small: SMALL },
+  }),
 );
 const seeded = await startFromLast();
 result.seedFromDefaultMark = {

@@ -160,6 +160,11 @@
     "preset": "",
     "warned": true
   },
+  "lastModelChoiceKeepsItsProvider": {
+    "inTheChat": "anthropic",
+    "inTheNextChat": "anthropic",
+    "model": "claude-future-9"
+  },
   "seedFromDefaultMark": {
     "preset": "big",
     "fileWritten": false

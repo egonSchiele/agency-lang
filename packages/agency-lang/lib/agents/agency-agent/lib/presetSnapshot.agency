@@ -47,9 +47,10 @@ type ModelFields = {
   slots: Record<string, string>
 }
 
-// A resolved slot as a value a preset with no provider can hold:
-// `provider/model`, or the bare model when the provider is unknown.
-def qualified(resolved: Resolved | null): string {
+/** A resolved slot as a value a preset with no provider can hold:
+  `provider/model`, or the bare model when the provider is unknown. The
+  last settings keep chat models the same way (lastSettings.agency). */
+export def qualified(resolved: Resolved | null): string {
   if (resolved == null || resolved.model == "") {
     return ""
   }

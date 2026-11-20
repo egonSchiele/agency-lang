@@ -9,14 +9,20 @@
 */
 import { _readLastSettings, _writeLastSettings } from "agency-lang/stdlib-lib/agentLastSettings.js"
 
+import { filterEntries } from "std::object"
+
+import { getResolvedSlots } from "../shared.agency"
 import { POLICY_DIR } from "./config.agency"
 import { EFFORT_CHOICES, EffortChoice } from "./effort.agency"
 import { ModelChoices, ModelFlags, hasModelFlags, noModelChoices } from "./modelRequest.agency"
+import { Resolved } from "./models.agency"
 import { notice } from "./notice.agency"
+import { qualified } from "./presetSnapshot.agency"
 import { PresetTable, defaultNames, readPresetTable, startPresetQuiet } from "./presets.agency"
 import { currentRecord } from "./record.agency"
-import { startModels, startedWithModelFlags } from "./session.agency"
+import { fixedProvider, startModels, startedWithModelFlags } from "./session.agency"
 import { Settings } from "./settings.agency"
+import { isChatSlot } from "./slots.agency"
 
 /** What a new session starts with. `preset` is a saved preset's name, or
   "" for none. `choices` never holds `llmOptions`. The file's own type is
@@ -39,6 +45,34 @@ export def lastSettingsOf(preset: string, choices: ModelChoices): LastSettings {
   return {
     preset: preset,
     choices: kept
+  }
+}
+
+/** The choices as a fresh start reads them back to the same models. With
+  no provider fixed, the session's provider came from the keys, and a
+  bare model name could be read against another provider at the next
+  start (one the catalog doesn't list goes to openai). So the chat models
+  are kept with the provider they ran on, as `/preset save` keeps them
+  (`detectedProviderFields` in presetSnapshot.agency). Other slots and
+  the effort stay as chosen. */
+export def portableChoices(
+  choices: ModelChoices,
+  resolved: Record<string, Resolved>,
+  providerFixed: boolean,
+): ModelChoices {
+  const namesAChatModel = choices.pin != "" || choices.slots["main"] != null || choices.slots["reasoning"] != null
+  if (providerFixed || !namesAChatModel) {
+    return choices
+  }
+  const others = filterEntries(choices.slots, \(model, slot) -> !isChatSlot(slot))
+  const chat = filterEntries({
+    main: qualified(resolved["main"]),
+    reasoning: qualified(resolved["reasoning"])
+  }, \(model, slot) -> model != "")
+  return {
+    ...choices,
+    pin: "",
+    slots: { ...others, ...chat }
   }
 }
 
@@ -155,7 +189,8 @@ export def rememberSettings(preset: string, choices: ModelChoices) {
   if (currentRecord() == null || startedWithModelFlags()) {
     return
   }
-  const problem = _writeLastSettings(POLICY_DIR, lastSettingsOf(preset, choices))
+  const portable = portableChoices(choices, getResolvedSlots(), fixedProvider() != "")
+  const problem = _writeLastSettings(POLICY_DIR, lastSettingsOf(preset, portable))
   if (problem != "") {
     notice("Could not remember these settings for new chats: ${problem}", "warning")
   }

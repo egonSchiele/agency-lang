@@ -3,6 +3,7 @@ import { setEnv } from "std::system"
 import {
   checkedChoices,
   lastSettingsOf,
+  portableChoices,
   seedFromDefault,
   startWith,
   usesLastSettings,
@@ -51,6 +52,23 @@ node seedNeedsOneDefault(): string {
     return "no seed"
   }
   return "${one.preset}|${JSON.stringify(one.choices)}|${none == null}|${two == null}"
+}
+
+// With no provider fixed, the session's provider came from the keys, and
+// a fresh start could read a bare model name against another one. So the
+// chat models are kept with the provider they ran on; other slots and the
+// effort stay as chosen. A fixed provider reads the names the same way at
+// every start, so they are kept as typed.
+node portableChoicesKeepTheProvider(): string {
+  const resolved = {
+    main: { model: "claude-future-9", provider: "anthropic", via: "" },
+    reasoning: { model: "claude-future-9", provider: "anthropic", via: "" }
+  }
+  const choices = { pin: "claude-future-9", slots: { embedding: "openai/text-embedding-3-small" } }
+  const detected = portableChoices(choices, resolved, false)
+  const fixed = portableChoices(choices, resolved, true)
+  const effortOnly = portableChoices({ pin: "", slots: {}, effort: "low" }, resolved, false)
+  return "${JSON.stringify(detected)} ${JSON.stringify(fixed)} ${JSON.stringify(effortOnly)}"
 }
 
 // A remembered preset that was deleted is dropped with one warning, and

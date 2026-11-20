@@ -12,6 +12,8 @@ import { stageConfiguredAgent } from "./stageConfiguredAgent.js";
 import { compiledOutputNodeArgs } from "./commands.js";
 import { compile } from "@/compiler/defaultSession.js";
 import { withRootCarriers } from "./childEnv.js";
+import { keychainWarning, loadApiKeys } from "@/stdlib/apiKeys.js";
+import { currentHost } from "@/runtime/currentHost.js";
 import { spawn as realSpawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
@@ -130,6 +132,9 @@ export type RunBundledAgentDependencies = {
   compile: typeof compile;
   spawn: typeof realSpawn;
   exit: (code: number) => void;
+  /** Fills in API keys from the keyring before the child's environment is
+   *  built. */
+  loadApiKeys: typeof loadApiKeys;
 };
 
 const DEFAULT_RUN_BUNDLED_AGENT_DEPENDENCIES: RunBundledAgentDependencies = {
@@ -139,6 +144,7 @@ const DEFAULT_RUN_BUNDLED_AGENT_DEPENDENCIES: RunBundledAgentDependencies = {
   compile,
   spawn: realSpawn,
   exit: (code) => process.exit(code),
+  loadApiKeys,
 };
 
 /**
@@ -194,13 +200,13 @@ export function resolveAgentLaunchArgs(args: readonly string[]): ResolvedAgentLa
   };
 }
 
-export function runBundledAgent(
+export async function runBundledAgent(
   config: AgencyConfig,
   agentName: string,
   args: string[] = [],
   options: AgentLaunchOptions = {},
   deps: Partial<RunBundledAgentDependencies> = {},
-): void {
+): Promise<void> {
   const launcher = { ...DEFAULT_RUN_BUNDLED_AGENT_DEPENDENCIES, ...deps };
   const agentDir = launcher.resolveAgentDir(agentName);
   const agencyFile = path.join(agentDir, "agent.agency");
@@ -230,6 +236,15 @@ export function runBundledAgent(
     console.error(`Error: --workdir ${launchArgs.workdir} is not a directory.`);
     launcher.exit(2);
     return;
+  }
+
+  // A key in the keyring reaches the agent as an environment variable, as
+  // one from the shell profile would. This never fails the launch, and runs
+  // before anything is staged.
+  const host = currentHost();
+  const warning = keychainWarning({ result: await launcher.loadApiKeys({ host }), env: host.env });
+  if (warning !== null) {
+    console.error(warning);
   }
 
   // An explicit config recompiles the agent in an isolated staged tree —

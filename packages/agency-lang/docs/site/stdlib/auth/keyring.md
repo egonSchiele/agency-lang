@@ -75,7 +75,7 @@ setSecret(
 ): Result raises <std::setSecret>
 ```
 
-Store a secret in the system keyring, replacing any existing value.
+Store a secret in the system keyring, replacing any existing value in place. The secret goes to the keyring on stdin, never on a command line, and must be one line.
 
 **Parameters:**
 
@@ -102,7 +102,7 @@ getSecret(
 ): Result raises <std::getSecret>
 ```
 
-Retrieve a secret from the system keyring, or null when it is missing.
+Retrieve a secret from the system keyring, or null when it is missing. Fails when the keyring couldn't be read, for example when it's locked or access was refused.
 
 **Parameters:**
 

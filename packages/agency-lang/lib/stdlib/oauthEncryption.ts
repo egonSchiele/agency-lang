@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import type { Host } from "../host/host.js";
-import { getSecret, setSecret, isKeyringAvailable } from "./keyring.js";
+import { getSecret, setSecret, isKeyringAvailable, readSecret } from "./keyring.js";
 
 const KEYRING_KEY = "oauth-encryption-key";
 const ALGORITHM = "aes-256-gcm";
@@ -20,9 +20,16 @@ export async function getEncryptionKey(host: Host): Promise<Buffer | null> {
   }
 
   if (await isKeyringAvailable(host)) {
-    const stored = await getSecret(host, KEYRING_KEY);
-    if (stored) {
-      const decoded = Buffer.from(stored, "hex");
+    // A key that couldn't be read is not a missing key: making a new one
+    // would overwrite it, and every saved token would no longer decrypt.
+    // On Linux, `secret-tool` may answer a dismissed unlock prompt as it
+    // answers a missing item, so there this guard may not hold.
+    const stored = await readSecret(host, KEYRING_KEY);
+    if (stored.kind === "failed") {
+      throw new Error(`Couldn't read the OAuth key from the keyring: ${stored.reason}`);
+    }
+    if (stored.kind === "found" && stored.value) {
+      const decoded = Buffer.from(stored.value, "hex");
       if (decoded.length !== KEY_LENGTH) {
         // Corrupted key — regenerate
         const newKey = crypto.randomBytes(KEY_LENGTH);

@@ -82,6 +82,15 @@ The startup flags, `settings.model`, and the default slots are kept in
 them, so flags stay above the preset all session, and neither command
 reads `settings.json` or checks the default router's key inside a turn.
 
+## Keys from the keychain
+
+`runBundledAgent`, which starts the agent for `agency agent`, `doctor`, `review` and `policy`, calls `loadApiKeys` (`lib/stdlib/apiKeys.ts`) before it stages or spawns anything. For each variable in `PROVIDER_KEY_VARIABLES` that the environment leaves unset, it reads the keyring entry with service `agency-lang` and the variable's name as account, and sets the variable. Everything after that (`env()` in the agent, `withHostKeys`) sees an ordinary environment variable. `agency run` doesn't load keys, so plain programs never pay for lookups.
+
+- **The first lookup runs alone, then the rest at once.** A locked keychain or a missing command shows up on the first, so a locked keychain asks at most once.
+- **No keyring is quiet:** an unsupported system, no `security` or `secret-tool`, or Linux with neither `DBUS_SESSION_BUS_ADDRESS` nor `XDG_RUNTIME_DIR` (with no session bus, `secret-tool` can only hang until the 2 s timeout).
+- **The warning** (`keychainWarning`) appears only when a lookup failed and no key variable is set afterwards, which is when it explains why the agent finds no key.
+- **An entry made in Keychain Access doesn't trust `security`,** so reading it opens a permission dialog. The lookup gives up after 2 s, and the key isn't read. The user docs say to create the entry with `security add-generic-password -w`.
+
 ## Options beside the model
 
 `settings.model`, a preset, and the session's `/model` choices can each hold

@@ -2,6 +2,21 @@ import { describe, it, expect, afterEach } from "vitest";
 import crypto from "crypto";
 import { encrypt, decrypt, getEncryptionKey } from "../oauthEncryption.js";
 import { memoryHost } from "../../host/memoryHost.js";
+import type { Command, Host, RunResult } from "../../host/host.js";
+import { exited, failed, hostOn } from "./fakeSubprocess.js";
+
+/** A macOS host whose `security` answers with `answer`, recording each
+ *  run's arguments. Nothing reaches the real keychain. */
+function keyringHost(answer: (args: string[]) => RunResult): { host: Host; runs: string[][] } {
+  const runs: string[][] = [];
+  const real = hostOn("macos");
+  const run = async (command: Command): Promise<RunResult> => {
+    const args = command.kind === "program" ? command.args : [];
+    runs.push(args);
+    return answer(args);
+  };
+  return { host: { ...real, subprocess: { ...real.subprocess, run } }, runs };
+}
 
 describe("getEncryptionKey", () => {
   const originalKey = process.env.AGENCY_OAUTH_KEY;
@@ -24,6 +39,28 @@ describe("getEncryptionKey", () => {
     // The memory host runs no programs, so the keyring is unavailable
     // there whatever this machine has. Nothing reaches the real keyring.
     expect(await getEncryptionKey(memoryHost())).toBeNull();
+  });
+});
+
+describe("getEncryptionKey with a keyring that can't be read", () => {
+  const originalKey = process.env.AGENCY_OAUTH_KEY;
+  afterEach(() => {
+    if (originalKey !== undefined) {
+      process.env.AGENCY_OAUTH_KEY = originalKey;
+    }
+  });
+
+  it("a failed read throws and never replaces the key", async () => {
+    delete process.env.AGENCY_OAUTH_KEY;
+    const { host, runs } = keyringHost((args) =>
+      args.includes("find-generic-password")
+        ? failed("User interaction is not allowed.", 51)
+        : exited(),
+    );
+    await expect(getEncryptionKey(host)).rejects.toThrow("Couldn't read the OAuth key");
+    expect(runs.some((args) => args.includes("-i") || args.includes("add-generic-password"))).toBe(
+      false,
+    );
   });
 });
 

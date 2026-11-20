@@ -60,6 +60,6 @@ export function doctor(
   config: AgencyConfig,
   file: string,
   opts: { symptom?: string; trace?: string | true; logFile?: string } = {},
-): void {
-  runBundledAgent(config, "agency-agent", buildDoctorArgs({ file, ...opts }));
+): Promise<void> {
+  return runBundledAgent(config, "agency-agent", buildDoctorArgs({ file, ...opts }));
 }

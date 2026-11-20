@@ -46,6 +46,7 @@ vi.mock("http", () => ({
 }));
 
 import { _getAccessToken, _isAuthorized, _revokeAuth } from "../oauth.js";
+import { getEncryptionKey } from "../oauthEncryption.js";
 import { runInTestContext } from "../../runtime/asyncContext.js";
 import { RuntimeContext } from "../../runtime/state/context.js";
 import { StateStack } from "../../runtime/state/stateStack.js";
@@ -148,6 +149,17 @@ describe("_getAccessToken", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+  });
+
+  it("a keyring that can't be read fails with its reason, not as missing tokens", async () => {
+    await fs.mkdir(TOKEN_DIR, { recursive: true });
+    await fs.writeFile(testTokenPath, "encrypted-tokens");
+    vi.mocked(getEncryptionKey).mockRejectedValueOnce(
+      new Error("Couldn't read the OAuth key from the keyring: locked"),
+    );
+    await expect(withCtx(() => _getAccessToken("token-test"))).rejects.toThrow(
+      "Couldn't read the OAuth key from the keyring: locked",
+    );
   });
 
   it("throws when no tokens exist", async () => {

@@ -734,6 +734,19 @@ describe("result summarizers", () => {
     );
   });
 
+  // `stepsResult` in stdlib/safeBash.agency writes this shape for a line
+  // that stopped because a step's plan changed after approval.
+  it("says a safeBash line stopped, and shows why above the status line", () => {
+    const stopped = [
+      "12.4.2",
+      "Stopped before `cat a.txt`: that path now leads to /x/s.",
+      "[stopped: the plan changed]",
+    ].join("\n");
+    expect(end("safeBash", { command: "pnpm -v; cat a.txt" }, stopped, "failure")).toBe(
+      "✗ Run pnpm -v; cat a.txt · stopped\n  │ 12.4.2\n  │ Stopped before `cat a.txt`: that path now leads to /x/s.",
+    );
+  });
+
   // A stream too long to return is replaced by a notice. Only the notice's
   // first line is for a human, whichever stream it stands for.
   it("cuts a saved stream to its first line and keeps the other stream", () => {

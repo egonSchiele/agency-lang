@@ -7061,6 +7061,10 @@ type StepsState = {
   limited: boolean;
   /** Why the line must stop now, or "" to carry on. */
   stopped: string;
+  /** Whether the stop is a step whose plan changed after approval. */
+  planChanged: boolean;
+  /** Each step that ran, as the model wrote it, for a stop's message. */
+  ran: string[];
   timedOut: boolean;
   /** Whether an in-process write started, so a failure after it says that
     destructive work ran. */
@@ -7088,6 +7092,8 @@ def runSteps(exec: StepsExec, dir: string, source: string, timeout: number, plan
     leftMs: timeout * 1000,
     limited: timeout > 0,
     stopped: "",
+    planChanged: false,
+    ran: [],
     timedOut: false,
     wrote: false
   }
@@ -7109,6 +7115,11 @@ def runSteps(exec: StepsExec, dir: string, source: string, timeout: number, plan
 def stepsResult(state: StepsState, timeout: number, verbs: string[]): Result<string> {
   if (state.timedOut) {
     return timeoutFailure(state.label, timeout, state.stdout, state.stderr)
+  }
+  if (state.planChanged) {
+    // Its own last line, as a time limit has one, because a stop has no
+    // exit status for the agent's trace to read.
+    return failure(failedOutput(state.stdout, state.stderr, state.label, [state.stopped, PLAN_CHANGED_LINE]), { type: PLAN_CHANGED })
   }
   if (state.stopped != "") {
     return failure(failedOutput(state.stdout, state.stderr, state.label, [state.stopped]))
@@ -7140,6 +7151,9 @@ def runStepList(steps: LineStep[], state: StepsState, origin: GhRepo | null): St
       { kind: "cd" } => ({ ...current, cwd: step.dir, status: 0, missingFolderStops: step.guarded })
       { kind: "group" } => runGroup(step, current, origin)
     }
+    if (current.stopped == "" && step.kind != "group") {
+      current = { ...current, ran: [...current.ran, stepText(step.source)] }
+    }
   }
   return current
 }
@@ -7154,11 +7168,13 @@ def runGroup(step: GroupStep, state: StepsState, origin: GhRepo | null): StepsSt
 
 @capabilities(fileRead, fileWrite, subprocess)
 def runOneStep(step: RunStep, state: StepsState, origin: GhRepo | null): StepsState {
+  // An in-process step is not planned again: the stdlib tool checks its
+  // path when it opens it, which is the check bash has no way to make.
   const exec = step.inProcess
   if (exec != null) {
     return runInProcess(exec, state)
   }
-  return runBashStep(step, state)
+  return runBashStep(step, state, origin)
 }
 
 // A line runs in process only when every step does, so `stderr` here
@@ -7174,12 +7190,34 @@ def runInProcess(exec: StepExec, state: StepsState): StepsState {
   return { ...state, stdout: state.stdout + printed.value, status: 0, wrote: wrote }
 }
 
+// Before a step runs, it is planned again against the disk as it is now,
+// with the repository the up-front plan looked up. When the new plan asks
+// anything other than what was approved, the line stops before the step.
+// Otherwise the step runs the text the new plan rebuilt, which describes
+// the disk as it is now.
+//
+// The refuse wall is not run again. It reads the disk only for `rm`, and
+// a changed `rm` target changes its std::remove payload, so this check
+// stops the line.
+//
 // `_bash`, for the reason runBash's comment gives: the only path here runs
 // through runPlanned, after approvedPlan raised every effect of the plan.
-// The text is the one the up-front plan rebuilt for this step.
-@capabilities(subprocess)
-def runBashStep(step: RunStep, state: StepsState): StepsState {
-  const text = if (step.readsStatus) then "(exit ${state.status}); ${step.text}" else step.text
+@capabilities(fileRead, subprocess)
+def runBashStep(step: RunStep, state: StepsState, origin: GhRepo | null): StepsState {
+  const fresh = classify(step.source, freshLine(state.cwd), origin, false)
+  if (fresh is failure(why)) {
+    return stopBefore(step, state, "it no longer has a rule: ${why}")
+  }
+  const same = sameEffects(step.effects, fresh.value.effects)
+  _debug("safeBash step check", { step: stepText(step.source), cwd: state.cwd, same: same })
+  if (!same) {
+    return stopBefore(step, state, changeOf(step.effects, fresh.value.effects))
+  }
+  const planned = stepText(fresh.value.command)
+  if (planned == "") {
+    return stopBefore(step, state, "it can no longer be written as a command")
+  }
+  const text = if (step.readsStatus) then "(exit ${state.status}); ${planned}" else planned
   const limit = if (state.limited) then state.leftMs else 0
   const started = now()
   const attempt = try _bash(text, state.cwd, limit, "", {})
@@ -7203,6 +7241,89 @@ def runBashStep(step: RunStep, state: StepsState): StepsState {
     leftMs: state.leftMs - spent,
     timedOut: result.timedOut
   }
+}
+
+/** The `data.type` of a failure that stopped a line because a step's plan
+ changed after approval. */
+static const PLAN_CHANGED = "planChanged"
+
+/** The last line of that failure, which the agent's trace reads. */
+static const PLAN_CHANGED_LINE = "[stopped: the plan changed]"
+
+/* The state of a line that stops before `step`, which runs nothing. */
+def stopBefore(step: RunStep, state: StepsState, found: string): StepsState {
+  _debug("safeBash step stopped", { step: stepText(step.source), cwd: state.cwd, found: found })
+  return { ...state, status: 1, stopped: stopMessage(step, found, state.ran), planChanged: true }
+}
+
+// Stopped before `cat README.md`: it was approved to read
+// /repo/README.md, and that path now leads to /outside/secret.
+// `git checkout evil` already ran. Run the rest as a new command if you
+// still want it.
+def stopMessage(step: RunStep, found: string, ran: string[]): string {
+  return "Stopped before `${stepText(step.source)}`: ${found}. ${ranSentence(ran)} Run the rest as a new command if you still want it."
+}
+
+def ranSentence(ran: string[]): string {
+  if (ran.length == 0) {
+    return "Nothing ran before it."
+  }
+  const named = ["`${text}`" for text in ran]
+  return "${named.join(", ")} already ran."
+}
+
+/* Whether two effect lists ask the same questions: the same names and
+ payloads, in the same order. */
+def sameEffects(approved: Effect[], fresh: Effect[]): boolean {
+  return JSON.stringify([comparable(effect) for effect in approved]) == JSON.stringify([comparable(effect) for effect in fresh])
+}
+
+// An effect as plain data to compare. `timeout` is left out: a plan writes
+// 0, and raiseOne writes the real limit only when it raises.
+def comparable(effect: Effect): any {
+  const loose: any = effect
+  if (loose.payload == null) {
+    return { name: effect.name }
+  }
+  return { name: effect.name, payload: { ...loose.payload, timeout: null } }
+}
+
+/* What changed between the approved effects and the new ones, in words:
+ the first effect that differs. */
+def changeOf(approved: Effect[], fresh: Effect[]): string {
+  for (effect, index in approved) {
+    if (index >= fresh.length) {
+      return "it was approved to ${describeEffect(effect)}, and it no longer asks that"
+    }
+    const other = fresh[index]
+    if (JSON.stringify(comparable(effect)) != JSON.stringify(comparable(other))) {
+      return differenceOf(effect, other)
+    }
+  }
+  return "it now also asks to ${describeEffect(fresh[approved.length])}"
+}
+
+def differenceOf(approved: Effect, fresh: Effect): string {
+  const before = accessesOf([approved])
+  const after = accessesOf([fresh])
+  if (before.length > 0 && after.length > 0 && before[0].mode == after[0].mode) {
+    return "it was approved to ${describeEffect(approved)}, and that path now leads to ${after[0].path}"
+  }
+  return "it was approved to ${describeEffect(approved)}, and it now asks to ${describeEffect(fresh)}"
+}
+
+/* An effect in words: what it does to which path, or its name and folder. */
+def describeEffect(effect: Effect): string {
+  const accesses = accessesOf([effect])
+  if (accesses.length > 0) {
+    return "${accesses[0].mode} ${accesses[0].path}"
+  }
+  const loose: any = effect
+  const payload: any = loose.payload
+  if (payload != null && payload.cwd != null) {
+    return "ask ${effect.name} in ${payload.cwd}"
+  }
+  return "ask ${effect.name}"
 }
 
 /** Whether bash skips a step after this join, given how the last step that

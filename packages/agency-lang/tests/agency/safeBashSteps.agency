@@ -86,16 +86,123 @@ def withFolderGone(line: string): Result<string> {
   return out
 }
 
-// Bash ends the group with status 1 and runs what comes after it. When
-// the line fails, the reason the step did not start is in its stderr, as
-// bash's own complaint about the `cd` would be.
-node aGroupWhoseFolderWentAwayCarriesOn() {
+// The folder the `cd` was approved to enter is gone when it runs. That is
+// not the folder that was approved, so the line stops there, inside the
+// group, and nothing after it runs: not the group's `ls`, and not the
+// `ls sub` after the group.
+node aGroupWhoseFolderWentAwayStops() {
   makeFixture()
   mkdir(FIXTURE + "/gone") with approve
   const kind = planFor("(cd gone && ls); ls sub", FIXTURE).execution.kind
-  const carriesOn = withFolderGone("(cd gone && ls); ls sub")
-  const fails = withFolderGone("(cd gone && ls); false")
-  return [kind, isSuccess(carriesOn), textOf(carriesOn), textOf(fails).includes("Working directory does not exist")]
+  const out = withFolderGone("(cd gone && ls); ls sub")
+  const text = textOf(out)
+  return [kind, isSuccess(out), text.includes("Stopped before"), text.includes("a.txt")]
+}
+
+/** A folder outside the fixture, for a link to point at. */
+static const OUTSIDE = __dirname + "/stdlib/__safebash_steps_outside__"
+
+/* The outside folder: `secret.txt`, and a folder `dir` that holds `b.txt`. */
+def makeOutside() {
+  remove(OUTSIDE) with approve
+  mkdir(OUTSIDE) with approve
+  bash("mkdir dir && printf 'SECRET\\n' > secret.txt && printf 'b\\n' > dir/b.txt", cwd: OUTSIDE) with approve
+}
+
+/* A line run in the fixture, with `change` run in the fixture by bash
+ while the first question is answered, before anything runs. */
+def changedWhileAsking(line: string, change: string): Result<string> {
+  let out: Result<string> = success("")
+  let changed: boolean[] = []
+  handle {
+    out = safeBash(line, cwd: FIXTURE)
+  } with (intr) {
+    if (changed.length == 0 && change != "") {
+      bash(change, cwd: FIXTURE) with approve
+      changed.push(true)
+    }
+    return approve()
+  }
+  return out
+}
+
+/* The `type` a failure carries, or "" for a success. */
+def failureType(result: Result<string>): string {
+  if (result is failure(why)) {
+    return result.data.type
+  }
+  return ""
+}
+
+/* Whether a line failed with a stop, and whether the outside folder's
+ content leaked into its text. */
+def stopRow(line: string, change: string): any {
+  makeFixture()
+  makeOutside()
+  const out = changedWhileAsking(line, change)
+  const text = textOf(out)
+  const row = [line, isSuccess(out), text.includes("Stopped before"), text.includes("SECRET") || text.includes("b.txt")]
+  remove(FIXTURE) with approve
+  remove(OUTSIDE) with approve
+  return row
+}
+
+// The handler swaps a path for a link to the outside folder while the
+// first question is answered. The step that names it is planned again
+// just before it runs, the new plan differs from the approved one, and
+// the line stops before that step with nothing from outside printed.
+node aChangedPlanStopsTheLine() {
+  return [
+    stopRow("pnpm --version; cat one.txt", "rm one.txt && ln -s ${OUTSIDE}/secret.txt one.txt"),
+    stopRow("pnpm --version; ls sub", "rm -r sub && ln -s ${OUTSIDE}/dir sub"),
+    stopRow("pnpm --version; cat one.txt", ""),
+  ]
+}
+
+/* The stop's text for the first row above, with the folders replaced. */
+node theStopSaysWhatChanged() {
+  makeFixture()
+  makeOutside()
+  const out = changedWhileAsking("pnpm --version; cat one.txt", "rm one.txt && ln -s ${OUTSIDE}/secret.txt one.txt")
+  const text = textOf(out)
+  remove(FIXTURE) with approve
+  remove(OUTSIDE) with approve
+  const lines = text.split("\n")
+  const lastLines = lines.slice(lines.length - 2)
+  return [failureType(out), lastLines[1], lastLines[0].startsWith("Stopped before `cat one.txt`: ")]
+}
+
+/* Whether a line ran without a stop. */
+def ranWithoutStop(line: string): any {
+  makeFixture()
+  const out = safeBash(line, cwd: FIXTURE) with approve
+  const text = textOf(out)
+  remove(FIXTURE) with approve
+  return [line, isSuccess(out), text.includes("Stopped before")]
+}
+
+// The check plans each step with a fresh line, which knows nothing of
+// what earlier steps wrote or made, while the up-front plan used what the
+// line had written and made. These lines must still run.
+node harmlessLinesDoNotStop() {
+  return [
+    ranWithoutStop("mkdir -p out && ls out"),
+    ranWithoutStop("mkdir -p build && cd build && pnpm --version"),
+    ranWithoutStop("pnpm --version > v.txt && cat v.txt"),
+    ranWithoutStop("pnpm --version > v.txt; pnpm --version >> v.txt"),
+  ]
+}
+
+// A gh read that names no repository waits on a lookup of the folder's
+// origin remote, which approvedPlan does once. The check plans the step
+// with the repository that lookup found, so it does not stop. The fixture
+// is inside this repository, whose origin is on GitHub. gh may fail for
+// want of a login; only a stop would be wrong.
+node aGhLookupDoesNotStop() {
+  makeFixture()
+  const out = safeBash("gh pr view 1 --json title; ls sub", cwd: FIXTURE) with approve
+  remove(FIXTURE) with approve
+  return textOf(out).includes("Stopped before")
 }
 
 // Three steps share one limit of 2 seconds: the line stops at 2 seconds

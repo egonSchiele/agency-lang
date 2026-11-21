@@ -138,9 +138,12 @@ not know prints as is.
 
 Command output under a line differs by tool. A nonzero `exec` shows
 stderr when there is any, else stdout. A failed `safeBash` is text, not
-fields: the output, then a status line (`Command exited with code 2`, or
-`[stopped at the time limit of 120 seconds]`). An exit line is the last
-line; a time limit's note for the model follows its status line.
+fields: the output, then a status line (`Command exited with code 2`,
+`[stopped at the time limit of 120 seconds]`, or `[stopped: the plan
+changed]`, which the trace shows as "stopped"). An exit line and a
+plan-changed line are the last line, and a plan-changed stop's reason is
+above it, so the trace shows the reason with the output. A time limit's
+note for the model follows its status line.
 `safeBashFailure` shows the status in words on the tool's line and the
 output above it under the line, and leaves out what follows the status. An
 agent's model gets a non-zero exit as a result with the same text, and

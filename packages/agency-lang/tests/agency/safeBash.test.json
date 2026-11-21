@@ -503,6 +503,17 @@
       ]
     },
     {
+      "nodeName": "exitStatusInEcho",
+      "description": "`$?`, the exit status, is a number, so `pnpm test; echo \"exit=$?\"` asks only what pnpm asks and runs as written, and a lone echo of it asks std::bash::readonly. A lone echo of it beside another variable asks std::bash. Where a word names a file, a folder, a program, a ref, a pattern, a duration, or an assignment's value, `$?` is a variable like any other and the line asks std::bash.",
+      "input": "",
+      "expectedOutput": "[[\"pnpm test; echo \\\"exit=$?\\\"\",\"narrow\",[\"std::exec\"]],[\"pnpm test; echo $?\",\"narrow\",[\"std::exec\"]],[\"pnpm test; printf 'exit=%s\\\\n' $?\",\"narrow\",[\"std::exec\"]],\"pnpm test; echo \\\"exit=$?\\\"\",[\"echo \\\"exit=$?\\\"\",\"narrow\",[\"std::bash::readonly\"]],[\"echo \\\"$HOME $?\\\"\",\"broad\",[\"std::bash\"]],[\"cat $?\",\"broad\",[\"std::bash\"]],[\"cat x$?.txt\",\"broad\",[\"std::bash\"]],[\"echo hi > $?\",\"broad\",[\"std::bash\"]],[\"echo hi > out$?.txt\",\"broad\",[\"std::bash\"]],[\"cat < $?\",\"broad\",[\"std::bash\"]],[\"TERM=$? ls\",\"broad\",[\"std::bash\"]],[\"grep -rn foo $?\",\"broad\",[\"std::bash\"]],[\"grep -rn $? lib\",\"broad\",[\"std::bash\"]],[\"rm $?\",\"broad\",[\"std::bash\"]],[\"mkdir $?\",\"broad\",[\"std::bash\"]],[\"touch $?\",\"broad\",[\"std::bash\"]],[\"ls | tee $?\",\"broad\",[\"std::bash\"]],[\"git log $?\",\"broad\",[\"std::bash\"]],[\"git -C $? status\",\"broad\",[\"std::bash\"]],[\"cd $? && ls\",\"broad\",[\"std::bash\"]],[\"timeout $? pnpm test\",\"broad\",[\"std::bash\"]],[\"sleep $?; ls\",\"broad\",[\"std::bash\"]],[\"which $?; ls\",\"broad\",[\"std::bash\"]],[\"pnpm test; exit $?\",\"broad\",[\"std::bash\"]],[\"pnpm run $?\",\"broad\",[\"std::bash\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "quietCommandsAskNothing",
       "description": "Commands that only print add no question inside a line: pwd, which, command -v, uname, whoami, hostname, date with a +FORMAT, basename, dirname, sleep, true, false, :, type, and printf with a literal format. A spelling the table does not accept has no rule: a lookup of agency by name or path, command without -v, hostname or date with a word that sets something, sleep of a variable, and printf with -v (as a flag or as a quoted word), with a format that is not literal, with a format that holds `%n` (which sets a shell variable), or with a variable argument. A lone `which agency` is refused. A redirect still asks std::write.",
       "input": "",

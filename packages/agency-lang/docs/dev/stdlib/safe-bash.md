@@ -27,6 +27,14 @@ repository, re-exported by `lib/stdlib/safeBash.ts`). An unparseable
 string is "we understood nothing": the whole string asks `std::bash` and
 bash runs the original text.
 
+The parser reads `$?`, the exit status of the last command, as a variable
+named `?`. It is a number, so `echo` and `printf` may print it
+(`knownOrExitStatus`): `pnpm test; echo "exit=$?"` asks only what `pnpm
+test` asks. Everywhere else it is a variable like any other. In `cat $?`,
+`echo hi > $?`, or `git log $?` the word names a file or a ref that
+safeBash cannot know, so the line asks `std::bash`. `exitStatusInEcho`
+pins both halves.
+
 ## The rules
 
 - **The payload tells the truth.** A narrow effect's payload describes

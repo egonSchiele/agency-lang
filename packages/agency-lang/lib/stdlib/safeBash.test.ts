@@ -19,6 +19,9 @@ function strip(value: unknown): unknown {
 // quoting cases that would turn one command into two if rendering lost a
 // quote.
 const CORPUS = [
+  'echo "exit=$?"',
+  "echo $?",
+  'pnpm test; echo "exit=$?"',
   "echo hello",
   "echo hello world",
   "echo 'a  b'",

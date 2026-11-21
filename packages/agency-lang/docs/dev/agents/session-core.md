@@ -58,8 +58,8 @@ of them is not refused:
 
 **The pause.** The core waits with one interrupt, `agent::sessionInput`.
 Its data is what a front-end shows and saves between turns: `thread`,
-`cwd`, `record`, `models`, `preset`, `fixedProvider`, `effort`, `budget`,
-`context`, `brain`, `search`.
+`cwd`, `record`, `models`, `preset`, `presetChanges`, `fixedProvider`,
+`effort`, `budget`, `context`, `brain`, `search`.
 
 - `search` is the web search backend in force: `hosted`, `tavily`,
   `brave` or `off`. The driver reads it as "" from a pause that lacks it.
@@ -71,6 +71,26 @@ Its data is what a front-end shows and saves between turns: `thread`,
 - `fixedProvider` is the provider the session is fixed to, by the name a
   person sees, or "". `--provider`, a preset that names a provider, or
   `settings.model` fixes one.
+- `presetChanges` lists what the session changed from its preset, one
+  line per field, such as `effort: (none) → low`. The lines use
+  `/preset save`'s words, trimmed (`presetChanges` in
+  `lib/session.agency`). The session compares itself with a snapshot of
+  the preset as it took it: the startup flags plus the preset, with no
+  choices. It takes that snapshot at start (`notePresetBaseline`), at
+  each switch, and after a save to the active preset. It does not compare
+  with the preset as saved, because a saved preset can store the same
+  models in a different form, such as a bare `pin`. A startup flag such as
+  `--max-tool-rounds` is in both snapshots, so it never shows as a change.
+  - It reads only memory, so the pause can build it.
+  - It is empty with no active preset (a deleted one is no longer active)
+    and after `/local`. A session resumed from a version that kept no
+    snapshot reports none until its next pick or save.
+  - A front-end offers Save as a `savePreset` answer naming the preset,
+    and Revert as a `preset` answer with the same name. Changes under a
+    preset are not kept for new sessions (agent-presets.md, "The last
+    settings").
+  - The terminal does not draw this field yet. The driver reads it as
+    `[]` from a pause that lacks it.
 
 **Answers.** A front-end answers the pause with an `Answer`:
 
@@ -120,9 +140,22 @@ did is a notice at level `info`, except a `model`, `options`, `budget`,
   the user's settings as a direct result of a command the user gave, so
   the core approves the write itself with `with approve`. A rule in the
   run's policy still decides first.
-- **`savePreset`** is `writeSessionPreset` in `lib/session.agency`. A save
-  it refuses, such as one with no name and no active preset, is the error
-  notice. The lines that say what was saved are one `info` notice.
+- **`savePreset`** is `refreshAndSavePreset` in `lib/session.agency`,
+  then `writeSessionPreset`. A save it refuses, such as one with no name
+  and no active preset, is the error notice. The lines that say what was
+  saved are one `info` notice.
+- **`preset` and `savePreset` read the presets again first**
+  (`refreshPresetTable`, approved by the core with `with approve`, as the
+  save's write is). A run reads `settings.json` once at start, and another
+  session or the terminal may have saved or deleted a preset since: a
+  pick gets the preset as saved now, and a save compares against it. A
+  file that can't be read leaves the run's copy. A save naming the
+  preset that was active, which the read shows deleted, is refused with
+  "The '<name>' preset was deleted, so there is nothing to save to.",
+  rather than creating it again. So a box out of date can't bring back a
+  deleted preset. `recommended` approves reads of `settings.json` in the
+  agent home (`settingsReadRule`). Under `minimal`, or a policy with no
+  rule for that file, a pick now asks, as a save always did.
 - **`local`** is `useLocalModel` in `lib/session.agency`: the model the
   `/local` picker chose, a catalog name, an `hf:` URI or a `.gguf` path. A
   process that cannot host a local model refuses it with "Local models are

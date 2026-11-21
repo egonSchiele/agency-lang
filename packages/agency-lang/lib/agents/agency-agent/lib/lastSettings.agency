@@ -1,11 +1,12 @@
 /** @module
   @summary The last settings: what a new session starts with. The preset
-  and the model choices the person last chose, in any session, kept in
-  `last-settings.json` in the agent home. The session core writes them
-  after a model, effort or preset answer, and a run that names no preset,
-  model or effort flag starts from them. They replace the default preset:
-  a preset marked default only seeds the start until the first change.
-  See "The last settings" in docs/dev/agents/agent-presets.md.
+  the person last chose, or with no preset the model choices, in any
+  session, kept in `last-settings.json` in the agent home. The session
+  core writes them after a model, effort or preset answer, and a run that
+  names no preset, model or effort flag starts from them. They replace
+  the default preset: a preset marked default only seeds the start until
+  the first change. See "The last settings" in
+  docs/dev/agents/agent-presets.md.
 */
 import { _readLastSettings, _writeLastSettings } from "agency-lang/stdlib-lib/agentLastSettings.js"
 
@@ -38,9 +39,18 @@ export type LastSettings = {
   choices: ModelChoices
 }
 
-/** The settings to keep for new chats. The options are dropped: they can
-  name a server, and the coordinator's useLlmOptions tool can set them. */
+/** The settings to keep for new chats. A preset is kept by its name
+  alone: changes made on top of it are this session's, and `/preset save`
+  is how they reach the preset. With no preset, the choices are kept, but
+  not the options: they can name a server, and the coordinator's
+  useLlmOptions tool can set them. */
 export def lastSettingsOf(preset: string, choices: ModelChoices): LastSettings {
+  if (preset != "") {
+    return {
+      preset: preset,
+      choices: noModelChoices()
+    }
+  }
   let kept: ModelChoices = {
     pin: choices.pin,
     slots: choices.slots
@@ -187,13 +197,13 @@ def startWithout(start: StartRequest, warning: string): Result<string[]> {
   return success([...started.value, warning])
 }
 
-/** Keep this session's preset and choices for new chats. Only a session
-  that is saved, and that started with no model or effort flag, writes
-  them. An incognito session has no record, so it writes nothing. Nor does
-  one `/local` moved: its choices no longer describe the models it runs,
-  and its resolved slots are local (`/preset save` refuses it the same
-  way). A write that fails is a warning: the change it follows still
-  counts. */
+/** Keep this session's preset, or with no preset its choices, for new
+  chats (`lastSettingsOf`). Only a session that is saved, and that started
+  with no model or effort flag, writes them. An incognito session has no
+  record, so it writes nothing. Nor does one `/local` moved: its choices
+  no longer describe the models it runs, and its resolved slots are local
+  (`/preset save` refuses it the same way). A write that fails is a
+  warning: the change it follows still counts. */
 export def rememberSettings(preset: string, choices: ModelChoices) {
   if (currentRecord() == null || startedWithModelFlags()) {
     return

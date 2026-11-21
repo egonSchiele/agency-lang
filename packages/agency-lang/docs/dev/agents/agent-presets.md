@@ -100,7 +100,12 @@ chose, in any session, in any front-end. They replace the default preset:
 one concept answers "what does a new chat start with".
 
 - **What is kept** (`last-settings.json` in the agent home):
-  `{ preset, choices }`, where `choices` is the session's `ModelChoices`
+  `{ preset, choices }`. Under a preset, only its name: `choices` is
+  empty. A model or effort chosen on top of a preset belongs to that
+  session, and `/preset save` (Perry's Save) is how it reaches the preset,
+  so new sessions start with the plain preset. A file an older agent wrote
+  can still hold choices under a preset, and the start still applies
+  them. With no preset, `choices` is the session's `ModelChoices`
   without `llmOptions`. Options can name a server (`baseUrl`), and the
   coordinator's `useLlmOptions` tool can set them, so keeping them would
   let text injected into one chat pick the server for every later one.

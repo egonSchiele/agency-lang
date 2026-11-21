@@ -310,6 +310,106 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "noPresetHasNoChanges",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bareFreshPresetHasNoChanges",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "effortChangeShowsInChanges",
+      "input": "",
+      "expectedOutput": "\"[\\\"effort: (none) → low\\\"]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "savedChangesLeaveNone",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "deletedPresetHasNoChanges",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "refreshReadsAPresetSavedElsewhere",
+      "input": "",
+      "expectedOutput": "\"claude-opus-4-8\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "refreshKeepsTheTableWhenTheFileIsBroken",
+      "input": "",
+      "expectedOutput": "\"claude-sonnet-4-6\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bareChangedPresetShowsOnlyEffort",
+      "input": "",
+      "expectedOutput": "\"[\\\"effort: (none) → low\\\"]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "startSnapshotLeavesOutChoices",
+      "input": "",
+      "expectedOutput": "\"[\\\"pin: claude-sonnet-4-6 → claude-opus-4-8\\\"]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveRefusesAPresetDeletedElsewhere",
+      "input": "",
+      "expectedOutput": "\"The 'small' preset was deleted, so there is nothing to save to. | recreated: false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

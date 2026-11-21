@@ -1,3 +1,34 @@
+## Nov 20 2026 — v0.43.3
+
+### Breaking
+
+- **`cp`, `mv`, and `ln` now ask `std::bash`,** so a saved `std::exec` rule for them stops matching.
+- **Under a preset, `/model` and effort changes no longer carry over to new sessions.** Use `/preset save` to keep them. With no preset, changes still carry over.
+
+### safeBash
+
+- **`grep` run through bash asks `std::grep` for each path,** and reads only the files the grep tool would read.
+- **Git reads such as `rev-parse`, `merge-base`, `ls-files`, `git grep`, and `worktree list` ask a narrow effect.** `--no-pager` and `-C <dir>` work with them.
+- **Quiet commands such as `pwd`, `which`, and `date` ask the new `std::bash::readonly`,** which is in the `Shell` set. `timeout N cmd` asks what `cmd` asks, and output-only settings such as `NO_COLOR=1` may come before a command.
+- **File commands ask narrow effects.** `mkdir` asks `std::mkdir`, `touch` and `tee` ask `std::write`, and `sed -n N,Mp`, the checksum tools, and `file` ask `std::read`.
+- **A later command may name a file or folder the line itself made,** as in `pnpm test > out.txt; tail out.txt` or `mkdir -p out && ls out`.
+- **`$?` parses,** so `pnpm test; echo "exit=$?"` asks only `std::exec`.
+- **A `cd` on the right of `&&` moves the line into that folder,** as in `mkdir -p build && cd build && cmake ..`.
+- **After a command that can replace files, such as `git checkout` or `git stash pop`, a later command that names a path asks `std::bash`.** Before, a checkout could swap a file for a link out of the repository before `cat` read it.
+- **`rm` refuses a path with a `..` after a symlink,** such as `rm -rf link/../build`.
+
+### Agent
+
+- **Picking or saving a preset re-reads `settings.json`,** so it sees a preset another session saved. Under the `minimal` policy, a pick now asks first.
+
+### TypeScript API
+
+- **The session core's pause reports `presetChanges`,** one line for each field the session changed from its preset. The driver reads it as `PauseData.presetChanges`.
+
+### Other
+
+- Upgrade tarsec to v0.6.1.
+
 ## Nov 20 2026 — v0.43.2
 
 Agency agent: new chats start with the last settings you chose.

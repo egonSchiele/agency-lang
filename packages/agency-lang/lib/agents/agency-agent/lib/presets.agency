@@ -54,11 +54,23 @@ def emptyTable(): PresetTable {
   }
 }
 
-// Read once at startup, before the policy handler exists, and kept
-// current by the preset tools, so /preset and listPresets raise no
-// interrupt. A resumed session restores both globals.
+// Read at startup, before the policy handler exists, and kept current by
+// the preset tools, so listPresets and the pause's report raise no
+// interrupt. A `preset` or `savePreset` answer reads the file again first
+// (`refreshPresetTable`). A resumed session restores both globals.
 let _table: PresetTable = emptyTable()
 let _active: string = ""
+
+/** Read the saved presets again, for a session about to pick or save
+  one: another session or the terminal may have saved or deleted one
+  since this run read them. A file that can't be read leaves the table as
+  it was. The reads are the caller's to decide. */
+export def refreshPresetTable() {
+  const loaded = readSettingsFile()
+  if (loaded is success(settings)) {
+    setPresetTable(readPresetTable(settings.presets))
+  }
+}
 
 export def setPresetTable(table: PresetTable) {
   _table = table

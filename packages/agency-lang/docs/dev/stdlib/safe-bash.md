@@ -802,7 +802,25 @@ symlink, it throws, so the line asks `std::bash`. A working folder that
 is itself a symlink counts as such a step. A word with no `..` costs
 nothing, and a `..` after a real folder resolves as before.
 `dotDotAfterALinkHasNoRule` pins the rule for a read, a listing, a
-search, a redirect, `tee`, `cd`, `rm`, `mkdir`, and `git -C`.
+search, a redirect, `tee`, `cd`, `mkdir`, and `git -C`.
+
+An `rm` or `rmdir` with such a word is refused, as the other `rm` walls
+are. `_removeRefusal` resolves its target with `resolveBashPath` too, and
+the throw is its reason: the checks that refuse the home folder or a
+folder that holds the working directory would otherwise judge a path
+bash does not delete.
+
+`resolveBashPath` can only test a step that names a real path. In
+`rm -rf */../x` or `rm -rf $D/../x`, the step before the `..` is
+expanded by bash, and it may expand to a symlink. So `_removeRefusal`
+refuses a `..` that comes after a step with a glob character, a brace,
+or a `$`, without looking at the disk.
+
+Like every `rm` wall, this one is checked from the folder the line
+starts in. After a `cd` in the same line, as in `cd sub && rm
+link/../creds` where only `sub/link` is a symlink, the wall does not see
+the link. `removeEffects` then resolves the target from `sub`, gets the
+refusal there, and the line asks `std::bash`.
 
 ### Files the line wrote and folders it made
 

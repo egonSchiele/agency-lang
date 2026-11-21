@@ -393,10 +393,30 @@ Three pull requests, each of which leaves main working.
 
 Rough size: six to eight days. The first pull request is the largest.
 
+## Where this is heading (owner, 2026-11-21)
+
+safeBash should run an Agency function for every command it can. This
+design is the first part of that: after it, a line is a list of steps,
+and each step is either an Agency function or a real program.
+
+- A step that is an Agency function needs no knowledge about the other
+  commands in the line, because the stdlib checks the path when it opens
+  it. Moving a command in process removes rules; it adds none.
+- Some commands will always be real programs: `pnpm`, `make`, `node`,
+  and any tool safeBash has never heard of, such as a person's own
+  scripts. For those, safeBash keeps the analysis it has, and where a
+  prediction is hard it asks the broad question instead. A person may
+  answer more interrupts for such lines. That is accepted.
+- There is one tool. No second "agencyBash" is built beside safeBash.
+
+Commands move in process one at a time after this design ships, picked
+from the logs.
+
 ## What this leaves for other tickets
 
 - **ADI-261** (run a pipeline's stages in process) is unchanged. A
-  pipeline is one step here.
+  pipeline is one step here. It is the first of the moves described
+  above.
 
 ## Decisions (owner, 2026-11-20)
 

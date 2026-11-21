@@ -1,5 +1,6 @@
 import {
   _parseMarkdown,
+  _parseFrontmatter,
   _walkMarkdown,
   _renderMarkdownForCli,
   _renderMarkdownForHtml,
@@ -256,16 +257,12 @@ export def frontmatter(input: string): Result {
   YAML-style record with scalar values and inline lists. Returns a failure
   if frontmatter is missing or parsing fails.
   """
-  const result = _parseMarkdown(input)
+  // Reads only the header, not the document after it.
+  const result = _parseFrontmatter(input)
   if (!result.success) {
     return failure(result.error)
   }
-  for (block in result.blocks) {
-    if (block.type == "frontmatter") {
-      return success(block.data)
-    }
-  }
-  return failure("no frontmatter")
+  return success(result.data)
 }
 
 /**

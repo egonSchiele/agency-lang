@@ -1,5 +1,10 @@
 import { currentRun, type Run } from "../runtime/asyncContext.js";
-import { Block, markdownParser } from "tarsec/parsers/markdown";
+import {
+  Block,
+  frontmatterParser,
+  type FrontmatterValue,
+  markdownParser,
+} from "tarsec/parsers/markdown";
 import { __call } from "../runtime/call.js";
 import { color } from "@/utils/termcolors.js";
 
@@ -30,6 +35,25 @@ export function _parseMarkdown(input: string): MarkdownParseResult {
     error: res.message,
     rest: res.rest ?? "",
   };
+}
+
+export type FrontmatterParseResult = {
+  success: boolean;
+  data: Record<string, FrontmatterValue>;
+  error: string;
+};
+
+/** Parse only the frontmatter block at the start of `input`, and leave the
+ *  body unread. It is the parser `markdownParser` runs first, so the data
+ *  is what `_parseMarkdown`'s frontmatter block would hold. Reading the
+ *  whole document for a few header lines is slow: a session reads every
+ *  skill's SKILL.md this way when it starts. */
+export function _parseFrontmatter(input: string): FrontmatterParseResult {
+  const res = frontmatterParser(input);
+  if (res.success) {
+    return { success: true, data: res.result.data, error: "" };
+  }
+  return { success: false, data: {}, error: "no frontmatter" };
 }
 
 // ---------------------------------------------------------------------------

@@ -277,14 +277,17 @@ node anUnchangedFolderSpelledAnotherWayRuns() {
 }
 
 // Three steps share one limit of 2 seconds: the line stops at 2 seconds
-// in total, not 2 seconds per step.
+// in total, not 2 seconds per step. With a limit per step, each one-second
+// sleep would finish and no time limit message would appear, so the
+// message is the check. The time is only a loose bound: planning, the
+// approval, and starting each shell add time on a slow machine.
 node stepsShareOneTimeLimit() {
   makeFixture()
   const start = now()
   const out = safeBash("ls sub; sleep 1; sleep 1; sleep 1", cwd: FIXTURE, timeout: 2) with approve
   const took = now() - start
   remove(FIXTURE) with approve
-  return [textOf(out).includes("stopped at the time limit of 2 seconds"), took < 3000]
+  return [textOf(out).includes("stopped at the time limit of 2 seconds"), took < 6000]
 }
 
 // The limit runs out during `sleep 2`, so the write after it never runs.

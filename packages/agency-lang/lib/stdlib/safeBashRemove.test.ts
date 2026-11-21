@@ -59,6 +59,20 @@ describe("_removeRefusal", () => {
     expect(await _removeRefusal("stdlib", sub)).toBe("");
   });
 
+  it("refuses a `..` after a symlink, and allows one after a real or missing folder", async () => {
+    const root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "rm-wall-"));
+    try {
+      fs.mkdirSync(path.join(root, "outside", "inner"), { recursive: true });
+      fs.mkdirSync(path.join(root, "sub"));
+      fs.symlinkSync(path.join(root, "outside", "inner"), path.join(root, "link"));
+      expect(await _removeRefusal("link/../build", root)).toContain("follows the symlink");
+      expect(await _removeRefusal("sub/../build", root)).toBe("");
+      expect(await _removeRefusal("nope/../build", root)).toBe("");
+    } finally {
+      safeDeleteDirectoryWithin(root, fs.realpathSync(os.tmpdir()));
+    }
+  });
+
   it("says why", async () => {
     expect(await _removeRefusal("/", cwd)).toBe("that is the filesystem root");
     expect(await _removeRefusal("$X/*", cwd)).toBe("if $X is unset, that is the filesystem root");

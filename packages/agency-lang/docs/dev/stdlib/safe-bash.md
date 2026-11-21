@@ -802,7 +802,13 @@ symlink, it throws, so the line asks `std::bash`. A working folder that
 is itself a symlink counts as such a step. A word with no `..` costs
 nothing, and a `..` after a real folder resolves as before.
 `dotDotAfterALinkHasNoRule` pins the rule for a read, a listing, a
-search, a redirect, `tee`, `cd`, `rm`, `mkdir`, and `git -C`.
+search, a redirect, `tee`, `cd`, `mkdir`, and `git -C`.
+
+An `rm` or `rmdir` with such a word is refused and never asks.
+`_removeRefusal` resolves its target with `resolveBashPath` too, and the
+throw is its reason: the checks that refuse the home folder or a folder
+that holds the working directory would otherwise judge a path bash does
+not delete.
 
 ### Files the line wrote and folders it made
 

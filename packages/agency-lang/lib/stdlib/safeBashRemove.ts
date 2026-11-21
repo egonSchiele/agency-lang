@@ -30,6 +30,8 @@ function holds(folder: string, inner: string): boolean {
  *   rm -rf "$HOME"      refused
  *   rm -rf $BUILD/*     refused: an unset variable makes this `/*`
  *   rm -rf *            refused: everything in the working directory
+ *   rm -rf link/../x    refused when `link` is a symlink: bash deletes `x`
+ *                       beside the link's target, not the `x` named here
  *   rm -rf build        ""
  *
  * `target` is the text of one argument with each variable written as
@@ -55,11 +57,13 @@ export async function _removeRefusal(target: string, cwd: string): Promise<strin
     text = ".";
   }
   try {
-    const lexical = resolveAgainstCwd(text.replace(HOME_VARIABLE, "~"), cwd, "expand", "rm");
-    if (holds(lexical, resolveAgainstCwd(".", cwd, "literal", "rm"))) {
+    // Throws for a `..` after a symlink, which is a refusal here: the path
+    // read from the text is not the one bash would delete.
+    const named = await resolveBashPath(text.replace(HOME_VARIABLE, "~"), cwd, "expand", "rm");
+    if (holds(named, resolveAgainstCwd(".", cwd, "literal", "rm"))) {
       return "that is the working directory or a folder that holds it";
     }
-    await rejectDangerousPath(currentHost(), lexical, "rm", "target");
+    await rejectDangerousPath(currentHost(), named, "rm", "target");
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   }

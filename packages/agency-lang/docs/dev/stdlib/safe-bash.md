@@ -424,8 +424,20 @@ parenthesized group; `flattenOne` flattens it through `flattenCommands`,
 so the refuse wall sees every stage and classification needs no new
 branch: a pipeline is recognized when every stage is, its effects are
 the union, and it runs through bash as the rebuilt text (`git status |
-git log` and `git status | head` are narrow; `git status | xargs echo` is
-broad). A dup redirect
+head` is narrow; `git status | xargs echo` is broad).
+
+A pipeline is one step, so the runner checks it once, before any stage
+starts, and cannot check between stages that run at the same time. So
+**at most one stage may ask anything other than `std::exec`**, whose
+approval already lets a program read and change any file. `git checkout
+x | cat README.md` could read a file the checkout swapped a moment
+before, so it asks `std::bash`, and so do `git status | git log` and
+`git log | head > out.txt`. `cat package.json | grep version` and `pnpm
+test 2>&1 | tee out.log | tail -30` stay narrow. The rule names no
+effect but `std::exec`, so an effect added later counts against the
+limit (`aPipelineHasOneStageThatAsks`).
+
+A dup redirect
 (`2>&1`, op `>&`) moves a stream and writes no file, so `redirectEffect`
 skips it; `prepareRedirectWrite` stays strict, because the shell-free
 write path computes the bytes it writes and a dup changes which stream
@@ -847,8 +859,11 @@ narrow question at all.
 
 The stages of a pipeline run at the same time, and the runner checks a
 pipeline as one step, before any stage starts. So each stage is
-classified in the line as it was before the pipeline. Parentheses end a
-`cd`, but not what the line wrote or ran.
+classified in the line as it was before the pipeline, and at most one
+stage may ask anything other than `std::exec` (see "Pipelines, dup
+redirects, and glob words"). In `pnpm test | cat nope.txt` only the
+`cat` asks, so a read of a missing file beside a program stays narrow.
+Parentheses end a `cd`, but not what the line wrote or ran.
 
 Some lookups set `strict` and never use the three rules above, because
 each needs a real path: `find`, `tree`, `grep -r`, `diff`, `cmp`, an input

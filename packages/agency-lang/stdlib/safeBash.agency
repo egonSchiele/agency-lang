@@ -5447,19 +5447,38 @@ def withTimeout(timed: Timed, ran: Command): Result<Command> {
 // inside one moves nothing outside it. The stages run at the same time,
 // so each is classified in the line as it was before the pipeline, and
 // what the line knows afterwards takes in every stage.
+//
+// A pipeline is one step, so the runner checks it once, before any stage
+// starts, and cannot check between stages. So at most one stage may ask
+// anything other than std::exec, whose approval already lets a program
+// read and change any file: `git checkout x | cat README.md` could read a
+// file the checkout just swapped. Any other effect, one added later
+// included, counts, so a mistake asks the broad question.
 @capabilities(fileRead)
 def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   let effects: Effect[] = []
   let rewritten: any[] = []
+  let asking = 0
   for (stage, index in stages) {
     const classified = classify(stage, line, origin, readsStdin || index > 0)?
+    if (asksBeyondExec(classified.effects)) {
+      asking = asking + 1
+    }
     effects = [...effects, ...classified.effects]
     rewritten.push(classified.command)
+  }
+  if (asking > 1) {
+    return failure("two stages of a pipeline each ask a question, and they run at the same time")
   }
   const ran: Command = { tag: "pipeline", stages: rewritten }
   // The stages run at the same time, so a pipeline is one step.
   const steps = runStepOf({ tag: "pipeline", stages: stages }, ran, line, effects)?
   return success({ effects: effects, line: afterCommand(line, effects), command: ran, steps: steps })
+}
+
+/* Whether a stage asks anything other than std::exec. */
+def asksBeyondExec(effects: Effect[]): boolean {
+  return [effect for effect in effects if effect.name != "std::exec"].length > 0
 }
 
 // Parentheses run a subshell, so a `cd` inside them ends with them. A file

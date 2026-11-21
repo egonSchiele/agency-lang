@@ -768,7 +768,7 @@ node newShapes() {
     planSummary("shred x | cat"),
     planSummary("make 2>&1 | tail -100"),
     planReason("git status | head"),
-    executionCommand("git    status |  git   log"),
+    executionCommand("git    status |  head"),
   ]
 }
 
@@ -1104,6 +1104,23 @@ node foldersTheLineMade() {
     fileRow("pnpm build | mkdir x; ls x"),
     fileRow("git checkout main; mkdir -p build && cd build && ls"),
   ]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
+// A pipeline is one step, so the runner cannot check between its stages,
+// which run at the same time. At most one stage may ask anything other
+// than std::exec, whose approval already lets a program read any file.
+node aPipelineHasOneStageThatAsks() {
+  makeFilesFixture()
+  const rows = [[line, outcomeOf(planFor(line, FILES_FIXTURE))] for line in [
+    "git checkout x | cat one.txt",
+    "git checkout main | tee log.txt",
+    "cat one.txt | grep version",
+    "pnpm test 2>&1 | tee out.log | tail -30",
+    "git log --oneline | head > out.txt",
+    "pnpm test | cat nope.txt",
+  ]]
   remove(FILES_FIXTURE) with approve
   return rows
 }

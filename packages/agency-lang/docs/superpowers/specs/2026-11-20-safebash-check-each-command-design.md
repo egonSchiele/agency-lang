@@ -223,7 +223,7 @@ Three pieces of state remain:
 |---|---|---|
 | The working directory | `cd lib && ls` | The runner keeps the folder and starts each later step in it. |
 | The last exit status | `pnpm test; echo "exit=$?"` | The runner knows the status of the step it just ran. A step that reads `$?` runs as `(exit 3); echo "exit=$?"`. |
-| The last argument, `$_` | `ls src; echo $_` | A word that holds `$_` makes its command unrecognized, so the line asks `std::bash` and runs whole. |
+| Variables bash sets from the commands before: `$_`, `$OLDPWD`, `$PIPESTATUS`, `$BASH_COMMAND`, `$LINENO`, `$!` | `ls src; echo $_` | A word that holds one of them makes its command unrecognized, so the line asks `std::bash` and runs whole. |
 
 ## Steps that run in process
 
@@ -456,7 +456,7 @@ from the logs.
 3. **The lines that become narrow again.** The first four lines in the
    table ask their narrow questions up front and rely on the check.
 
-## Decisions still open after the review
+## Decisions made after the review (owner, 2026-11-21: yes to all three)
 
 1. **The fifth line, `pnpm build && cat dist/out.txt`.** The first draft
    left it for another ticket while also deleting the check that keeps

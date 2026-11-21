@@ -660,6 +660,50 @@ def stepsOf(line: string): any {
   return [line, [stepSummary(step) for step in exec.steps]]
 }
 
+// A narrow line runs a step at a time, each under a shell of its own, so
+// a rule that let a command change the shell (a variable, an option, an
+// alias) would change what a later step does. None of these has a rule,
+// and this list fails when one gains one.
+node noNarrowRuleChangesTheShell() {
+  makeFilesFixture()
+  const lines = [
+    "export FOO=1",
+    "set -e",
+    "shopt -s globstar",
+    "alias ll=ls",
+    "umask 077",
+    "hash -p /bin/ls ls",
+    "FOO=1",
+    "printf -v x hi",
+    "read x",
+    "trap 'echo' EXIT",
+    "pushd sub",
+    "source x",
+    "eval ls",
+    "exec ls",
+    "unset PATH",
+    "declare x=1",
+    "enable -n echo",
+    "builtin cd sub",
+    "command cd sub",
+  ]
+  return [line for line in lines if outcomeOf(planFor("${line}; ls sub", FILES_FIXTURE)) != "broad"]
+}
+
+// Bash sets these from the commands before, so a line split into steps
+// would print something else: `$OLDPWD` after a `cd`, `$PIPESTATUS` after
+// a pipeline, `$_` after any command.
+node shellVariablesThatDependOnTheCommandsBefore() {
+  makeFilesFixture()
+  return [[line, outcomeOf(planFor(line, FILES_FIXTURE))] for line in [
+    "ls sub; echo $_",
+    "pnpm --version && cd sub && echo $OLDPWD",
+    "false | true; echo $PIPESTATUS",
+    "ls sub; echo \"last: $_\"",
+    "ls sub; echo $BASH_COMMAND $LINENO $!",
+  ]]
+}
+
 node stepsOfALine() {
   makeFilesFixture()
   return [stepsOf(line) for line in [

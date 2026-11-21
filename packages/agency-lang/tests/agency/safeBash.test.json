@@ -414,6 +414,28 @@
       ]
     },
     {
+      "nodeName": "noNarrowRuleChangesTheShell",
+      "description": "A narrow line runs a step at a time, each under a shell of its own. Every way to change the shell here (a variable, an option, an alias, a function of the shell such as hash or enable, a builtin run through builtin or command) is broad, so no narrow line can change what a later step does. The list is empty; a line that shows up gained a narrow rule the runner is not safe for.",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "shellVariablesThatDependOnTheCommandsBefore",
+      "description": "A word that reads a variable bash sets from the commands before ($_, $OLDPWD, $PIPESTATUS, $BASH_COMMAND, $LINENO, $!) makes its line broad, because a line split into steps would print something else. $? is the one such variable the runner carries.",
+      "input": "",
+      "expectedOutput": "[[\"ls sub; echo $_\",\"broad\"],[\"pnpm --version && cd sub && echo $OLDPWD\",\"broad\"],[\"false | true; echo $PIPESTATUS\",\"broad\"],[\"ls sub; echo \\\"last: $_\\\"\",\"broad\"],[\"ls sub; echo $BASH_COMMAND $LINENO $!\",\"broad\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "stepsOfALine",
       "description": "The steps of a narrow line: one per simple command or pipeline, one per cd, and one group per parenthesized group, each with the join before it. A cd that is a whole command of the line is guarded, so its failure ends the line. A step that reads $? says so.",
       "input": "",

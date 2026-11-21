@@ -405,6 +405,10 @@ def simpleCommandRule(command: SimpleCommand, line: LineState, origin: GhRepo | 
   if (name.tag != "literal") {
     return failure("the command word is not a literal")
   }
+  const state = heldVariable(command, SHELL_STATE_VARIABLES)
+  if (state != "") {
+    return failure("`$" + state + "` depends on the commands before it")
+  }
   quietAssignments(command.assignments)?
   const redirect = redirectEffect(command.redirects, cwd)?
   if (name.text == "git") {
@@ -5393,29 +5397,53 @@ def stepText(command: Command): string {
   return text.value
 }
 
-/** The variable bash sets to the exit status of the command before. */
+/** The variable bash sets to the exit status of the command before. The
+ runner carries it from one step to the next. */
 static const EXIT_STATUS: string[] = ["?"]
+
+/** Variables bash sets from the commands before, which the runner does
+ not carry, so a line split into steps would print something else:
+ `$_` is the last word of the command before, `$OLDPWD` the folder
+ before a `cd`, `$PIPESTATUS` the statuses of the pipeline before. */
+static const SHELL_STATE_VARIABLES: string[] = ["_", "OLDPWD", "PIPESTATUS", "BASH_COMMAND", "LINENO", "!"]
 
 /* Whether a word of any command in `command` holds one of these variables. */
 def readsAny(command: Command, names: string[]): boolean {
+  return heldVariable(command, names) != ""
+}
+
+/* The first of these variables a word of any command in `command` holds,
+ or "". */
+def heldVariable(command: Command, names: string[]): string {
   for (entry in flattenOne(command)) {
     const words = [...commandWords(entry.command), ...[assignment.value for assignment in entry.command.assignments if assignment.value != null]]
     for (word in words) {
-      if (holdsVariable(word, names)) {
-        return true
+      const held = variableIn(word, names)
+      if (held != "") {
+        return held
       }
     }
   }
-  return false
+  return ""
 }
 
-def holdsVariable(word: Word, names: string[]): boolean {
+def variableIn(word: Word, names: string[]): string {
   return match(word) {
-    { tag: "variable", name } => names.includes(name)
-    { tag: "doubleQuoted", parts } => [part for part in parts if holdsVariable(part, names)].length > 0
-    { tag: "interpolatedVariable", parts } => [part for part in parts if holdsVariable(part, names)].length > 0
-    _ => false
+    { tag: "variable", name } if (names.includes(name)) => name
+    { tag: "doubleQuoted", parts } => firstVariableIn(parts, names)
+    { tag: "interpolatedVariable", parts } => firstVariableIn(parts, names)
+    _ => ""
   }
+}
+
+def firstVariableIn(parts: Word[], names: string[]): string {
+  for (part in parts) {
+    const held = variableIn(part, names)
+    if (held != "") {
+      return held
+    }
+  }
+  return ""
 }
 
 @capabilities(fileRead)

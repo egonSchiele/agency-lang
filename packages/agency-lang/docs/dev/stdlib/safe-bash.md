@@ -2242,6 +2242,16 @@ then the `cd`, which only moves the state's folder, then `ls` in `lib`.
   inside one. A step's shell is never cut short by a pause and never runs
   twice.
 
+Splitting a line is safe because a narrow line shares almost no shell
+state between its commands. No narrow rule changes the shell apart from
+`cd`: every other builtin has no rule, and neither does a line of
+assignments (`noNarrowRuleChangesTheShell` pins the list). The runner
+carries the folder and `$?`. A word that reads another variable bash
+sets from the commands before (`$_`, `$OLDPWD`, `$PIPESTATUS`,
+`$BASH_COMMAND`, `$LINENO`, `$!`, the list `SHELL_STATE_VARIABLES`) has
+no rule, so `ls src; echo $_` asks `std::bash` and runs whole under one
+shell.
+
 The runner raises nothing. Every question was raised in `approvedPlan`
 before the first step runs, and each step runs the text the plan rebuilt
 for it. The plan also keeps the whole rebuilt line in `command`, which a

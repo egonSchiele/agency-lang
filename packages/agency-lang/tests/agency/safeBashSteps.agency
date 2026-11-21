@@ -261,12 +261,13 @@ static const FIXTURE_LINK = __dirname + "/stdlib/__safebash_steps_link__"
 // none of those stops a line whose folder did not change.
 node anUnchangedFolderSpelledAnotherWayRuns() {
   makeFixture()
-  remove(FIXTURE_LINK) with approve
-  bash("ln -s ${FIXTURE} ${FIXTURE_LINK}") with approve
+  // `remove` refuses a link, so the link is made and removed by bash. `-n`
+  // replaces a link left by an earlier run instead of following it.
+  bash("ln -sfn ${FIXTURE} ${FIXTURE_LINK}") with approve
   const fromDot = safeBash("pnpm --version; ls", cwd: ".") with approve
   const fromLink = safeBash("pnpm --version; ls", cwd: FIXTURE_LINK) with approve
   const fromRelative = safeBash("pnpm --version; ls", cwd: relative(cwd(), FIXTURE)) with approve
-  remove(FIXTURE_LINK) with approve
+  bash("rm -f ${FIXTURE_LINK}") with approve
   remove(FIXTURE) with approve
   return [
     [".", textOf(fromDot).includes("Stopped before")],

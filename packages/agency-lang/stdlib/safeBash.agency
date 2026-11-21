@@ -7189,7 +7189,9 @@ def runBashStep(step: RunStep, state: StepsState): StepsState {
     if (state.missingFolderStops) {
       return { ...state, status: 1, stopped: "`${state.label}` was not run: ${why}" }
     }
-    return { ...state, status: 1, leftMs: state.leftMs - spent }
+    // The line goes on, and the reason goes to stderr, where bash's own
+    // complaint about the `cd` would be.
+    return { ...state, status: 1, stderr: "${state.stderr}${why}\n", leftMs: state.leftMs - spent }
   }
   // try wraps the returned ExecResult in the success value.
   const result: any = attempt.value

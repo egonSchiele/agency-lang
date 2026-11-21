@@ -24,9 +24,9 @@
     },
     {
       "nodeName": "aGroupWhoseFolderWentAwayCarriesOn",
-      "description": "A cd inside a group whose folder is gone when it runs ends the group with status 1, and the line carries on after the group, as bash does.",
+      "description": "A cd inside a group whose folder is gone when it runs ends the group with status 1, and the line carries on after the group, as bash does. When the line then fails, its stderr says why the step did not start.",
       "input": "",
-      "expectedOutput": "[\"steps\",true,\"a.txt\\n\"]",
+      "expectedOutput": "[\"steps\",true,\"a.txt\\n\",true]",
       "evaluationCriteria": [
         {
           "type": "exact"

@@ -759,7 +759,7 @@ export type Execution =
   | RefuseExec
   | GrepExec
   | ReadExec
-  | ChainExec
+  | StepsExec
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L680))
@@ -1050,32 +1050,27 @@ export type GroupStep = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L839))
 
-### ChainStep
+### StepsExec
+
+A line that runs a step at a time, with bash's rule for each join.
+ Every step runs in process, or every step that is not a `cd` or a group
+ runs through bash.
 
 ```ts
-export type ChainStep = {
-  join: Join;
-  execution: StepExec
+/** A line that runs a step at a time, with bash's rule for each join.
+ Every step runs in process, or every step that is not a `cd` or a group
+ runs through bash. */
+export type StepsExec = {
+  kind: "steps";
+  /** The whole rebuilt line, which a background job still runs as one text. */
+  command: string;
+  steps: LineStep[];
+  /** The repository a `gh` step was planned with, for planning it again. */
+  origin?: GhRepo
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L845))
-
-### ChainExec
-
-Several in-process commands joined by `;`, `&&`, or `||`, run left to
- right with bash's rule for each join.
-
-```ts
-/** Several in-process commands joined by `;`, `&&`, or `||`, run left to
- right with bash's rule for each join. */
-export type ChainExec = {
-  kind: "chain";
-  steps: ChainStep[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L852))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L848))
 
 ### RefuseExec
 

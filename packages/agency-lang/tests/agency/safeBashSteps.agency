@@ -69,14 +69,12 @@ node steppedLinesPrintWhatOneBashPrinted() {
   return rows
 }
 
-// `gone` is there when the line is planned, so its `cd` has a rule, and
-// the handler removes it before anything runs. Bash ends the group with
-// status 1 and runs the `ls sub` after it.
-node aGroupWhoseFolderWentAwayCarriesOn() {
+/* A line run in the fixture with a folder `gone` that is there when the
+ line is planned, so its `cd` has a rule, and that the handler removes
+ before anything runs. */
+def withFolderGone(line: string): Result<string> {
   makeFixture()
   mkdir(FIXTURE + "/gone") with approve
-  const line = "(cd gone && ls); ls sub"
-  const kind = planFor(line, FIXTURE).execution.kind
   let out: Result<string> = success("")
   handle {
     out = safeBash(line, cwd: FIXTURE)
@@ -85,7 +83,19 @@ node aGroupWhoseFolderWentAwayCarriesOn() {
     return approve()
   }
   remove(FIXTURE) with approve
-  return [kind, isSuccess(out), textOf(out)]
+  return out
+}
+
+// Bash ends the group with status 1 and runs what comes after it. When
+// the line fails, the reason the step did not start is in its stderr, as
+// bash's own complaint about the `cd` would be.
+node aGroupWhoseFolderWentAwayCarriesOn() {
+  makeFixture()
+  mkdir(FIXTURE + "/gone") with approve
+  const kind = planFor("(cd gone && ls); ls sub", FIXTURE).execution.kind
+  const carriesOn = withFolderGone("(cd gone && ls); ls sub")
+  const fails = withFolderGone("(cd gone && ls); false")
+  return [kind, isSuccess(carriesOn), textOf(carriesOn), textOf(fails).includes("Working directory does not exist")]
 }
 
 // Three steps share one limit of 2 seconds: the line stops at 2 seconds

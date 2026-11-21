@@ -232,11 +232,22 @@ launch: it starts the job only after `approvedPlan` returns success.
 in `runBash`, and it is safe for the same reason. Do not add a caller that
 skips `approvedPlan`.
 
-Only a plan of kind `bash` becomes a job. `startJob` runs every other plan,
-such as a file read, `echo`, or an `agency` line, in the foreground the way
-`safeBash` runs it, with a line in front of its output saying so. `start`
-refuses such a plan and runs nothing; its approvals are still asked first,
-because the plan's kind is known only after `approvedPlan`.
+Only a plan that starts a shell becomes a job: a plan of kind `bash`, or a
+narrow line of kind `steps` (`startsShell`). `startJob` runs every other
+plan, such as a file read, `echo`, or an `agency` line, in the foreground
+the way `safeBash` runs it, with a line in front of its output saying so.
+`start` refuses such a plan and runs nothing; its approvals are still asked
+first, because the plan's kind is known only after `approvedPlan`.
+
+A job's line runs whole in the job's own process, where nothing checks it a
+step at a time (`docs/dev/stdlib/safe-bash.md`, "Each step is checked just
+before it runs"). So a narrow line becomes a job only when it is one
+command, or a `cd` and one command (`jobShape`). `startJob("cd app && pnpm
+dev")` asks `std::exec` for `pnpm dev` in `app`; at launch, `jobLaunch`
+resolves the `cd` and the folder again, starts nothing if either now leads
+somewhere else, and starts `pnpm dev` in `app`. Any other line of several
+steps asks `std::bash` as a job and runs whole (`asJobPlan`), while the
+same line keeps its narrow questions in the foreground.
 
 An "always approve" rule pins `command` and `cwd` for `std::bash`, and
 `command` and `subcommand` for `std::exec`. Neither pins `timeout`, so a

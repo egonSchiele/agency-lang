@@ -6014,25 +6014,26 @@ def approvedPlan(command: string, dir: string, timeoutMs: number, jobMs: number 
   // describes what will run: only a plan that starts a shell becomes a job.
   let asJob = false
   let limitMs = timeoutMs
-  if (jobMs != null && jobText(exec) != null) {
+  if (jobMs != null && startsShell(exec)) {
     asJob = true
     limitMs = jobMs
   }
-  const raised = raiseAll(plan.effects, command, dir, limitMs, asJob)
+  const toRaise = if (asJob) then asJobPlan(plan, command) else plan
+  const raised = raiseAll(toRaise.effects, command, dir, limitMs, asJob)
   // The rejection is passed on as it came, not rebuilt with `failure()`,
   // which would drop its `rejected` flag. Without the flag the tool loop
   // shows the user's reason as a tool error and says to call again.
   if (isFailure(raised)) {
-    if (plan.broadReason == null) {
+    if (toRaise.broadReason == null) {
       return raised
     }
     // A rejected broad question tells the model why no narrower one was
     // available, so its next attempt can take the narrower path. On its
     // own line: the rejection text comes from the handler or a policy
     // rejectMessage and may or may not end in a period.
-    return _addLine(raised, "${broadExplanation(plan.broadReason)}${toolHint(plan.verbs)}")
+    return _addLine(raised, "${broadExplanation(toRaise.broadReason)}${toolHint(toRaise.verbs)}")
   }
-  return success(plan)
+  return success(toRaise)
 }
 
 // Runs a plan approvedPlan returned, in the foreground.
@@ -6057,18 +6058,91 @@ def runPlanned(plan: Plan, dir: string, command: string, timeout: number): Resul
   }
 }
 
-/* The text a job launches, or null for a plan that starts no shell: a
- job runs its line whole, under one shell. */
-def jobText(exec: Execution): string | null {
-  if (exec is { kind: "bash", command }) {
-    return command
+/* Whether a plan starts a shell, which is what a job can run. */
+def startsShell(exec: Execution): boolean {
+  if (exec is { kind: "bash" }) {
+    return true
   }
   if (exec is { kind: "steps" }) {
-    if (!allInProcess(exec.steps)) {
-      return exec.command
-    }
+    return !allInProcess(exec.steps)
+  }
+  return false
+}
+
+/** The one step a job launches, and the folder of a `cd` before it. */
+type JobShape = {
+  cdStep: CdStep | null;
+  step: RunStep
+}
+
+// A job's line runs in the job's own process, where nothing checks it a
+// step at a time. So a job may be one step, or a `cd` and one step: the
+// `cd` is checked at launch, and the step starts in its folder.
+def jobShape(steps: LineStep[]): JobShape | null {
+  if (steps.length == 1 && steps[0] is { kind: "run" }) {
+    return { cdStep: null, step: steps[0] }
+  }
+  if (steps.length == 2 && steps[0] is { kind: "cd" } && steps[1] is { kind: "run" }) {
+    return { cdStep: steps[0], step: steps[1] }
   }
   return null
+}
+
+/* The plan a job raises: a stepped line of any other shape asks the
+ broad question and runs whole. */
+def asJobPlan(plan: Plan, command: string): Plan {
+  const exec = plan.execution
+  if (exec is { kind: "steps" }) {
+    if (jobShape(exec.steps) == null) {
+      const reason: BroadReason = { kind: "unrecognized", detail: "a job runs its line whole, so only one command, or a `cd` and one command, gets narrow questions" }
+      return { ...broadPlan(command, plan.verbs, reason), savedPaths: plan.savedPaths }
+    }
+  }
+  return plan
+}
+
+/** What a job launches: the text, and the folder it starts in. */
+type JobLaunch = {
+  text: string;
+  cwd: string
+}
+
+// The text and folder a job launches. A broad plan launches its whole
+// text. A stepped plan launches its one step, after the `cd` before it and
+// the step's folder are resolved again, as the runner does before a step:
+// a folder that leads somewhere else since approval starts nothing.
+@capabilities(fileRead)
+def jobLaunch(exec: Execution, dir: string, command: string): Result<JobLaunch> {
+  if (exec is { kind: "bash", command as text }) {
+    return success({ text: text, cwd: dir })
+  }
+  if (!(exec is { kind: "steps" })) {
+    return failure("`${command}` was not run: only a shell command can run as a job")
+  }
+  const shape = jobShape(exec.steps)
+  if (shape == null) {
+    return failure("`${command}` was not run: a job runs only one command, or a `cd` and one command")
+  }
+  let folder = dir
+  const cdStep = shape.cdStep
+  if (cdStep != null) {
+    const target = cdTarget(cdStep.source, freshLine(dir))
+    if (target is failure(why)) {
+      return failure("`${command}` was not run: the `cd` no longer has a rule: ${why}")
+    }
+    if (target.value != cdStep.dir) {
+      return failure("`${command}` was not run: it was approved to enter ${cdStep.dir}, and that folder now leads to ${target.value}")
+    }
+    folder = cdStep.dir
+  }
+  const real = try _realFolder(folder)
+  if (real is failure(why)) {
+    return failure("`${command}` was not run: the folder ${folder} can no longer be resolved: ${why}")
+  }
+  if (real.value != shape.step.realCwd) {
+    return failure("`${command}` was not run: it was approved to run in ${shape.step.realCwd}, and that folder now leads to ${real.value}")
+  }
+  return success({ text: shape.step.text, cwd: folder })
 }
 
 // A parameter default must be a literal, so startJob's signature repeats
@@ -6157,19 +6231,19 @@ export def startShellJob(
     return approved
   }
   const plan = approved.value
-  const text = jobText(plan.execution)
-  if (text != null) {
+  if (startsShell(plan.execution)) {
     // `_launchJob` runs a command with no interrupt of its own, as `_bash`
     // does in runBash, and it is safe for the reason runBash's comment
     // gives: the only path here runs through an approvedPlan that raised
     // every effect in the plan and returned success. Do not add a caller
     // that skips approvedPlan. The saved-output copies are written first,
     // for the reason runBash gives.
+    const launch = jobLaunch(plan.execution, dir, command)?
     const copied = try _prepareSpillFiles(plan.savedPaths)
     if (copied is failure(why)) {
       return failure("`${command}` was not run: ${why}")
     }
-    const started = try _launchJob(text, label, dir, minutes * 60000)
+    const started = try _launchJob(launch.text, label, launch.cwd, minutes * 60000)
     if (started is failure(why)) {
       return failure("`${command}` was not run: ${why}")
     }

@@ -2235,7 +2235,7 @@ shell.
 
 The runner raises nothing. Every question was raised in `approvedPlan`
 before the first step runs. The plan also keeps the whole rebuilt line in
-`command`, which a background job launches as one text.
+`command`, which the debug log records.
 
 ### Each step is checked just before it runs
 
@@ -2419,11 +2419,16 @@ write a file, or read a file with no approval at all.
 because the two share `approvedPlan`, which plans the command, returns a
 refusal, and calls `raiseAll`. Both raise the effect set
 `SafeBashEffects`, so an effect added for `safeBash` is added for both. `safeBash` then runs the plan with
-`runPlanned`. `startJob` starts a plan of kind `bash` with `_startJob`, and
-runs any other plan with `runPlanned`, in the foreground. `_startJob` is
-the second place a command runs with no interrupt of its own, and it is
-safe for the same reason as the executors: the only path to it runs
-through `approvedPlan`.
+`runPlanned`. `startJob` starts a plan that starts a shell with
+`_launchJob`, and runs any other plan with `runPlanned`, in the
+foreground. `_launchJob` is the second place a command runs with no
+interrupt of its own, and it is safe for the same reason as the
+executors: the only path to it runs through `approvedPlan`.
+
+A job runs its line whole, where the runner is not present, so as a job a
+narrow line may be only one step, or a `cd` and one step. Any other line
+of several steps asks `std::bash` as a job. The rule and the launch check
+are in `docs/dev/stdlib/jobs.md`, "Approvals".
 
 `approvedPlan` decides from the plan, not from the caller, whether the
 command runs as a job. When it does, `raiseOne` puts "in the background"

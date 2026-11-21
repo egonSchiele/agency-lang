@@ -212,6 +212,38 @@ node missingFolder() {
   return [isFailure(result), result.error.includes("was not run"), listJobs().length]
 }
 
+/* The questions a line asks as a job, each as its effect and the end of
+ its folder, and whether the job started. Every job it starts is
+ stopped. */
+def jobQuestions(line: string): any {
+  let asked: any[] = []
+  let result: any = null
+  handle {
+    result = startJob(line, cwd: __dirname, maxMinutes: 1)
+    for (job in listJobs()) {
+      stopJob(job.id)
+    }
+  } with (intr) {
+    const folder: string = intr.data.cwd ?? ""
+    asked.push([intr.effect, folder.endsWith("/tests/agency/stdlib")])
+    return approve()
+  }
+  return [line, asked, isSuccess(result)]
+}
+
+// A job's line runs whole in the job's own process, where nothing checks
+// it a step at a time. So only one command, or a `cd` and one command,
+// gets narrow questions as a job: the `cd` is checked at launch and the
+// command starts in its folder. Any other line of several steps asks
+// std::bash.
+node aJobIsOneStepOrACdAndOneStep() {
+  return [
+    jobQuestions("cd stdlib && pnpm --version"),
+    jobQuestions("pnpm --version && pnpm --version"),
+    jobQuestions("pnpm --version"),
+  ]
+}
+
 node timeLimitCarriesTheLimit() {
   let result: any = null
   handle {

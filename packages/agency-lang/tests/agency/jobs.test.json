@@ -78,6 +78,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "aJobIsOneStepOrACdAndOneStep",
+      "description": "Each row: the line, the questions it asked as a job (the effect, and whether its folder is the cd's folder), and whether the job started. A cd and one command asks std::exec in the cd's folder. Two commands ask one std::bash, because a job runs its line whole where nothing checks it a step at a time. One command asks what it asks in the foreground.",
+      "input": "",
+      "expectedOutput": "[[\"cd stdlib && pnpm --version\",[[\"std::exec\",true]],true],[\"pnpm --version && pnpm --version\",[[\"std::bash\",false]],true],[\"pnpm --version\",[[\"std::exec\",false]],true]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "timeLimitCarriesTheLimit",
       "description": "The question for a job carries the job's limit in milliseconds as its timeout.",
       "input": "",

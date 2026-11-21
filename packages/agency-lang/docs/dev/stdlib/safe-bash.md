@@ -40,15 +40,17 @@ bash runs the original text.
   without adding information.
 - **Rebuilt text when narrow.** When every command was recognized, the
   text that runs is rendered from the tree that was classified
-  (`astToBash`), so a parser bug degrades to running what was read. Four
+  (`astToBash`), so a parser bug degrades to running what was read. Some
   commands in that tree are written by the classifier: a `cd` names the
   folder it resolved, the `exit 1` of a `cd` guard is added after it, a
-  git command is the one `gitCommand` built, and a `gh` command is the
-  one `ghCommand` built.
-- **Every shell spawn raises at least one effect.** A string of nothing
-  but echoes still raises `std::bash` (`bashPlan` substitutes it for an
-  empty effect list), so the effect log is a complete audit of shell
-  invocations.
+  git command is the one `gitCommand` built, a `gh` command is the one
+  `ghCommand` built, a grep of paths is the one `grepCommand` built, and
+  a `timeout` goes back in front of the command it runs.
+- **Every shell spawn raises at least one effect.** A line whose
+  commands raise nothing, such as `pwd` or `echo hi | grep h`, asks
+  `std::bash::readonly` when every word in it is known now, and
+  `std::bash` when one is not (see "A line that asks nothing"), so the
+  effect log is a complete audit of shell invocations.
 - **A relabeled effect approves the question, not the bytes.** Approving
   `std::write` for a redirect approves "a write to this file"; the
   content does not exist until bash runs.
@@ -92,7 +94,7 @@ runs in-process through `std::agency`.
 
 `bash`: everything else. Narrow when every command was recognized: a git
 command with a rule, see "git" below; a `gh` read with a rule, see "gh"
-below; a grep of one named file, a read of named files, a listing of named folders, a find, a
+below; a grep of named files and folders, a read of named files, a listing of named folders, a find, a
 program safeBash has no rule for (`std::exec`), a redirect contributing
 `std::write` or `std::read`), broad otherwise.
 
@@ -183,7 +185,8 @@ shell, as `std::github` has no Enterprise support either (issue #1003).
 The list is `SHELL_ENV_REMOVED` in
 `lib/host/node/nodeSubprocess.ts`. Without `POSIXLY_CORRECT`, GNU
 programs in the child read options anywhere on the line. No plan
-changes, because the flag tables that care set `optionsFirst`.
+changes, because the flag tables that care set `optionsFirst`, and a
+grep of paths runs with its flags written first.
 
 The shell-free echo models bash's builtin echo. `-n` is the one flag it
 takes. `-e` and `-E` go to bash, because the shell-free path does not
@@ -208,7 +211,7 @@ plan. For a broad plan it is `{ kind, detail }`:
 |---|---|
 | `unparseable` | the parser's message |
 | `unrecognized` | the first failure message `effectsFor` returned, such as ``no rule for `xargs` `` |
-| `noEffects` | `""`; every command was recognized and none raised an effect, so the audit rule asked `std::bash` |
+| `noEffects` | `""`; every command was recognized and none raised an effect, and a word in the line is not known now, so the audit rule asked `std::bash` |
 | `unrenderable` | why the tree could not be rendered back to text |
 
 The four broad branches of `planFor` go through `broadPlan`, which is
@@ -420,19 +423,23 @@ skips it; `prepareRedirectWrite` stays strict, because the shell-free
 write path computes the bytes it writes and a dup changes which stream
 `echo`'s output goes to.
 
-`redirectEffect` has two more rules for output redirects:
+`redirectEffect` has three more rules:
 
-1. A redirect of standard output or standard error to `/dev/null` writes
-   no file, so it contributes no effect. `pnpm test 2>/dev/null` asks one
-   `std::exec`.
-2. A redirect of standard error to a file contributes the same
+1. A redirect of standard output, standard error, or both (`&>`) to
+   `/dev/null` writes no file, so it contributes no effect. `pnpm test
+   2>/dev/null` and `pnpm test &>/dev/null` ask one `std::exec`.
+2. `< /dev/null` gives the command an empty stdin, which safeBash gives
+   every line anyway, so it contributes no effect either, and
+   `pipedProgram` does not count it as input. `node --version < /dev/null`
+   asks one `std::exec`. `cat < /dev/null` still has no rule, because a
+   cat with no file reads an empty stdin.
+3. A redirect of standard error to a file contributes the same
    `std::write` as `>` to that file, with the same mode. `make
    2>build.log` asks `std::exec` and `std::write`.
 
 Descriptor 1 means the same as no descriptor, so `make 1>out.log` is
 `make >out.log`. Any other explicit descriptor is unrecognized, so
-`make 3>x` is broad. `&>` is not one of these redirects, so
-`pnpm test &>/dev/null` is still broad.
+`make 3>x` is broad. `&>` to a file has no rule.
 Both rules live in `redirectEffect` only. `prepareRedirectWrite` still
 refuses every explicit descriptor, so `echo hi 2>err.txt` is never a
 shell-free write. It runs through bash and asks `std::write` for
@@ -479,8 +486,8 @@ Two pieces carry this, each with one job:
   `effectsFor`.
 - **What a command reads.** A verb's rule says what the command reads
   and nothing about where it sits. `readGrep` answers with a `GrepRead`:
-  `{ kind: "search", call }` for a path, or `{ kind: "stdin" }` when it
-  names none. The verb rule never sees the pipe flag.
+  `{ kind: "search", calls }` for its paths, or `{ kind: "stdin" }` when
+  it names none. The verb rule never sees the pipe flag.
 
 `stdinStage(verb, readsStdin, redirects)` joins them for a verb whose
 rule can read stdin, and `pipedProgram` is its counterpart for a program
@@ -488,8 +495,13 @@ rule can read stdin, and `pipedProgram` is its counterpart for a program
 two places that read the flag. A stdin reader fed by a pipe contributes only
 its redirects; anywhere else it is unrecognized, with the message `grep
 with no path reads stdin`. Its callers are grep, the read verbs (see "The
-read family"), and `tr`. A new verb that can read its stdin writes its
-"reads stdin" answer and calls the same helper.
+read family"), `tr`, and `tee`. A new verb that can read its stdin writes
+its "reads stdin" answer and calls the same helper.
+
+`tee` in a pipe writes the pipe into each file it names, as `>` does, so
+`teeEffects` asks `std::write` for each, resolved by the resolver `>`
+uses, in append mode under `-a`. `pnpm test 2>&1 | tee out.log | tail
+-30` asks `std::exec` and `std::write`.
 
 A grep in a pipe still goes through the flag table, so `-R` or
 `--filter` is still refused, and so is a flag after the pattern (`git
@@ -514,18 +526,23 @@ There are two greps, and safeBash uses both.
 
 Both raise `std::grep` with the same `dir`, so a policy cannot tell them
 apart, and a policy that approves `std::grep` under the launch directory
-is approving what the tool does. So a grep is handled one of two ways:
+is approving what the tool does. So real grep may run under that approval
+only when it reads no file the tool would not read. safeBash makes sure
+of that by writing the grep command itself (see "Any other grep runs real
+grep, written by safeBash"):
 
 | Command | What happens |
 |---|---|
 | `grep -rn hello src` | lone, translates: the tool's search, `std::grep` with `dir: <cwd>/src` |
 | `grep -n hello one.txt` | lone, translates: the tool's search, `std::grep` with `file: "one.txt"` |
-| `grep -rn "a+b" src` | `+` means different things to grep and JavaScript; a directory through bash: `std::bash` |
-| `grep -n "a+b" one.txt` | does not translate; one file through bash: `std::grep`, then real grep runs |
-| `grep -c hello one.txt` | the tool has no `-c`; one file through bash: `std::grep`, then real grep runs |
-| `grep -rn hello src \| head -20` | not lone; a directory through bash: `std::bash` |
+| `grep -rn "a+b" src` | `+` means different things to grep and JavaScript: real grep, `std::grep` for the folder |
+| `grep -c hello one.txt` | the tool has no `-c`: real grep, `std::grep` for the file |
+| `grep -rn hello src \| head -20` | not lone: real grep, `std::grep` for the folder |
+| `grep -rn hello src lib --include="*.ts"` | real grep, one `std::grep` per path |
+| `grep -rn hello node_modules \| head` | the folder's own name is one the tool skips: `std::bash` |
 | `git status \| grep hello` | fed by a pipe, no path: a filter, only the git question |
-| `git status \| grep -rn hello` | `-r` reads the working directory, pipe or not; a directory through bash: `std::bash` |
+| `git status \| grep -rn hello` | `-r` reads the working directory, pipe or not: `std::grep` for it |
+| `git status \| grep hello -v` | a filter runs as written, so a flag after the pattern: `std::bash` |
 | `grep hello` | no path and no pipe: reads a closed stdin, `std::bash` |
 | `grep -R hello .`, `grep --filter=x hello .` | not in the flag table: `std::bash` |
 
@@ -541,30 +558,42 @@ because a payload that ignored it would describe a different command.
 
 Left out on purpose: `-R` (GNU grep follows every symlink below the
 path; BSD grep does not by default); `-f`,
-`--exclude-from`, `--include-from` (read another file); `--include`,
-`--exclude`, `--exclude-dir` (the shell-free path cannot carry them out,
-and the bash path is narrow only for one named file); `-m` (counted per
+`--exclude-from`, `--include-from` (read another file); `-m` (counted per
 file); `-P` (BSD grep lacks it); `-z`, `-d`, `-D` (different meanings in
 different greps); ugrep's `--filter` and `--save-config`; the long
 spellings of short flags. Each letter in the table means the same thing in
 GNU grep's manual, ugrep 7.8.4's `--help`, and FreeBSD's grep manual.
+`--include`, `--exclude`, and `--exclude-dir` are in the table: each only
+narrows what grep reads, and each may be given more than once (the
+table's `repeatable`). The shell-free table does not have them, because
+the tool's search cannot carry them out.
+
+The parser reads `--include="*.ts"` as one word of two parts, the text
+`--include=` and a quoted part. A table that sets `quotedValues` reads
+such a word as the flag with the quoted text as its value
+(`joinedFlag`). Only `GREP_FLAGS` and the git `log` and `show` rows set
+it. A quoted value can hold a space, a comma, or a glob character, and the
+other tables' checks were written for bare values: `gh`'s list flags are
+read as CSV, and `find -name="x"` is refused on purpose.
 
 Four more refusals:
 
 - **A quoted word that starts with `-`.** Bash strips the quotes, so
   `grep "-R" src` runs `grep -R src`. This applies to a flag's value too,
   so `grep -e "-x" f` is refused even though grep would search for `-x`.
-- **A repeated valued flag.** For `grep -e a -e b`, a payload with one
-  pattern would misdescribe the search.
-- **A flag after the first positional, on the bash path.** BSD grep, and
-  GNU grep with `POSIXLY_CORRECT` set, read `-s` in `grep -n x f -s` as a
-  second file. The shell-free path sets `optionsFirst: false`, because no
-  real grep reads its arguments.
+- **A repeated valued flag**, except the three file filters. For `grep -e
+  a -e b`, a payload with one pattern would misdescribe the search.
+- **A flag after the pattern of a grep that reads a pipe.** BSD grep, and
+  GNU grep with `POSIXLY_CORRECT` set, read `-v` in `cmd | grep x -v` as a
+  file. Such a grep runs as written, so `readGrep` refuses it.
+  `GREP_FLAGS` itself allows a late flag (`optionsFirst: false`) and
+  records it in `SplitArgs.lateFlag`, because a grep of paths runs the
+  command safeBash writes, flags first.
 - **No path, outside a pipe.** grep reads the shell's closed stdin.
   Fed by a pipe it is a filter (see "Stages that read a pipe"). The `-r`
-  check comes first either way: with `-r` the path is `.`, grep prints
-  bare names, and a pipe does not stop it reading files, so `git status
-  | grep -rn hello` asks `std::bash` for the directory.
+  check comes first either way: with `-r` the path is `.`, and a pipe
+  does not stop grep reading files, so `git status | grep -rn hello` asks
+  `std::grep` for the working directory.
 
 ### A lone grep runs the tool's search
 
@@ -634,14 +663,54 @@ change the output, not what is read:
 - In the C locale grep works on bytes, so its `.` matches one byte of a
   multi-byte character, and the tool's matches a whole character.
 
-### Any other grep runs real grep, narrow for one file only
+### Any other grep runs real grep, written by safeBash
 
-`grepSearchEffects` is the `effectsFor` arm for a grep of a path. It
-raises `std::grep` only when the path names one file, which real grep and the tool read the same way. A
-directory search through bash reads files the tool skips, so it asks
-`std::bash`. `readGrep` resolves the path with `_searchTargetIn`, the same
-split the tool uses: a file gives its real parent as `dir` and its name as
-`file`, so a symlink to `~/.ssh/id_rsa` names `~/.ssh`.
+`grepRule` is the `simpleCommandRule` branch for grep. A grep that reads
+a pipe runs as written and asks nothing beyond its redirects. A grep of
+paths asks one `std::grep` per path (`grepSearchRule`) and runs the
+command `grepCommand` writes:
+
+```
+# The model writes:
+grep -rn "planFor" lib --include="*.ts" | head -20
+
+# bash runs:
+grep -r -n '--include=*.ts' --exclude-dir=node_modules --exclude=node_modules ... -e 'planFor' -- lib | head -20
+```
+
+The command has, in order: the checked flags; `--exclude-dir=<name>` and
+`--exclude=<name>` for each name in `SKIP_DIRS`, read through
+`_skipDirNames`; `-e` and the pattern, so a pattern that starts with `-`
+is never a flag; `--`; and the paths as the model wrote them, or `.` for
+a `grep -r` that named none (GNU grep then searches the working folder,
+and BSD grep reads stdin).
+
+The excludes are the safety argument. Real `grep -r` reads every file
+under the folder, `.git/config` included, while the tool's walk skips
+every entry with one of the six names, a file as well as a folder. In a
+git worktree `.git` is a file, so `--exclude-dir` alone would let grep
+read it. With both flags, real grep reads no file the tool skips, and
+`grepThroughBashReadsWhatTheToolReads` checks that on a tree with a match
+in each skipped place, on BSD grep and on GNU grep. `grepRunsWhatItAsked`
+pins the exact text, so a name added to `SKIP_DIRS` fails it until the
+expected text agrees. Real `grep -r` follows no symlink below the folder
+on either grep, as the tool does not.
+
+Real grep still reads what `.gitignore` ignores, and the tool does not.
+That is within the approval: the tool's `respectGitignore: false` reads
+those files too, and `std::grep` has no field for it, so an approval of a
+folder already covers its ignored files.
+
+A folder needs `-r`. A folder whose own name is one of the six has no
+rule, checked on the path as written and on its real path: with
+`--exclude-dir=dist`, `grep -r x dist` searches nothing (GNU grep skips
+"any command-line directory with a name suffix that matches"), while the
+tool searches a folder it is given. So `grep -rn x .` run inside a folder
+called `build` asks `std::bash` too.
+
+`readGrep` resolves each path with `_searchTargetIn`, the same split the
+tool uses: a file gives its real parent as `dir` and its name as `file`,
+so a symlink to `~/.ssh/id_rsa` names `~/.ssh`.
 
 ### What the payload fields mean
 
@@ -662,15 +731,80 @@ field needs two facts:
 
 ### Resolving the path when the plan is made
 
-`readGrep` and `readFileVerb` resolve a path before anything runs, and
-bash runs the line later. That is safe only while nothing that runs before the grep in a
-narrow line can change which file the path names. Today the narrow
-commands are git reads, file reads, and redirects, and a redirect writes
-into a file but cannot turn it into a symlink. Once project scripts are
-narrow (ADI-243), `pnpm build && cat out.txt` could replace `out.txt`
-between the plan and the run, and that slice has to deal with it. The
-shell-free read does not have this gap: `_read` opens the file without
-following a final link and checks it is the regular file it resolved.
+`readGrep`, `readFileVerb`, and the listings resolve a path before
+anything runs, and bash runs the line later. So the classifier carries
+what it knows about the line as it walks it, command by command, in a
+`LineState`:
+
+- `cwd`, the working directory after each `cd`;
+- `written`, the `std::write` payloads the line has asked for so far;
+- `opaque`, whether the line has run a command safeBash cannot see into;
+- `strict`, set for a lookup that needs a real path (below).
+
+`afterCommand` updates it after each command. A `std::write` goes in
+`written`. Any effect that is not in `SEE_THROUGH_EFFECTS`, the reads,
+listings, and searches, the git reads, and the GitHub reads, each by
+name, makes the line opaque. The list is by name and never by prefix:
+`git checkout` and `git stash pop` are `std::git` effects too, and either
+can put a symlink a commit holds into the working folder. An effect added
+to safeBash later makes the line opaque until someone adds it here.
+
+An opaque effect other than `std::exec` also empties `written`. A
+`std::exec` program's approval already lets it read any file, so a file
+written before it stays remembered. `git checkout` and `git stash pop`
+are approved to change the repository only, yet either can put a link
+where the written file was, so after one of them `echo a > out.txt; rm
+out.txt; git checkout main; cat out.txt` asks `std::bash`.
+
+A path that does not exist when the plan is made has a rule
+(`missingPath`) when its parent folder exists:
+
+1. When the line wrote that very file earlier, and `written` still holds
+   it, it resolves to it, even if the line is opaque: `pnpm test >
+   out.txt 2>&1; tail -50 out.txt`
+   asks `std::exec`, `std::write`, and `std::read` for the same file.
+2. Otherwise, when nothing opaque has run, it resolves by its parent:
+   `cat nope.txt` asks `std::read` for that name in the folder, and `ls
+   nope` asks `std::ls` for the folder, as `ls file` does.
+3. Otherwise it has no rule, as before. In `ln -s ~/.ssh/id_rsa x; cat
+   x`, `x` is missing when the plan is made, and the `cat` would read the
+   key under a question that names `x`.
+
+`_missingTarget` finds the place with `_resolveRedirectTarget`, the
+resolver `>` uses, so a read and a write of one new file name one
+`dir` and `filename`. It adds two checks: nothing is at the path, and the
+parent is a folder that exists. The walk keeps every step after the first
+missing one as written, so without the second check `cat nodir/nope.txt`
+would resolve too.
+
+Rule 1 is safe for this reason. The file a redirect made can still be
+swapped by a program that runs after it, as in `ln -sf ~/.ssh/id_rsa
+out.txt > out.txt; cat out.txt`. For a general program such as `pnpm
+test` that adds nothing: its approval already lets it read any file and
+print it. It adds something only for a program that does one narrow
+thing, where a person would approve it without thinking of reads. `ln`,
+`cp`, and `mv` are such programs, and they ask `std::bash` (see
+"Programs with no rule"), so the line above has no rule. A new narrow
+program that can replace a file must join that list before it gets any
+rule. The same swap is possible for a file that exists when the plan is
+made, as in `ln -sf ~/.ssh/id_rsa one.txt; cat one.txt`, and the same
+list closes it.
+
+The stages of a pipeline run at the same time, so another stage may make
+a path before this one reads it: in `pnpm test | cat nope.txt`, `pnpm
+test` runs alongside the `cat`. Each stage is classified in the line as
+it was before the pipeline, marked opaque, so inside a pipeline only rule
+1 applies, for a file written before the pipeline began. Parentheses end
+a `cd`, but not what the line wrote or ran.
+
+Some lookups set `strict` and never use the rules above, because each
+needs a real path: `find`, `tree`, `grep -r`, `diff`, `cmp`, an input
+redirect, and the shell-free paths. A lone `cat nope.txt` therefore goes
+to bash, which runs real cat, and the model reads cat's own error.
+
+The shell-free read does not have the swap gap at all: `_read` opens the
+file without following a final link and checks it is the regular file it
+resolved.
 
 ## The read family
 
@@ -691,6 +825,18 @@ hold a count.
 | `cut` | `-d C`, `-f F`, `-c C` | any number |
 | `nl` | `-b B` | any number |
 | `tac`, `rev` | none | any number |
+| `md5sum`, `shasum`, `sha256sum` | none | any number |
+| `file` | none | any number |
+
+`file` opens the file and prints what its first bytes say, such as
+`OpenSSH private key`, so it is a read. The checksums take no flag:
+`shasum -c` reads every file a list names.
+
+`sed -n Np` and `sed -n N,Mp` of one file is how models read a range of
+lines, so `sedEffects` asks `std::read` for that one shape: the flag
+`-n`, a script of digits, an optional comma and digits, then `p`, and one
+path. Every other sed has no rule: `w` in a script writes a file, and
+GNU sed's `e` runs a command.
 
 Every letter means the same thing in GNU coreutils, BSD coreutils, and
 busybox. These are left out on purpose:
@@ -734,8 +880,8 @@ target goes through the same function:
   both, following links, under two questions that name only `a` and `b`.
 - A FIFO or a device is refused. `wc -l pipe` would not return until
   `runBash`'s time limit stopped it.
-- A missing path is refused, so `cat nope.txt` asks `std::bash`, as
-  `grep x nope.txt` does.
+- A missing path has a rule only through `missingPath` (see "Resolving
+  the path when the plan is made").
 
 The payload names the file's real parent as `dir` and its name as
 `filename`, so a link to `~/.ssh/id_rsa` names `~/.ssh`.
@@ -832,11 +978,16 @@ asks:
 | `ls` | `l a A h 1 t r S R d p F --color=never` | none | with `-R` | its folder |
 | `tree` | `a d --noreport`, valued `L I` | `L` | always | refused |
 | `du` | `s h a c`, valued `d` | `d` | always | its folder |
+| `stat` | none | none | never | its folder |
+
+`stat` prints a file's or folder's size, owner, and times, which `ls -l`
+prints too, so it asks what `ls -l` asks.
 
 `listEffects` raises one `std::ls { dir, recursive, maxResults: 0 }` per
 folder named, and `.` when none is named. Every path goes through
 `resolveTargets`: it must be literal, and the payload names the real
-folder. A missing path or a glob word makes the command unrecognized. A
+folder. A glob word makes the command unrecognized, and a missing path
+follows `missingPath`, except under `tree`, which needs a real folder. A
 listing ignores its stdin, so `git log | ls` is a listing of `.`.
 
 A file given to `ls` or `du` asks for the folder that holds it, with
@@ -1008,13 +1159,24 @@ These stay broad, each for a reason:
   approves `std::exec` for agency's safe subcommands, which were chosen
   for the exec tool. `which` and `whereis` are here because a lone
   `which agency` is refused by `tryAgencyPlan`, and a chain must not turn
-  the same lookup into a question a saved rule answers. These keep the
-  message "no rule for `xargs`", because that's still true and the
-  rejection fixtures pin it.
+  the same lookup into a question a saved rule answers; the quiet table
+  takes a `which` before this list is read (see "Commands that only
+  print"). `cp`, `mv`, `ln`, and `sed` do one narrow thing to files, and
+  `std::exec` pins only the first argument: "always approve" for `mv -f a
+  b` would cover every forced move, one for `sed -n` covered `sed -n '1e
+  cmd'` and `sed -n 'w file'`, and one for `ln -sf` would let a later
+  command read a file swapped for a link (see "Resolving the path when the
+  plan is made"). A new program that can replace a file joins this list
+  before it gets any rule. `timeout` and `gtimeout` are here for every
+  spelling `unwrapTimeout` does not read through. These keep the message
+  "no rule for `xargs`", because that's still true and the rejection
+  fixtures pin it.
 - **A program fed by a pipe or `<`** (`pipedProgram`). The payload's
   `stdin` is empty, so it can't describe what the program reads.
-- From earlier checks: a leading assignment, and a command word that
-  isn't literal (`./gradlew`).
+  `< /dev/null` is not input.
+- From earlier checks: a leading assignment outside the quiet list (see
+  "Assignments in front of a command"), and a command word that isn't
+  literal (`./gradlew`).
 
 What a saved rule covers: `@always(command, subcommand)` saves the
 program with its first argument, so a rule for `pnpm test` covers `pnpm
@@ -1022,10 +1184,124 @@ test` in any folder and with any later arguments, the same as for the
 exec tool. `node -e '...'` is as broad as `sh -c`, so a rule for an
 interpreter should be keyed on `subcommand`. The same goes for every
 program that takes its program as text: `python3`, `perl`, `ruby`,
-`awk`, `sed`, and `jq`. A rule keyed on `awk` and `'{print}'` still
+`awk`, and `jq`. A rule keyed on `awk` and `'{print}'` still
 covers every file named after them. `rg --pre=<program>` runs
 another program for each file, so a saved rule for `rg` covers that
 too.
+
+## Commands that only print
+
+`QUIET_VERBS` lists commands that reveal nothing and change nothing.
+Inside a line each adds no question, as `echo` does, so `pwd; ls src`
+asks one `std::ls`. Some are bash builtins and some are programs; the
+table is checked first, in `otherVerbEffects`, so a spelling it accepts
+never reaches the builtin refusal or `NO_EXEC_PROGRAMS`.
+
+| Verb | Flags | Words |
+|---|---|---|
+| `pwd` | `-P -L` | none |
+| `true`, `false`, `:` | none | any |
+| `printf` | none | a literal format that does not start with `-` and holds no `%n`, then words that are literal or `$?` |
+| `basename`, `dirname` | none | literal |
+| `sleep` | none | one number |
+| `date` | `-u` | at most one `+FORMAT` word |
+| `uname` | `-a -s -r -m` | none |
+| `whoami`, `hostname` | none | none |
+| `which` | `-a` | literal names, none with the last path segment `agency` |
+| `type` | none | the same |
+| `command` | `-v`, required | the same |
+
+A spelling the table does not accept has no rule, and the line asks
+`std::bash`: `date -s` and `date 0101` set the clock, `hostname x`
+renames the machine, and `command ls` runs a program. `printf -v NAME`
+sets a shell variable, `PATH` included, so the next command in the line
+would run a program from another folder under an approval for the real
+one. The parser reads `"-v"` as a quoted word, and bash still takes it as
+the option, so the check reads the format's text. `%n` in a format sets
+a variable too: `printf 'aaa%n' PATH` leaves `PATH` as `3`, so a format
+with a `%n` conversion, modifiers or not, has no rule. A variable argument to
+`printf` would print what no `std::env` question named. `env` and
+`printenv` are not in the table, because they print the environment.
+
+## A line that asks nothing
+
+When every command in a line is recognized and none raises an effect,
+`planLine` asks one question for the line. `pwd`, `echo "---"`, `which
+node; date`, a lone `cd lib`, and `echo hi | grep h` all end here. When
+every word in the line is known now (`everyWordKnown`: `isLiteralWord`,
+or a word made only of such text and `$?`), it asks
+`std::bash::readonly { command, cwd, timeout }` and runs the rebuilt
+text, so the plan is narrow. `timeout` is the limit the line runs under,
+as in `std::bash`, so a job started with `startJob("sleep 600")` shows
+its limit. Otherwise, as in `echo $GITHUB_TOKEN`, it asks
+`std::bash` for the original text, with the reason `noEffects`.
+
+`std::bash::readonly` is declared in `stdlib/shell.agency`, with
+`@always(command, cwd)`. `recommended` approves it, so a lone `pwd` asks
+no person. It is in the `Shell` effect set, so `--reject Shell` rejects
+it, and the approval prompt colors it as a shell question. A saved policy
+does not follow `recommended`: someone whose `~/.agency-agent/policy.json`
+was written before it existed gets the rule only after `/policy` updates
+the file. Until then a lone `pwd` asks them the new question.
+
+## `timeout`
+
+`timeout 60 pnpm test` runs `pnpm test` and stops it after a minute, so
+it asks what `pnpm test` asks. `unwrapTimeout` reads through `timeout` or
+`gtimeout` (the name coreutils gives it on macOS) when its first word is
+a number with an optional `s`, `m`, or `h` unit and a command follows.
+The wrapper is read in one place for each reader: `flattenOne` hands the
+refuse wall the command inside every layer of it, so `timeout 5 rm -rf /`
+and `timeout 5 timeout 5 shred x` are refused, and `classifySimple`
+classifies the command inside one layer. No verb rule knows the word.
+
+`withTimeout` puts the wrapper back in front of the command the rule
+returned. The assignments go in front of `timeout`, the model's and any
+the rule added, such as the `GH_HOST=github.com` that `ghCommand` puts on
+a search: after it, `timeout` would look for a program called
+`GH_HOST=github.com`. A rule that returns more than one command, as a
+`git diff` does, has no rule under `timeout`. So does a flag on `timeout`
+(`-s KILL`) and a second `timeout`.
+
+## Assignments in front of a command
+
+A leading assignment can make an approved program run other code:
+`PATH=/tmp/evil:$PATH pnpm test`, `NODE_OPTIONS='--require ./x.js' pnpm
+test`, `GIT_SSH_COMMAND=... git fetch`. No payload has a field for the
+environment, so a saved rule for `pnpm test` would approve all of these.
+
+`QUIET_ASSIGNMENTS` is the exception: `TERM`, `NO_COLOR`, `FORCE_COLOR`,
+`CLICOLOR`, `CLICOLOR_FORCE`, `COLUMNS`, `LINES`, `LC_ALL`, `LANG`, and
+`TZ` change how output looks. `quietAssignments` accepts one only with a
+literal value of letters, digits, and `. _ - :`. A value with a `/` has
+no rule, because the C library reads `TZ=/some/path` and a locale name
+with a slash as a file to open. `NODE_ENV` changes which config a program
+loads, and `CI` changes what programs do (`pnpm install` uses the frozen
+lockfile), so neither is on the list.
+
+A command safeBash writes for git, gh, or grep starts with no assignments
+of the model's, so `withAssignments` puts them back in front of each
+simple command the rule wrote, before any safeBash adds:
+`NO_COLOR=1 gh search issues crash --repo o/r` runs as `NO_COLOR=1
+GH_HOST=github.com gh search issues ...`, and `TERM=dumb git diff` puts
+`TERM=dumb` in front of both commands of the guarded diff.
+
+## `mkdir`, `touch`, and the files they make
+
+`mkdir` asks `std::mkdir { dir }` for each folder, with the real path the
+`mkdir` tool puts in its own payload. `_realPathIn` (`lib/stdlib/
+safeBashRemove.ts`) is that resolver, shared with `rm`: steps that exist
+are resolved through links, every step after the first missing one is
+kept as written, and a dangling link fails. `touch` asks `std::write {
+dir, filename, content: "", mode: "append" }` for each file, resolved by
+the resolver `>` uses, since touching a file appends nothing to it. The
+`with-writes` policy approves both under its folder. `mkdir -m` and
+`touch -t` are not in the table.
+
+`cp` and `mv` ask `std::bash` for now. A rule for them must name the file
+that lands, which depends on whether the destination is a folder, handle
+several sources, a link as a source (which `cp` follows and `mv` moves),
+and the refusals `rm` has, since `mv` deletes its source.
 
 ## git
 
@@ -1046,8 +1322,10 @@ A git command is recognized only when an existing `std::git::*` effect
 describes it completely. The rule fills that effect's payload from the
 command's own words. So a policy that approves the `gitCommit` tool in a
 project approves `git commit -m "..."` there, with no change to the
-policy. A command with no such effect (`git push`, `git revert`, `git
-rev-parse`) has no rule and asks `std::bash`.
+policy. A read with no effect of its own asks an existing effect when
+it prints a part of what that effect already shows (see "Reads that map
+onto another effect"). A command with no such effect (`git push`, `git
+revert`, `git fetch`) has no rule and asks `std::bash`.
 
 A flag is allowed only when it leaves the payload true. A flag that
 changes how the result is shown (`--oneline`, `--stat`) or shows less of
@@ -1097,6 +1375,59 @@ Not recognized, on purpose: a forced form (`branch -D`, `checkout -f`),
 `checkout -b name start`), `add -u`, `stash -u` and `stash drop`, a path
 on `show` or `status`, and a ref on `blame`. For the last three the
 effect has no field to hold the word.
+
+`log` and `show` take `--format` and `--pretty`, which change how the
+result is shown. Their rows set `quotedValues`, so `--format="%h %s"`
+is read as the flag (see "The flag table" under grep), and the value runs
+as one quoted word.
+
+### Reads that map onto another effect
+
+These subcommands have no effect of their own. Each prints a part of what
+an existing effect already shows, so it asks that effect:
+
+| Command | Asks | Why the payload is true |
+|---|---|---|
+| `rev-parse <ref>`, alone or with `--short`, `--abbrev-ref`, `--verify` | `log { cwd, ref, path: "" }` | It prints the hash or name of a commit that `git log <ref>` prints. |
+| `rev-parse --show-toplevel`, `--git-dir`, `--is-inside-work-tree` | `status { cwd }` | It prints where the repository is. |
+| `merge-base A B` | `log` for `A` and for `B` | It prints one commit from the history of both. |
+| `ls-files [folder]` | `std::ls { dir, recursive: true, maxResults: 0 }` | It prints names under the folder, which `ls -R` prints too. |
+| `grep <pattern> [paths]` | `std::grep` per path | It searches tracked files under each path, minus the six names the grep tool skips. |
+| `grep <pattern> <ref> [-- paths]` | `show { cwd, ref }` | It reads files of that commit, which `git show <ref>:<path>` already reads under the same question. |
+| `worktree list` | `branchList { cwd }` | It prints the branches checked out and where. |
+
+`rev-parse` with flags of both kinds, or any other flag (`--git-path`),
+has no rule. `ls-files --others` lists every ignored file without
+`--exclude-standard`, `node_modules` included, so the two are allowed
+only together. `git grep` takes `-n -i -l -w -E -F -c`. `--no-index`
+reads outside the repository, and `-O` and `--open-files-in-pager` run a
+program, so none of them has a rule.
+
+A repository can track files under a folder the grep tool skips, such as
+`dist`. For a `git grep` with no ref, `gitGrepRule` writes two exclude
+pathspecs per name in `SKIP_DIRS` after the paths, `':(top,exclude,glob)**/<name>/**'`
+and `':(top,exclude,glob)**/<name>'`, so git grep reads no file the tool
+would skip. `top` reads each from the top of the repository, so `git grep
+x ..` from a subfolder does not reach a `dist` beside it. With no path from the model it writes `.` first, because git
+needs one pathspec that is not an exclude. `gitRunsSafely` commits a
+match under `dist` and checks git grep does not print it. The pattern is
+always written after `-e`, so a pattern that starts with `-` is never a
+flag. The form with a ref writes no excludes: an approval of `show` in a
+repository already covers reading any file of any commit there.
+
+### Flags before the subcommand
+
+`gitLeadingFlags` reads two flags before the subcommand. `--no-pager`
+changes nothing, because the fixed flags already set `core.pager=cat`,
+so it is dropped. `-C <dir>` runs git in that folder, which is `cd <dir>
+&& git ...`, so the folder is resolved by `cdTarget`'s rules, and each
+`-C` is read from the folder the one before it named, as git does. Every
+payload names that folder, and `inGitFolder` writes `-C '<folder>'`
+after the fixed flags in each git command the rule built, the repository
+check in front of a diff included. Any other leading flag, such as `-c`
+or `--git-dir`, has no rule. The refuse wall reads past the same two
+flags (`afterGitLead`), so `git --no-pager checkout .` and `git -C x
+reset --hard` are refused.
 
 ### safeBash writes the git command it runs
 
@@ -1225,10 +1556,11 @@ name, so `git checkout -b src` works beside a `src` folder.
 
 `simpleCommandRule` is the one function every simple command is
 classified by. It makes four checks before it looks at the verb: there is
-a command word, the word is literal (`/bin/git` is not `git`), there is
-no leading assignment (`GIT_DIR=/x git status`), and the redirects have
-effects. It returns the effects and the command to run. For every verb
-but git the command is the one it was given.
+a command word, the word is literal (`/bin/git` is not `git`), every
+leading assignment is a quiet one (`GIT_DIR=/x git status` is not), and
+the redirects have effects. It returns the effects and the command to
+run. For every verb but git, gh, and a grep of paths, the command is the
+one it was given.
 
 `effectsFor` is a call to `simpleCommandRule` that returns the effects.
 `classifySimple` calls it and passes on both. `gitEffects` has no other
@@ -1236,15 +1568,17 @@ caller, so no path reaches a git rule without the four checks. A second
 caller would have to repeat them, and one that forgot the redirects would
 let `git log > ~/.zshrc` ask only `std::git::log`.
 
-### The table and the four functions
+### The table and the functions
 
-Nine subcommands have one shape, and each is a row of `GIT_VERBS`: its
+Ten subcommands have one shape, and each is a row of `GIT_VERBS`: its
 flags, how its words are read, and how many refs, paths, and names it
 takes. `gitRowRule` checks any row, and `gitPayloads` fills the payload
 with one `match` arm per subcommand. Adding one is a row and an arm.
 
-For `branch`, `stash`, `commit`, and `checkout` the allowed words depend
-on the flags, so each has a function of its own, using the same helpers.
+For `branch`, `stash`, `commit`, `checkout`, `rev-parse`, `ls-files`,
+`worktree`, and `grep` the allowed words or the effect depend on the
+flags or on the disk, so each has a function of its own, using the same
+helpers.
 `branch` is the one to be careful with: `git branch -v newname` creates a
 branch, so a listing flag beside a name has no rule, and only `--merged`
 and `--no-merged` take a word.
@@ -1949,10 +2283,14 @@ nothing more, as it does for a file on disk.
 - `lib/host/gitEnvironment.ts`: the git environment variables, in three
   lists the shell and the git tools share.
 - `lib/stdlib/safeBash.ts`: the tarsec re-export.
-- `lib/stdlib/safeBashRemove.ts`: the delete refusal and the real path of
-  an `rm` operand, tested in `safeBashRemove.test.ts`. The plan tests are
-  `removePlans`, `removeRefusals`, `removeAfterCd`, and
-  `removeAsksLikeTheRemoveTool`. No test runs an `rm`.
+- `lib/stdlib/safeBashRemove.ts`: the delete refusal and `_realPathIn`,
+  the real path of an `rm` or `mkdir` operand, tested in
+  `safeBashRemove.test.ts`. The plan tests are `removePlans`,
+  `removeRefusals`, `removeAfterCd`, and `removeAsksLikeTheRemoveTool`.
+  No test runs an `rm`.
+- `lib/stdlib/prepareContainedPath.ts`: `resolveRedirectTarget`, where a
+  write lands, and `missingTarget`, the same place for a read of a path
+  that does not exist yet.
 - `lib/stdlib/grepDialect.ts`: the pattern translation, grep's output
   format, and the skipped-folders note.
 - `lib/stdlib/readDialect.ts`: what `cat`, `cat -n`, `head`, and `tail`
@@ -1981,7 +2319,21 @@ nothing more, as it does for a file on disk.
   `ghLookupFailureRaisesNothing` (a repository the test makes, with and
   without an origin), `ghRunsWhatItAsked` and `ghLoginNote` (a fake `gh`
   on the search path, through `runWithFakeGh`). `punctuationInWords`
-  covers words with `,`, `@`, `%`, and braces.
+  covers words with `,`, `@`, `%`, and braces. The grep-through-bash
+  nodes are `grepThroughBashAsksStdGrep`, `grepRunsWhatItAsked`, and
+  `grepThroughBashReadsWhatTheToolReads`, which runs real grep on a tree
+  that holds a match in every place the tool skips. The quiet nodes are
+  `quietCommandsAskNothing`, `timeoutReadsThrough`,
+  `quietAssignmentsAndNull`, `quietLinesAskTheQuietQuestion`, and
+  `quietLineRunsUnderRecommended`. The file-command nodes are
+  `makeAsksLikeTheTools`, `fileProgramsAskBash`,
+  `teeWritesLikeARedirect`, and `readsByOtherNames`. The missing-path
+  nodes are `missingPathsResolveByParent`,
+  `missingPathAfterAProgramIsBroad`, and `readsOfFilesTheLineWrote`.
+- `tests/agency/safeBash-corpus.agency` and `safeBash-corpus.json`: the
+  measurement. Each row is a common coding line with the outcome and
+  effect names it plans to, so a rule change shows as rows that moved.
+  It is not the place for a rule's edge cases.
 - `lib/stdlib/safeBash.test.ts`: `astToBash` round-trips every command
   family the classifier sees.
 - `lib/stdlib/statelog.test.ts`: `_debug`.

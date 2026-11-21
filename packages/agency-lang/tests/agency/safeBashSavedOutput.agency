@@ -154,8 +154,8 @@ node programsWithNoRuleAskTheirOwnQuestion() {
   let sliced = ""
   let echoed = ""
   handle {
-    sliced = text(safeBash("sed -n '2,3p' ${path}"))
-    // Naming a saved output reads nothing, so this still asks std::bash.
+    sliced = text(safeBash("awk 'NR==2,NR==3' ${path}"))
+    // Naming a saved output reads nothing, so this still asks a question.
     echoed = text(safeBash("echo ${path} | cat"))
   } with (intr) {
     seen.push(intr.effect)
@@ -223,7 +223,9 @@ node aLineThatWritesKeepsItsReadQuestion() {
   let seen: string[] = []
   let result = ""
   handle {
-    result = text(safeBash("ln -sf ${FIXTURE}/a.txt ${path}; cat ${path}"))
+    // touch writes a file, so the line does more than read. (`ln` would
+    // make the whole line ask std::bash: it has no rule.)
+    result = text(safeBash("touch ${FIXTURE}/b.txt; cat ${path}"))
   } with (intr) {
     seen.push(intr.effect)
     if (intr.effect == "std::read") {

@@ -13,9 +13,9 @@ import {
  } from "std::safeBash"
 import test { splitFlags, flattenCommands, readFileVerb, verbName, ghLongFlags } from "std::safeBash"
 import { pendingLookups, GhRepo, Plan } from "std::safeBash/actions"
-import { checkPolicy, recommendedAutoApprovePolicy } from "std::policy"
+import { checkPolicy, recommendedAutoApprovePolicy, withWritesPolicy } from "std::policy"
 import { resolve } from "std::path"
-import { bash, glob } from "std::shell"
+import { bash, glob, grep } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
 import { cwd, env, setEnv } from "std::system"
 
@@ -400,8 +400,8 @@ node removeAsksLikeTheRemoveTool() {
 node sequenceRunsThroughBash() {
   // The measured divergence that motivated the redesign: v2 returned
   // "hi\n\nbye\n" where bash returns "hi\nbye\n".
-  // The trailing `true` has no rule, so the line stays on the bash path;
-  // a chain of echoes alone runs in process.
+  // The trailing `true` keeps the line on the bash path; a chain of
+  // echoes alone runs in process.
   const result = safeBash("echo hi && echo bye && true")
   if (result is failure(why)) {
     return "FAILED: ${why}"
@@ -627,7 +627,8 @@ node rejectedBroadSaysWhy() {
 }
 
 node rejectedAuditSaysWhy() {
-  const result = safeBash("echo hi | cat")
+  // `$HOME` is not known now, so this asks std::bash, not the quiet question.
+  const result = safeBash("echo $HOME | cat")
   if (result is failure(why)) {
     return why
   }
@@ -671,15 +672,308 @@ node newShapes() {
 }
 
 node pipelineRunsThroughBash() {
-  // `tr` has no rule, so this plan is broad and runs the original text.
-  // What this pins is that a pipe in a broad string reaches bash through
-  // _bash and produces bash's output. The rebuilt-text path through a
-  // pipe is pinned by the executionCommand row in newShapes.
+  // `tr` reads the pipe and asks nothing, so the line asks the quiet
+  // question. What this pins is that a pipe reaches bash through _bash and
+  // produces bash's output.
   const result = safeBash("echo hi | tr a-z A-Z")
   if (result is failure(why)) {
     return "FAILED: ${why}"
   }
   return result.value
+}
+
+// Commands that only print add no question inside a line. A spelling the
+// quiet table does not accept has no rule.
+node quietCommandsAskNothing() {
+  return [
+    treeRow("pwd; ls lib", PACKAGE_DIR),
+    treeRow("which node && node --version", PACKAGE_DIR),
+    treeRow("command -v gtimeout; ls", PACKAGE_DIR),
+    treeRow("uname -a; whoami; hostname; date -u '+%s'; ls", PACKAGE_DIR),
+    treeRow("basename a/b.txt; dirname a/b.txt; sleep 1; true; false; :; type git; ls", PACKAGE_DIR),
+    treeRow("which agency", PACKAGE_DIR),
+    treeRow("which agency; ls", PACKAGE_DIR),
+    treeRow("which node_modules/.bin/agency; ls", PACKAGE_DIR),
+    treeRow("command ls", PACKAGE_DIR),
+    treeRow("hostname x; ls", PACKAGE_DIR),
+    treeRow("date -s 1; ls", PACKAGE_DIR),
+    treeRow("date 0101; ls", PACKAGE_DIR),
+    treeRow("sleep $N; ls", PACKAGE_DIR),
+    treeRow("printf -v PATH x; ls", PACKAGE_DIR),
+    treeRow("printf \"-v\" PATH x; ls", PACKAGE_DIR),
+    treeRow("printf $F x; ls", PACKAGE_DIR),
+    treeRow("printf \"$GITHUB_TOKEN\"; ls", PACKAGE_DIR),
+    treeRow("printf 'a\\n'; ls", PACKAGE_DIR),
+    treeRow("printf '%s\\n' a b; ls", PACKAGE_DIR),
+    treeRow("printf 'a%n' PATH; ls", PACKAGE_DIR),
+    treeRow("printf '%5n' PATH; ls", PACKAGE_DIR),
+    treeRow("printf '%s%ln' a PATH; ls", PACKAGE_DIR),
+    treeRow("printf '100%%n\\n'; ls", PACKAGE_DIR),
+    treeRow("pwd -P > out.txt", PACKAGE_DIR),
+  ]
+}
+
+// `timeout <duration> <command>` asks what the command asks. The wrapper
+// goes back in front of the command that runs, with the assignments in
+// front of it.
+node timeoutReadsThrough() {
+  return [
+    treeRow("timeout 60 pnpm test", PACKAGE_DIR),
+    execArgs("timeout 60 pnpm test"),
+    treeRow("timeout 5 cat one.txt", FIXTURES),
+    treeRow("gtimeout 60s pnpm test", PACKAGE_DIR),
+    treeRow("timeout 120 pnpm run typecheck 2>&1 | tail -20", PACKAGE_DIR),
+    treeRow("timeout -s KILL 5 pnpm test", PACKAGE_DIR),
+    treeRow("timeout 5 timeout 5 ls", PACKAGE_DIR),
+    treeRow("timeout 5 git diff", PACKAGE_DIR),
+    treeRow("timeout 5s5 ls", PACKAGE_DIR),
+    treeRow("timeout 5", PACKAGE_DIR),
+    executionCommand("TERM=dumb timeout 60 pnpm test"),
+    executionCommand("timeout 5 gh search issues crash --repo o/r"),
+    executionCommand("timeout 5 git status > out.txt"),
+    planOutcome("timeout 5 rm -rf /"),
+    planOutcome("timeout 5 shred x"),
+    planOutcome("timeout 5 git reset --hard"),
+    planOutcome("timeout 5 timeout 5 rm -rf /"),
+  ]
+}
+
+// A few variables only change how output looks, and may come in front of
+// a command with a plain value. A redirect from or to /dev/null reads and
+// writes no file.
+node quietAssignmentsAndNull() {
+  return [
+    treeRow("TERM=dumb pnpm test", PACKAGE_DIR),
+    treeRow("NO_COLOR=1 LC_ALL=C pnpm test", PACKAGE_DIR),
+    treeRow("tv --help </dev/null", PACKAGE_DIR),
+    treeRow("pnpm test &>/dev/null", PACKAGE_DIR),
+    treeRow("PATH=/tmp pnpm test", PACKAGE_DIR),
+    treeRow("TERM=$X pnpm test", PACKAGE_DIR),
+    treeRow("NODE_OPTIONS=x pnpm test", PACKAGE_DIR),
+    treeRow("CI=1 pnpm test", PACKAGE_DIR),
+    treeRow("TZ=/etc/passwd date", PACKAGE_DIR),
+    treeRow("pnpm test &>out.txt", PACKAGE_DIR),
+    treeRow("cat < /dev/null", PACKAGE_DIR),
+    treeRow("git status < /dev/null", PACKAGE_DIR),
+    executionCommand("TERM=dumb git status"),
+    executionCommand("TERM=dumb git diff"),
+    executionCommand("NO_COLOR=1 gh search issues crash --repo o/r"),
+    executionCommandIn("LC_ALL=C grep -rn hello . | head", FIXTURES),
+  ]
+}
+
+/* A plan's effect names and the text it runs. */
+def quietLine(source: string, dir: string): any {
+  const plan = planFor(source, dir)
+  const ran = match(plan.execution) {
+    { kind: "bash", command } => command
+    _ => "NOT-BASH"
+  }
+  return [source, outcomeOf(plan), [effect.name for effect in plan.effects], ran.split(resolve(dir)).join("<dir>")]
+}
+
+// A line whose commands raise no question asks std::bash::readonly when
+// every word in it is known now, and std::bash when one is not.
+node quietLinesAskTheQuietQuestion() {
+  return [
+    quietLine("pwd", PACKAGE_DIR),
+    quietLine("echo \"---\"", PACKAGE_DIR),
+    quietLine("which node; date", PACKAGE_DIR),
+    quietLine("echo $HOME", PACKAGE_DIR),
+    quietLine("echo ~", PACKAGE_DIR),
+    quietLine("cd lib", PACKAGE_DIR),
+    quietLine("echo hi | grep h", PACKAGE_DIR),
+    quietLine("TERM=dumb pwd", PACKAGE_DIR),
+  ]
+}
+
+// The question reaches a policy as std::bash::readonly, which recommended
+// approves. A lone `pwd` runs with no other question.
+node quietLineRunsUnderRecommended() {
+  let out = ""
+  handle {
+    const result = safeBash("pwd", cwd: FIXTURES)
+    if (result is success(text)) {
+      out = text
+    }
+  } with (intr) {
+    if (intr.effect == "std::bash::readonly" && checkPolicy(recommendedAutoApprovePolicy, intr).type == "approve") {
+      return approve()
+    }
+    return reject()
+  }
+  return out.trim() == resolve(FIXTURES)
+}
+
+/** A folder of its own for the file-command and missing-path tests: a
+ file `one.txt` and a folder `sub`. */
+static const FILES_FIXTURE = __dirname + "/stdlib/__safebash_files__"
+
+def makeFilesFixture() {
+  remove(FILES_FIXTURE) with approve
+  mkdir(FILES_FIXTURE) with approve
+  bash("mkdir sub && printf 'one\\ntwo\\n' > one.txt", cwd: FILES_FIXTURE) with approve
+}
+
+/* The path an effect's payload names, with the fixture's folder as `<fix>`. */
+def fixturePath(payload: any): string {
+  if (payload == null) {
+    return ""
+  }
+  let full: string = payload.dir ?? payload.target ?? payload.cwd ?? ""
+  if (payload.filename != null) {
+    full = full + "/" + payload.filename
+  }
+  return full.split(resolve(FILES_FIXTURE)).join("<fix>")
+}
+
+/* A plan in the fixture: its outcome, and each effect's name and path. */
+def fileRow(source: string): any {
+  const plan = planFor(source, FILES_FIXTURE)
+  const effects: any[] = plan.effects
+  return [source, outcomeOf(plan), [[effect.name, fixturePath(effect.payload)] for effect in effects]]
+}
+
+/* The decision a policy makes on the first effect of a plan in the fixture. */
+def firstDecision(source: string, policy: any): string {
+  const effect: any = planFor(source, FILES_FIXTURE).effects[0]
+  return checkPolicy(policy, { effect: effect.name, data: effect.payload }).type
+}
+
+// mkdir asks std::mkdir for the real path the mkdir tool would name, and
+// touch asks std::write for an empty append, which the with-writes policy
+// approves under its folder.
+node makeAsksLikeTheTools() {
+  makeFilesFixture()
+  const touched: any = planFor("touch x.txt", FILES_FIXTURE).effects[0]
+  const rows = [
+    fileRow("mkdir -p a/b"),
+    fileRow("mkdir a b"),
+    fileRow("mkdir -p sub/x"),
+    fileRow("touch x.txt"),
+    [touched.payload.content, touched.payload.mode],
+    fileRow("touch one.txt sub/two.txt"),
+    fileRow("mkdir -m 700 a"),
+    fileRow("mkdir $X"),
+    fileRow("touch -t 0101 x"),
+    fileRow("mkdir"),
+    firstDecision("mkdir -p tmp/x", withWritesPolicy(FILES_FIXTURE)),
+    firstDecision("mkdir -p /usr/local/x", withWritesPolicy(FILES_FIXTURE)),
+  ]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
+// cp, mv, ln, and sed do one narrow thing to files, and std::exec pins
+// only their first argument, so none of them asks std::exec.
+node fileProgramsAskBash() {
+  return [
+    grepNames("cp a b"),
+    grepNames("mv -f a b"),
+    grepNames("ln -s a b"),
+    grepNames("sed -i s/a/b/ one.txt"),
+    grepNames("sed -n '1e true' one.txt"),
+    grepNames("sed -n 'w out.txt' one.txt"),
+  ]
+}
+
+// tee in a pipe writes each file it names, as a redirect does.
+node teeWritesLikeARedirect() {
+  makeFilesFixture()
+  const append: any = planFor("pnpm test | tee -a out.log", FILES_FIXTURE).effects[1]
+  const rows = [
+    fileRow("pnpm test 2>&1 | tee out.log | tail -30"),
+    fileRow("pnpm test | tee a.log sub/b.log"),
+    append.payload.mode,
+    fileRow("tee out.log"),
+    fileRow("pnpm test | tee $F"),
+  ]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
+// A range read with sed, a checksum, and file are reads; stat is a
+// listing of the folder that holds the file.
+node readsByOtherNames() {
+  makeFilesFixture()
+  const rows = [
+    fileRow("sed -n 10,20p one.txt"),
+    fileRow("sed -n '5p' one.txt"),
+    fileRow("sed -n '1,5p;7p' one.txt"),
+    fileRow("sed -n p one.txt"),
+    fileRow("git log | sed -n 1,5p"),
+    fileRow("stat one.txt"),
+    fileRow("stat sub"),
+    fileRow("shasum one.txt"),
+    fileRow("sha256sum one.txt"),
+    fileRow("md5sum one.txt"),
+    fileRow("file one.txt"),
+    fileRow("shasum -c sums.txt"),
+    fileRow("file sub"),
+  ]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
+// A path that does not exist when the plan is made resolves by its
+// parent, when the parent exists and nothing opaque has run before it.
+node missingPathsResolveByParent() {
+  makeFilesFixture()
+  const rows = [
+    fileRow("cat nope.txt"),
+    planFor("cat nope.txt", FILES_FIXTURE).execution.kind,
+    fileRow("ls nope 2>/dev/null || echo missing"),
+    fileRow("ls -la one.txt nope.txt"),
+    fileRow("wc -l nope.txt sub/nope.txt"),
+    fileRow("cat nodir/nope.txt"),
+    fileRow("find nope -name x"),
+    fileRow("tree nope"),
+    fileRow("diff one.txt nope.txt"),
+    fileRow("wc -l < nope.txt"),
+    fileRow("grep x nope.txt | head"),
+    fileRow("pnpm build && cat out.txt"),
+    fileRow("git status; cat nope.txt"),
+  ]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
+// After a command that ran a program safeBash cannot see into, a missing
+// path has no rule: the program may have made it into anything.
+node missingPathAfterAProgramIsBroad() {
+  makeFilesFixture()
+  const rows = [
+    fileRow("ln -s /etc/hosts x; cat x"),
+    fileRow("mkdir x; ls x"),
+    fileRow("cp one.txt y; cat y"),
+    fileRow("ln -sf /etc/hosts out.txt > out.txt; cat out.txt"),
+    fileRow("pnpm test; cat nope.txt"),
+    fileRow("pnpm test | cat nope.txt"),
+    // A narrow command that can put a link where a file was forgets the
+    // files the line wrote.
+    fileRow("echo a > out.txt; rm out.txt; git checkout main; cat out.txt"),
+    fileRow("echo a > out.txt; git stash pop; cat out.txt"),
+    fileRow("git checkout main > out.txt; cat out.txt"),
+  ]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
+// A read of a file the same line wrote resolves to it, even after an
+// opaque program: the redirect asked std::write for that very file.
+node readsOfFilesTheLineWrote() {
+  makeFilesFixture()
+  const rows = [
+    fileRow("gh pr diff 1 --repo o/r > x.diff 2>&1; wc -l x.diff"),
+    fileRow("pnpm test > out.txt 2>&1; tail -50 out.txt"),
+    fileRow("tail -5 out.txt; pnpm test > out.txt"),
+    fileRow("pnpm test > out.txt | cat out.txt"),
+    fileRow("(pnpm test > out.txt); cat out.txt"),
+    fileRow("pnpm test > out.txt 2>&1 && cat out.txt | tail -5"),
+    fileRow("pnpm test 2>&1 | tee out.txt; grep FAIL out.txt"),
+  ]
+  remove(FILES_FIXTURE) with approve
+  return rows
 }
 
 def split(source: string): any {
@@ -719,6 +1013,21 @@ node splitGrepFlags() {
     split("grep -e \"-x\" one.txt"),
     split("grep -n hello one.txt -s"),
     split("grep --color=always x one.txt"),
+    split("grep -rn x lib --include=\"*.ts\" --include=\"*.md\""),
+    split("grep -e a -e b f"),
+  ]
+}
+
+// A long flag joined to a quoted value is that flag, but only for a table
+// that asks for it: gh and find do not, and plan as before.
+node joinedFlagWords() {
+  return [
+    split("grep --include=\"*.ts\" x lib"),
+    split("grep --include='*.ts' x lib"),
+    split("grep --include=\"$X\" x lib"),
+    split("grep \"-R\" src"),
+    grepNames("gh pr list --label=\"bug,urgent\""),
+    grepNames("find . -name=\"*.ts\""),
   ]
 }
 
@@ -782,13 +1091,17 @@ def grepPayloadOf(source: string): any {
 
 node grepThroughBash() {
   // Not lone (a pipe or a redirect), or a flag the tool lacks: the
-  // command runs through bash, narrow only for one file.
+  // command runs through bash, with one std::grep per path.
   return [
     grepNames("grep -c hello one.txt"),
     grepNames("grep -A 1 hello one.txt"),
     grepNames("grep -n \"a+b\" one.txt"),
     grepNames("grep -n hello one.txt > out.txt"),
     grepNames("git status && grep -n hello one.txt"),
+    grepNames("grep -rn hello one.txt two.txt"),
+    grepNames("grep -rn hello --include='*.txt' ."),
+    grepNames("git status && grep -rn hello ."),
+    grepNames("git status && grep -n hello one.txt -s"),
   ]
 }
 
@@ -802,12 +1115,8 @@ node grepUnrecognized() {
     grepNames("grep --filter=x hello ."),
     grepNames("grep -rn $PAT ."),
     grepNames("grep -rn hello *.txt"),
-    grepNames("grep -rn hello one.txt two.txt"),
-    grepNames("grep -rn hello --include='*.txt' ."),
     grepNames("grep -c hello ."),
-    grepNames("git status && grep -rn hello ."),
     grepNames("rg hello ."),
-    grepNames("git status && grep -n hello one.txt -s"),
     grepNames("grep -e \"-x\" one.txt"),
     grepNames("grep --include=*.txt -rn hello ."),
   ]
@@ -1028,6 +1337,106 @@ node grepFilterStages() {
   ]
 }
 
+/** A tree for the grep-through-bash tests. Each of the folders and files
+ the grep tool skips holds `needle`, as do a file named `build` and a
+ `.git` file, which is what a git worktree has. `outside` sits beside
+ `tree`, and links in `tree/src` point at it. */
+static const GREP_TREE = __dirname + "/stdlib/__safebash_grep_tree__"
+static const GREP_TREE_ROOT = GREP_TREE + "/tree"
+
+def makeGrepTree() {
+  remove(GREP_TREE) with approve
+  mkdir(GREP_TREE) with approve
+  const folders = "mkdir -p tree/.git tree/node_modules/p tree/src/dist tree/src/sub/build tree/lib outside"
+  const needles = "for f in tree/.git/config tree/node_modules/p/i.js tree/src/a.ts tree/src/dist/b.js tree/src/sub/build/c.js tree/src/build tree/src/sub/.git outside/s.txt; do echo needle > $f; done"
+  const others = "echo hello > tree/one.txt && echo hello > tree/lib/l.ts"
+  const links = "ln -s ../../outside/s.txt tree/src/link.txt && ln -s ../../outside tree/src/linkdir"
+  bash("${folders} && ${needles} && ${others} && ${links}", cwd: GREP_TREE) with approve
+}
+
+def treeRow(source: string, dir: string): any {
+  const plan = planFor(source, dir)
+  return [source, outcomeOf(plan), [effect.name for effect in plan.effects]]
+}
+
+node grepThroughBashAsksStdGrep() {
+  makeGrepTree()
+  const rows = [
+    treeRow("grep -rn hello . | head -20", GREP_TREE_ROOT),
+    treeRow("grep -rn \"a\\|b\" src", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src lib", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src --include=\"*.ts\"", GREP_TREE_ROOT),
+    treeRow("grep -n hello one.txt -A 5", GREP_TREE_ROOT),
+    treeRow("grep -rn hello node_modules | head", GREP_TREE_ROOT),
+    treeRow("grep -rn hello node_modules/p | head", GREP_TREE_ROOT),
+    treeRow("grep -n hello src", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src/dist | head", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src/dist/ | head", GREP_TREE_ROOT),
+    treeRow("grep -rn hello . | head", GREP_TREE_ROOT + "/src/sub/build"),
+    treeRow("grep -rn hello | head", GREP_TREE_ROOT),
+    treeRow("pnpm test | grep FAIL -v", GREP_TREE_ROOT),
+    treeRow("git status | grep -v deleted -c", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src -e x | head", GREP_TREE_ROOT),
+  ]
+  remove(GREP_TREE) with approve
+  return rows
+}
+
+// The exact text bash runs. The six names are the grep tool's skip list.
+// If a name is added to that list, this fails until the text here agrees,
+// which is the check that real grep still skips what the tool skips.
+node grepRunsWhatItAsked() {
+  makeGrepTree()
+  const rows = [
+    executionCommandIn("grep -rn hello . | head -20", GREP_TREE_ROOT),
+    executionCommandIn("grep -rn hello src --include=\"*.ts\"", GREP_TREE_ROOT),
+    executionCommandIn("grep -n hello one.txt -A 5", GREP_TREE_ROOT),
+    executionCommandIn("grep -n hello one.txt lib/l.ts | head", GREP_TREE_ROOT),
+    executionCommandIn("grep -rn hello | head", GREP_TREE_ROOT),
+  ]
+  remove(GREP_TREE) with approve
+  return rows
+}
+
+/* What safeBash prints for a line, approving only std::grep. */
+def grepOnly(source: string, dir: string): string {
+  let out = ""
+  handle {
+    const result = safeBash(source, cwd: dir)
+    if (result is success(text)) {
+      out = text
+    } else {
+      out = "FAILED"
+    }
+  } with (intr) {
+    if (intr.effect == "std::grep") {
+      return approve()
+    }
+    return reject()
+  }
+  return out
+}
+
+// Real grep through bash reads no file the grep tool skips, follows no
+// link out of the folder, and reads the same files the tool reads. This
+// runs BSD grep on macOS and GNU grep in CI; a difference is a finding.
+node grepThroughBashReadsWhatTheToolReads() {
+  makeGrepTree()
+  const withPath = grepOnly("grep -rn needle . | sort", GREP_TREE_ROOT)
+  const noPath = grepOnly("grep -rn needle | sort", GREP_TREE_ROOT)
+  const skipped = outcomeOf(planFor("grep -rn needle src/dist | sort", GREP_TREE_ROOT))
+  let toolFiles: string[] = []
+  handle {
+    const found = grep("needle", GREP_TREE_ROOT, filesOnly: true, respectGitignore: false)
+    if (found is success(names)) {
+      toolFiles = names
+    }
+  } with approve
+  remove(GREP_TREE) with approve
+  return [withPath, noPath, skipped, toolFiles]
+}
+
 def filesOf(found: any): any {
   return match(found) {
     { kind: "stdin" } => "stdin"
@@ -1047,7 +1456,9 @@ def readOf(source: string): any {
     if (spec == null) {
       return "NOT A READ VERB"
     }
-    return match(readFileVerb(verb, first, FIXTURES, spec)) {
+    // A line that has run nothing yet, where a missing path has no rule.
+    const line: any = { cwd: FIXTURES, written: [], opaque: false, strict: true }
+    return match(readFileVerb(verb, first, line, spec)) {
       success(found) => filesOf(found)
       failure(why) => why
     }
@@ -1368,11 +1779,10 @@ node ampersandRedirectWritesTheFile() {
 
 node echoIsTheSameAloneAndInAChain() {
   // bash's echo does not read backslash escapes, alone or in a chain. The
-  // lone echo asks nothing; the chain asks std::bash, which is the one
-  // question the test file approves. The trailing `true` has no rule, so
-  // the chain stays on the bash path even when chains of echoes run in
-  // process; without it this node would compare the in-process echo with
-  // itself.
+  // lone echo asks nothing; the chain asks std::bash::readonly, which is
+  // the one question the test file approves. The trailing `true` keeps
+  // the chain on the bash path even when chains of echoes run in process;
+  // without it this node would compare the in-process echo with itself.
   const alone = safeBash("echo 'a\\tb'")
   const chain = safeBash("echo 'a\\tb'; echo x; true")
   return [alone, chain]
@@ -1691,8 +2101,9 @@ node listingsAskStdLs() {
 
 node listingOfAMissingPath() {
   // The resolver's message names the absolute path, so only its start is
-  // pinned.
-  const detail = grepNames("ls nope")[1].detail
+  // pinned. A missing path whose folder exists has a rule, so this one's
+  // folder is missing too.
+  const detail = grepNames("ls nodir/nope")[1].detail
   return detail.startsWith("No file or directory at")
 }
 
@@ -2149,13 +2560,100 @@ node gitStaysBroad() {
     planOutcome("git status src"),
     planOutcome("git switch -- main"),
     planOutcome("git restore --staged"),
-    planOutcome("git -C /tmp status"),
+    planOutcome("git -C $X status"),
+    planOutcome("git -c a=b status"),
+    planOutcome("git --git-dir=x status"),
     planOutcome("GIT_DIR=/x git status"),
     planOutcome("/usr/bin/git status"),
     planOutcome("git push"),
-    planOutcome("git log --format=%h"),
-    planOutcome("git log --author=\"Dana X\""),
+    planOutcome("git log --format=\"$F\""),
+    planOutcome("git rev-parse --show-toplevel HEAD"),
+    planOutcome("git rev-parse --git-path x"),
+    planOutcome("git worktree add x"),
+    planOutcome("git grep --no-index x"),
+    planOutcome("git grep -O x"),
+    planOutcome("git grep x a b"),
+    planOutcome("git ls-files --others"),
+    planOutcome("git ls-files --exclude-standard"),
+    planOutcome("git merge-base a"),
     planOutcome("git"),
+  ]
+}
+
+/** A plan in the package folder: each effect's name and its ref, or its
+ folder relative to the package folder. */
+def mappedRow(source: string): any {
+  const plan = planFor(source, PACKAGE_DIR)
+  const effects: any[] = plan.effects
+  return [source, outcomeOf(plan), [[effect.name, effect.payload.ref ?? underPackage(effect.payload.dir ?? effect.payload.cwd)] for effect in effects]]
+}
+
+def underPackage(dir: string): string {
+  // A git payload names the folder as planFor was given it, unresolved.
+  const base = resolve(PACKAGE_DIR)
+  if (dir == base || dir == PACKAGE_DIR) {
+    return "."
+  }
+  return dir.split(base + "/").join("")
+}
+
+// The git reads that map onto an existing effect, one row per line of the
+// plan's table: each asks a question whose payload names what it prints.
+node gitMappedReads() {
+  return [
+    mappedRow("git rev-parse HEAD"),
+    mappedRow("git rev-parse --short HEAD"),
+    mappedRow("git rev-parse --abbrev-ref HEAD"),
+    mappedRow("git rev-parse --show-toplevel"),
+    mappedRow("git merge-base HEAD main"),
+    mappedRow("git ls-files lib"),
+    mappedRow("git ls-files --others --exclude-standard"),
+    mappedRow("git grep -n planFor -- lib"),
+    mappedRow("git grep -n planFor lib stdlib"),
+    mappedRow("git grep -n planFor main -- lib"),
+    mappedRow("git grep -n planFor"),
+    mappedRow("git worktree list"),
+    mappedRow("git worktree list --porcelain"),
+    mappedRow("git --no-pager log --oneline -5"),
+    mappedRow("git -C lib status"),
+    mappedRow("git -C lib -C stdlib status"),
+    mappedRow("git log -5 --format=%s"),
+    mappedRow("git log --format=\"%h %s\" -3"),
+    mappedRow("git show --pretty=fuller HEAD"),
+    mappedRow("git log --author=\"Dana X\""),
+  ]
+}
+
+// The flags before a git subcommand do not hide a destructive one from
+// the refuse wall.
+node gitLeadingFlagRefusals() {
+  return [
+    refusedFor("git --no-pager checkout ."),
+    refusedFor("git -C sub reset --hard"),
+    refusedFor("git -C sub --no-pager clean -fd"),
+    refusedFor("git -C sub status"),
+    refusedFor("git --no-pager log"),
+  ]
+}
+
+/* The text a plan in the package folder runs, with that folder's path
+ replaced by `<pkg>`. */
+def packageCommand(source: string): string {
+  return match(planFor(source, PACKAGE_DIR).execution) {
+    { kind: "bash", command } => command.split(resolve(PACKAGE_DIR)).join("<pkg>")
+    _ => "NOT-BASH"
+  }
+}
+
+node gitLeadingFlagsRun() {
+  return [
+    packageCommand("git --no-pager log --oneline -5"),
+    packageCommand("git -C lib status"),
+    packageCommand("git -C lib diff --stat"),
+    packageCommand("git log --format=\"%h %s\" -3"),
+    packageCommand("git grep -n x main -- src"),
+    packageCommand("git grep -n planFor"),
+    packageCommand("git ls-files lib"),
   ]
 }
 
@@ -2363,6 +2861,21 @@ node gitRunsSafely() {
     gitFolder[1].includes("must be run in a work tree"),
     gitFolder[1].includes(GIT_MARKER),
   ]
+  // A repository may track files under a folder the grep tool skips. The
+  // exclude pathspecs safeBash writes keep git grep out of it, on this git.
+  const tracked = "mkdir dist && printf 'NEEDLE\\n' > dist/x.js && printf 'NEEDLE\\n' > c.py && git add dist/x.js c.py && git -c user.name=Test -c user.email=test@example.com commit -q -m 'Add dist'"
+  bash(tracked, cwd: GIT_FIXTURE) with approve
+  const gitGrep = runNarrow("git grep -n NEEDLE", GIT_FIXTURE)
+  seen.push(gitGrep[0])
+  seen.push(gitGrep[1].includes("c.py:1:NEEDLE"))
+  seen.push(gitGrep[1].includes("dist/x.js"))
+  // From a subfolder, `..` reaches the same `dist`, and the excludes
+  // still hold because they are read from the top of the repository.
+  bash("mkdir sub && printf 'NEEDLE\\n' > sub/d.py && git add sub/d.py", cwd: GIT_FIXTURE) with approve
+  const fromBelow = runNarrow("git grep -n NEEDLE ..", GIT_FIXTURE + "/sub")
+  seen.push(fromBelow[0])
+  seen.push(fromBelow[1].includes("d.py:1:NEEDLE"))
+  seen.push(fromBelow[1].includes("dist/x.js"))
   remove(GIT_FIXTURE) with approve
   remove(GIT_NO_REPO) with approve
   remove(GIT_BARE) with approve
@@ -2757,7 +3270,8 @@ node timeLimitStopsTheCommand() {
   let result: any = null
   handle {
     // "A1" and "B2" are text the command prints and does not spell.
-    result = safeBash("printf 'A%s\\n' 1; sleep 20; printf 'B%s\\n' 2", timeout: 1)
+    // `sh -c` has no rule, so this asks std::bash, which carries a limit.
+    result = safeBash("printf 'A%s\\n' 1; sh -c 'sleep 20'; printf 'B%s\\n' 2", timeout: 1)
   } with (intr) {
     // Every question about this line carries the limit, in milliseconds.
     if (intr.data.timeout != 1000) {

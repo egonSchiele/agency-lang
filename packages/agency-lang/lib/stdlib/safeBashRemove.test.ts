@@ -1,10 +1,13 @@
+import fs from "fs";
+import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import { currentHost } from "../runtime/currentHost.js";
-import { _removeRefusal, _removeTargetIn, _unparsedRemoveRefusal } from "./safeBashRemove.js";
+import { safeDeleteDirectoryWithin } from "../utils.js";
+import { _removeRefusal, _realPathIn, _unparsedRemoveRefusal } from "./safeBashRemove.js";
 
-// Nothing here deletes anything: both functions only read path text and,
-// for the real spelling, the filesystem.
+// Nothing here deletes anything but a temp folder a test made: the
+// functions only read path text and, for the real spelling, the filesystem.
 describe("_removeRefusal", () => {
   const home = currentHost().system.homeDir();
   const cwd = currentHost().system.cwd();
@@ -91,16 +94,33 @@ describe("_unparsedRemoveRefusal", () => {
   });
 });
 
-describe("_removeTargetIn", () => {
+describe("_realPathIn", () => {
   const cwd = currentHost().system.cwd();
 
   it("resolves a relative operand against safeBash's folder", async () => {
     const real = await currentHost().files.realPath(path.join(cwd, "package.json"));
-    expect(await _removeTargetIn("package.json", cwd, "expand")).toBe(real);
-    expect(await _removeTargetIn("../package.json", path.join(cwd, "lib"), "expand")).toBe(real);
+    expect(await _realPathIn("package.json", cwd, "expand", "rm")).toBe(real);
+    expect(await _realPathIn("../package.json", path.join(cwd, "lib"), "expand", "rm")).toBe(real);
   });
 
   it("leaves a quoted tilde as a file name", async () => {
-    expect(await _removeTargetIn("~", cwd, "literal")).toBe(path.join(cwd, "~"));
+    expect(await _realPathIn("~", cwd, "literal", "rm")).toBe(path.join(cwd, "~"));
+  });
+
+  it("keeps the missing steps of a folder that mkdir -p would make, below a linked folder", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "safebash-realpath-"));
+    try {
+      const realRoot = await currentHost().files.realPath(root);
+      fs.mkdirSync(path.join(root, "target"));
+      fs.symlinkSync(path.join(root, "target"), path.join(root, "link"));
+      expect(await _realPathIn("a/b/c", root, "expand", "mkdir")).toBe(
+        path.join(realRoot, "a/b/c"),
+      );
+      expect(await _realPathIn("link/b/c", root, "expand", "mkdir")).toBe(
+        path.join(realRoot, "target/b/c"),
+      );
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), root);
+    }
   });
 });

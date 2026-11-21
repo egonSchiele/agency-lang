@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "corpusOutcomes",
+      "description": "Every line in safeBash-corpus.json plans to the outcome and effect names written beside it. A rule change that moves a line shows as a change to that file.",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

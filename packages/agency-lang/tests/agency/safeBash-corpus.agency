@@ -1,0 +1,40 @@
+import { planFor, outcomeOf } from "std::safeBash"
+
+// The measurement for safeBash's rules: common coding lines, each with the
+// outcome and the effect names its plan has today. A change to a rule
+// shows here as rows whose outcome changed. This is not the place to pin a
+// rule's edge cases: those belong in safeBash.agency.
+
+/** The package folder: every path in the corpus is relative to it. */
+static const PACKAGE_DIR = __dirname + "/../.."
+
+type CorpusRow = {
+  command: string;
+  outcome: string;
+  effects: string[]
+}
+
+def planned(command: string): CorpusRow {
+  const plan = planFor(command, PACKAGE_DIR)
+  return { command: command, outcome: outcomeOf(plan), effects: [effect.name for effect in plan.effects] }
+}
+
+def sameRow(a: CorpusRow, b: CorpusRow): boolean {
+  return a.outcome == b.outcome && JSON.stringify(a.effects) == JSON.stringify(b.effects)
+}
+
+node corpusOutcomes() {
+  const text = read("safeBash-corpus.json", __dirname) with approve
+  if (text is failure(why)) {
+    return why
+  }
+  const rows: CorpusRow[] = JSON.parse(text.value)
+  let differing: CorpusRow[] = []
+  for (row in rows) {
+    const now = planned(row.command)
+    if (!sameRow(now, row)) {
+      differing.push(now)
+    }
+  }
+  return differing
+}

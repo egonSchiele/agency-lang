@@ -84,6 +84,7 @@ const EXPECTED: Record<string, string[]> = {
   "std::llm::registerProvider": ["path"],
   "std::exec": ["command", "subcommand"],
   "std::bash": ["command", "cwd"],
+  "std::bash::readonly": ["command", "cwd"],
   "std::run": [],
   // Pins the file being started. The policy, the limits, and the
   // arguments are not pinned.

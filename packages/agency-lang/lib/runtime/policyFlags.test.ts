@@ -6,6 +6,7 @@ import {
   splitEffects,
 } from "./policyFlags.js";
 import type { Policy } from "./policy.js";
+import { builtinPolicy } from "./builtinPolicies.js";
 
 describe("layerPolicy", () => {
   it("puts the top policy's rules ahead of the base's, effect by effect", () => {
@@ -50,6 +51,15 @@ describe("policyOverlayFromFlags", () => {
       { action: "approve" },
       { match: { dir: "/tmp/**" }, action: "reject" },
     ]);
+  });
+
+  it("rejects a shell line that only prints under --reject Shell, though 'recommended' approves it", () => {
+    const out = policyOverlayFromFlags(
+      undefined,
+      "Shell",
+      builtinPolicy("recommended", "/tmp/base")!,
+    );
+    expect(out["std::bash::readonly"][0]).toEqual({ action: "reject" });
   });
 
   it("puts a reject ahead of an approve for the same effect", () => {

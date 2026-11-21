@@ -65,7 +65,7 @@ run any program, so approve them with care.
 ```ts
 /** Shell commands, program execution, and Agency subprocess runs. These can
 run any program, so approve them with care. */
-export effectSet Shell = <std::bash, std::exec, std::run>
+export effectSet Shell = <std::bash, std::bash::readonly, std::exec, std::run>
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/effectSets.agency#L33))

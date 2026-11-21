@@ -91,7 +91,7 @@
   { "command": "dirname stdlib/safeBash.agency; ls", "outcome": "narrow", "effects": ["std::ls"] },
   { "command": "sleep 1 && git status", "outcome": "narrow", "effects": ["std::git::status"] },
   { "command": "true && git status", "outcome": "narrow", "effects": ["std::git::status"] },
-  { "command": "pnpm test; echo \"exit=$?\"", "outcome": "broad", "effects": ["std::bash"] },
+  { "command": "pnpm test; echo \"exit=$?\"", "outcome": "narrow", "effects": ["std::exec"] },
   { "command": "timeout 60 pnpm test", "outcome": "narrow", "effects": ["std::exec"] },
   { "command": "timeout 120 pnpm run typecheck 2>&1 | tail -20", "outcome": "narrow", "effects": ["std::exec"] },
   { "command": "TERM=dumb pnpm test", "outcome": "narrow", "effects": ["std::exec"] },

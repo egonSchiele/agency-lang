@@ -713,6 +713,40 @@ node quietCommandsAskNothing() {
   ]
 }
 
+// `$?` is the exit status of the last command, a number, so a word made
+// of it and literal text is known. Where a word names a file or a
+// program, `$?` is a variable like any other and the line has no rule.
+node exitStatusInEcho() {
+  return [
+    treeRow("pnpm test; echo \"exit=$?\"", PACKAGE_DIR),
+    treeRow("pnpm test; echo $?", PACKAGE_DIR),
+    treeRow("pnpm test; printf 'exit=%s\\n' $?", PACKAGE_DIR),
+    executionCommand("pnpm test; echo \"exit=$?\""),
+    treeRow("echo \"exit=$?\"", PACKAGE_DIR),
+    treeRow("echo \"$HOME $?\"", PACKAGE_DIR),
+    treeRow("cat $?", PACKAGE_DIR),
+    treeRow("cat x$?.txt", PACKAGE_DIR),
+    treeRow("echo hi > $?", PACKAGE_DIR),
+    treeRow("echo hi > out$?.txt", PACKAGE_DIR),
+    treeRow("cat < $?", PACKAGE_DIR),
+    treeRow("TERM=$? ls", PACKAGE_DIR),
+    treeRow("grep -rn foo $?", PACKAGE_DIR),
+    treeRow("grep -rn $? lib", PACKAGE_DIR),
+    treeRow("rm $?", PACKAGE_DIR),
+    treeRow("mkdir $?", PACKAGE_DIR),
+    treeRow("touch $?", PACKAGE_DIR),
+    treeRow("ls | tee $?", PACKAGE_DIR),
+    treeRow("git log $?", PACKAGE_DIR),
+    treeRow("git -C $? status", PACKAGE_DIR),
+    treeRow("cd $? && ls", PACKAGE_DIR),
+    treeRow("timeout $? pnpm test", PACKAGE_DIR),
+    treeRow("sleep $?; ls", PACKAGE_DIR),
+    treeRow("which $?; ls", PACKAGE_DIR),
+    treeRow("pnpm test; exit $?", PACKAGE_DIR),
+    treeRow("pnpm run $?", PACKAGE_DIR),
+  ]
+}
+
 // `timeout <duration> <command>` asks what the command asks. The wrapper
 // goes back in front of the command that runs, with the assignments in
 // front of it.

@@ -12,7 +12,7 @@ import { abortableShell, abortableSpawn, AbortableSpawnOptions, SpawnResult } fr
 import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
 import { resolveDir } from "./resolveDir.js";
-import { expandTilde, resolveAgainstCwd, type TildeMode } from "./prepareContainedPath.js";
+import { expandTilde, resolveBashPath, type TildeMode } from "./prepareContainedPath.js";
 import {
   type GitignoreFile,
   ignoresWholeDirectory,
@@ -567,7 +567,7 @@ export async function _searchTargetIn(
   cwd: string,
   tildeMode: TildeMode,
 ): Promise<GrepTarget> {
-  const absolute = resolveAgainstCwd(given, cwd, tildeMode, "grep");
+  const absolute = await resolveBashPath(given, cwd, tildeMode, "grep");
   const target = await _searchTarget(absolute, "grep");
   return { dir: target.dir, file: target.file, argument: expandTilde(given, tildeMode) };
 }

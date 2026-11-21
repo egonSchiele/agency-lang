@@ -603,9 +603,9 @@
     },
     {
       "nodeName": "readsByOtherNames",
-      "description": "`sed -n Np` and `sed -n N,Mp` of one file ask std::read; every other sed, including one fed by a pipe, has no rule. stat asks std::ls for the folder that holds a file, or for a folder it names, as ls -l does. The checksums and file read the file, so they ask std::read; a flag such as `shasum -c` and a folder have no rule.",
+      "description": "`sed -n Np` and `sed -n N,Mp` of one file ask std::read, and the same range read of a pipe adds no question to the pipe's own. Every other sed, and a range read with no file and no pipe, has no rule. stat asks std::ls for the folder that holds a file, or for a folder it names, as ls -l does. The checksums and file read the file, so they ask std::read. `shasum -a` with a number is allowed; any other flag, such as `shasum -c`, and a folder have no rule.",
       "input": "",
-      "expectedOutput": "[[\"sed -n 10,20p one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"sed -n '5p' one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"sed -n '1,5p;7p' one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"sed -n p one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git log | sed -n 1,5p\",\"broad\",[[\"std::bash\",\"\"]]],[\"stat one.txt\",\"narrow\",[[\"std::ls\",\"<fix>\"]]],[\"stat sub\",\"narrow\",[[\"std::ls\",\"<fix>/sub\"]]],[\"shasum one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"sha256sum one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"md5sum one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"file one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"shasum -c sums.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"file sub\",\"broad\",[[\"std::bash\",\"\"]]]]",
+      "expectedOutput": "[[\"sed -n 10,20p one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"sed -n '5p' one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"sed -n '1,5p;7p' one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"sed -n p one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git log | sed -n 1,5p\",\"narrow\",[[\"std::git::log\",\"<fix>\"]]],[\"git log | sed -n '1e true'\",\"broad\",[[\"std::bash\",\"\"]]],[\"sed -n 1,5p\",\"broad\",[[\"std::bash\",\"\"]]],[\"shasum -a 256 one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"shasum -a x one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"stat one.txt\",\"narrow\",[[\"std::ls\",\"<fix>\"]]],[\"stat sub\",\"narrow\",[[\"std::ls\",\"<fix>/sub\"]]],[\"shasum one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"sha256sum one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"md5sum one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"file one.txt\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"]]],[\"shasum -c sums.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"file sub\",\"broad\",[[\"std::bash\",\"\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -624,10 +624,54 @@
       ]
     },
     {
-      "nodeName": "missingPathAfterAProgramIsBroad",
-      "description": "After a command that ran a program safeBash cannot see into, or in a pipeline beside one, a missing path has no rule: the program may have made it into a link to a secret. ln, cp, and mv ask std::bash anyway, so a line that swaps the file its own redirect wrote, `ln -sf <file> out.txt > out.txt; cat out.txt`, asks std::bash. A narrow command that can put a link where a file was, git checkout or git stash pop, forgets the files the line wrote, so a read after it asks std::bash too.",
+      "nodeName": "foldersTheLineMade",
+      "description": "A folder the line made with mkdir can be named by a later command. `mkdir x; ls x` asks std::mkdir and std::ls for that folder. A redirect into it and a read of the file it wrote name the file in it. A cd into it moves every later payload there, and the cd that runs names the resolved folder. A folder above the named one, which `mkdir -p` makes too, is a made folder as well, so `ls -R a` after `mkdir -p a/b` asks std::ls for `a`. A cd into a folder nobody made asks std::bash. A read of a file nobody wrote, in a made folder, asks std::read for that file. The folder stays remembered after a program or rm, before or after the mkdir, for the reason a written file does. After git checkout no command may name a path, so those lines ask std::bash.",
       "input": "",
-      "expectedOutput": "[[\"ln -s /etc/hosts x; cat x\",\"broad\",[[\"std::bash\",\"\"]]],[\"mkdir x; ls x\",\"broad\",[[\"std::bash\",\"\"]]],[\"cp one.txt y; cat y\",\"broad\",[[\"std::bash\",\"\"]]],[\"ln -sf /etc/hosts out.txt > out.txt; cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm test; cat nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm test | cat nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"echo a > out.txt; rm out.txt; git checkout main; cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"echo a > out.txt; git stash pop; cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main > out.txt; cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]]]",
+      "expectedOutput": "[[\"mkdir x; ls x\",\"narrow\",[[\"std::mkdir\",\"<fix>/x\"],[\"std::ls\",\"<fix>/x\"]]],[\"mkdir -p out && ls -la out\",\"narrow\",[[\"std::mkdir\",\"<fix>/out\"],[\"std::ls\",\"<fix>/out\"]]],[\"mkdir -p out && pnpm build > out/log.txt 2>&1; tail -5 out/log.txt\",\"narrow\",[[\"std::mkdir\",\"<fix>/out\"],[\"std::exec\",\"<fix>\"],[\"std::write\",\"<fix>/out/log.txt\"],[\"std::read\",\"<fix>/out/log.txt\"]]],[\"mkdir -p build && cd build && pnpm test\",\"narrow\",[[\"std::mkdir\",\"<fix>/build\"],[\"std::exec\",\"<fix>/build\"]]],[\"mkdir -p build && cd build && ls\",\"narrow\",[[\"std::mkdir\",\"<fix>/build\"],[\"std::ls\",\"<fix>/build\"]]],\"mkdir -p build && cd '<fix>/build' && ls\",[\"mkdir -p a/b && ls a/b\",\"narrow\",[[\"std::mkdir\",\"<fix>/a/b\"],[\"std::ls\",\"<fix>/a/b\"]]],[\"mkdir -p a/b && ls a\",\"narrow\",[[\"std::mkdir\",\"<fix>/a/b\"],[\"std::ls\",\"<fix>/a\"]]],[\"mkdir -p a/b && ls -R a\",\"narrow\",[[\"std::mkdir\",\"<fix>/a/b\"],[\"std::ls\",\"<fix>/a\"]]],[\"mkdir -p a/b && cd a && ls\",\"narrow\",[[\"std::mkdir\",\"<fix>/a/b\"],[\"std::ls\",\"<fix>/a\"]]],[\"mkdir -p out && pnpm build && ls out\",\"narrow\",[[\"std::mkdir\",\"<fix>/out\"],[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>/out\"]]],[\"mkdir x && tree x\",\"narrow\",[[\"std::mkdir\",\"<fix>/x\"],[\"std::ls\",\"<fix>/x\"]]],[\"cd nope && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"mkdir out && cat out/nope.txt\",\"narrow\",[[\"std::mkdir\",\"<fix>/out\"],[\"std::read\",\"<fix>/out/nope.txt\"]]],[\"pnpm build; mkdir -p out; ls out\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::mkdir\",\"<fix>/out\"],[\"std::ls\",\"<fix>/out\"]]],[\"mkdir x; git checkout main; ls x\",\"broad\",[[\"std::bash\",\"\"]]],[\"mkdir x; rm -r x; ls x\",\"narrow\",[[\"std::mkdir\",\"<fix>/x\"],[\"std::remove\",\"<fix>/x\"],[\"std::ls\",\"<fix>/x\"]]],[\"pnpm build | mkdir x; ls x\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::mkdir\",\"<fix>/x\"],[\"std::ls\",\"<fix>/x\"]]],[\"git checkout main; mkdir -p build && cd build && ls\",\"broad\",[[\"std::bash\",\"\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noPathAfterACommandThatReplacesPaths",
+      "description": "Every payload is resolved against the disk before the line runs, so after a command that can put a link where a file or folder was (git checkout, git switch, git stash, git stash pop), a later command that names a path asks std::bash: a read, a write, a redirect, a search, a listing, a remove, a mkdir, a cd, `git -C`, a read of a file the line wrote, a read after a program, a tee beside the checkout in a pipeline, a read behind timeout, a read after a checkout in parentheses, and a read after `||`, which runs when the checkout failed partway. Commands that name no path keep their rules after it: a program, git reads, a filter on its own output, an echo. A path before the checkout is fine. A program, rm, git add, and git commit do not replace paths under their approvals, so a path after them keeps its rule.",
+      "input": "",
+      "expectedOutput": "[[\"git checkout main; cat one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git stash pop && cat one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git switch main && head -5 one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git stash; cat one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main; echo x >> one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main; pnpm test > out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main; grep -rn x sub\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main; ls sub\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main; ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main; rm one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main; mkdir x\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main && cd sub && pnpm test\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main; cd sub; pnpm test\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main; git -C sub status\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main; echo x >> out.txt; cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main; pnpm test; cat one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main 2>&1 | tee log.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main; timeout 5 cat one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"(git checkout main); cat one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main || cat one.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main && pnpm test\",\"narrow\",[[\"std::git::checkout\",\"main\"],[\"std::exec\",\"<fix>\"]]],[\"git checkout main; git status; git log --oneline -3\",\"narrow\",[[\"std::git::checkout\",\"main\"],[\"std::git::status\",\"<fix>\"],[\"std::git::log\",\"<fix>\"]]],[\"git stash; pnpm test; git stash pop\",\"narrow\",[[\"std::git::stashPush\",\"<fix>\"],[\"std::exec\",\"<fix>\"],[\"std::git::stashPop\",\"<fix>\"]]],[\"git checkout main 2>&1 | tail -5\",\"narrow\",[[\"std::git::checkout\",\"main\"]]],[\"git checkout main; echo ok\",\"narrow\",[[\"std::git::checkout\",\"main\"]]],[\"cat one.txt; git checkout main\",\"narrow\",[[\"std::read\",\"<fix>/one.txt\"],[\"std::git::checkout\",\"main\"]]],[\"rm -rf sub && pnpm build && ls sub\",\"narrow\",[[\"std::remove\",\"<fix>/sub\"],[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>/sub\"]]],[\"git add one.txt && git commit -m x && cat one.txt\",\"narrow\",[[\"std::git::add\",\"<fix>\"],[\"std::git::commit\",\"<fix>\"],[\"std::read\",\"<fix>/one.txt\"]]],[\"pnpm build; cat one.txt\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::read\",\"<fix>/one.txt\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "dotDotAfterALinkHasNoRule",
+      "description": "With `link` a symlink to a folder elsewhere, bash opens `link/../creds` in the folder that holds the link's target, while removing the `..` from the text gives the project's own `creds`. So a path in which a `..` follows a symlink asks std::bash: a read, a listing, a search, a redirect, a tee, a cd, an rm, a mkdir, and `git -C`. A `..` after a real folder resolves as before, and so does a link with no `..` after it, whose payload names the real folder.",
+      "input": "",
+      "expectedOutput": "[[\"cat link/../creds | head\",\"broad\",[[\"std::bash\",\"\"]]],[\"ls link/..\",\"broad\",[[\"std::bash\",\"\"]]],[\"grep -rn x link/..\",\"broad\",[[\"std::bash\",\"\"]]],[\"echo x > link/../creds\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm test | tee link/../log.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"cd link/.. && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"rm link/../creds\",\"broad\",[[\"std::bash\",\"\"]]],[\"mkdir link/../made\",\"broad\",[[\"std::bash\",\"\"]]],[\"git -C link/.. status\",\"broad\",[[\"std::bash\",\"\"]]],[\"cat sub/../creds | head\",\"narrow\",[[\"std::read\",\"<fix>/creds\"]]],[\"ls link | head\",\"narrow\",[[\"std::ls\",\"<fix>/outside/inner\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cdOnTheRightOfAnd",
+      "description": "In `a && cd dir && b`, `b` runs only when the cd worked, so its payload names `dir`, and the cd that runs names the resolved folder. Inside parentheses the cd ends with them. A command after `;` or `||`, a cd in a pipe, a cd to a missing folder or a variable, and a cd with an assignment have no rule. The refuse wall still refuses `git checkout .` after the cd.",
+      "input": "",
+      "expectedOutput": "[[\"pnpm build && cd sub && ls\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>/sub\"]]],\"pnpm build && cd '<fix>/sub' && ls\",[\"pnpm build && cd sub && cd .. && ls\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>\"]]],[\"(pnpm build && cd sub) && ls\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>\"]]],[\"pnpm build && cd sub; ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd sub && ls; ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd sub || ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd sub | ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd nope && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd $HOME && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && X=1 cd sub && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd sub && git checkout .\",\"refuse\",[]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "missingPathAfterAProgramIsBroad",
+      "description": "After a command that ran a program safeBash cannot see into, or in a pipeline beside one, a missing path has no rule: the program may have made it into a link to a secret. ln, cp, and mv ask std::bash anyway, so a line that swaps the file its own redirect wrote, `ln -sf <file> out.txt > out.txt; cat out.txt`, asks std::bash. After a narrow command that can put a link where a file was, git checkout or git stash pop, no command may name a path, so a read of a file the line wrote asks std::bash too.",
+      "input": "",
+      "expectedOutput": "[[\"ln -s /etc/hosts x; cat x\",\"broad\",[[\"std::bash\",\"\"]]],[\"cp one.txt y; cat y\",\"broad\",[[\"std::bash\",\"\"]]],[\"ln -sf /etc/hosts out.txt > out.txt; cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm test; cat nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm test | cat nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"echo a > out.txt; rm out.txt; git checkout main; cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"echo a > out.txt; git stash pop; cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git checkout main > out.txt; cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1259,9 +1303,9 @@
     },
     {
       "nodeName": "cdMovesTheRestOfAnAndChain",
-      "description": "cd <dir> on the left of && raises nothing, and every command to its right is classified in <dir>: a listing, a read, a program, a longer chain, and a pipeline. A cd that is the right side of an inner && is not recognized. The rebuilt cd names the resolved folder as an absolute path in single quotes.",
+      "description": "cd <dir> on the left of && raises nothing, and every command to its right is classified in <dir>: a listing, a read, a program, a longer chain, and a pipeline. A cd on the right of an && moves what follows it with &&, as in `ls && cd grep-fixtures && ls`; one that ends the line moves nothing more, and a cd after a cd is read from where the first leads. The rebuilt cd names the resolved folder as an absolute path in single quotes.",
       "input": "",
-      "expectedOutput": "[[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::read\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::exec\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::read\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"broad\",[[\"std::bash\",\"\"]]],true]",
+      "expectedOutput": "[[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::read\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::exec\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::read\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"stdlib\"],[\"std::ls\",\"grep-fixtures\"]]],true,[\"narrow\",[[\"std::ls\",\"stdlib\"]]],[\"narrow\",[[\"std::ls\",\"read-fixtures\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1292,9 +1336,9 @@
     },
     {
       "nodeName": "cdAnywhereElseIsBroad",
-      "description": "cd before ||, last in a chain, in a pipeline, to a missing folder, to a file, with no argument, with -, with a variable, with two arguments, with a redirect, followed by a second cd, or on the right of || asks std::bash. A cd alone raises no effect, so it asks the quiet question.",
+      "description": "cd before ||, in a pipeline, to a missing folder, to a file, with no argument, with -, with a variable, with two arguments, with a redirect, or on the right of || asks std::bash. A cd alone raises no effect, so it asks the quiet question.",
       "input": "",
-      "expectedOutput": "[[\"narrow\",[[\"std::bash::readonly\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
+      "expectedOutput": "[[\"narrow\",[[\"std::bash::readonly\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"

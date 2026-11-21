@@ -1,6 +1,8 @@
 # safeBash: check each command just before it runs (ADI-358)
 
-Status: draft for review. Nothing here is built.
+Status: second draft, revised after the review in
+`2026-11-20-safebash-check-each-command-design-review.md`. Nothing here
+is built.
 
 ## The problem
 
@@ -34,10 +36,10 @@ broad `std::bash` question. The rule works, and it has two costs:
 ## The idea in one paragraph
 
 Keep asking every question up front, exactly as today. Then run the line
-one command at a time. Just before each command runs, plan that one
-command again against the disk as it is now, and compare the result with
-what was approved. If they match, run it. If they differ, stop the line.
-safeBash never asks a question in the middle of a line.
+one step at a time. Just before each step runs, plan that one step again
+against the disk as it is now, and compare the result with what was
+approved. If they match, run it. If they differ, stop the line. safeBash
+never asks a question in the middle of a line.
 
 ## What the person sees
 
@@ -78,35 +80,12 @@ If the model runs `cat README.md` as a new command, it is planned fresh
 and asks `std::read` for `/outside/secret`. The person sees the true
 question and can say no.
 
-## Why splitting a line is safe
-
-Splitting a line into separate `bash -c` calls would be wrong if commands
-shared shell state: a variable set by one and read by the next, a
-function, a `trap`, `set -e`. They do not, because of rules safeBash
-already has:
-
-- A line is split only when its plan is narrow. A broad line runs whole
-  under `std::bash`, as today. Its question is "run this text", which no
-  earlier command can make false.
-- A narrow line should carry no shell state. A variable in a recognized
-  position makes the command unrecognized. A builtin that changes the
-  shell (`export`, `set`, `source`, `trap`, `alias`) must have no narrow
-  rule either. I have not checked every name in `BUILTIN_VERBS` against
-  the rules, so the first pull request does that, with a test that fails
-  when a builtin that changes the shell gains a narrow rule.
-
-Two pieces of state remain, and the runner carries both itself:
-
-| State | Example | How the runner carries it |
-|---|---|---|
-| The working directory | `cd lib && ls` | safeBash already resolves a `cd` to an absolute folder. The runner keeps the folder and starts each later command in it. A `cd` spawns no shell. |
-| The last exit status | `pnpm test; echo "exit=$?"` | The runner knows the status of the command it just ran. A command that reads `$?` runs as `(exit 3); echo "exit=$?"`. |
-
 ## What one step is
 
 The runner walks the same tree the classifier walked.
 
 - A simple command is one step.
+- A `cd` is one step. It starts no shell.
 - `;`, `&&`, and `||` are run by the runner, with the rule `runChain`
   already uses: `;` runs the next step always, `&&` only after a success,
   `||` only after a failure.
@@ -116,34 +95,163 @@ The runner walks the same tree the classifier walked.
   copy of the working directory, which is dropped at the closing
   parenthesis.
 
-A step that translates to a stdlib tool (`cat one.txt`, a `grep` that
-translates, an `echo`) runs in process, as it does today when it is alone
-or in a chain of such commands. Every other step runs through `bash -c`.
-So `tryShellFreeChain` stops being a separate all-or-nothing path. It
-becomes the case where every step happens to run in process.
+A step is a command of the model's text, not of the text that runs. The
+plan rewrites some commands: `git diff` becomes `(git rev-parse
+--show-toplevel >/dev/null && git diff ...)`, and a `gh` command gains
+`GH_HOST`. The rewritten text is still one step.
 
-## What "the same as approved" means
+## One function plans a step: `planStep`
 
-For each step, safeBash keeps the effects the up-front plan gave it: each
-effect's name and payload. Before the step runs, it plans the step again,
-alone, in the runner's current folder. The step runs when the two lists
-are equal, ignoring `timeout`.
+Today a command gets its effects in three ways, and they disagree:
 
-The up-front plan still has to describe files and folders that do not
-exist yet, so that it can ask narrow questions:
+| Step | Effects inside a line | Effects from `planFor` on the step alone |
+|---|---|---|
+| `grep -rn TODO src` | `std::grep` with the raw pattern, `flags: ""`, `maxResults: 0` | `std::grep` with the translated regex, `flags: "u"`, `maxResults: 1000` |
+| `pwd` | none | `std::bash::readonly` |
+| `echo "exit=$?"` | none | `std::bash::readonly` |
+
+So the check cannot call `planFor` on a step's text. A harmless `grep`
+would stop every time.
+
+The design adds one function, `planStep(command, line, form)`. It
+returns three things:
+
+- the step's effects,
+- how the step runs: in process through a stdlib tool, or the text to
+  give `bash -c`,
+- the `LineState` after the step.
+
+Both sides of the check call it:
+
+- **Up front,** the plan calls `planStep` for each step in order, with
+  the `LineState` built so far. `planStep` decides the form. A step runs
+  in process when its in-process planner accepts it against the disk as
+  it is now, and through bash otherwise. The questions asked are the ones
+  for that form. A `grep` that will run in process asks the in-process
+  payload, so a policy rule saved for a lone `grep -rn` matches it.
+- **Before the step runs,** the runner calls `planStep` again on the same
+  command, with a fresh `LineState` whose folder is the runner's folder,
+  and with the form the up-front plan chose. If the step can no longer be
+  planned in that form, the line stops.
+
+The step runs when the two effect lists are equal, ignoring `timeout`.
+The runner runs what the fresh call returned, so the text that runs
+always comes from the disk as it is now.
+
+A step with no effects, such as `pwd` or `echo hi`, has an empty list
+both times, and the lists match. `std::bash::readonly` stays a question
+about the whole line, which `planLine` asks.
+
+For a `gh` step, the fresh call is given the repository the up-front
+plan looked up. Looking it up again would be a second call to GitHub,
+and `git checkout` does not change the remotes.
+
+The plan needs a new execution kind for this, `{ kind: "steps" }`. Each
+step in it holds the source command, the join before it, the form, and
+the approved effects. `tryShellFreeChain` stops being a separate
+all-or-nothing path: it becomes the case where every step is in process.
+
+## The folder is checked too
+
+A `git` or `std::exec` payload names its folder as a plain string, and
+nothing resolves that string again. That leaves this line open:
 
 ```
-mkdir -p out && ls out
+git checkout evil && cd sub && git status
 ```
 
-Up front, `out` is not on the disk. `LineState.made` lets the plan ask
-`std::ls` for `<cwd>/out` anyway. When `ls out` is about to run, `out`
-exists, the fresh plan gives `std::ls` for `<cwd>/out`, and the two
-match.
+Up front, `sub` is a real folder and the question is `std::git::status`
+in `<cwd>/sub`. On the `evil` branch, `sub` is a link to another
+repository. A fresh plan of `git status` in `<cwd>/sub` gives the same
+payload, so the effect check passes, and git prints the status of the
+other repository.
 
-So `LineState.written` and `LineState.made` stay. What changes is what
-they are trusted for. Today a wrong prediction is a hole. After this
-change a wrong prediction is a line that stops.
+So the runner has a second rule. Before each step, it resolves its own
+folder again with `realDir`, and stops the line if the result differs
+from the folder the up-front plan used for that step. A `cd` is checked
+the same way: the runner resolves its target again before moving, and
+stops if the target changed. A `cd` that fails stops the line, which is
+what `cd '/abs' || exit 1` does today.
+
+## Why splitting a line is safe
+
+Splitting a line into separate `bash -c` calls would be wrong if
+commands shared shell state. A narrow line shares almost none:
+
+- **A broad line is not split.** It runs whole under `std::bash`, as
+  today. Its question is "run this text", which no earlier command can
+  make false.
+- **No narrow rule changes the shell, apart from `cd`.** The builtins
+  with a narrow rule today are `cd`, `echo`, `pwd`, `true`, `false`,
+  `:`, `printf`, `type`, and `command -v`. `printf -v` is refused. Every
+  other builtin has no rule, and so does a line made only of
+  assignments. `&`, `!`, and a redirect on a group do not parse, so such
+  a line asks `std::bash`. The review checked this against the code. A
+  test will fail when a builtin that changes the shell gains a narrow
+  rule.
+- **`echo` and `printf` may print a variable** (ADI-356 is about that).
+  An environment variable is the same in every `bash -c`, so it does not
+  matter here.
+
+Three pieces of state remain:
+
+| State | Example | What the design does |
+|---|---|---|
+| The working directory | `cd lib && ls` | The runner keeps the folder and starts each later step in it. |
+| The last exit status | `pnpm test; echo "exit=$?"` | The runner knows the status of the step it just ran. A step that reads `$?` runs as `(exit 3); echo "exit=$?"`. |
+| The last argument, `$_` | `ls src; echo $_` | A word that holds `$_` makes its command unrecognized, so the line asks `std::bash` and runs whole. |
+
+## Steps that run in process
+
+A step that runs in process behaves as the same command does today when
+it is alone. That differs from the real program in two known ways: the
+in-process `grep` skips what `.gitignore` ignores and stops at 1000
+matches. Today that shows only for a lone command or a chain of
+in-process commands. After this change it shows in any narrow line with
+such a step, for example the `grep` in `git switch main; grep -rn TODO
+src`. That is accepted, because a lone `grep -rn` already behaves this
+way.
+
+Two rules keep the rest exact:
+
+- **The exit status.** An in-process step that fails reports status 1,
+  where real `grep` reports 2 for an error. So a step runs through bash
+  when the step after it reads `$?`.
+- **Writes.** `runChain` runs an in-process write inside `destructive {
+  }`. A later failure in the same call then removes safeBash from the
+  conversation, and a stop is a failure. So a write step runs in process
+  only when every step in the line does, as today. In any other line it
+  runs through bash, which is also what happens today.
+
+## Pipelines
+
+A pipeline is one step, so the check cannot run between its stages. One
+rule covers it, and it needs no list of effects:
+
+**In a pipeline, at most one stage may raise an effect other than
+`std::exec`. Otherwise the line asks `std::bash`.**
+
+`std::exec` is the one effect whose approval already lets the program
+read and change any file. Any other effect, including one added later,
+counts against the limit, so a mistake asks a broad question and never
+opens a hole.
+
+| Pipeline | Effects other than exec, by stage | Result |
+|---|---|---|
+| `git checkout x \| cat README.md` | checkout, read | `std::bash` |
+| `git checkout main \| tee log.txt` | checkout, write | `std::bash` |
+| `cat package.json \| grep version` | read, none | narrow |
+| `pnpm test 2>&1 \| tee out.log \| tail -30` | none, write, none | narrow |
+| `git log --oneline \| head > out.txt` | log, write | `std::bash` |
+
+The last row is a line that is narrow today and would become broad. None
+of the 26 pipelines in `tests/agency/safeBash-corpus.json` has two such
+stages, so the rule costs nothing in the logged lines. It can be widened
+later if such lines show up.
+
+A stage may name a path that is not on the disk yet only when no other
+stage raises anything except `std::exec`. The rule above already says
+so.
 
 ## What is deleted
 
@@ -152,13 +260,21 @@ change a wrong prediction is a line that stops.
   `CHANGING_EFFECTS`.
 - The `disk` checks in `missingPath` and `cdTarget`.
 
-One small rule replaces them, for the one place the runner cannot step: a
-pipeline in which one stage can replace a path and another stage names a
-path asks `std::bash`. An example is `git checkout x | cat README.md`.
-No such line is in the logs.
+`LineState.written` and `LineState.made` stay, so the up-front plan can
+ask a narrow question about a file or folder the line has not made yet:
 
-`resolveBashPath` (the `..` after a symlink) stays. That gap is inside one
-word, and checking later does not close it.
+```
+mkdir -p out && ls out
+```
+
+Up front, `out` is not on the disk, and `made` lets the plan ask
+`std::ls` for `<cwd>/out`. When `ls out` is about to run, `out` exists,
+and the fresh plan gives the same payload. What changes is what these
+two lists are trusted for. Today a wrong prediction is a hole. After
+this change a wrong prediction is a line that stops.
+
+`resolveBashPath` (the `..` after a symlink) stays. That gap is inside
+one word, and checking later does not close it.
 
 ## Lines that get their narrow questions back
 
@@ -170,6 +286,12 @@ The "After" column is what the design predicts. No code has run these.
 | `git stash pop && ls` | `std::bash` | stash pop, ls |
 | `git checkout -b new && ls` | `std::bash` | checkout, ls |
 | `git switch main; grep -rn TODO src` | `std::bash` | switch, grep |
+| `pnpm build && cat dist/out.txt` (`out.txt` not there yet) | `std::bash` | exec, read |
+
+The last row follows from deleting the `disk` check in `missingPath`.
+The plan asks `std::read` for `<cwd>/dist/out.txt` as written. If the
+build makes `out.txt` a link to another file, the fresh plan resolves
+the link, and the line stops.
 
 ## Background jobs
 
@@ -189,17 +311,26 @@ The `cd` is resolved and checked at launch, and the job starts `pnpm dev`
 in that folder. Any other line with more than one step asks `std::bash`
 as a job. In the foreground the same line keeps its narrow questions.
 
-**This is the one decision in this design that changes a prompt for the
-worse.** A job such as `startJob("pnpm build && pnpm start")` asks two
-`std::exec` questions today and would ask one `std::bash`.
+The logs hold seven distinct `startJob` lines. Four are a `cd` followed
+by one `node -e` command, and one is a lone `ls`; those five are
+unchanged. One uses `$(...)` and asks `std::bash` already. One would get
+worse:
+
+```
+git status --short && git branch --show-current && ls docs/superpowers/plans
+```
+
+It is a line that finishes at once and did not need to be a job.
 
 ## What this does not close
 
 There is still a short gap between the fresh plan of a step and the
 moment its program opens the file. Today the gap is the whole line, and
 the line's own commands can use it. After this change the gap is a few
-milliseconds, and only a process that is already running beside the line
-can use it. A step that runs in process has no gap, because the stdlib
+milliseconds. Two things can use it: a process already running beside
+the line, and a child process that an earlier step left running. Only a
+`std::exec` step can leave one, and its approval already lets it read
+any file. A step that runs in process has no gap, because the stdlib
 tool checks the path when it opens it.
 
 ## Interrupts, handlers, and checkpoints
@@ -207,52 +338,65 @@ tool checks the path when it opens it.
 - Every raise still happens in `approvedPlan`, before anything runs. The
   runner raises nothing. Handlers and policies see the same interrupts
   they see today, in the same order.
-- The runner never pauses for an answer, so it adds no new point at which
-  a checkpoint is taken. A run paused from outside in the middle of a
-  line resumes after the last step that finished, as `runChain` does
-  today.
-- A checkpoint is a file a person can edit. The approved effects for each
-  step are held in the plan, which is a local variable. Editing them in a
-  checkpoint can only make the fresh plan disagree, which stops the line,
-  or agree with a plan the handlers never saw. The second case is the
-  same exposure `safeBash` has today, where the text to run is also a
-  local variable.
+- The runner is Agency code, as `runChain` is. Its folder, the last exit
+  status, and the output so far are local variables, so a checkpoint
+  saves them. A run paused between two steps resumes at the next step.
+  That step is planned again before it runs, so a change to the disk
+  during the pause is caught too.
+- A pause that arrives while a step's `bash -c` is running raises a
+  question this design does not answer: can that step run a second time
+  on resume? Today the same question exists for the whole line. The plan
+  must find the answer before the runner is written.
+- A checkpoint is a file a person can edit. The approved effects for
+  each step are held in the plan, which is a local variable. Editing
+  them can make the fresh plan disagree, which stops the line, or agree
+  with a plan the handlers never saw. The second case is the exposure
+  `safeBash` has today, where the text to run is also a local variable.
 
 ## Differences from bash that a person could notice
 
-- **Output order.** Each step's stdout and stderr are collected and
-  joined in step order. Within one step nothing changes.
 - **The time limit** covers the whole line. Each step runs with the time
   that is left.
 - **One more failure.** The stop described above.
+- **In-process steps** in more lines, as described above.
 - **Cost.** One extra plan per step, which reads a few paths, and one
   `bash` start per step instead of one per line.
+
+Output is not a difference. Each step's stdout is joined to the stdout
+so far, and its stderr to the stderr so far, which is what one `bash -c`
+gives.
+
+One thing gets better: the check for a `gh` login failure can read the
+exit status of the `gh` step. Today it only has the status of the whole
+line.
 
 ## How it would be built
 
 Three pull requests, each of which leaves main working.
 
-1. **The runner, with no checks.** A narrow line runs step by step and
-   must print what the whole line prints under one `bash -c`. Parity
-   tests compare the two for output, exit status, `$?`, `cd`, groups,
-   and the joins. No prompt changes.
-2. **The check before each step, and the stop.** The attack lines from
-   #1523's tests stop instead of running. Still no prompt changes.
-3. **Delete the prediction rule.** The lines in the table above become
+1. **`planStep`, the `steps` execution kind, and the runner, with no
+   checks.** Parity tests compare a line run step by step with the same
+   line under one `bash -c`, for output, exit status, `$?`, `cd`,
+   groups, and the joins. These tests cover steps that run through bash.
+   A separate test pins the exit status that `$?` and the joins see
+   after an in-process step. The runner prepares saved-output copies
+   (`_prepareSpillFiles`) before the first step that reads one. The
+   builtin test goes here. No prompt changes.
+2. **The two checks and the stop.** The effect check, the folder check,
+   and the stop message. Each check and each stop is logged with
+   `_debug`, so stops can be counted from the logs. The attack lines
+   from #1523's tests stop, and so does `git checkout evil && cd sub &&
+   git status`. No prompt changes.
+3. **Delete the prediction rule.** The five lines in the table become
    narrow, the pipeline rule and the job rule go in, and
    `noPathAfterACommandThatReplacesPaths` is rewritten to pin the stop.
 
-Rough size: five to seven days.
+Rough size: six to eight days. The first pull request is the largest.
 
 ## What this leaves for other tickets
 
 - **ADI-261** (run a pipeline's stages in process) is unchanged. A
   pipeline is one step here.
-- **A read of a file the line has not made yet**, such as `pnpm build &&
-  cat dist/out.txt` with `out.txt` missing, asks `std::bash` today. With
-  the check in place it could ask `std::read` for the path as written,
-  and stop if the file turns out to be a link. That would remove more
-  prompts, and it is a separate change.
 
 ## Decisions (owner, 2026-11-20)
 
@@ -260,6 +404,15 @@ Rough size: five to seven days.
    `std::bash`, apart from a leading `cd`. The prediction rule is not
    kept alive for jobs.
 2. **Stop.** The whole line stops at the first step that does not match.
-   It does not skip that step and carry on.
-3. **The lines that become narrow again.** All four lines in the table
-   ask their narrow questions up front and rely on the check.
+3. **The lines that become narrow again.** The first four lines in the
+   table ask their narrow questions up front and rely on the check.
+
+## Decisions still open after the review
+
+1. **The fifth line, `pnpm build && cat dist/out.txt`.** The first draft
+   left it for another ticket while also deleting the check that keeps
+   it broad. The review pointed out it has to be one or the other. This
+   draft makes it narrow.
+2. **The pipeline rule.** It makes `git log --oneline | head > out.txt`
+   ask `std::bash`, where it is narrow today.
+3. **`$_`.** A word that holds `$_` makes its command unrecognized.

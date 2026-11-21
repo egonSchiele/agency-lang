@@ -1,7 +1,7 @@
 import path from "#path";
 import { currentHost } from "../runtime/currentHost.js";
 import { rejectDangerousPath } from "./fs.js";
-import { resolveAgainstCwd, type TildeMode } from "./prepareContainedPath.js";
+import { resolveAgainstCwd, resolveBashPath, type TildeMode } from "./prepareContainedPath.js";
 
 /** A trailing `/`, `/*`, `/.*`, or `/.` names a folder's contents, which
  *  for the refusal is the folder. */
@@ -107,5 +107,5 @@ export async function _realPathIn(
   tildeMode: TildeMode,
   verb: string,
 ): Promise<string> {
-  return currentHost().files.realPath(resolveAgainstCwd(text, cwd, tildeMode, verb));
+  return currentHost().files.realPath(await resolveBashPath(text, cwd, tildeMode, verb));
 }

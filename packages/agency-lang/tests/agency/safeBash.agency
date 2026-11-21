@@ -1032,6 +1032,8 @@ node noPathAfterACommandThatReplacesPaths() {
     fileRow("git checkout main; pnpm test; cat one.txt"),
     fileRow("git checkout main 2>&1 | tee log.txt"),
     fileRow("git checkout main; timeout 5 cat one.txt"),
+    fileRow("(git checkout main); cat one.txt"),
+    fileRow("git checkout main || cat one.txt"),
     fileRow("git checkout main && pnpm test"),
     fileRow("git checkout main; git status; git log --oneline -3"),
     fileRow("git stash; pnpm test; git stash pop"),
@@ -1041,6 +1043,31 @@ node noPathAfterACommandThatReplacesPaths() {
     fileRow("rm -rf sub && pnpm build && ls sub"),
     fileRow("git add one.txt && git commit -m x && cat one.txt"),
     fileRow("pnpm build; cat one.txt"),
+  ]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
+// The plan removes a `..` from the text of a path, and the kernel applies
+// it after following a link. With `link -> outside/inner`, bash opens
+// `outside/creds` for `link/../creds`, so a `..` that follows a symlink
+// has no rule. A `..` after a real folder, and a link with no `..` after
+// it, resolve as before.
+node dotDotAfterALinkHasNoRule() {
+  makeFilesFixture()
+  bash("mkdir -p outside/inner && ln -s outside/inner link && printf 'o\\n' > outside/creds && printf 'p\\n' > creds", cwd: FILES_FIXTURE) with approve
+  const rows = [
+    fileRow("cat link/../creds | head"),
+    fileRow("ls link/.."),
+    fileRow("grep -rn x link/.."),
+    fileRow("echo x > link/../creds"),
+    fileRow("pnpm test | tee link/../log.txt"),
+    fileRow("cd link/.. && ls"),
+    fileRow("rm link/../creds"),
+    fileRow("mkdir link/../made"),
+    fileRow("git -C link/.. status"),
+    fileRow("cat sub/../creds | head"),
+    fileRow("ls link | head"),
   ]
   remove(FILES_FIXTURE) with approve
   return rows

@@ -787,6 +787,23 @@ refused together: `git checkout main | tee log.txt`.
 This rule predicts what a command can do. The plan to check each command
 against the disk just before it runs, which would replace it, is ADI-358.
 
+### A `..` after a symlink
+
+The same gap between the plan and bash exists inside one word. Every
+resolver makes the word absolute with `path.resolve`, which removes a
+`..` from the text. The kernel applies a `..` after following a link.
+With `link` pointing at `/elsewhere/inner`, `link/../creds` is
+`<cwd>/creds` to the plan and `/elsewhere/creds` to `cat`.
+
+`resolveBashPath` (`lib/stdlib/prepareContainedPath.ts`) is the first
+step of `_searchTargetIn`, `_resolveRedirectTarget`, and `_realPathIn`.
+It walks the word as written, and when a `..` follows a step that is a
+symlink, it throws, so the line asks `std::bash`. A working folder that
+is itself a symlink counts as such a step. A word with no `..` costs
+nothing, and a `..` after a real folder resolves as before.
+`dotDotAfterALinkHasNoRule` pins the rule for a read, a listing, a
+search, a redirect, `tee`, `cd`, `rm`, `mkdir`, and `git -C`.
+
 ### Files the line wrote and folders it made
 
 `afterCommand` updates the line after each command. A `std::write` goes

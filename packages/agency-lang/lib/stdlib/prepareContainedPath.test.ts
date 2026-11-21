@@ -3,7 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "fs";
 import { realpath } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
-import { prepareContainedPath, resolveRedirectTarget } from "./prepareContainedPath.js";
+import {
+  prepareContainedPath,
+  resolveBashPath,
+  resolveRedirectTarget,
+} from "./prepareContainedPath.js";
 
 const sandboxes: string[] = [];
 
@@ -202,6 +206,58 @@ describe("resolveRedirectTarget", () => {
 
   it("rejects an empty cwd", async () => {
     await expect(resolveRedirectTarget("f.txt", "", "expand")).rejects.toThrow(/cwd/);
+  });
+});
+
+// `path.resolve` removes a `..` from the text, and the kernel applies it
+// after following a link. With `link -> ../outside/inner`, bash opens
+// `outside/creds` for `link/../creds`, not `root/creds`.
+describe("resolveBashPath", () => {
+  function linked(): { root: string } {
+    const { root, outside } = sandbox();
+    mkdirSync(path.join(outside, "inner"));
+    mkdirSync(path.join(root, "sub"));
+    symlinkSync(path.join(outside, "inner"), path.join(root, "link"));
+    writeFileSync(path.join(root, "creds"), "project");
+    writeFileSync(path.join(outside, "creds"), "outside");
+    return { root };
+  }
+
+  it("refuses a `..` that follows a symlink", async () => {
+    const { root } = linked();
+    await expect(resolveBashPath("link/../creds", root, "expand", "cat")).rejects.toThrow(
+      /follows the symlink/,
+    );
+    await expect(resolveBashPath("./link/sub/../../creds", root, "expand", "cat")).rejects.toThrow(
+      /follows the symlink/,
+    );
+    await expect(
+      // Spelled by hand: `path.join` would remove the `..` itself.
+      resolveBashPath(`${root}/link/../creds`, "/", "expand", "cat"),
+    ).rejects.toThrow(/follows the symlink/);
+  });
+
+  it("refuses a `..` from a working folder that is itself a symlink", async () => {
+    const { root } = linked();
+    await expect(
+      resolveBashPath("../creds", path.join(root, "link"), "expand", "cat"),
+    ).rejects.toThrow(/follows the symlink/);
+  });
+
+  it("resolves a `..` that follows a real folder, and a path through a link with no `..`", async () => {
+    const { root } = linked();
+    expect(await resolveBashPath("sub/../creds", root, "expand", "cat")).toBe(
+      path.join(root, "creds"),
+    );
+    expect(await resolveBashPath("link/x/../y", root, "expand", "cat")).toBe(
+      path.join(root, "link", "y"),
+    );
+    expect(await resolveBashPath("link/creds", root, "expand", "cat")).toBe(
+      path.join(root, "link", "creds"),
+    );
+    expect(await resolveBashPath("nope/../creds", root, "expand", "cat")).toBe(
+      path.join(root, "creds"),
+    );
   });
 });
 

@@ -89,6 +89,17 @@
       ]
     },
     {
+      "nodeName": "aCheckoutThatSwapsAPathStops",
+      "description": "Each row: the line, whether it succeeded, the step it stopped before, and whether anything from outside was printed. A git checkout that puts a link where a file or folder was is narrow, and the step that names the swapped path stops the line before it runs.",
+      "input": "",
+      "expectedOutput": "[[\"git checkout evil; cat one.txt\",false,\"cat one.txt\",false],[\"git checkout evil && ls sub\",false,\"ls sub\",false],[\"git checkout evil && cd sub && git status\",false,\"cd sub\",false]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "anUnchangedFolderSpelledAnotherWayRuns",
       "description": "The folder check compares real folders, so a line planned in \".\", in a folder spelled through a link, or in a relative folder does not stop when nothing changed.",
       "input": "",

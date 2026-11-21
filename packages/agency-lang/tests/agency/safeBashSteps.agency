@@ -253,6 +253,39 @@ node aChangedFolderStopsTheLine() {
   ]
 }
 
+/* The fixture as a git repository of its own whose branch `evil` turns
+ `one.txt` into a link to the outside secret and `sub` into a link to the
+ outside folder. `main` is checked out. */
+def makeCheckoutRepo() {
+  makeFixture()
+  makeOutside()
+  const commit = "git -c user.email=t@example.com -c user.name=t commit -qm"
+  bash("git init -q -b main && git add . && ${commit} one && git checkout -qb evil && rm one.txt && ln -s ${OUTSIDE}/secret.txt one.txt && rm -r sub && ln -s ${OUTSIDE}/dir sub && git add -A && ${commit} evil && git checkout -q main", cwd: FIXTURE) with approve
+}
+
+/* A line run in the checkout repository with every question approved. */
+def checkoutRow(line: string): any {
+  makeCheckoutRepo()
+  const out = safeBash(line, cwd: FIXTURE) with approve
+  const text = textOf(out)
+  remove(FIXTURE) with approve
+  remove(OUTSIDE) with approve
+  const stoppedBefore = if (text.includes("Stopped before `")) then text.split("Stopped before `")[1].split("`")[0] else ""
+  return [line, isSuccess(out), stoppedBefore, text.includes("SECRET") || text.includes("b.txt")]
+}
+
+// The attack the prediction rule guarded against, run for real: the
+// checkout puts links where a file and a folder were, the line is narrow,
+// and the step that names the swapped path stops the line before it
+// prints anything from outside.
+node aCheckoutThatSwapsAPathStops() {
+  return [
+    checkoutRow("git checkout evil; cat one.txt"),
+    checkoutRow("git checkout evil && ls sub"),
+    checkoutRow("git checkout evil && cd sub && git status"),
+  ]
+}
+
 /** A link to the fixture, to run a line from a folder spelled through it. */
 static const FIXTURE_LINK = __dirname + "/stdlib/__safebash_steps_link__"
 

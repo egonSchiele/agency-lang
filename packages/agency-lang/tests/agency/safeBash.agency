@@ -686,6 +686,17 @@ node noNarrowRuleChangesTheShell() {
     "enable -n echo",
     "builtin cd sub",
     "command cd sub",
+    "ulimit -n 10",
+    "readonly FOO=1",
+    "typeset x=1",
+    "let x=1",
+    "popd",
+    "wait",
+    // These end the line under one shell. A runner that took one as a
+    // step would carry on to the next step.
+    "exit 1",
+    "return 1",
+    "logout",
   ]
   return [line for line in lines if outcomeOf(planFor("${line}; ls sub", FILES_FIXTURE)) != "broad"]
 }

@@ -4,7 +4,12 @@ import path from "path";
 import { describe, expect, it } from "vitest";
 import { currentHost } from "../runtime/currentHost.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
-import { _removeRefusal, _realPathIn, _unparsedRemoveRefusal } from "./safeBashRemove.js";
+import {
+  _removeRefusal,
+  _realFolder,
+  _realPathIn,
+  _unparsedRemoveRefusal,
+} from "./safeBashRemove.js";
 
 // Nothing here deletes anything but a temp folder a test made: the
 // functions only read path text and, for the real spelling, the filesystem.
@@ -150,5 +155,27 @@ describe("_realPathIn", () => {
     } finally {
       safeDeleteDirectoryWithin(os.tmpdir(), root);
     }
+  });
+});
+
+describe("_realFolder", () => {
+  it("follows a link in the last step of the path", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "safebash-realfolder-"));
+    try {
+      const realRoot = await currentHost().files.realDir(root);
+      fs.mkdirSync(path.join(root, "target"));
+      fs.symlinkSync(path.join(root, "target"), path.join(root, "link"));
+      expect(await _realFolder(path.join(root, "link"))).toBe(path.join(realRoot, "target"));
+      // `realPath` keeps the last step as written, which is why the folder
+      // check cannot use `_realPathIn`.
+      expect(await _realPathIn("link", root, "expand", "cd")).toBe(path.join(realRoot, "link"));
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), root);
+    }
+  });
+
+  it("spells a relative folder as an absolute one", async () => {
+    const cwd = currentHost().system.cwd();
+    expect(await _realFolder(".")).toBe(await currentHost().files.realDir(cwd));
   });
 });

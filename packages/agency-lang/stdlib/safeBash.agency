@@ -67,11 +67,15 @@ import {
   SavedPath,
   ReadSource,
   readPayloadOf,
+  LineStep,
+  RunStep,
+  CdStep,
+  GroupStep,
  } from "./safeBash/actions.agency"
 import { _prepareSpillFiles, _grepSaved, _readSpill, _spillPathParts, _savedPathsInText, _inSpillFolder } from "agency-lang/stdlib-lib/spill.js"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
-import { _removeRefusal, _realPathIn, _unparsedRemoveRefusal } from "agency-lang/stdlib-lib/safeBashRemove.js"
+import { _removeRefusal, _realFolder, _realPathIn, _unparsedRemoveRefusal } from "agency-lang/stdlib-lib/safeBashRemove.js"
 import { _gitHardeningFlags } from "agency-lang/stdlib-lib/git.js"
 import { _ghParseTarget, _ghParseRepoFlag, _ghSearchQuery, _ghParseApiPath, _ghApiPath } from "agency-lang/stdlib-lib/safeBashGh.js"
 import { _ghResolveRepo } from "agency-lang/stdlib-lib/github/repo.js"
@@ -118,135 +122,31 @@ the command. See `docs/dev/stdlib/safe-bash.md` for classification rules.
 
 export { MAX_STDOUT_LEN } from "std::spill"
 
-export type Word =
-  | LiteralWord
-  | PathWord
-  | GlobWord
-  | FlagWord
-  | SingleQuotedWord
-  | DoubleQuotedWord
-  | VariableWord
-  | InterpolatedVariableWord
-
-export type ScriptName = LiteralWord | PathWord
-
-export type LiteralWord = {
-  tag: "literal";
-  text: string
-}
-
-export type PathWord = {
-  tag: "path";
-  text: string
-}
-
-/** An unquoted word bash will expand (`*.ts`, `src/*.md`). Its own node
- so it is never mistaken for the quoted text `'*.ts'`; no rule here
- treats it as a literal. */
-export type GlobWord = {
-  tag: "glob";
-  text: string
-}
-
-export type FlagWord = {
-  tag: "flag";
-  flagName: string;
-  flagValue?: string;
-  /** Present and true when the value is an unquoted glob (`--include=*.ts`). */
-  valueIsGlob?: boolean
-}
-
-export type SingleQuotedWord = {
-  tag: "singleQuoted";
-  text: string
-}
-
-export type DoubleQuotedWord = {
-  tag: "doubleQuoted";
-  parts: Word[]
-}
-
-export type VariableWord = {
-  tag: "variable";
-  name: string
-}
-
-/** Adjacent word parts, such as `$HOME.txt` or `"a"b`, that form one Bash argument. */
-export type InterpolatedVariableWord = {
-  tag: "interpolatedVariable";
-  parts: (
-  | LiteralWord
-  | VariableWord
-  | SingleQuotedWord
-  | DoubleQuotedWord)[]
-}
-
-/** `name=value` (or `name=` with a null value) before a command. */
-export type Assignment = {
-  tag: "assignment";
-  name: string;
-  value?: Word
-}
-
-/** A redirect like `> out.txt`, `>> log`, `2> err.txt`, `< in.txt`, or
- the dup `2>&1` (op `>&`, target a one-digit literal). `fd` is the
- explicit file descriptor (`2` in `2>`), or undefined for the default.
- Heredocs and here-strings are rejected rather than parsed. */
-export type Redirect = {
-  tag: "redirect";
-  fd?: number;
-  op: string;
-  target: Word
-}
-
-export type SimpleCommand = {
-  tag: "simpleCommand";
-  assignments: Assignment[];
-  /* The command name, or null for an assignment-only line (`FOO=bar`).
-    Bash requires at least one of a command name or an assignment. */
-  command?: ScriptName;
-  /** Every word after the command name, in source order. */
-  args: Word[];
-  redirects: Redirect[]
-}
-
-export type Command = SimpleCommand | Pipeline | And | Or | Parens
-
-/** What may sit between pipes: a simple command or a parenthesized group. */
-export type PipelineStage = SimpleCommand | Parens
-
-/** `a | b | c`: flat, two or more stages, binding tighter than `&&`/`||`. */
-export type Pipeline = {
-  tag: "pipeline";
-  stages: PipelineStage[]
-}
-
-export type And = {
-  tag: "and";
-  left: Command;
-  right: Command
-}
-
-export type Or = {
-  tag: "or";
-  left: Command;
-  right: Command
-}
-
-export type Parens = {
-  tag: "parens";
-  command: Command
-}
-
-export type BashNode =
-  | Command
-  | SimpleCommand
-  | Assignment
-  | Redirect
-  | Word
-  | ScriptName
-
-export type BashAST = Command[]
+// The parsed command types live in `std::safeBash/actions`, because a plan
+// step holds the command it runs, and that module cannot import this one.
+export {
+  Word,
+  ScriptName,
+  LiteralWord,
+  PathWord,
+  GlobWord,
+  FlagWord,
+  SingleQuotedWord,
+  DoubleQuotedWord,
+  VariableWord,
+  InterpolatedVariableWord,
+  Assignment,
+  Redirect,
+  SimpleCommand,
+  Command,
+  PipelineStage,
+  Pipeline,
+  And,
+  Or,
+  Parens,
+  BashNode,
+  BashAST,
+} from "./safeBash/actions.agency"
 
 // Flags are classified separately so git diff --staged can reach its rule.
 def literalArgs(command: SimpleCommand): Result<string[]> {
@@ -5340,13 +5240,16 @@ def planLine(source: string, parsed: Result<BashAST>, cwd: string, origin: GhRep
 type Classified = {
   effects: Effect[];
   line: LineState;
-  command: Command
+  command: Command;
+  /** The same command as steps the runner takes one at a time. */
+  steps: LineStep[]
 }
 
-/** The effects of the whole string and the command tree to run. */
+/** The effects of the whole string, the command tree to run, and its steps. */
 type ClassifiedAll = {
   effects: Effect[];
-  commands: Command[]
+  commands: Command[];
+  steps: LineStep[]
 }
 
 // Classify the whole string. This walks the command tree, where the refuse
@@ -5369,6 +5272,7 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
   """
   let effects: Effect[] = []
   let rewritten: Command[] = []
+  let steps: LineStep[] = []
   // The line the next command is classified in.
   let line = freshLine(cwd)
   for (command, index in commands) {
@@ -5376,6 +5280,7 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
     if (cd != null) {
       const moved = cdTarget(cd, line)?
       rewritten.push(cdOrExit(cd, moved))
+      steps.push({ kind: "cd", join: "seq", source: cd, cwd: line.cwd, dir: moved, guarded: true })
       line = { ...line, cwd: moved }
       continue
     }
@@ -5387,9 +5292,79 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
     }
     effects = [...effects, ...classified.effects]
     rewritten.push(classified.command)
+    steps = [...steps, ...classified.steps]
     line = classified.line
   }
-  return success({ effects: effects, commands: rewritten })
+  return success({ effects: effects, commands: rewritten, steps: steps })
+}
+
+// The steps of a line run with bash's rule for each join. The parser is
+// left-associative, so a flat list with one join per step runs in bash's
+// order; the comment in `linksOf` says why. A right side is a simple
+// command, a pipeline, or a group, never another `&&` or `||`.
+def joined(steps: LineStep[], join: Join): LineStep[] {
+  if (steps.length == 0) {
+    return steps
+  }
+  return [{ ...steps[0], join: join }, ...steps.slice(1)]
+}
+
+// One command or one pipeline that runs through bash. `source` is the
+// command as the model wrote it, which a later check plans again, and
+// `ran` is the command as the plan rewrote it, which this step runs.
+@capabilities(fileRead)
+def runStepOf(source: Command, ran: Command, line: LineState, effects: Effect[]): Result<LineStep[]> {
+  const real = try _realFolder(line.cwd)
+  if (real is failure(why)) {
+    return failure("the folder `${line.cwd}` cannot be resolved: ${why}")
+  }
+  return success([{
+    kind: "run",
+    join: "seq",
+    source: source,
+    cwd: line.cwd,
+    realCwd: real.value,
+    text: stepText(ran),
+    effects: effects,
+    readsStatus: readsAny(source, EXIT_STATUS),
+    inProcess: null
+  }])
+}
+
+// A command that cannot be rendered also makes the whole line's rebuild
+// fail, and `planLine` then sends the line to std::bash before any step
+// runs, so an empty text here is never run.
+def stepText(command: Command): string {
+  const text = rebuild([command])
+  if (text is failure(why)) {
+    return ""
+  }
+  return text.value
+}
+
+/** The variable bash sets to the exit status of the command before. */
+static const EXIT_STATUS: string[] = ["?"]
+
+/* Whether a word of any command in `command` holds one of these variables. */
+def readsAny(command: Command, names: string[]): boolean {
+  for (entry in flattenOne(command)) {
+    const words = [...commandWords(entry.command), ...[assignment.value for assignment in entry.command.assignments if assignment.value != null]]
+    for (word in words) {
+      if (holdsVariable(word, names)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+def holdsVariable(word: Word, names: string[]): boolean {
+  return match(word) {
+    { tag: "variable", name } => names.includes(name)
+    { tag: "doubleQuoted", parts } => [part for part in parts if holdsVariable(part, names)].length > 0
+    { tag: "interpolatedVariable", parts } => [part for part in parts if holdsVariable(part, names)].length > 0
+    _ => false
+  }
 }
 
 @capabilities(fileRead)
@@ -5411,12 +5386,14 @@ def classifySimple(command: SimpleCommand, line: LineState, origin: GhRepo | nul
   if (timed == null) {
     const rule = simpleCommandRule(command, line, origin, readsStdin)?
     refuseStalePath(line, rule.effects)?
-    return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: rule.command })
+    const steps = runStepOf(command, rule.command, line, rule.effects)?
+    return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: rule.command, steps: steps })
   }
   const rule = simpleCommandRule(timed.inner, line, origin, readsStdin)?
   refuseStalePath(line, rule.effects)?
   const wrapped = withTimeout(timed, rule.command)?
-  return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: wrapped })
+  const steps = runStepOf(command, wrapped, line, rule.effects)?
+  return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: wrapped, steps: steps })
 }
 
 /** A `timeout <duration> <command>` line: the wrapper's words, and the
@@ -5525,7 +5502,10 @@ def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | 
   // A stage that can replace paths runs beside the others, so none of
   // them may name one: `git checkout main | tee log.txt`.
   refuseStalePath({ ...line, disk: diskAfter(effects) }, effects)?
-  return success({ effects: effects, line: afterCommand(line, effects), command: { tag: "pipeline", stages: rewritten } })
+  const ran: Command = { tag: "pipeline", stages: rewritten }
+  // The stages run at the same time, so a pipeline is one step.
+  const steps = runStepOf({ tag: "pipeline", stages: stages }, ran, line, effects)?
+  return success({ effects: effects, line: afterCommand(line, effects), command: ran, steps: steps })
 }
 
 // Parentheses run a subshell, so a `cd` inside them ends with them. A file
@@ -5534,7 +5514,12 @@ def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | 
 @capabilities(fileRead)
 def classifyGroup(inner: Command, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   const classified = classify(inner, line, origin, readsStdin)?
-  return success({ effects: classified.effects, line: { ...classified.line, cwd: line.cwd }, command: { tag: "parens", command: classified.command } })
+  return success({
+    effects: classified.effects,
+    line: { ...classified.line, cwd: line.cwd },
+    command: { tag: "parens", command: classified.command },
+    steps: [{ kind: "group", join: "seq", steps: classified.steps }]
+  })
 }
 
 // `cd dir && rest`: when the `cd` fails, bash runs nothing to its right, so
@@ -5556,7 +5541,8 @@ def classifyAnd(left: Command, right: Command, line: LineState, origin: GhRepo |
   return success({
     effects: [...first.effects, ...second.effects],
     line: second.line,
-    command: { tag: "and", left: first.command, right: second.command }
+    command: { tag: "and", left: first.command, right: second.command },
+    steps: [...first.steps, ...joined(second.steps, "and")]
   })
 }
 
@@ -5575,7 +5561,8 @@ def classifyOr(left: Command, right: Command, line: LineState, origin: GhRepo | 
   return success({
     effects: [...first.effects, ...second.effects],
     line: second.line,
-    command: { tag: "or", left: first.command, right: second.command }
+    command: { tag: "or", left: first.command, right: second.command },
+    steps: [...first.steps, ...joined(second.steps, "or")]
   })
 }
 
@@ -5692,7 +5679,12 @@ def andSide(side: Command, line: LineState, origin: GhRepo | null, readsStdin: b
 @capabilities(fileRead)
 def cdStep(cd: SimpleCommand, line: LineState): Result<Classified> {
   const moved = cdTarget(cd, line)?
-  return success({ effects: [], line: { ...line, cwd: moved }, command: cdTo(cd, moved) })
+  return success({
+    effects: [],
+    line: { ...line, cwd: moved },
+    command: cdTo(cd, moved),
+    steps: [{ kind: "cd", join: "seq", source: cd, cwd: line.cwd, dir: moved, guarded: false }]
+  })
 }
 
 /** Commands we decline to run even when a human approves. */

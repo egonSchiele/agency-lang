@@ -124,6 +124,16 @@ export async function _unparsedRemoveRefusal(source: string, cwd: string): Promi
  * for an unquoted word, because bash expands `~` only there. `verb` names
  * the command in an error.
  */
+/**
+ * A folder with every link followed, the last step included, for the
+ * check that a step still runs in the folder that was approved. A folder
+ * that became a link is a link in its last step, which `_realPathIn`
+ * keeps as written.
+ */
+export async function _realFolder(dir: string): Promise<string> {
+  return currentHost().files.realDir(dir);
+}
+
 export async function _realPathIn(
   text: string,
   cwd: string,

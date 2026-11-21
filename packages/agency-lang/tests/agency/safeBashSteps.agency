@@ -264,9 +264,20 @@ def makeCheckoutRepo() {
 }
 
 /* A line run in the checkout repository with every question approved. */
+// Every narrow question is approved and the broad one rejected, as a
+// policy that trusts narrow questions would answer. A line that went broad
+// runs nothing.
 def checkoutRow(line: string): any {
   makeCheckoutRepo()
-  const out = safeBash(line, cwd: FIXTURE) with approve
+  let out: Result<string> = success("")
+  handle {
+    out = safeBash(line, cwd: FIXTURE)
+  } with (intr) {
+    if (intr.effect == "std::bash") {
+      return reject("no broad questions")
+    }
+    return approve()
+  }
   const text = textOf(out)
   remove(FIXTURE) with approve
   remove(OUTSIDE) with approve
@@ -283,6 +294,8 @@ node aCheckoutThatSwapsAPathStops() {
     checkoutRow("git checkout evil; cat one.txt"),
     checkoutRow("git checkout evil && ls sub"),
     checkoutRow("git checkout evil && cd sub && git status"),
+    // A group in a pipeline runs as one step, so it asks std::bash.
+    checkoutRow("(git checkout evil && cat one.txt) | cat"),
   ]
 }
 

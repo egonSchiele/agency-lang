@@ -414,10 +414,21 @@
       ]
     },
     {
-      "nodeName": "aPipelineHasOneStageThatAsks",
-      "description": "The stages of a pipeline run at the same time, and the runner checks a pipeline as one step. So at most one stage may ask anything other than std::exec, whose approval already lets a program read any file: a checkout beside a read or a write, and a log beside a write, ask std::bash. A read beside a filter, a write beside programs, and a read of a missing file beside a program stay narrow.",
+      "nodeName": "aSlashAfterALinkHasNoRule",
+      "description": "rm -rf link/ follows the link and deletes what it points to, while the std::remove payload names the link, so a `/` after a link asks std::bash, for rmdir too. A link with no slash, which removes only the link, and a real folder with a slash stay narrow.",
       "input": "",
-      "expectedOutput": "[[\"git checkout x | cat one.txt\",\"broad\"],[\"git checkout main | tee log.txt\",\"broad\"],[\"cat one.txt | grep version\",\"narrow\"],[\"pnpm test 2>&1 | tee out.log | tail -30\",\"narrow\"],[\"git log --oneline | head > out.txt\",\"broad\"],[\"pnpm test | cat nope.txt\",\"narrow\"]]",
+      "expectedOutput": "[[\"rm -rf link/\",\"broad\"],[\"rmdir link/\",\"broad\"],[\"rm -rf link\",\"narrow\"],[\"rm -rf sub/\",\"narrow\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aPipelineHasOneStageThatAsks",
+      "description": "The stages of a pipeline run at the same time, and the runner checks a pipeline as one step. So at most one stage may ask anything other than std::exec, whose approval already lets a program read any file: a checkout beside a read or a write, and a log beside a write, ask std::bash. A read beside a filter, a write beside programs, and a read of a missing file beside a program stay narrow. A group of several commands is part of one stage, so beside any question other than std::exec it asks std::bash: a checkout and a read in one group, and a checkout, a cd, and a program. A group of programs, and a cd and a program, stay narrow.",
+      "input": "",
+      "expectedOutput": "[[\"git checkout x | cat one.txt\",\"broad\"],[\"git checkout main | tee log.txt\",\"broad\"],[\"cat one.txt | grep version\",\"narrow\"],[\"pnpm test 2>&1 | tee out.log | tail -30\",\"narrow\"],[\"git log --oneline | head > out.txt\",\"broad\"],[\"pnpm test | cat nope.txt\",\"narrow\"],[\"(git checkout x && cat one.txt) | cat\",\"broad\"],[\"(git checkout x && cd sub && pnpm test) | cat\",\"broad\"],[\"(pnpm build && pnpm test) | tail -5\",\"narrow\"],[\"(cd sub && pnpm test) | tail -5\",\"narrow\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1413,9 +1424,9 @@
     },
     {
       "nodeName": "cdDoesNotLeakOutOfItsChain",
-      "description": "A cd inside parentheses ends with them, so the next command is classified in the original folder. A command after ; or || that follows a chain with a cd is broad, because its folder depends on whether the cd worked. A cd chain that comes last after ; is narrow.",
+      "description": "A cd inside parentheses ends with them, so the next command is classified in the original folder. A group of several commands in a pipeline that asks a question is broad, because the group runs as one step. A command after ; or || that follows a chain with a cd is broad, because its folder depends on whether the cd worked. A cd chain that comes last after ; is narrow.",
       "input": "",
-      "expectedOutput": "[[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::ls\",\"stdlib\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"narrow\",[[\"std::ls\",\"stdlib\"],[\"std::ls\",\"grep-fixtures\"]]]]",
+      "expectedOutput": "[[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::ls\",\"stdlib\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"narrow\",[[\"std::ls\",\"stdlib\"],[\"std::ls\",\"grep-fixtures\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"

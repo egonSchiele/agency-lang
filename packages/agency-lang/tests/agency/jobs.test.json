@@ -85,6 +85,20 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "aJobRunsInItsCdFolder",
+      "description": "A job of a cd and one command starts that command in the cd's folder: the listing shows a folder inside tests/agency/stdlib and not a file of tests/agency.",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "aJobWhoseCdChangedDoesNotStart",
+      "description": "When the cd's folder is swapped for a link after the questions were answered, the folder no longer leads where it was approved to, so the job fails at launch and nothing starts.",
+      "input": "",
+      "expectedOutput": "[true,true,0]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "timeLimitCarriesTheLimit",
       "description": "The question for a job carries the job's limit in milliseconds as its timeout.",
       "input": "",

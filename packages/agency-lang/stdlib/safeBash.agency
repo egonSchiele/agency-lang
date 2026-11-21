@@ -5457,16 +5457,28 @@ def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | 
   let effects: Effect[] = []
   let rewritten: any[] = []
   let asking = 0
+  let severalInAGroup = false
   for (stage, index in stages) {
     const classified = classify(stage, line, origin, readsStdin || index > 0)?
     if (asksBeyondExec(classified.effects)) {
       asking = asking + 1
+    }
+    if (stage.tag == "parens" && flattenOne(stage).length > 1) {
+      severalInAGroup = true
     }
     effects = [...effects, ...classified.effects]
     rewritten.push(classified.command)
   }
   if (asking > 1) {
     return failure("two stages of a pipeline each ask a question, and they run at the same time")
+  }
+  // A group's commands run inside one stage, so the check before the
+  // pipeline cannot see between them either: in `(git checkout x && cat
+  // README.md) | cat` the cat reads after the checkout, and in `(git
+  // checkout x && cd sub && pnpm test) | cat` pnpm runs in a folder the
+  // checkout may have swapped.
+  if (asking > 0 && severalInAGroup) {
+    return failure("a group of several commands in a pipeline runs as one step, and the pipeline asks a question")
   }
   const ran: Command = { tag: "pipeline", stages: rewritten }
   // The stages run at the same time, so a pipeline is one step.
@@ -5748,6 +5760,17 @@ def removeEffects(verb: string, command: SimpleCommand, cwd: string, spec: FlagS
     const target = try _realPathIn(text.value, cwd, tildeModeFor(word), verb)
     if (isFailure(target)) {
       return target
+    }
+    // The payload keeps the last step of the path as written, which is
+    // right for `rm link`: it removes the link. With a `/` after it, `rm
+    // -rf link/` follows the link and deletes what it points to, which the
+    // payload does not name. `_realFolder` follows the last step, so it
+    // differs from the payload exactly when that step is a link.
+    if (text.value.endsWith("/") && text.value != "/") {
+      const followed = try _realFolder(target.value)
+      if (isFailure(followed) || followed.value != target.value) {
+        return failure("a `/` after a link makes `${verb}` delete what the link points to")
+      }
     }
     effects.push(removeEffect({ target: target.value }))
   }
@@ -7159,9 +7182,13 @@ def runInProcess(exec: StepExec, state: StepsState): StepsState {
 // Otherwise the step runs the text the new plan rebuilt, which describes
 // the disk as it is now.
 //
-// The refuse wall is not run again. It reads the disk only for `rm`, and
-// a changed `rm` target changes its std::remove payload, so this check
-// stops the line.
+// The refuse wall is not run again. It reads the disk only for `rm`. A
+// changed `rm` target changes its std::remove payload, so this check
+// stops the line, with one exception the rule closes itself: the payload
+// keeps a link as written, so `rm -rf build/` after `build` became a link
+// would delete the link's target under the same payload. `removeEffects`
+// gives a `/` after a link no rule, so the fresh plan fails and the line
+// stops.
 //
 // `_bash`, for the reason runBash's comment gives: the only path here runs
 // through runPlanned, after approvedPlan raised every effect of the plan.

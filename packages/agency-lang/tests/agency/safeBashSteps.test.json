@@ -90,9 +90,9 @@
     },
     {
       "nodeName": "aCheckoutThatSwapsAPathStops",
-      "description": "Each row: the line, whether it succeeded, the step it stopped before, and whether anything from outside was printed. A git checkout that puts a link where a file or folder was is narrow, and the step that names the swapped path stops the line before it runs.",
+      "description": "Each row: the line, whether it succeeded, the step it stopped before, and whether anything from outside was printed. A git checkout that puts a link where a file or folder was is narrow, and the step that names the swapped path stops the line before it runs. Narrow questions are approved and the broad one rejected, so a checkout and a read in one group of a pipeline, which run as one step, ask std::bash and run nothing.",
       "input": "",
-      "expectedOutput": "[[\"git checkout evil; cat one.txt\",false,\"cat one.txt\",false],[\"git checkout evil && ls sub\",false,\"ls sub\",false],[\"git checkout evil && cd sub && git status\",false,\"cd sub\",false]]",
+      "expectedOutput": "[[\"git checkout evil; cat one.txt\",false,\"cat one.txt\",false],[\"git checkout evil && ls sub\",false,\"ls sub\",false],[\"git checkout evil && cd sub && git status\",false,\"cd sub\",false],[\"(git checkout evil && cat one.txt) | cat\",false,\"\",false]]",
       "evaluationCriteria": [
         {
           "type": "exact"

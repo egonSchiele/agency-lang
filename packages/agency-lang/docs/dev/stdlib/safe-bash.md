@@ -437,6 +437,15 @@ test 2>&1 | tee out.log | tail -30` stay narrow. The rule names no
 effect but `std::exec`, so an effect added later counts against the
 limit (`aPipelineHasOneStageThatAsks`).
 
+A group of several commands is part of one stage, so the check cannot see
+between its commands either. When the pipeline asks anything other than
+`std::exec`, a stage that is a group of more than one command asks
+`std::bash`: `(git checkout x && cat README.md) | cat`, and `(git checkout
+x && cd sub && pnpm test) | cat`, where `pnpm` would run in a folder the
+checkout may have swapped. The rule is coarse: `(cd lib && ls) | head`
+asks `std::bash` too, while `cd lib && ls | head` stays narrow. A group of
+programs, `(pnpm build && pnpm test) | tail`, stays narrow.
+
 A dup redirect
 (`2>&1`, op `>&`) moves a stream and writes no file, so `redirectEffect`
 skips it; `prepareRedirectWrite` stays strict, because the shell-free
@@ -2278,7 +2287,12 @@ and a second write to that file they give the same ones
 A step that runs in process is not checked. The stdlib tool checks the
 path when it opens it. The refuse wall is not run again either. It reads
 the disk only for `rm`, and a changed `rm` target changes the
-`std::remove` payload, so the plan check stops the line.
+`std::remove` payload, so the plan check stops the line. The payload keeps
+a link in the last step as written, which is right for `rm link`, so for
+`rm -rf build/` after `build` became a link to another folder it would
+not change, and `rm` would delete the link's target. `removeEffects`
+gives a `/` after a link no rule (`aSlashAfterALinkHasNoRule`), so the
+fresh plan of that step fails and the line stops.
 
 A stop runs nothing more. The failure has `data.type` `"planChanged"`,
 and its text is the output so far, a sentence that names the step, what

@@ -1120,7 +1120,30 @@ node aPipelineHasOneStageThatAsks() {
     "pnpm test 2>&1 | tee out.log | tail -30",
     "git log --oneline | head > out.txt",
     "pnpm test | cat nope.txt",
+    // A group runs as part of its stage, so a check before the pipeline
+    // cannot see between its commands.
+    "(git checkout x && cat one.txt) | cat",
+    "(git checkout x && cd sub && pnpm test) | cat",
+    "(pnpm build && pnpm test) | tail -5",
+    "(cd sub && pnpm test) | tail -5",
   ]]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
+// `rm -rf link/` follows the link and deletes what it points to, while the
+// std::remove payload names the link itself. So a `/` after a link has no
+// rule. Planned only: nothing here deletes anything.
+node aSlashAfterALinkHasNoRule() {
+  makeFilesFixture()
+  bash("ln -s sub link", cwd: FILES_FIXTURE) with approve
+  const rows = [[line, outcomeOf(planFor(line, FILES_FIXTURE))] for line in [
+    "rm -rf link/",
+    "rmdir link/",
+    "rm -rf link",
+    "rm -rf sub/",
+  ]]
+  bash("rm -f link", cwd: FILES_FIXTURE) with approve
   remove(FILES_FIXTURE) with approve
   return rows
 }

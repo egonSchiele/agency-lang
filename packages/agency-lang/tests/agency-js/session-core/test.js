@@ -534,7 +534,9 @@ result.lastModelChoiceKeepsItsProvider = {
 };
 
 // Someone upgrading: no file, and a preset marked default seeds the start
-// without writing anything. Their first change replaces the mark.
+// without writing anything. Their first change replaces the mark. Made
+// under the preset, the change itself isn't kept: the next start has the
+// preset's own effort.
 const savedPresets = JSON.parse(presetsSettings).presets;
 const SMALL = { provider: "anthropic", pin: "claude-sonnet-4-6" };
 rmSync(lastSettingsFile, { force: true });

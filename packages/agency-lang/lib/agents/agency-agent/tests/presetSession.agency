@@ -1,15 +1,19 @@
 import { setEnv } from "std::system"
 
 import { POLICY_DIR, SETTINGS_FILE, usingDefaultAgentHome } from "../lib/config.agency"
-import { noModelChoices, noModelFlags, requestLlmOptions } from "../lib/modelRequest.agency"
+import { ModelChoices, noModelChoices, noModelFlags, requestLlmOptions } from "../lib/modelRequest.agency"
 import { Resolved } from "../lib/models.agency"
 import { Ctx } from "../lib/resolution.agency"
-import { activePresetName, readPresetTable, setPresetTable } from "../lib/presets.agency"
+import { activePresetName, readPresetTable, refreshPresetTable, setPresetTable } from "../lib/presets.agency"
 import {
   Session,
+  applyModelRequest,
   applySessionLlmOptions,
   currentModelRequest,
+  notePresetBaseline,
   parsePresetCommand,
+  presetChanges,
+  refreshAndSavePreset,
   saveSessionPreset,
   setStartupModelFlags,
   switchModel,
@@ -342,4 +346,114 @@ node saveRefusesABadName(): boolean {
     return false
   }
   return saveSessionPreset("Bad Name", noModelChoices())[0].startsWith("Not saved:")
+}
+
+// What a session changed from its preset: the lines /preset save would
+// print. None without a preset.
+def lowEffort(): ModelChoices {
+  return { ...noModelChoices(), effort: "low" }
+}
+
+node noPresetHasNoChanges(): string {
+  return JSON.stringify(presetChanges(lowEffort()))
+}
+
+// A preset that names no provider is saved as `pin`, and its snapshot
+// holds both chat slots instead. Just picked, it has changed nothing.
+node bareFreshPresetHasNoChanges(): string {
+  if (!useSavedPresets({ small: { pin: "claude-sonnet-4-6" } })) {
+    return "not sandboxed"
+  }
+  return JSON.stringify(presetChanges(noModelChoices()))
+}
+
+node effortChangeShowsInChanges(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  return JSON.stringify(presetChanges(lowEffort()))
+}
+
+node savedChangesLeaveNone(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  saveSessionPreset("", lowEffort())
+  return JSON.stringify(presetChanges(lowEffort()))
+}
+
+// A deleted preset is no longer the active one, so there is nothing to
+// report changes from.
+node deletedPresetHasNoChanges(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  setPresetTable(readPresetTable({ big: SAVED_PRESETS.big }))
+  return JSON.stringify(presetChanges(lowEffort()))
+}
+
+// The comparison is with the preset as taken, not as saved: a bare preset
+// changed once reports only that change, not its saved form.
+node bareChangedPresetShowsOnlyEffort(): string {
+  if (!useSavedPresets({ small: { pin: "claude-sonnet-4-6" } })) {
+    return "not sandboxed"
+  }
+  return JSON.stringify(presetChanges(lowEffort()))
+}
+
+// At start, a session can already hold choices (an older last-settings
+// file). The snapshot is of the preset alone, so they show as changes.
+node startSnapshotLeavesOutChoices(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  const choices: ModelChoices = { pin: "claude-opus-4-8", slots: {} }
+  applyModelRequest(currentModelRequest(choices), {})
+  notePresetBaseline()
+  return JSON.stringify(presetChanges(choices))
+}
+
+// Save reads the presets again first. A preset deleted elsewhere since is
+// not created again.
+node saveRefusesAPresetDeletedElsewhere(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  write(SETTINGS_FILE, JSON.stringify({ presets: { big: SAVED_PRESETS.big } }), POLICY_DIR) with approve
+  const saved = refreshAndSavePreset("small", lowEffort()) with approve
+  if (saved is failure(reason)) {
+    return "${reason} | recreated: ${JSON.parse(settingsText()).presets.small != null}"
+  }
+  return "saved: ${saved.value.join(" ")}"
+}
+
+// Another chat, or the terminal, may save a preset while this run holds
+// its own copy of the table. A pick or a save reads the file again.
+node refreshReadsAPresetSavedElsewhere(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  const savedElsewhere = { ...SAVED_PRESETS, small: { provider: "anthropic", pin: "claude-opus-4-8" } }
+  write(SETTINGS_FILE, JSON.stringify({ presets: savedElsewhere }), POLICY_DIR) with approve
+  refreshPresetTable() with approve
+  const switched = switchPreset("small")
+  if (isFailure(switched)) {
+    return "failed: ${switched.error}"
+  }
+  const main: Resolved = switched.value.resolved["main"]
+  return main.model
+}
+
+node refreshKeepsTheTableWhenTheFileIsBroken(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  write(SETTINGS_FILE, "not json{{{", POLICY_DIR) with approve
+  refreshPresetTable() with approve
+  const switched = switchPreset("small")
+  if (isFailure(switched)) {
+    return "failed: ${switched.error}"
+  }
+  const main: Resolved = switched.value.resolved["main"]
+  return main.model
 }

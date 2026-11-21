@@ -7,7 +7,8 @@ const REPORTED: PauseData = {
   cwd: "/work",
   record: null,
   models: { main: { model: "sonnet", provider: "anthropic", via: "" } },
-  preset: "",
+  preset: "glm",
+  presetChanges: ["effort: high → low"],
   fixedProvider: "",
   effort: "",
   budget: { maxCost: 1, maxTime: 2 },
@@ -57,6 +58,16 @@ describe("pauseData", () => {
   it("reads a pause from a core that reports no search backend as an empty one", () => {
     const { search: _none, ...noSearchField } = REPORTED;
     expect(pauseData([raised("agent::sessionInput", noSearchField)])?.search).toBe("");
+  });
+
+  it("reads a pause from a core that reports no preset changes as none", () => {
+    const { presetChanges: _none, ...noChanges } = REPORTED;
+    expect(pauseData([raised("agent::sessionInput", noChanges)])?.presetChanges).toEqual([]);
+  });
+
+  it("reads preset changes that aren't all text as none", () => {
+    const odd = { ...REPORTED, presetChanges: ["effort: high → low", 3] };
+    expect(pauseData([raised("agent::sessionInput", odd)])?.presetChanges).toEqual([]);
   });
 
   it("reads a pause from a core that reports no capabilities as null", () => {

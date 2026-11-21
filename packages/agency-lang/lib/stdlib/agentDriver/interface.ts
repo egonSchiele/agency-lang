@@ -75,6 +75,10 @@ export type PauseData = {
   record: SessionRecord | null;
   models: Record<string, ResolvedModel>;
   preset: string;
+  /** What the session changed from its preset: the lines `/preset save`
+   *  would print, such as "effort: (none) → low". Empty when it matches
+   *  its preset or has none, and from a core that reports none. */
+  presetChanges: string[];
   fixedProvider: string;
   effort: string;
   budget: TurnBudget;
@@ -156,6 +160,11 @@ function text(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+/** A list of text, or none when it is anything else. */
+function lines(value: unknown): string[] {
+  return Array.isArray(value) && value.every((line) => typeof line === "string") ? value : [];
+}
+
 /** What the core reported at this pause, or null when the interrupts are
  *  not its pause. The data comes out of a checkpoint, so each field is
  *  checked. */
@@ -171,6 +180,7 @@ export function pauseData(pause: Interrupt[]): PauseData | null {
     record: isSessionRecord(data.record) ? data.record : null,
     models: data.models,
     preset: text(data.preset),
+    presetChanges: lines(data.presetChanges),
     fixedProvider: text(data.fixedProvider),
     effort: text(data.effort),
     budget: data.budget,

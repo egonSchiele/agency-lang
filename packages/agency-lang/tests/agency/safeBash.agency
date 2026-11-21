@@ -174,6 +174,7 @@ node wholeStringPlans() {
 def executionCommand(source: string): any {
   return match(planFor(source, "/repo").execution) {
     { kind: "bash", command } => command
+    { kind: "steps", command } => command
     _ => "NOT-BASH"
   }
 }
@@ -615,7 +616,118 @@ node planOutcomes() {
     planOutcome("dd if=a of=b"),
     planOutcome("agency typecheck foo.agency"),
     planOutcome("echo hi | cat"),
+    outcomeOf(planFor("pnpm build && cat one.txt", FIXTURES)),
+    planOutcome("pnpm test"),
+    planOutcome("pwd"),
+    planOutcome("ls $X"),
+    outcomeOf(planFor("echo a; cat one.txt", FIXTURES)),
   ]
+}
+
+node narrowLinesPlanAsSteps() {
+  return [planFor(line, FIXTURES).execution.kind for line in [
+    "pnpm build && cat one.txt",
+    "pnpm test",
+    "pwd",
+    "ls $X",
+    "echo a; cat one.txt",
+  ]]
+}
+
+/* One step of a stepped plan: its kind, its join, and for a command its
+ verb, its effect names, and whether it reads `$?`. */
+def stepSummary(step: any): any {
+  if (step.kind == "group") {
+    return ["group", step.join, [stepSummary(inner) for inner in step.steps]]
+  }
+  if (step.kind == "cd") {
+    return ["cd", step.join, step.guarded]
+  }
+  const source: any = step.source
+  const verb = if (source.tag == "simpleCommand") then verbName(source) else source.tag
+  let summary: any[] = ["run", step.join, verb, [effect.name for effect in step.effects]]
+  if (step.readsStatus) {
+    summary.push("readsStatus")
+  }
+  return summary
+}
+
+def stepsOf(line: string): any {
+  const exec: any = planFor(line, FILES_FIXTURE).execution
+  if (exec.kind != "steps") {
+    return [line, exec.kind]
+  }
+  return [line, [stepSummary(step) for step in exec.steps]]
+}
+
+// A narrow line runs a step at a time, each under a shell of its own, so
+// a rule that let a command change the shell (a variable, an option, an
+// alias) would change what a later step does. None of these has a rule,
+// and this list fails when one gains one.
+node noNarrowRuleChangesTheShell() {
+  makeFilesFixture()
+  const lines = [
+    "export FOO=1",
+    "set -e",
+    "shopt -s globstar",
+    "alias ll=ls",
+    "umask 077",
+    "hash -p /bin/ls ls",
+    "FOO=1",
+    "printf -v x hi",
+    "read x",
+    "trap 'echo' EXIT",
+    "pushd sub",
+    "source x",
+    "eval ls",
+    "exec ls",
+    "unset PATH",
+    "declare x=1",
+    "enable -n echo",
+    "builtin cd sub",
+    "command cd sub",
+    "ulimit -n 10",
+    "readonly FOO=1",
+    "typeset x=1",
+    "let x=1",
+    "popd",
+    "wait",
+    // These end the line under one shell. A runner that took one as a
+    // step would carry on to the next step.
+    "exit 1",
+    "return 1",
+    "logout",
+  ]
+  return [line for line in lines if outcomeOf(planFor("${line}; ls sub", FILES_FIXTURE)) != "broad"]
+}
+
+// Bash sets these from the commands before, so a line split into steps
+// would print something else: `$OLDPWD` after a `cd`, `$PIPESTATUS` after
+// a pipeline, `$_` after any command.
+node shellVariablesThatDependOnTheCommandsBefore() {
+  makeFilesFixture()
+  return [[line, outcomeOf(planFor(line, FILES_FIXTURE))] for line in [
+    "ls sub; echo $_",
+    "pnpm --version && cd sub && echo $OLDPWD",
+    "false | true; echo $PIPESTATUS",
+    "ls sub; echo \"last: $_\"",
+    "ls sub; echo $BASH_COMMAND $LINENO $!",
+  ]]
+}
+
+node stepsOfALine() {
+  makeFilesFixture()
+  return [stepsOf(line) for line in [
+    "pnpm build && cat one.txt",
+    "cd sub && ls",
+    "pnpm build && cd sub && ls",
+    "(cd sub && ls); ls",
+    "cat one.txt | head -2 && ls",
+    "git status && git log --oneline -3 || echo none",
+    "pnpm test; echo \"exit=$?\"",
+    "timeout 5 pnpm test",
+    "cd sub; ls",
+  ]]
 }
 
 node rejectedBroadSaysWhy() {
@@ -801,6 +913,7 @@ def quietLine(source: string, dir: string): any {
   const plan = planFor(source, dir)
   const ran = match(plan.execution) {
     { kind: "bash", command } => command
+    { kind: "steps", command } => command
     _ => "NOT-BASH"
   }
   return [source, outcomeOf(plan), [effect.name for effect in plan.effects], ran.split(resolve(dir)).join("<dir>")]
@@ -1840,10 +1953,19 @@ node loneReadIsShellFree() {
  * from FIXTURES so no grep parity row's output changes. */
 static const READ_FIXTURES = __dirname + "/stdlib/read-fixtures"
 
+/* A plan's execution kind, with "chain" for a stepped plan whose every
+ step runs in process. */
+def inProcessKind(plan: Plan): string {
+  if (plan.execution.kind == "steps" && outcomeOf(plan) == "shellFree") {
+    return "chain"
+  }
+  return plan.execution.kind
+}
+
 def exactParityOf(source: string, kind: string, cwd: string): any {
   // Without this check, a row whose command fell back to the bash path
   // would compare the real program with itself and pass for no reason.
-  if (planFor(source, cwd).execution.kind != kind) {
+  if (inProcessKind(planFor(source, cwd)) != kind) {
     return "NOT SHELL-FREE: ${source}"
   }
   let ours = ""
@@ -2160,6 +2282,7 @@ node cdDoesNotLeakOutOfItsChain() {
 def executionCommandIn(source: string, cwd: string): any {
   return match(planFor(source, cwd).execution) {
     { kind: "bash", command } => command
+    { kind: "steps", command } => command
     _ => "NOT-BASH"
   }
 }
@@ -2799,6 +2922,7 @@ node gitLeadingFlagRefusals() {
 def packageCommand(source: string): string {
   return match(planFor(source, PACKAGE_DIR).execution) {
     { kind: "bash", command } => command.split(resolve(PACKAGE_DIR)).join("<pkg>")
+    { kind: "steps", command } => command.split(resolve(PACKAGE_DIR)).join("<pkg>")
     _ => "NOT-BASH"
   }
 }
@@ -3055,6 +3179,7 @@ def ghPlan(source: string, cwd: string = "/repo", origin: GhRepo | null = null):
   const effects: any[] = plan.effects
   const text = match(plan.execution) {
     { kind: "bash", command as text } => text
+    { kind: "steps", command as text } => text
     _ => ""
   }
   return [outcomeOf(plan), [[effect.name, effect.payload] for effect in effects], text, pendingLookups(plan.effects), reasonOf(plan)]

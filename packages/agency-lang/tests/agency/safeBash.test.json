@@ -48,7 +48,7 @@
       "nodeName": "stderrAndDevNullRedirects",
       "description": "A redirect of standard output or standard error to /dev/null writes no file, so it adds no effect. 2>file asks std::write for that file, with the same overwrite and append modes as >file, and descriptor 1 means the same as no descriptor. &>/dev/null discards both streams and adds no effect either. Any other descriptor, a second output file, or a variable target stays broad. The rebuilt text keeps the redirect.",
       "input": "",
-      "expectedOutput": "[[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::exec\",\"std::write\"]],[\"bash\",[\"std::exec\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"build.log\",\"overwrite\"],[\"build.log\",\"append\"],\"pnpm test 2> /dev/null\"]",
+      "expectedOutput": "[[\"steps\",[\"std::exec\"]],[\"steps\",[\"std::exec\"]],[\"steps\",[\"std::exec\"]],[\"steps\",[\"std::exec\",\"std::write\"]],[\"steps\",[\"std::exec\",\"std::write\"]],[\"steps\",[\"std::exec\",\"std::write\"]],[\"steps\",[\"std::exec\"]],[\"steps\",[\"std::exec\",\"std::write\"]],[\"steps\",[\"std::exec\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"build.log\",\"overwrite\"],[\"build.log\",\"append\"],\"pnpm test 2> /dev/null\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -59,7 +59,7 @@
       "nodeName": "wholeStringPlans",
       "description": "The whole string gets one plan: refused if any command anywhere is refused, one std::bash if any command is unrecognized, otherwise the union of narrow effects. Chains are walked, so `true && dd if=a of=b` is refused rather than approvable.",
       "input": "",
-      "expectedOutput": "[[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"chain\",[]],[\"refuse\",[]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"refuse\",[]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"steps\",[\"std::git::status\"]],[\"steps\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"steps\",[]],[\"refuse\",[]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],[\"steps\",[\"std::git::status\",\"std::git::log\"]],[\"refuse\",[]],[\"steps\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -81,7 +81,7 @@
       "nodeName": "shellFreeEcho",
       "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a sequence, a flag other than -n, a flag after the first word, or a quoted word that starts with a dash sends it to bash, because bash reads the quoted dash as the option too. There it asks std::bash::readonly when every word is known, and std::bash when one is an expansion.",
       "input": "",
-      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"echo\",\"hi\",[]],[\"chain\",\"\",[]],[\"echo\",\"\",[]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"echo\",\"hi\",[]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"bash\",\"\",[\"std::bash::readonly\"]]]",
+      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"echo\",\"hi\",[]],[\"steps\",\"\",[]],[\"echo\",\"\",[]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"echo\",\"hi\",[]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"bash\",\"\",[\"std::bash::readonly\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -92,7 +92,7 @@
       "nodeName": "shellFreeWrite",
       "description": "A single literal redirected echo computes its content and writes it, with no shell. The `>` and `>>` rows differ only in mode, which is the difference between overwriting and appending. A variable TARGET is unrecognized entirely; a variable in the ARGUMENTS is still recognized and goes to bash raising std::write with no content — approval of the destination, not the bytes. Non-write plans report only the fields their Execution variant carries.",
       "input": "",
-      "expectedOutput": "[[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"append\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::write\"]],[\"write\",\"hi\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]]]",
+      "expectedOutput": "[[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"append\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"steps\",[\"std::write\"]],[\"write\",\"hi\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -393,9 +393,53 @@
     },
     {
       "nodeName": "planOutcomes",
-      "description": "outcomeOf names the decision: refuse, shellFree, agency, narrow, or broad.",
+      "description": "outcomeOf names the decision: refuse, shellFree, agency, narrow, or broad. A narrow line that runs a step at a time is still narrow, a line that asks nothing is narrow with the quiet question, and a chain of in-process commands is shellFree.",
       "input": "",
-      "expectedOutput": "[\"narrow\",\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"narrow\"]",
+      "expectedOutput": "[\"narrow\",\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"shellFree\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "narrowLinesPlanAsSteps",
+      "description": "A narrow line is a plan of kind steps, and so is a chain of in-process commands. A line that asks nothing (the quiet question) and a broad line are plans of kind bash, which run whole under one shell.",
+      "input": "",
+      "expectedOutput": "[\"steps\",\"steps\",\"bash\",\"bash\",\"steps\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noNarrowRuleChangesTheShell",
+      "description": "A narrow line runs a step at a time, each under a shell of its own. Every way to change the shell here (a variable, an option, an alias, a function of the shell such as hash or enable, a builtin run through builtin or command) is broad, so no narrow line can change what a later step does. The list is empty; a line that shows up gained a narrow rule the runner is not safe for.",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "shellVariablesThatDependOnTheCommandsBefore",
+      "description": "A word that reads a variable bash sets from the commands before ($_, $OLDPWD, $PIPESTATUS, $BASH_COMMAND, $LINENO, $!) makes its line broad, because a line split into steps would print something else. $? is the one such variable the runner carries.",
+      "input": "",
+      "expectedOutput": "[[\"ls sub; echo $_\",\"broad\"],[\"pnpm --version && cd sub && echo $OLDPWD\",\"broad\"],[\"false | true; echo $PIPESTATUS\",\"broad\"],[\"ls sub; echo \\\"last: $_\\\"\",\"broad\"],[\"ls sub; echo $BASH_COMMAND $LINENO $!\",\"broad\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "stepsOfALine",
+      "description": "The steps of a narrow line: one per simple command or pipeline, one per cd, and one group per parenthesized group, each with the join before it. A cd that is a whole command of the line is guarded, so its failure ends the line. A step that reads $? says so.",
+      "input": "",
+      "expectedOutput": "[[\"pnpm build && cat one.txt\",[[\"run\",\"seq\",\"pnpm\",[\"std::exec\"]],[\"run\",\"and\",\"cat\",[\"std::read\"]]]],[\"cd sub && ls\",[[\"cd\",\"seq\",false],[\"run\",\"and\",\"ls\",[\"std::ls\"]]]],[\"pnpm build && cd sub && ls\",[[\"run\",\"seq\",\"pnpm\",[\"std::exec\"]],[\"cd\",\"and\",false],[\"run\",\"and\",\"ls\",[\"std::ls\"]]]],[\"(cd sub && ls); ls\",[[\"group\",\"seq\",[[\"cd\",\"seq\",false],[\"run\",\"and\",\"ls\",[\"std::ls\"]]]],[\"run\",\"seq\",\"ls\",[\"std::ls\"]]]],[\"cat one.txt | head -2 && ls\",[[\"run\",\"seq\",\"pipeline\",[\"std::read\"]],[\"run\",\"and\",\"ls\",[\"std::ls\"]]]],[\"git status && git log --oneline -3 || echo none\",[[\"run\",\"seq\",\"git\",[\"std::git::status\"]],[\"run\",\"and\",\"git\",[\"std::git::log\"]],[\"run\",\"or\",\"echo\",[]]]],[\"pnpm test; echo \\\"exit=$?\\\"\",[[\"run\",\"seq\",\"pnpm\",[\"std::exec\"]],[\"run\",\"seq\",\"echo\",[],\"readsStatus\"]]],[\"timeout 5 pnpm test\",[[\"run\",\"seq\",\"timeout\",[\"std::exec\"]]]],[\"cd sub; ls\",[[\"cd\",\"seq\",true],[\"run\",\"seq\",\"ls\",[\"std::ls\"]]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -478,7 +522,7 @@
       "nodeName": "newShapes",
       "description": "Pipelines, dup redirects, and glob words after the tarsec bump. A pipeline of recognized stages is narrow and runs the rebuilt text, and a read verb with no path after a pipe is a filter that adds nothing; an unrecognized stage makes the whole string broad; 2>&1 contributes no effect, so an echo with one asks the quiet question, std::bash::readonly; a glob is never literal, so echo cannot be shell-free with one, and a line with one asks std::bash; the wall sees through a pipe.",
       "input": "",
-      "expectedOutput": "[[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::bash::readonly\"]],[\"bash\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"bash\",[\"std::exec\"]],null,\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks status | git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log --\"]",
+      "expectedOutput": "[[\"steps\",[\"std::git::status\",\"std::git::log\"]],[\"steps\",[\"std::git::status\"]],[\"bash\",[\"std::bash::readonly\"]],[\"steps\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"steps\",[\"std::exec\"]],null,\"git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks status | git -c core.pager=cat -c core.fsmonitor=false --no-optional-locks log --\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -616,7 +660,7 @@
       "nodeName": "missingPathsResolveByParent",
       "description": "A missing path whose folder exists asks the question for that name in the folder: std::read for a read, std::ls of the folder for ls. A lone cat of a missing file runs through bash, so the model reads cat's own error. A missing folder, find, tree, diff, an input redirect, a grep of a missing file, and a read after a program safeBash cannot see into have no rule. A git read before it is not such a program.",
       "input": "",
-      "expectedOutput": "[[\"cat nope.txt\",\"narrow\",[[\"std::read\",\"<fix>/nope.txt\"]]],\"bash\",[\"ls nope 2>/dev/null || echo missing\",\"narrow\",[[\"std::ls\",\"<fix>\"]]],[\"ls -la one.txt nope.txt\",\"narrow\",[[\"std::ls\",\"<fix>\"]]],[\"wc -l nope.txt sub/nope.txt\",\"narrow\",[[\"std::read\",\"<fix>/nope.txt\"],[\"std::read\",\"<fix>/sub/nope.txt\"]]],[\"cat nodir/nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"find nope -name x\",\"broad\",[[\"std::bash\",\"\"]]],[\"tree nope\",\"broad\",[[\"std::bash\",\"\"]]],[\"diff one.txt nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"wc -l < nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"grep x nope.txt | head\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git status; cat nope.txt\",\"narrow\",[[\"std::git::status\",\"<fix>\"],[\"std::read\",\"<fix>/nope.txt\"]]]]",
+      "expectedOutput": "[[\"cat nope.txt\",\"narrow\",[[\"std::read\",\"<fix>/nope.txt\"]]],\"steps\",[\"ls nope 2>/dev/null || echo missing\",\"narrow\",[[\"std::ls\",\"<fix>\"]]],[\"ls -la one.txt nope.txt\",\"narrow\",[[\"std::ls\",\"<fix>\"]]],[\"wc -l nope.txt sub/nope.txt\",\"narrow\",[[\"std::read\",\"<fix>/nope.txt\"],[\"std::read\",\"<fix>/sub/nope.txt\"]]],[\"cat nodir/nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"find nope -name x\",\"broad\",[[\"std::bash\",\"\"]]],[\"tree nope\",\"broad\",[[\"std::bash\",\"\"]]],[\"diff one.txt nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"wc -l < nope.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"grep x nope.txt | head\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cat out.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"git status; cat nope.txt\",\"narrow\",[[\"std::git::status\",\"<fix>\"],[\"std::read\",\"<fix>/nope.txt\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -759,7 +803,7 @@
       "nodeName": "loneGrepIsShellFree",
       "description": "A lone grep whose flags and pattern translate exactly runs through the grep tool's search, with no shell. A flag the tool lacks, a pattern that does not translate, a directory without -r, a pipe, or -w with a non-word edge sends it to the bash path. A flag after the file is fine here, where no real grep reads the arguments.",
       "input": "",
-      "expectedOutput": "[\"grep\",\"grep\",\"grep\",\"grep\",\"grep\",\"grep\",\"bash\",\"bash\",\"bash\",\"bash\",\"shellFree\",\"bash\",\"grep\"]",
+      "expectedOutput": "[\"grep\",\"grep\",\"grep\",\"grep\",\"grep\",\"grep\",\"steps\",\"steps\",\"bash\",\"steps\",\"shellFree\",\"steps\",\"grep\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1212,7 +1256,7 @@
       "nodeName": "chainsOfInProcessCommands",
       "description": "A line of in-process commands joined by ;, &&, or || plans as one chain that asks only the steps' own questions. A command no lone planner takes, a parenthesized group, a pipeline, a missing file, or a refused command sends the line down the general path, where a missing file asks std::read for it, and so does a file the line wrote.",
       "input": "",
-      "expectedOutput": "[[\"shellFree\",\"chain\",[]],[\"shellFree\",\"chain\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"chain\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"chain\",[\"std::grep\"]],[\"shellFree\",\"chain\",[]],[\"narrow\",\"bash\",[\"std::git::status\"]],[\"narrow\",\"bash\",[\"std::bash::readonly\"]],[\"narrow\",\"bash\",[\"std::bash::readonly\"]],[\"narrow\",\"bash\",[\"std::read\"]],[\"narrow\",\"bash\",[\"std::read\"]],[\"narrow\",\"bash\",[\"std::write\",\"std::read\"]],[\"refuse\",\"refuse\",[]],[\"broad\",\"bash\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"shellFree\",\"steps\",[]],[\"shellFree\",\"steps\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"steps\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"steps\",[\"std::grep\"]],[\"shellFree\",\"steps\",[]],[\"narrow\",\"steps\",[\"std::git::status\"]],[\"narrow\",\"bash\",[\"std::bash::readonly\"]],[\"narrow\",\"bash\",[\"std::bash::readonly\"]],[\"narrow\",\"steps\",[\"std::read\"]],[\"narrow\",\"steps\",[\"std::read\"]],[\"narrow\",\"steps\",[\"std::write\",\"std::read\"]],[\"refuse\",\"refuse\",[]],[\"broad\",\"bash\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"

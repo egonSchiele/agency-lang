@@ -58,20 +58,47 @@ import {
   GrepExec,
   GrepRender,
   GrepFileNames,
-  ChainExec,
+  StepsExec,
   Execution,
   StepExec,
-  ChainStep,
   Join,
   accessesOf,
   SavedPath,
   ReadSource,
   readPayloadOf,
+  // The parsed command types live in `std::safeBash/actions`, because a
+  // plan step holds the command it runs, and that module cannot import
+  // this one.
+  Word,
+  ScriptName,
+  LiteralWord,
+  PathWord,
+  GlobWord,
+  FlagWord,
+  SingleQuotedWord,
+  DoubleQuotedWord,
+  VariableWord,
+  InterpolatedVariableWord,
+  Assignment,
+  Redirect,
+  SimpleCommand,
+  Command,
+  PipelineStage,
+  Pipeline,
+  And,
+  Or,
+  Parens,
+  BashNode,
+  BashAST,
+  LineStep,
+  RunStep,
+  CdStep,
+  GroupStep,
  } from "./safeBash/actions.agency"
 import { _prepareSpillFiles, _grepSaved, _readSpill, _spillPathParts, _savedPathsInText, _inSpillFolder } from "agency-lang/stdlib-lib/spill.js"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
-import { _removeRefusal, _realPathIn, _unparsedRemoveRefusal } from "agency-lang/stdlib-lib/safeBashRemove.js"
+import { _removeRefusal, _realFolder, _realPathIn, _unparsedRemoveRefusal } from "agency-lang/stdlib-lib/safeBashRemove.js"
 import { _gitHardeningFlags } from "agency-lang/stdlib-lib/git.js"
 import { _ghParseTarget, _ghParseRepoFlag, _ghSearchQuery, _ghParseApiPath, _ghApiPath } from "agency-lang/stdlib-lib/safeBashGh.js"
 import { _ghResolveRepo } from "agency-lang/stdlib-lib/github/repo.js"
@@ -83,6 +110,7 @@ import { _resolveRedirectTarget, _missingTarget } from "agency-lang/stdlib-lib/f
 import { _searchTargetIn, _bash, _grep, _skipDirNames } from "agency-lang/stdlib-lib/shell.js"
 import { _launchJob, _jobStartRefusal } from "agency-lang/stdlib-lib/jobs.js"
 import { basename as lastSegment, dirname as parentOf } from "std::path"
+import { now } from "std::date"
 import { _grepPatternToRegex, _renderGrepOutput, _skippedDirsNote } from "agency-lang/stdlib-lib/grepDialect.js"
 import { _renderReadView } from "agency-lang/stdlib-lib/readDialect.js"
 
@@ -117,136 +145,6 @@ the command. See `docs/dev/stdlib/safe-bash.md` for classification rules.
 */
 
 export { MAX_STDOUT_LEN } from "std::spill"
-
-export type Word =
-  | LiteralWord
-  | PathWord
-  | GlobWord
-  | FlagWord
-  | SingleQuotedWord
-  | DoubleQuotedWord
-  | VariableWord
-  | InterpolatedVariableWord
-
-export type ScriptName = LiteralWord | PathWord
-
-export type LiteralWord = {
-  tag: "literal";
-  text: string
-}
-
-export type PathWord = {
-  tag: "path";
-  text: string
-}
-
-/** An unquoted word bash will expand (`*.ts`, `src/*.md`). Its own node
- so it is never mistaken for the quoted text `'*.ts'`; no rule here
- treats it as a literal. */
-export type GlobWord = {
-  tag: "glob";
-  text: string
-}
-
-export type FlagWord = {
-  tag: "flag";
-  flagName: string;
-  flagValue?: string;
-  /** Present and true when the value is an unquoted glob (`--include=*.ts`). */
-  valueIsGlob?: boolean
-}
-
-export type SingleQuotedWord = {
-  tag: "singleQuoted";
-  text: string
-}
-
-export type DoubleQuotedWord = {
-  tag: "doubleQuoted";
-  parts: Word[]
-}
-
-export type VariableWord = {
-  tag: "variable";
-  name: string
-}
-
-/** Adjacent word parts, such as `$HOME.txt` or `"a"b`, that form one Bash argument. */
-export type InterpolatedVariableWord = {
-  tag: "interpolatedVariable";
-  parts: (
-  | LiteralWord
-  | VariableWord
-  | SingleQuotedWord
-  | DoubleQuotedWord)[]
-}
-
-/** `name=value` (or `name=` with a null value) before a command. */
-export type Assignment = {
-  tag: "assignment";
-  name: string;
-  value?: Word
-}
-
-/** A redirect like `> out.txt`, `>> log`, `2> err.txt`, `< in.txt`, or
- the dup `2>&1` (op `>&`, target a one-digit literal). `fd` is the
- explicit file descriptor (`2` in `2>`), or undefined for the default.
- Heredocs and here-strings are rejected rather than parsed. */
-export type Redirect = {
-  tag: "redirect";
-  fd?: number;
-  op: string;
-  target: Word
-}
-
-export type SimpleCommand = {
-  tag: "simpleCommand";
-  assignments: Assignment[];
-  /* The command name, or null for an assignment-only line (`FOO=bar`).
-    Bash requires at least one of a command name or an assignment. */
-  command?: ScriptName;
-  /** Every word after the command name, in source order. */
-  args: Word[];
-  redirects: Redirect[]
-}
-
-export type Command = SimpleCommand | Pipeline | And | Or | Parens
-
-/** What may sit between pipes: a simple command or a parenthesized group. */
-export type PipelineStage = SimpleCommand | Parens
-
-/** `a | b | c`: flat, two or more stages, binding tighter than `&&`/`||`. */
-export type Pipeline = {
-  tag: "pipeline";
-  stages: PipelineStage[]
-}
-
-export type And = {
-  tag: "and";
-  left: Command;
-  right: Command
-}
-
-export type Or = {
-  tag: "or";
-  left: Command;
-  right: Command
-}
-
-export type Parens = {
-  tag: "parens";
-  command: Command
-}
-
-export type BashNode =
-  | Command
-  | SimpleCommand
-  | Assignment
-  | Redirect
-  | Word
-  | ScriptName
-
-export type BashAST = Command[]
 
 // Flags are classified separately so git diff --staged can reach its rule.
 def literalArgs(command: SimpleCommand): Result<string[]> {
@@ -504,6 +402,10 @@ def simpleCommandRule(command: SimpleCommand, line: LineState, origin: GhRepo | 
   // only ever cause a refusal.
   if (name.tag != "literal") {
     return failure("the command word is not a literal")
+  }
+  const state = heldVariable(command, SHELL_STATE_VARIABLES)
+  if (state != "") {
+    return failure("`$" + state + "` depends on the commands before it")
   }
   quietAssignments(command.assignments)?
   const redirect = redirectEffect(command.redirects, cwd)?
@@ -4557,7 +4459,11 @@ def tryShellFreeChain(commands: Command[], cwd: string): Result<Plan> {
   if (links.value.length < 2) {
     return failure("not a chain")
   }
-  let steps: ChainStep[] = []
+  const real = try _realFolder(cwd)
+  if (real is failure(why)) {
+    return failure("the folder `${cwd}` cannot be resolved: ${why}")
+  }
+  let steps: LineStep[] = []
   let effects: Effect[] = []
   for (link in links.value) {
     const plan = tryShellFreeStep(link.command, cwd)
@@ -4568,16 +4474,21 @@ def tryShellFreeChain(commands: Command[], cwd: string): Result<Plan> {
     if (isFailure(execution)) {
       return execution
     }
-    steps.push({ join: link.join, execution: execution.value })
+    steps.push({
+      kind: "run",
+      join: link.join,
+      source: link.command,
+      cwd: cwd,
+      realCwd: real.value,
+      text: stepText(link.command),
+      effects: plan.value.effects,
+      readsStatus: false,
+      inProcess: execution.value
+    })
     effects = [...effects, ...plan.value.effects]
   }
-  return success({
-    effects: effects,
-    execution: { kind: "chain", steps: steps },
-    broadReason: null,
-    verbs: verbNames([link.command for link in links.value]),
-    savedPaths: []
-  })
+  const whole = rebuild(commands)?
+  return success(stepsPlan(whole, steps, effects, verbNames([link.command for link in links.value]), null))
 }
 
 // Keep this match exhaustive so every new execution kind gets a chain decision.
@@ -4593,7 +4504,7 @@ def stepExecOf(exec: Execution): Result<StepExec> {
     { kind: "bash" } => failure("a shell is not a chain step")
     { kind: "agency" } => failure("an agency command is not a chain step")
     { kind: "refuse" } => failure("a refused command is not a chain step")
-    { kind: "chain" } => failure("a chain is not a chain step")
+    { kind: "steps" } => failure("a stepped line is not a step")
   }
 }
 
@@ -4773,6 +4684,38 @@ def broadPlan(command: string, verbs: string[], reason: BroadReason): Plan {
   return bashPlan(command, [BASH_EFFECT], verbs, reason)
 }
 
+/* A line that runs a step at a time. Every narrow question was asked, so
+ it has effects of its own and never needs `BASH_EFFECT`. */
+def stepsPlan(command: string, steps: LineStep[], effects: Effect[], verbs: string[], origin: GhRepo | null): Plan {
+  return {
+    effects: effects,
+    execution: {
+      kind: "steps",
+      command: command,
+      steps: steps,
+      origin: origin
+    },
+    broadReason: null,
+    verbs: verbs,
+    savedPaths: []
+  }
+}
+
+/* Whether every step runs in process, looking inside groups. */
+def allInProcess(steps: LineStep[]): boolean {
+  for (step in steps) {
+    const inProcess = match(step) {
+      { kind: "run" } => step.inProcess != null
+      { kind: "group" } => allInProcess(step.steps)
+      { kind: "cd" } => false
+    }
+    if (!inProcess) {
+      return false
+    }
+  }
+  return true
+}
+
 /* The command word of each simple command, "" for an assignment-only one. */
 def verbNames(commands: SimpleCommand[]): string[] {
   return [verbName(command) for command in commands]
@@ -4796,10 +4739,20 @@ export def outcomeOf(plan: Plan): string {
     "write" => "shellFree"
     "grep" => "shellFree"
     "read" => "shellFree"
-    "chain" => "shellFree"
     "agency" => "agency"
     "bash" => bashOutcome(plan)
+    "steps" => stepsOutcome(plan)
   }
+}
+
+def stepsOutcome(plan: Plan): string {
+  const exec = plan.execution
+  if (exec is { kind: "steps" }) {
+    if (allInProcess(exec.steps)) {
+      return "shellFree"
+    }
+  }
+  return "narrow"
 }
 
 def bashOutcome(plan: Plan): string {
@@ -5330,7 +5283,7 @@ def planLine(source: string, parsed: Result<BashAST>, cwd: string, origin: GhRep
     // hard rule.
     return broadPlan(source, verbs, { kind: "unrenderable", detail: why })
   }
-  return bashPlan(rebuilt.value, narrow, verbs, null)
+  return stepsPlan(rebuilt.value, classified.value.steps, narrow, verbs, origin)
 }
 
 /** The effects of a command, the line once it has run, and the command as
@@ -5340,13 +5293,16 @@ def planLine(source: string, parsed: Result<BashAST>, cwd: string, origin: GhRep
 type Classified = {
   effects: Effect[];
   line: LineState;
-  command: Command
+  command: Command;
+  /** The same command as steps the runner takes one at a time. */
+  steps: LineStep[]
 }
 
-/** The effects of the whole string and the command tree to run. */
+/** The effects of the whole string, the command tree to run, and its steps. */
 type ClassifiedAll = {
   effects: Effect[];
-  commands: Command[]
+  commands: Command[];
+  steps: LineStep[]
 }
 
 // Classify the whole string. This walks the command tree, where the refuse
@@ -5369,6 +5325,7 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
   """
   let effects: Effect[] = []
   let rewritten: Command[] = []
+  let steps: LineStep[] = []
   // The line the next command is classified in.
   let line = freshLine(cwd)
   for (command, index in commands) {
@@ -5376,6 +5333,7 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
     if (cd != null) {
       const moved = cdTarget(cd, line)?
       rewritten.push(cdOrExit(cd, moved))
+      steps.push({ kind: "cd", join: "seq", source: cd, cwd: line.cwd, dir: moved, guarded: true })
       line = { ...line, cwd: moved }
       continue
     }
@@ -5387,9 +5345,103 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
     }
     effects = [...effects, ...classified.effects]
     rewritten.push(classified.command)
+    steps = [...steps, ...classified.steps]
     line = classified.line
   }
-  return success({ effects: effects, commands: rewritten })
+  return success({ effects: effects, commands: rewritten, steps: steps })
+}
+
+// The steps of a line run with bash's rule for each join. The parser is
+// left-associative, so a flat list with one join per step runs in bash's
+// order; the comment in `linksOf` says why. A right side is a simple
+// command, a pipeline, or a group, never another `&&` or `||`.
+def joined(steps: LineStep[], join: Join): LineStep[] {
+  if (steps.length == 0) {
+    return steps
+  }
+  return [{ ...steps[0], join: join }, ...steps.slice(1)]
+}
+
+// One command or one pipeline that runs through bash. `source` is the
+// command as the model wrote it, which a later check plans again, and
+// `ran` is the command as the plan rewrote it, which this step runs.
+@capabilities(fileRead)
+def runStepOf(source: Command, ran: Command, line: LineState, effects: Effect[]): Result<LineStep[]> {
+  const real = try _realFolder(line.cwd)
+  if (real is failure(why)) {
+    return failure("the folder `${line.cwd}` cannot be resolved: ${why}")
+  }
+  return success([{
+    kind: "run",
+    join: "seq",
+    source: source,
+    cwd: line.cwd,
+    realCwd: real.value,
+    text: stepText(ran),
+    effects: effects,
+    readsStatus: readsAny(source, EXIT_STATUS),
+    inProcess: null
+  }])
+}
+
+// A command that cannot be rendered also makes the whole line's rebuild
+// fail, and `planLine` then sends the line to std::bash before any step
+// runs, so an empty text here is never run.
+def stepText(command: Command): string {
+  const text = rebuild([command])
+  if (text is failure(why)) {
+    return ""
+  }
+  return text.value
+}
+
+/** The variable bash sets to the exit status of the command before. The
+ runner carries it from one step to the next. */
+static const EXIT_STATUS: string[] = ["?"]
+
+/** Variables bash sets from the commands before, which the runner does
+ not carry, so a line split into steps would print something else:
+ `$_` is the last word of the command before, `$OLDPWD` the folder
+ before a `cd`, `$PIPESTATUS` the statuses of the pipeline before. */
+static const SHELL_STATE_VARIABLES: string[] = ["_", "OLDPWD", "PIPESTATUS", "BASH_COMMAND", "LINENO", "!"]
+
+/* Whether a word of any command in `command` holds one of these variables. */
+def readsAny(command: Command, names: string[]): boolean {
+  return heldVariable(command, names) != ""
+}
+
+/* The first of these variables a word of any command in `command` holds,
+ or "". */
+def heldVariable(command: Command, names: string[]): string {
+  for (entry in flattenOne(command)) {
+    const words = [...commandWords(entry.command), ...[assignment.value for assignment in entry.command.assignments if assignment.value != null]]
+    for (word in words) {
+      const held = variableIn(word, names)
+      if (held != "") {
+        return held
+      }
+    }
+  }
+  return ""
+}
+
+def variableIn(word: Word, names: string[]): string {
+  return match(word) {
+    { tag: "variable", name } if (names.includes(name)) => name
+    { tag: "doubleQuoted", parts } => firstVariableIn(parts, names)
+    { tag: "interpolatedVariable", parts } => firstVariableIn(parts, names)
+    _ => ""
+  }
+}
+
+def firstVariableIn(parts: Word[], names: string[]): string {
+  for (part in parts) {
+    const held = variableIn(part, names)
+    if (held != "") {
+      return held
+    }
+  }
+  return ""
 }
 
 @capabilities(fileRead)
@@ -5411,12 +5463,14 @@ def classifySimple(command: SimpleCommand, line: LineState, origin: GhRepo | nul
   if (timed == null) {
     const rule = simpleCommandRule(command, line, origin, readsStdin)?
     refuseStalePath(line, rule.effects)?
-    return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: rule.command })
+    const steps = runStepOf(command, rule.command, line, rule.effects)?
+    return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: rule.command, steps: steps })
   }
   const rule = simpleCommandRule(timed.inner, line, origin, readsStdin)?
   refuseStalePath(line, rule.effects)?
   const wrapped = withTimeout(timed, rule.command)?
-  return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: wrapped })
+  const steps = runStepOf(command, wrapped, line, rule.effects)?
+  return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: wrapped, steps: steps })
 }
 
 /** A `timeout <duration> <command>` line: the wrapper's words, and the
@@ -5525,7 +5579,10 @@ def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | 
   // A stage that can replace paths runs beside the others, so none of
   // them may name one: `git checkout main | tee log.txt`.
   refuseStalePath({ ...line, disk: diskAfter(effects) }, effects)?
-  return success({ effects: effects, line: afterCommand(line, effects), command: { tag: "pipeline", stages: rewritten } })
+  const ran: Command = { tag: "pipeline", stages: rewritten }
+  // The stages run at the same time, so a pipeline is one step.
+  const steps = runStepOf({ tag: "pipeline", stages: stages }, ran, line, effects)?
+  return success({ effects: effects, line: afterCommand(line, effects), command: ran, steps: steps })
 }
 
 // Parentheses run a subshell, so a `cd` inside them ends with them. A file
@@ -5534,7 +5591,12 @@ def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | 
 @capabilities(fileRead)
 def classifyGroup(inner: Command, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   const classified = classify(inner, line, origin, readsStdin)?
-  return success({ effects: classified.effects, line: { ...classified.line, cwd: line.cwd }, command: { tag: "parens", command: classified.command } })
+  return success({
+    effects: classified.effects,
+    line: { ...classified.line, cwd: line.cwd },
+    command: { tag: "parens", command: classified.command },
+    steps: [{ kind: "group", join: "seq", steps: classified.steps }]
+  })
 }
 
 // `cd dir && rest`: when the `cd` fails, bash runs nothing to its right, so
@@ -5556,7 +5618,8 @@ def classifyAnd(left: Command, right: Command, line: LineState, origin: GhRepo |
   return success({
     effects: [...first.effects, ...second.effects],
     line: second.line,
-    command: { tag: "and", left: first.command, right: second.command }
+    command: { tag: "and", left: first.command, right: second.command },
+    steps: [...first.steps, ...joined(second.steps, "and")]
   })
 }
 
@@ -5575,7 +5638,8 @@ def classifyOr(left: Command, right: Command, line: LineState, origin: GhRepo | 
   return success({
     effects: [...first.effects, ...second.effects],
     line: second.line,
-    command: { tag: "or", left: first.command, right: second.command }
+    command: { tag: "or", left: first.command, right: second.command },
+    steps: [...first.steps, ...joined(second.steps, "or")]
   })
 }
 
@@ -5692,7 +5756,12 @@ def andSide(side: Command, line: LineState, origin: GhRepo | null, readsStdin: b
 @capabilities(fileRead)
 def cdStep(cd: SimpleCommand, line: LineState): Result<Classified> {
   const moved = cdTarget(cd, line)?
-  return success({ effects: [], line: { ...line, cwd: moved }, command: cdTo(cd, moved) })
+  return success({
+    effects: [],
+    line: { ...line, cwd: moved },
+    command: cdTo(cd, moved),
+    steps: [{ kind: "cd", join: "seq", source: cd, cwd: line.cwd, dir: moved, guarded: false }]
+  })
 }
 
 /** Commands we decline to run even when a human approves. */
@@ -6049,10 +6118,10 @@ def approvedPlan(command: string, dir: string, timeoutMs: number, jobMs: number 
   }
 
   // Decided from the plan, not from the caller, so a question always
-  // describes what will run: only a plan of kind bash becomes a job.
+  // describes what will run: only a plan that starts a shell becomes a job.
   let asJob = false
   let limitMs = timeoutMs
-  if (jobMs != null && exec.kind == "bash") {
+  if (jobMs != null && jobText(exec) != null) {
     asJob = true
     limitMs = jobMs
   }
@@ -6087,12 +6156,26 @@ def runPlanned(plan: Plan, dir: string, command: string, timeout: number): Resul
     { kind: "agency", args } => runAgency(args, dir, command)
     { kind: "grep" } => runGrep(exec, command)
     { kind: "read" } => runRead(exec, command)
-    { kind: "chain" } => runChain(exec, command)
+    { kind: "steps" } => runSteps(exec, dir, command, timeout, plan)
     { kind: "bash", command as text } => runBash(text, dir, command, timeout, plan.verbs, plan.savedPaths)
     // Unreachable — approvedPlan already returned a refusal. The arm
     // exists only to keep the match exhaustive over Execution.
     { kind: "refuse", reason } => failure(reason)
   }
+}
+
+/* The text a job launches, or null for a plan that starts no shell: a
+ job runs its line whole, under one shell. */
+def jobText(exec: Execution): string | null {
+  if (exec is { kind: "bash", command }) {
+    return command
+  }
+  if (exec is { kind: "steps" }) {
+    if (!allInProcess(exec.steps)) {
+      return exec.command
+    }
+  }
+  return null
 }
 
 // A parameter default must be a literal, so startJob's signature repeats
@@ -6181,8 +6264,8 @@ export def startShellJob(
     return approved
   }
   const plan = approved.value
-  const exec = plan.execution
-  if (exec is { kind: "bash", command as text }) {
+  const text = jobText(plan.execution)
+  if (text != null) {
     // `_launchJob` runs a command with no interrupt of its own, as `_bash`
     // does in runBash, and it is safe for the reason runBash's comment
     // gives: the only path here runs through an approvedPlan that raised
@@ -6270,6 +6353,12 @@ def planRecord(plan: Plan, command: string, cwd: string): Record<string, any> {
     reason = plan.broadReason.kind
     detail = plan.broadReason.detail
   }
+  let rebuilt = ""
+  let steps = 0
+  if (plan.execution is { kind: "steps" }) {
+    rebuilt = plan.execution.command
+    steps = plan.execution.steps.length
+  }
   return {
     command: command,
     cwd: cwd,
@@ -6278,7 +6367,9 @@ def planRecord(plan: Plan, command: string, cwd: string): Record<string, any> {
     detail: detail,
     verbs: plan.verbs,
     effects: [e.name for e in plan.effects],
-    accesses: accessesOf(plan.effects)
+    accesses: accessesOf(plan.effects),
+    rebuilt: rebuilt,
+    steps: steps
   }
 }
 
@@ -6950,41 +7041,166 @@ def runWrite(exec: WriteExec): Result<string> {
   return success("")
 }
 
-@capabilities(fileRead, fileWrite)
-def runChain(exec: ChainExec, command: string): Result<string> {
-  """
-  Execute approved in-process commands with Bash-style ;, &&, and || joins.
-  Return a failure when the last command executed failed.
-  """
-  let out = ""
-  let ok = true
-  let lastError = ""
-  for (step in exec.steps) {
-    if (skipsStep(step.join, ok)) {
+/** What the runner carries from one step to the next. */
+type StepsState = {
+  /** The line as the model wrote it, which every failure names. */
+  label: string;
+  cwd: string;
+  /** Whether a step that cannot start in `cwd` ends the line. It is false
+    after a `cd` joined by `&&` or inside a group, where bash carries on
+    with status 1 when the `cd` fails. */
+  missingFolderStops: boolean;
+  status: number;
+  stdout: string;
+  stderr: string;
+  /** Milliseconds left of the line's limit. */
+  leftMs: number;
+  /** False for a limit of 0 or less, which means no limit. */
+  limited: boolean;
+  /** Why the line must stop now, or "" to carry on. */
+  stopped: string;
+  timedOut: boolean;
+  /** Whether an in-process write started, so a failure after it says that
+    destructive work ran. */
+  wrote: boolean
+}
+
+// Runs an approved steps plan, a step at a time, with bash's rule for
+// each join. Every question was raised in approvedPlan before this runs,
+// and nothing here raises one.
+@capabilities(fileRead, fileWrite, subprocess)
+def runSteps(exec: StepsExec, dir: string, source: string, timeout: number, plan: Plan): Result<string> {
+  // The copies first, right before the first shell starts, for the reason
+  // runBash gives.
+  const copied = try _prepareSpillFiles(plan.savedPaths)
+  if (copied is failure(why)) {
+    return failure("`${source}` was not run: ${why}")
+  }
+  const start: StepsState = {
+    label: source,
+    cwd: dir,
+    missingFolderStops: true,
+    status: 0,
+    stdout: "",
+    stderr: "",
+    leftMs: timeout * 1000,
+    limited: timeout > 0,
+    stopped: "",
+    timedOut: false,
+    wrote: false
+  }
+  const done = runStepList(exec.steps, start, exec.origin)
+  const outcome = stepsResult(done, timeout, plan.verbs)
+  if (done.wrote && isFailure(outcome)) {
+    // A write ran, so the tool loop must not retry the line and write
+    // twice. Bash steps never enter this region (safe-bash.md, "Why a
+    // bash call is never destructive").
+    destructive {
+      return outcome
+    }
+  }
+  return outcome
+}
+
+/* The result of a line that ran: the time limit, a stop, the last step's
+ status, or its output. */
+def stepsResult(state: StepsState, timeout: number, verbs: string[]): Result<string> {
+  if (state.timedOut) {
+    return timeoutFailure(state.label, timeout, state.stdout, state.stderr)
+  }
+  if (state.stopped != "") {
+    return failure(failedOutput(state.stdout, state.stderr, state.label, [state.stopped]))
+  }
+  if (state.status != 0) {
+    const note = if (isGhLoginFailure(verbs, state.status, state.stderr)) then GH_LOGIN_NOTE else ""
+    return exitFailure(state.status, state.stdout, state.stderr, state.label, note)
+  }
+  return success(keepOutput(state.stdout, 0, state.label))
+}
+
+@capabilities(fileRead, fileWrite, subprocess)
+def runStepList(steps: LineStep[], state: StepsState, origin: GhRepo | null): StepsState {
+  let current = state
+  for (step in steps) {
+    if (current.stopped != "" || current.timedOut) {
+      return current
+    }
+    if (skipsStep(step.join, current.status == 0)) {
       continue
     }
-    let printed: Result<string> = success("")
-    if (step.execution.kind == "write") {
-      // Mark this activation too: a later failure must not let the tool
-      // loop retry the chain and repeat an earlier write.
-      destructive {
-        printed = printStep(step.execution)
-      }
-    } else {
-      printed = printStep(step.execution)
+    // The host sets no limit at all for a limit of zero or less, so a step
+    // must not start once the line's time is used up.
+    if (current.limited && current.leftMs <= 0) {
+      return { ...current, timedOut: true }
     }
-    if (printed is success(text)) {
-      out = out + text
-      ok = true
-    } else if (printed is failure(why)) {
-      ok = false
-      lastError = "${why}"
+    current = match(step) {
+      { kind: "run" } => runOneStep(step, current, origin)
+      { kind: "cd" } => ({ ...current, cwd: step.dir, status: 0, missingFolderStops: step.guarded })
+      { kind: "group" } => runGroup(step, current, origin)
     }
   }
-  if (!ok) {
-    return exitFailure(1, out, lastError, command)
+  return current
+}
+
+/* A group runs in a subshell, so its folder changes end at the closing
+ parenthesis. Everything else it did carries on. */
+@capabilities(fileRead, fileWrite, subprocess)
+def runGroup(step: GroupStep, state: StepsState, origin: GhRepo | null): StepsState {
+  const inner = runStepList(step.steps, state, origin)
+  return { ...inner, cwd: state.cwd, missingFolderStops: state.missingFolderStops }
+}
+
+@capabilities(fileRead, fileWrite, subprocess)
+def runOneStep(step: RunStep, state: StepsState, origin: GhRepo | null): StepsState {
+  const exec = step.inProcess
+  if (exec != null) {
+    return runInProcess(exec, state)
   }
-  return success(keepOutput(out, 0, command))
+  return runBashStep(step, state)
+}
+
+// A line runs in process only when every step does, so `stderr` here
+// holds only the last failure's message, as one in-process command's
+// failure would.
+@capabilities(fileRead, fileWrite)
+def runInProcess(exec: StepExec, state: StepsState): StepsState {
+  const wrote = state.wrote || exec.kind == "write"
+  const printed = printStep(exec)
+  if (printed is failure(why)) {
+    return { ...state, status: 1, stderr: "${why}", wrote: wrote }
+  }
+  return { ...state, stdout: state.stdout + printed.value, status: 0, wrote: wrote }
+}
+
+// `_bash`, for the reason runBash's comment gives: the only path here runs
+// through runPlanned, after approvedPlan raised every effect of the plan.
+// The text is the one the up-front plan rebuilt for this step.
+@capabilities(subprocess)
+def runBashStep(step: RunStep, state: StepsState): StepsState {
+  const text = if (step.readsStatus) then "(exit ${state.status}); ${step.text}" else step.text
+  const limit = if (state.limited) then state.leftMs else 0
+  const started = now()
+  const attempt = try _bash(text, state.cwd, limit, "", {})
+  const spent = now() - started
+  if (attempt is failure(why)) {
+    // The folder is gone, or the shell did not start.
+    if (state.missingFolderStops) {
+      return { ...state, status: 1, stopped: "`${state.label}` was not run: ${why}" }
+    }
+    // The line goes on, and the reason goes to stderr, where bash's own
+    // complaint about the `cd` would be.
+    return { ...state, status: 1, stderr: "${state.stderr}${why}\n", leftMs: state.leftMs - spent }
+  }
+  // try wraps the returned ExecResult in the success value.
+  const result: any = attempt.value
+  return {
+    ...state,
+    stdout: state.stdout + result.stdout,
+    stderr: state.stderr + result.stderr,
+    status: result.exitCode,
+    leftMs: state.leftMs - spent,
+    timedOut: result.timedOut
+  }
 }
 
 /** Whether bash skips a step after this join, given how the last step that

@@ -22,6 +22,137 @@ A plan pairs the required approvals with an execution. Inspect the plan to
 test classification without executing its commands.
 */
 
+/** One word of a parsed command, as the parser read it. */
+export type Word =
+  | LiteralWord
+  | PathWord
+  | GlobWord
+  | FlagWord
+  | SingleQuotedWord
+  | DoubleQuotedWord
+  | VariableWord
+  | InterpolatedVariableWord
+
+export type ScriptName = LiteralWord | PathWord
+
+export type LiteralWord = {
+  tag: "literal";
+  text: string
+}
+
+export type PathWord = {
+  tag: "path";
+  text: string
+}
+
+/** An unquoted word bash will expand (`*.ts`, `src/*.md`). Its own node
+ so it is never mistaken for the quoted text `'*.ts'`; no rule here
+ treats it as a literal. */
+export type GlobWord = {
+  tag: "glob";
+  text: string
+}
+
+export type FlagWord = {
+  tag: "flag";
+  flagName: string;
+  flagValue?: string;
+  /** Present and true when the value is an unquoted glob (`--include=*.ts`). */
+  valueIsGlob?: boolean
+}
+
+export type SingleQuotedWord = {
+  tag: "singleQuoted";
+  text: string
+}
+
+export type DoubleQuotedWord = {
+  tag: "doubleQuoted";
+  parts: Word[]
+}
+
+export type VariableWord = {
+  tag: "variable";
+  name: string
+}
+
+/** Adjacent word parts, such as `$HOME.txt` or `"a"b`, that form one Bash argument. */
+export type InterpolatedVariableWord = {
+  tag: "interpolatedVariable";
+  parts: (
+  | LiteralWord
+  | VariableWord
+  | SingleQuotedWord
+  | DoubleQuotedWord)[]
+}
+
+/** `name=value` (or `name=` with a null value) before a command. */
+export type Assignment = {
+  tag: "assignment";
+  name: string;
+  value?: Word
+}
+
+/** A redirect like `> out.txt`, `>> log`, `2> err.txt`, `< in.txt`, or
+ the dup `2>&1` (op `>&`, target a one-digit literal). `fd` is the
+ explicit file descriptor (`2` in `2>`), or undefined for the default.
+ Heredocs and here-strings are rejected rather than parsed. */
+export type Redirect = {
+  tag: "redirect";
+  fd?: number;
+  op: string;
+  target: Word
+}
+
+export type SimpleCommand = {
+  tag: "simpleCommand";
+  assignments: Assignment[];
+  /* The command name, or null for an assignment-only line (`FOO=bar`).
+    Bash requires at least one of a command name or an assignment. */
+  command?: ScriptName;
+  /** Every word after the command name, in source order. */
+  args: Word[];
+  redirects: Redirect[]
+}
+
+export type Command = SimpleCommand | Pipeline | And | Or | Parens
+
+/** What may sit between pipes: a simple command or a parenthesized group. */
+export type PipelineStage = SimpleCommand | Parens
+
+/** `a | b | c`: flat, two or more stages, binding tighter than `&&`/`||`. */
+export type Pipeline = {
+  tag: "pipeline";
+  stages: PipelineStage[]
+}
+
+export type And = {
+  tag: "and";
+  left: Command;
+  right: Command
+}
+
+export type Or = {
+  tag: "or";
+  left: Command;
+  right: Command
+}
+
+export type Parens = {
+  tag: "parens";
+  command: Command
+}
+
+export type BashNode =
+  | Command
+  | SimpleCommand
+  | Assignment
+  | Redirect
+  | Word
+  | ScriptName
+
+export type BashAST = Command[]
+
 /** A required approval, with a payload checked for its effect. */
 export type Effect =
   | { name: "std::bash" }
@@ -546,7 +677,7 @@ export def pendingLookups(effects: Effect[]): string[] {
 // exhaustively, so adding a variant is a type error at the dispatch rather
 // than a silent fall-through.
 /** What happens if every effect in the plan is approved. */
-export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec | GrepExec | ReadExec | ChainExec
+export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec | GrepExec | ReadExec | StepsExec
 
 export type BashExec = {
   kind: "bash";
@@ -670,16 +801,57 @@ export type Join = "seq" | "and" | "or"
  that spawns a shell. */
 export type StepExec = EchoExec | WriteExec | GrepExec | ReadExec
 
-export type ChainStep = {
+/** One step of a line that runs a step at a time. */
+export type LineStep = RunStep | CdStep | GroupStep
+
+/** One simple command or one pipeline, as the model wrote it. */
+export type RunStep = {
+  kind: "run";
   join: Join;
-  execution: StepExec
+  source: Command;
+  /** The folder as the plan had it, which is what the payloads name. */
+  cwd: string;
+  /** `cwd` with every link followed, for the folder check. */
+  realCwd: string;
+  /** The text the up-front plan rebuilt for this step. */
+  text: string;
+  effects: Effect[];
+  /** Whether a word of the command reads `$?`, the status of the step before. */
+  readsStatus: boolean;
+  /** Null when the step goes through bash. Otherwise the in-process
+    execution. */
+  inProcess: StepExec | null
 }
 
-/** Several in-process commands joined by `;`, `&&`, or `||`, run left to
- right with bash's rule for each join. */
-export type ChainExec = {
-  kind: "chain";
-  steps: ChainStep[]
+/** A `cd`. `dir` is the real folder the plan resolved. `guarded` is true
+  for a `cd` that is a whole command of the top-level list, which runs
+  as `cd '/abs' || exit 1` in one shell: when it fails, the line ends. */
+export type CdStep = {
+  kind: "cd";
+  join: Join;
+  source: SimpleCommand;
+  cwd: string;
+  dir: string;
+  guarded: boolean
+}
+
+/** A parenthesized group. Its folder changes end at the closing parenthesis. */
+export type GroupStep = {
+  kind: "group";
+  join: Join;
+  steps: LineStep[]
+}
+
+/** A line that runs a step at a time, with bash's rule for each join.
+ Every step runs in process, or every step that is not a `cd` or a group
+ runs through bash. */
+export type StepsExec = {
+  kind: "steps";
+  /** The whole rebuilt line, which a background job still runs as one text. */
+  command: string;
+  steps: LineStep[];
+  /** The repository a `gh` step was planned with, for planning it again. */
+  origin: GhRepo | null
 }
 
 /**

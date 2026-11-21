@@ -1,0 +1,59 @@
+{
+  "tests": [
+    {
+      "nodeName": "handlerChangesTheDisk",
+      "description": "A handler that changes the disk while it answers a question has changed it before the first step runs, because every question is raised before anything runs. The later tests in this file change the disk this way.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "steppedLinesPrintWhatOneBashPrinted",
+      "description": "A narrow line runs a step at a time and prints what one bash -c of the whole line printed: `;` runs the next step whatever the last one did, `&&` and `||` skip by the last status, `$?` reads the status of the step before, a cd moves the steps after it, a group's cd ends at its parenthesis, and the line fails with the last step's status. These values were recorded while the whole line still ran under one shell.",
+      "input": "",
+      "expectedOutput": "[[\"ls sub && printf 'a\\\\n' && printf 'b\\\\n'\",\"steps\",true,\"a.txt\\na\\nb\\n\"],[\"ls sub; false; printf 'after\\\\n'\",\"steps\",true,\"a.txt\\nafter\\n\"],[\"ls sub; false && printf 'skipped\\\\n'; printf 'ran\\\\n'\",\"steps\",true,\"a.txt\\nran\\n\"],[\"ls sub; false || printf 'rescued\\\\n'\",\"steps\",true,\"a.txt\\nrescued\\n\"],[\"ls sub; true || printf 'skipped\\\\n'\",\"steps\",true,\"a.txt\\n\"],[\"ls sub; false; printf 'exit=%s\\\\n' \\\"$?\\\"\",\"steps\",true,\"a.txt\\nexit=1\\n\"],[\"cd sub && ls\",\"steps\",true,\"a.txt\\n\"],[\"(cd sub && ls); ls\",\"steps\",true,\"a.txt\\none.txt\\nsub\\n\"],[\"ls | head -1 && printf 'done\\\\n'\",\"steps\",true,\"one.txt\\ndone\\n\"],[\"ls sub; printf 'x\\\\n' >&2; false\",\"steps\",false,\"a.txt\\nx\\nCommand exited with code 1\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aGroupWhoseFolderWentAwayCarriesOn",
+      "description": "A cd inside a group whose folder is gone when it runs ends the group with status 1, and the line carries on after the group, as bash does. When the line then fails, its stderr says why the step did not start.",
+      "input": "",
+      "expectedOutput": "[\"steps\",true,\"a.txt\\n\",true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "stepsShareOneTimeLimit",
+      "description": "The time limit covers the whole line: three steps under a 2 second limit stop at 2 seconds in total.",
+      "input": "",
+      "expectedOutput": "[true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noTimeLeftRunsNothing",
+      "description": "Once the limit has run out, no later step starts: the write after the step that used up the time never runs.",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -86,6 +86,7 @@ import { _resolveRedirectTarget, _missingTarget } from "agency-lang/stdlib-lib/f
 import { _searchTargetIn, _bash, _grep, _skipDirNames } from "agency-lang/stdlib-lib/shell.js"
 import { _launchJob, _jobStartRefusal } from "agency-lang/stdlib-lib/jobs.js"
 import { basename as lastSegment, dirname as parentOf } from "std::path"
+import { now } from "std::date"
 import { _grepPatternToRegex, _renderGrepOutput, _skippedDirsNote } from "agency-lang/stdlib-lib/grepDialect.js"
 import { _renderReadView } from "agency-lang/stdlib-lib/readDialect.js"
 
@@ -6129,23 +6130,12 @@ def runPlanned(plan: Plan, dir: string, command: string, timeout: number): Resul
     { kind: "agency", args } => runAgency(args, dir, command)
     { kind: "grep" } => runGrep(exec, command)
     { kind: "read" } => runRead(exec, command)
-    { kind: "steps" } => runStepsPlan(exec, plan, dir, command, timeout)
+    { kind: "steps" } => runSteps(exec, dir, command, timeout, plan)
     { kind: "bash", command as text } => runBash(text, dir, command, timeout, plan.verbs, plan.savedPaths)
     // Unreachable — approvedPlan already returned a refusal. The arm
     // exists only to keep the match exhaustive over Execution.
     { kind: "refuse", reason } => failure(reason)
   }
-}
-
-def runStepsPlan(exec: StepsExec, plan: Plan, dir: string, command: string, timeout: number): Result<string> {
-  if (allInProcess(exec.steps)) {
-    // Bound to a local, so the failure's own `destructiveRan` decides. A
-    // bare `return runChain(...)` would mark this call destructive even
-    // when `&&` skipped the write (docs/dev/language/destructive-regions.md).
-    const ran = runChain(exec.steps, command)
-    return ran
-  }
-  return runBash(exec.command, dir, command, timeout, plan.verbs, plan.savedPaths)
 }
 
 /* The text a job launches, or null for a plan that starts no shell: a
@@ -7025,45 +7015,164 @@ def runWrite(exec: WriteExec): Result<string> {
   return success("")
 }
 
-@capabilities(fileRead, fileWrite)
-def runChain(steps: LineStep[], command: string): Result<string> {
-  """
-  Execute approved in-process commands with Bash-style ;, &&, and || joins.
-  Return a failure when the last command executed failed.
-  """
-  let out = ""
-  let ok = true
-  let lastError = ""
+/** What the runner carries from one step to the next. */
+type StepsState = {
+  /** The line as the model wrote it, which every failure names. */
+  label: string;
+  cwd: string;
+  /** Whether a step that cannot start in `cwd` ends the line. It is false
+    after a `cd` joined by `&&` or inside a group, where bash carries on
+    with status 1 when the `cd` fails. */
+  missingFolderStops: boolean;
+  status: number;
+  stdout: string;
+  stderr: string;
+  /** Milliseconds left of the line's limit. */
+  leftMs: number;
+  /** False for a limit of 0 or less, which means no limit. */
+  limited: boolean;
+  /** Why the line must stop now, or "" to carry on. */
+  stopped: string;
+  timedOut: boolean;
+  /** Whether an in-process write started, so a failure after it says that
+    destructive work ran. */
+  wrote: boolean
+}
+
+// Runs an approved steps plan, a step at a time, with bash's rule for
+// each join. Every question was raised in approvedPlan before this runs,
+// and nothing here raises one.
+@capabilities(fileRead, fileWrite, subprocess)
+def runSteps(exec: StepsExec, dir: string, source: string, timeout: number, plan: Plan): Result<string> {
+  // The copies first, right before the first shell starts, for the reason
+  // runBash gives.
+  const copied = try _prepareSpillFiles(plan.savedPaths)
+  if (copied is failure(why)) {
+    return failure("`${source}` was not run: ${why}")
+  }
+  const start: StepsState = {
+    label: source,
+    cwd: dir,
+    missingFolderStops: true,
+    status: 0,
+    stdout: "",
+    stderr: "",
+    leftMs: timeout * 1000,
+    limited: timeout > 0,
+    stopped: "",
+    timedOut: false,
+    wrote: false
+  }
+  const done = runStepList(exec.steps, start, exec.origin)
+  const outcome = stepsResult(done, timeout, plan.verbs)
+  if (done.wrote && isFailure(outcome)) {
+    // A write ran, so the tool loop must not retry the line and write
+    // twice. Bash steps never enter this region (safe-bash.md, "Why a
+    // bash call is never destructive").
+    destructive {
+      return outcome
+    }
+  }
+  return outcome
+}
+
+/* The result of a line that ran: the time limit, a stop, the last step's
+ status, or its output. */
+def stepsResult(state: StepsState, timeout: number, verbs: string[]): Result<string> {
+  if (state.timedOut) {
+    return timeoutFailure(state.label, timeout, state.stdout, state.stderr)
+  }
+  if (state.stopped != "") {
+    return failure(failedOutput(state.stdout, state.stderr, state.label, [state.stopped]))
+  }
+  if (state.status != 0) {
+    const note = if (isGhLoginFailure(verbs, state.status, state.stderr)) then GH_LOGIN_NOTE else ""
+    return exitFailure(state.status, state.stdout, state.stderr, state.label, note)
+  }
+  return success(keepOutput(state.stdout, 0, state.label))
+}
+
+@capabilities(fileRead, fileWrite, subprocess)
+def runStepList(steps: LineStep[], state: StepsState, origin: GhRepo | null): StepsState {
+  let current = state
   for (step in steps) {
-    if (skipsStep(step.join, ok)) {
+    if (current.stopped != "" || current.timedOut) {
+      return current
+    }
+    if (skipsStep(step.join, current.status == 0)) {
       continue
     }
-    if (!(step is { kind: "run" }) || step.inProcess == null) {
-      return failure("an in-process line holds a step that is not in process")
+    // The host sets no limit at all for a limit of zero or less, so a step
+    // must not start once the line's time is used up.
+    if (current.limited && current.leftMs <= 0) {
+      return { ...current, timedOut: true }
     }
-    const execution = step.inProcess
-    let printed: Result<string> = success("")
-    if (execution.kind == "write") {
-      // Mark this activation too: a later failure must not let the tool
-      // loop retry the chain and repeat an earlier write.
-      destructive {
-        printed = printStep(execution)
-      }
-    } else {
-      printed = printStep(execution)
-    }
-    if (printed is success(text)) {
-      out = out + text
-      ok = true
-    } else if (printed is failure(why)) {
-      ok = false
-      lastError = "${why}"
+    current = match(step) {
+      { kind: "run" } => runOneStep(step, current, origin)
+      { kind: "cd" } => ({ ...current, cwd: step.dir, status: 0, missingFolderStops: step.guarded })
+      { kind: "group" } => runGroup(step, current, origin)
     }
   }
-  if (!ok) {
-    return exitFailure(1, out, lastError, command)
+  return current
+}
+
+/* A group runs in a subshell, so its folder changes end at the closing
+ parenthesis. Everything else it did carries on. */
+@capabilities(fileRead, fileWrite, subprocess)
+def runGroup(step: GroupStep, state: StepsState, origin: GhRepo | null): StepsState {
+  const inner = runStepList(step.steps, state, origin)
+  return { ...inner, cwd: state.cwd, missingFolderStops: state.missingFolderStops }
+}
+
+@capabilities(fileRead, fileWrite, subprocess)
+def runOneStep(step: RunStep, state: StepsState, origin: GhRepo | null): StepsState {
+  const exec = step.inProcess
+  if (exec != null) {
+    return runInProcess(exec, state)
   }
-  return success(keepOutput(out, 0, command))
+  return runBashStep(step, state)
+}
+
+// A line runs in process only when every step does, so `stderr` here
+// holds only the last failure's message, as one in-process command's
+// failure would.
+@capabilities(fileRead, fileWrite)
+def runInProcess(exec: StepExec, state: StepsState): StepsState {
+  const wrote = state.wrote || exec.kind == "write"
+  const printed = printStep(exec)
+  if (printed is failure(why)) {
+    return { ...state, status: 1, stderr: "${why}", wrote: wrote }
+  }
+  return { ...state, stdout: state.stdout + printed.value, status: 0, wrote: wrote }
+}
+
+// `_bash`, for the reason runBash's comment gives: the only path here runs
+// through runPlanned, after approvedPlan raised every effect of the plan.
+// The text is the one the up-front plan rebuilt for this step.
+@capabilities(subprocess)
+def runBashStep(step: RunStep, state: StepsState): StepsState {
+  const text = if (step.readsStatus) then "(exit ${state.status}); ${step.text}" else step.text
+  const limit = if (state.limited) then state.leftMs else 0
+  const started = now()
+  const attempt = try _bash(text, state.cwd, limit, "", {})
+  const spent = now() - started
+  if (attempt is failure(why)) {
+    // The folder is gone, or the shell did not start.
+    if (state.missingFolderStops) {
+      return { ...state, status: 1, stopped: "`${state.label}` was not run: ${why}" }
+    }
+    return { ...state, status: 1, leftMs: state.leftMs - spent }
+  }
+  // try wraps the returned ExecResult in the success value.
+  const result: any = attempt.value
+  return {
+    ...state,
+    stdout: state.stdout + result.stdout,
+    stderr: state.stderr + result.stderr,
+    status: result.exitCode,
+    leftMs: state.leftMs - spent,
+    timedOut: result.timedOut
+  }
 }
 
 /** Whether bash skips a step after this join, given how the last step that

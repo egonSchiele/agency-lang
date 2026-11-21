@@ -1,0 +1,109 @@
+import { mkdir, remove } from "std::fs"
+import { planFor, safeBash } from "std::safeBash"
+import { bash, exists } from "std::shell"
+import { now } from "std::date"
+
+/** A folder of its own, so these tests never touch another file's fixture. */
+static const FIXTURE = __dirname + "/stdlib/__safebash_steps__"
+
+/* The fixture: `one.txt` and a folder `sub` that holds `a.txt`. */
+def makeFixture() {
+  remove(FIXTURE) with approve
+  mkdir(FIXTURE) with approve
+  bash("mkdir sub && printf 'one\\ntwo\\n' > one.txt && printf 'a\\n' > sub/a.txt", cwd: FIXTURE) with approve
+}
+
+def textOf(result: Result<string>): string {
+  if (result is failure(why)) {
+    return "${why}"
+  }
+  return result.value
+}
+
+// Every question is raised before any step runs, so a handler that changes
+// the disk while it answers one has changed it before the first step.
+node handlerChangesTheDisk() {
+  makeFixture()
+  let out: Result<string> = success("")
+  handle {
+    out = safeBash("pnpm --version; ls", cwd: FIXTURE)
+  } with (intr) {
+    bash("touch marker.txt", cwd: FIXTURE) with approve
+    return approve()
+  }
+  const text = textOf(out)
+  remove(FIXTURE) with approve
+  return text.includes("marker.txt")
+}
+
+/* A line run in the fixture: its plan's kind, whether it succeeded, and
+ its output or failure text. A line that does not plan as steps would
+ run whole under one shell and prove nothing, so it is reported. */
+def stepped(line: string): any {
+  const kind = planFor(line, FIXTURE).execution.kind
+  if (kind != "steps") {
+    return "NOT STEPS: ${line}"
+  }
+  const result = safeBash(line, cwd: FIXTURE) with approve
+  return [line, kind, isSuccess(result), textOf(result)]
+}
+
+// Each line holds `ls sub`, which asks a question, because a line that
+// asks none is a readonly plan of kind bash and never reaches the runner.
+// The expected values are what one `bash -c` of the whole line printed.
+node steppedLinesPrintWhatOneBashPrinted() {
+  makeFixture()
+  const rows = [stepped(line) for line in [
+    "ls sub && printf 'a\\n' && printf 'b\\n'",
+    "ls sub; false; printf 'after\\n'",
+    "ls sub; false && printf 'skipped\\n'; printf 'ran\\n'",
+    "ls sub; false || printf 'rescued\\n'",
+    "ls sub; true || printf 'skipped\\n'",
+    "ls sub; false; printf 'exit=%s\\n' \"$?\"",
+    "cd sub && ls",
+    "(cd sub && ls); ls",
+    "ls | head -1 && printf 'done\\n'",
+    "ls sub; printf 'x\\n' >&2; false",
+  ]]
+  remove(FIXTURE) with approve
+  return rows
+}
+
+// `gone` is there when the line is planned, so its `cd` has a rule, and
+// the handler removes it before anything runs. Bash ends the group with
+// status 1 and runs the `ls sub` after it.
+node aGroupWhoseFolderWentAwayCarriesOn() {
+  makeFixture()
+  mkdir(FIXTURE + "/gone") with approve
+  const line = "(cd gone && ls); ls sub"
+  const kind = planFor(line, FIXTURE).execution.kind
+  let out: Result<string> = success("")
+  handle {
+    out = safeBash(line, cwd: FIXTURE)
+  } with (intr) {
+    remove(FIXTURE + "/gone") with approve
+    return approve()
+  }
+  remove(FIXTURE) with approve
+  return [kind, isSuccess(out), textOf(out)]
+}
+
+// Three steps share one limit of 2 seconds: the line stops at 2 seconds
+// in total, not 2 seconds per step.
+node stepsShareOneTimeLimit() {
+  makeFixture()
+  const start = now()
+  const out = safeBash("ls sub; sleep 1; sleep 1; sleep 1", cwd: FIXTURE, timeout: 2) with approve
+  const took = now() - start
+  remove(FIXTURE) with approve
+  return [textOf(out).includes("stopped at the time limit of 2 seconds"), took < 3000]
+}
+
+// The limit runs out during `sleep 2`, so the write after it never runs.
+node noTimeLeftRunsNothing() {
+  makeFixture()
+  const out = safeBash("ls sub; sleep 2; printf 'late\\n' > late.txt", cwd: FIXTURE, timeout: 2) with approve
+  const late = exists("late.txt", dir: FIXTURE)
+  remove(FIXTURE) with approve
+  return [isFailure(out), late]
+}

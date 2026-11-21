@@ -2146,8 +2146,9 @@ without one redirect, a grep that translates, or a cat, head, or tail
 that translates. An `agency` line is not a step. `stepExecOf` turns each
 step's plan into a `StepExec`, with an exhaustive match that makes a new
 execution kind a type error until someone decides whether a chain may
-hold it. The chain raises every step's effects, in order, and runs no
-shell.
+hold it. The chain is a plan of kind `steps` whose every step has its
+`StepExec` in `inProcess` (see "A narrow line runs one step at a time").
+It raises every step's effects, in order, and runs no shell.
 
 A parenthesized group or a pipeline refuses the chain. Bash skips
 `(b || c)` in `a && (b || c)` as a whole, which a flat list cannot say,
@@ -2160,23 +2161,23 @@ the whole line down the general path, where the refuse wall runs on
 every command and the line goes to bash. So `cat a.txt && shred a.txt` is
 still refused.
 
-`runChain` copies bash's run rule. `;` runs the next step whatever
-happened, `&&` runs it only after a success, and `||` only after a
-failure. A skipped step changes nothing. The chain fails when the last
-step that ran failed, with the joined text as stdout and that step's
-message as stderr. A failed step adds no text, the way a failing
-program's complaint goes to stderr. `grep` with no match is a failure,
-as its exit code 1 is.
+The runner that runs a narrow line runs the chain too, with bash's rule
+for each join (see the next section). The chain fails when the last step
+that ran failed, with the joined text as stdout and that step's message
+as stderr. A failed step adds no text, the way a failing program's
+complaint goes to stderr. `grep` with no match is a failure, as its exit
+code 1 is.
 
-A write step runs inside a `destructive { }` region of `runChain`'s own.
-`runWrite` enters one, but that marks `runWrite`'s activation, and a
-failure built later in `runChain` (`echo started >> log.txt; grep zzz
-one.txt`) would otherwise say nothing destructive ran, so the tool loop
-could retry and append twice. The region is entered before `_write`
-runs, so a write that fails before writing anything still reports
-`destructiveRan: true`, which is the safe direction. A line that runs
-through bash is never marked; see "Why a bash call is never
-destructive".
+`runWrite` enters a `destructive { }` region, but that marks only
+`runWrite`'s activation. A failure the runner builds later (`echo started
+>> log.txt; grep zzz one.txt`) would otherwise say nothing destructive
+ran, so the tool loop could retry and append twice. So the runner records
+in its state that an in-process write started (`wrote`), and `runSteps`
+returns a failure from inside a region of its own when it did. The flag
+is set before `_write` runs, so a write that fails before writing
+anything still reports `destructiveRan: true`, which is the safe
+direction. A step that runs through bash is never marked; see "Why a bash
+call is never destructive".
 
 A chain's effects may be empty. A chain of echoes raises nothing, as a
 lone echo raises nothing: the audit rule is about shell spawns, and a
@@ -2191,6 +2192,64 @@ left, under a `std::read` that named `f` (see "Resolving the path when
 the plan is made"). With `f` missing, `cat f` is refused at plan time,
 and the line goes to bash.
 
+## A narrow line runs one step at a time
+
+A narrow line is a plan of kind `steps`. Beside each command's effects
+and rewritten tree, the classifier returns the same command as steps
+(`LineStep` in `stdlib/safeBash/actions.agency`):
+
+- A `run` step is one simple command or one pipeline. The stages of a
+  pipeline run at the same time, so a pipeline is one step. The step
+  holds the command as the model wrote it, its effects, the folder the
+  plan used (`cwd`, which the payloads name), that folder with every link
+  followed (`realCwd`), and `text`, the text the plan rebuilt for it.
+- A `cd` step holds the folder `cdTarget` resolved. `guarded` is true for
+  a `cd` that is a whole command of the top-level list.
+- A `group` step holds the steps inside a pair of parentheses.
+
+Each step carries the join before it. The parser is left-associative, so
+a flat list with one join per step runs in bash's order (the comment in
+`linksOf` says why).
+
+`runSteps` runs the list. `runStepList` carries a state from one step to
+the next: the folder, the exit status of the last step that ran, the
+stdout and stderr so far, and the time left. For example, `pnpm build &&
+cd lib && ls` runs as three steps: `pnpm build` in the starting folder,
+then the `cd`, which only moves the state's folder, then `ls` in `lib`.
+
+- **The joins.** `skipsStep` decides whether a step runs: `;` always,
+  `&&` only after a status of 0, `||` only after any other status. A
+  skipped step changes nothing.
+- **A run step** runs its `text` under a `bash -c` of its own, in the
+  state's folder. Its stdout is added to the stdout so far and its stderr
+  to the stderr so far, which is what one `bash -c` of the whole line
+  gives. A step whose words read `$?` runs as `(exit 3); echo
+  "exit=$?"`, where 3 is the status of the step before.
+- **A `cd` step** starts no shell. When its folder is gone, the next
+  step's shell cannot start. After a guarded `cd`, the line ends with
+  "`<line>` was not run", as `cd '/abs' || exit 1` ended one shell. After
+  any other `cd` the status is 1 and the line goes on, as bash goes on
+  after a `cd` that failed inside `&&` or a group.
+- **A group** runs on a copy of the state. Its folder ends at the closing
+  parenthesis, and its status and output carry on, so `(cd sub && ls);
+  ls` lists `sub` and then the starting folder.
+- **The time limit** covers the whole line. Each step's shell gets the
+  time that is left, and once none is left no step starts, because the
+  host sets no limit at all for a limit of zero. A `timeout` of 0 or less
+  means no limit, as it did for one `bash -c`.
+- **A pause** from outside lands at a statement boundary
+  (`docs/dev/runtime/pause.md`), so it lands between steps and never
+  inside one. A step's shell is never cut short by a pause and never runs
+  twice.
+
+The runner raises nothing. Every question was raised in `approvedPlan`
+before the first step runs, and each step runs the text the plan rebuilt
+for it. The plan also keeps the whole rebuilt line in `command`, which a
+background job launches as one text.
+
+When every step has an in-process execution, the line is the chain of
+the section above, and its outcome is `shellFree`.
+
 ## Why a bash call is never destructive
 
 This is a decision, made after the alternatives below were weighed. Do
@@ -2198,9 +2257,9 @@ not add a `destructive { }` region around `runBash` without reading it.
 
 The rule: safeBash marks destructive work only where Agency code does
 the work. `runWrite` wraps `_write` in a `destructive { }` region, as
-the `write` tool does, and `runChain` enters one around each write step.
-`runBash` enters none, so a failure from a line that ran through bash
-always carries `destructiveRan: false`. safeBash is treated like any
+the `write` tool does, and `runSteps` enters one when an in-process write
+started. `runBash` and the runner's bash steps enter none, so a failure
+from a line that ran through bash always carries `destructiveRan: false`. safeBash is treated like any
 other tool: the Agency functions it runs mark their own work, and
 nothing in the `destructive` logic or the tool loop has a case for it.
 
@@ -2263,7 +2322,9 @@ before the limit is known, so the `timeout` in a planned `ExecPayload` is
 
 Only the bash path has the limit. A plan that runs in process (a lone
 `grep`, `cat`, or `echo`, or a chain of them) starts no program, and the
-git tools have their own 30-second limit.
+git tools have their own 30-second limit. A narrow line that runs a step
+at a time shares one limit across its steps (see "A narrow line runs one
+step at a time").
 
 A stopped line is a failure in the shape `exitFailure` gives, so the tool
 trace reads it the same way, with two more fields: `timedOut: true`, which
@@ -2285,8 +2346,9 @@ after `raiseAll` would ask the broad question a second time. The bypass
 is correct for one reason: the only path to an executor runs through a
 `raiseAll` that raised every effect in the plan and returned success, and
 every plan raises at least one effect, except a line that only reads
-saved output (see "Saved output"). `runChain` reaches the same
-internals through each step's executor.
+saved output (see "Saved output"). The runner reaches the same
+internals through each step's executor, and calls `_bash` for each step
+that runs through bash.
 
 That reason holds only if nothing else can call an executor. So the
 executors are private functions in `stdlib/safeBash.agency`, not exports.

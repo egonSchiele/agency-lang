@@ -4,7 +4,7 @@ import { POLICY_DIR, SETTINGS_FILE, usingDefaultAgentHome } from "../lib/config.
 import { ModelChoices, noModelChoices, noModelFlags, requestLlmOptions } from "../lib/modelRequest.agency"
 import { Resolved } from "../lib/models.agency"
 import { Ctx } from "../lib/resolution.agency"
-import { activePresetName, readPresetTable, setPresetTable } from "../lib/presets.agency"
+import { activePresetName, readPresetTable, refreshPresetTable, setPresetTable } from "../lib/presets.agency"
 import {
   Session,
   applySessionLlmOptions,
@@ -386,4 +386,35 @@ node deletedPresetHasNoChanges(): string {
   }
   setPresetTable(readPresetTable({ big: SAVED_PRESETS.big }))
   return JSON.stringify(presetChanges(lowEffort()))
+}
+
+// Another chat, or the terminal, may save a preset while this run holds
+// its own copy of the table. A pick or a save reads the file again.
+node refreshReadsAPresetSavedElsewhere(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  const savedElsewhere = { ...SAVED_PRESETS, small: { provider: "anthropic", pin: "claude-opus-4-8" } }
+  write(SETTINGS_FILE, JSON.stringify({ presets: savedElsewhere }), POLICY_DIR) with approve
+  refreshPresetTable() with approve
+  const switched = switchPreset("small")
+  if (isFailure(switched)) {
+    return "failed: ${switched.error}"
+  }
+  const main: Resolved = switched.value.resolved["main"]
+  return main.model
+}
+
+node refreshKeepsTheTableWhenTheFileIsBroken(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  write(SETTINGS_FILE, "not json{{{", POLICY_DIR) with approve
+  refreshPresetTable() with approve
+  const switched = switchPreset("small")
+  if (isFailure(switched)) {
+    return "failed: ${switched.error}"
+  }
+  const main: Resolved = switched.value.resolved["main"]
+  return main.model
 }

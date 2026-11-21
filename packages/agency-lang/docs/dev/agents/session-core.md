@@ -133,6 +133,14 @@ did is a notice at level `info`, except a `model`, `options`, `budget`,
 - **`savePreset`** is `writeSessionPreset` in `lib/session.agency`. A save
   it refuses, such as one with no name and no active preset, is the error
   notice. The lines that say what was saved are one `info` notice.
+- **`preset` and `savePreset` read the presets again first**
+  (`refreshPresetTable`, approved by the core with `with approve`, as the
+  save's write is). A run reads `settings.json` once at start, and another
+  session or the terminal may have saved or deleted a preset since: a
+  pick gets the preset as saved now, and a save compares against it. A
+  file that can't be read leaves the run's copy. Nothing else reads the
+  file again, so `presetChanges` at a pause compares with the copy as of
+  the last start, pick or save.
 - **`local`** is `useLocalModel` in `lib/session.agency`: the model the
   `/local` picker chose, a catalog name, an `hf:` URI or a `.gguf` path. A
   process that cannot host a local model refuses it with "Local models are

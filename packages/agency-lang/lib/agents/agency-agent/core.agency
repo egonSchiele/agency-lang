@@ -30,7 +30,7 @@ import { Resolved } from "./lib/models.agency"
 import { notice } from "./lib/notice.agency"
 import { rememberSettings } from "./lib/lastSettings.agency"
 import { addNote, withPendingNotes } from "./lib/pendingNotes.agency"
-import { activePresetName } from "./lib/presets.agency"
+import { activePresetName, refreshPresetTable } from "./lib/presets.agency"
 import {
   conversationThread,
   currentRecord,
@@ -303,6 +303,8 @@ def compactNotice(keep: string) {
 }
 
 def savePresetNotice(name: string) {
+  // Compared with the preset as saved now, not as this run first read it.
+  refreshPresetTable() with approve
   const saved = writeSessionPreset(name, modelChoices())
   if (saved is success(lines)) {
     notice(lines.join("\n"))
@@ -448,6 +450,10 @@ export node session(start: SessionStart) {
           }
         }
         { kind: "preset", name } => {
+          // Another session may have saved this preset since this run read
+          // the presets. Reading them is the agent's own bookkeeping, caused
+          // by a person's answer, as savePreset's write is.
+          refreshPresetTable() with approve
           const presetSwitch = applyPresetAnswer(name)
           if (presetSwitch is failure(reason)) {
             notice("Could not switch preset: ${reason}", "error")

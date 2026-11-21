@@ -66,6 +66,30 @@ import {
   SavedPath,
   ReadSource,
   readPayloadOf,
+  // The parsed command types live in `std::safeBash/actions`, because a
+  // plan step holds the command it runs, and that module cannot import
+  // this one.
+  Word,
+  ScriptName,
+  LiteralWord,
+  PathWord,
+  GlobWord,
+  FlagWord,
+  SingleQuotedWord,
+  DoubleQuotedWord,
+  VariableWord,
+  InterpolatedVariableWord,
+  Assignment,
+  Redirect,
+  SimpleCommand,
+  Command,
+  PipelineStage,
+  Pipeline,
+  And,
+  Or,
+  Parens,
+  BashNode,
+  BashAST,
   LineStep,
   RunStep,
   CdStep,
@@ -121,32 +145,6 @@ the command. See `docs/dev/stdlib/safe-bash.md` for classification rules.
 */
 
 export { MAX_STDOUT_LEN } from "std::spill"
-
-// The parsed command types live in `std::safeBash/actions`, because a plan
-// step holds the command it runs, and that module cannot import this one.
-export {
-  Word,
-  ScriptName,
-  LiteralWord,
-  PathWord,
-  GlobWord,
-  FlagWord,
-  SingleQuotedWord,
-  DoubleQuotedWord,
-  VariableWord,
-  InterpolatedVariableWord,
-  Assignment,
-  Redirect,
-  SimpleCommand,
-  Command,
-  PipelineStage,
-  Pipeline,
-  And,
-  Or,
-  Parens,
-  BashNode,
-  BashAST,
-} from "./safeBash/actions.agency"
 
 // Flags are classified separately so git diff --staged can reach its rule.
 def literalArgs(command: SimpleCommand): Result<string[]> {

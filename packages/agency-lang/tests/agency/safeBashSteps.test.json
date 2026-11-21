@@ -23,10 +23,76 @@
       ]
     },
     {
-      "nodeName": "aGroupWhoseFolderWentAwayCarriesOn",
-      "description": "A cd inside a group whose folder is gone when it runs ends the group with status 1, and the line carries on after the group, as bash does. When the line then fails, its stderr says why the step did not start.",
+      "nodeName": "aGroupWhoseFolderWentAwayStops",
+      "description": "A cd inside a group whose folder is gone when it runs is not the folder that was approved, so the line stops there, and neither the group's ls nor the ls sub after the group runs.",
       "input": "",
-      "expectedOutput": "[\"steps\",true,\"a.txt\\n\",true]",
+      "expectedOutput": "[\"steps\",false,true,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aChangedPlanStopsTheLine",
+      "description": "Each row: the line, whether it succeeded, whether it stopped, and whether anything from the outside folder was printed. A file or folder swapped for a link to the outside folder after approval makes the step that names it plan to something else just before it runs, so the line stops before that step and prints nothing from outside. With nothing swapped the line runs, and the timeout field alone in a std::exec payload stops nothing.",
+      "input": "",
+      "expectedOutput": "[[\"pnpm --version; cat one.txt\",false,true,false],[\"pnpm --version; ls sub\",false,true,false],[\"pnpm --version; cat one.txt\",true,false,false]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "theStopSaysWhatChanged",
+      "description": "A stop is a failure of type planChanged. Its text ends with a sentence that names the step as the model wrote it, then the status line the agent's trace reads.",
+      "input": "",
+      "expectedOutput": "[\"planChanged\",\"[stopped: the plan changed]\",true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "harmlessLinesDoNotStop",
+      "description": "The check plans each step with a fresh line, which knows nothing of what the steps before it wrote or made. A folder the line made, a cd into it, a file the line wrote, and a second write to that file all plan to what was approved, so none of these lines stops.",
+      "input": "",
+      "expectedOutput": "[[\"mkdir -p out && ls out\",true,false],[\"mkdir -p build && cd build && pnpm --version\",true,false],[\"pnpm --version > v.txt && cat v.txt\",true,false],[\"pnpm --version > v.txt; pnpm --version >> v.txt\",true,false]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aGhLookupDoesNotStop",
+      "description": "A gh read that names no repository is planned again with the repository the up-front lookup found, so the check does not stop it.",
+      "input": "",
+      "expectedOutput": "false",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aChangedFolderStopsTheLine",
+      "description": "Each row: the line, whether it succeeded, the step it stopped before, and whether the outside repository's status was printed. A folder swapped for a link to another repository after approval stops the line before the cd that enters it, and before a step that runs in it from the start, where the step's own payload names the folder as an unchanged string. With nothing swapped the line runs.",
+      "input": "",
+      "expectedOutput": "[[\"git status; cd sub && git status\",false,\"cd sub\",false],[\"cd sub && pnpm --version\",false,\"cd sub\",false],[\"cd sub && ls\",true,\"\",false],[\"git status; git log --oneline -1\",false,\"git status\",false]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "anUnchangedFolderSpelledAnotherWayRuns",
+      "description": "The folder check compares real folders, so a line planned in \".\", in a folder spelled through a link, or in a relative folder does not stop when nothing changed.",
+      "input": "",
+      "expectedOutput": "[[\".\",false],[\"link\",false],[\"relative\",false]]",
       "evaluationCriteria": [
         {
           "type": "exact"

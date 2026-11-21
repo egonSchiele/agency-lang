@@ -2220,16 +2220,17 @@ then the `cd`, which only moves the state's folder, then `ls` in `lib`.
 - **The joins.** `skipsStep` decides whether a step runs: `;` always,
   `&&` only after a status of 0, `||` only after any other status. A
   skipped step changes nothing.
-- **A run step** runs its `text` under a `bash -c` of its own, in the
-  state's folder. Its stdout is added to the stdout so far and its stderr
-  to the stderr so far, which is what one `bash -c` of the whole line
-  gives. A step whose words read `$?` runs as `(exit 3); echo
-  "exit=$?"`, where 3 is the status of the step before.
-- **A `cd` step** starts no shell. When its folder is gone, the next
-  step's shell cannot start. After a guarded `cd`, the line ends with
-  "`<line>` was not run", as `cd '/abs' || exit 1` ended one shell. After
-  any other `cd` the status is 1 and the line goes on, as bash goes on
-  after a `cd` that failed inside `&&` or a group.
+- **A run step** is checked (see the next section), then runs under a
+  `bash -c` of its own, in the state's folder. Its stdout is added to the
+  stdout so far and its stderr to the stderr so far, which is what one
+  `bash -c` of the whole line gives. A step whose words read `$?` runs as
+  `(exit 3); echo "exit=$?"`, where 3 is the status of the step before.
+- **A `cd` step** is checked, then moves the state's folder. It starts no
+  shell. If the folder disappears after the check, the next step's shell
+  cannot start. After a guarded `cd` the line ends with "`<line>` was not
+  run", as `cd '/abs' || exit 1` ended one shell. After any other `cd`
+  the status is 1, the host's reason goes to stderr, and the line goes
+  on, as bash goes on after a `cd` that failed inside `&&` or a group.
 - **A group** runs on a copy of the state. Its folder ends at the closing
   parenthesis, and its status and output carry on, so `(cd sub && ls);
   ls` lists `sub` and then the starting folder.
@@ -2253,9 +2254,76 @@ no rule, so `ls src; echo $_` asks `std::bash` and runs whole under one
 shell.
 
 The runner raises nothing. Every question was raised in `approvedPlan`
-before the first step runs, and each step runs the text the plan rebuilt
-for it. The plan also keeps the whole rebuilt line in `command`, which a
-background job launches as one text.
+before the first step runs. The plan also keeps the whole rebuilt line in
+`command`, which a background job launches as one text.
+
+### Each step is checked just before it runs
+
+Every payload was resolved against the disk before the line ran, and an
+earlier step can change the disk. After `git checkout evil`, `README.md`
+may be a link to a key, and `cat README.md` would print it under a
+question that named the file in the project. So before a step that runs
+through bash, the runner checks two things, and stops the line when
+either fails:
+
+1. **The folder.** `folderChange` resolves the runner's folder with
+   `_realFolder`, which follows every link, and compares it with the
+   step's `realCwd`. A git or exec payload names its folder as a string,
+   so a folder swapped for a link to another repository leaves the
+   payload the same, and only this check sees it. The comparison is real
+   path against real path, because `cwd` can be `"."`, a relative path,
+   or a path through a link. `_realPathIn` would not do: it keeps the last
+   step of a path as written, and a folder that became a link is a link
+   in its last step.
+2. **The plan.** The step is classified again, from its command as the
+   model wrote it, in a fresh line in the runner's folder, with the
+   repository the up-front plan looked up (so a `gh` step is not looked up
+   twice). `sameEffects` compares the new effects with the approved ones:
+   the same names and payloads in the same order, with `timeout` left
+   out. When they match, the step runs the text the new plan rebuilt,
+   which describes the disk as it is now.
+
+A `cd` step is checked too. `runCd` resolves its target again from the
+runner's folder, and stops the line when the target no longer resolves
+or resolves somewhere else. That holds for every `cd`, guarded or not:
+a folder that vanished after approval is not the folder that was
+approved.
+
+The fresh plan knows nothing of what earlier steps wrote or made, while
+the up-front plan used `written` and `made`. That matters only when the
+two give different payloads; for a folder the line made, a file it wrote,
+and a second write to that file they give the same ones
+(`harmlessLinesDoNotStop`).
+
+A step that runs in process is not checked. The stdlib tool checks the
+path when it opens it. The refuse wall is not run again either. It reads
+the disk only for `rm`, and a changed `rm` target changes the
+`std::remove` payload, so the plan check stops the line.
+
+A stop runs nothing more. The failure has `data.type` `"planChanged"`,
+and its text is the output so far, a sentence that names the step, what
+was approved, what the new plan found, and which steps already ran, then
+`[stopped: the plan changed]` as the last line, which the agent's trace
+shows as "stopped":
+
+```
+Stopped before `cat README.md`: it was approved to read
+/repo/README.md, and that path now leads to /outside/secret.
+`git checkout evil` already ran. Run the rest as a new command if you
+still want it.
+[stopped: the plan changed]
+```
+
+If the model runs `cat README.md` again as a new command, it is planned
+fresh and asks about `/outside/secret`, so the person sees the true
+question. Each check and each stop is logged with `_debug` ("safeBash
+step check", "safeBash step stopped").
+
+What the check does not close: there is still a gap of a few milliseconds
+between the fresh plan of a step and the moment its program opens the
+file. A process already running beside the line can use it, and so can a
+child process an earlier step left running. Only a `std::exec` step can
+leave one, and its approval already lets it read any file.
 
 When every step has an in-process execution, the line is the chain of
 the section above, and its outcome is `shellFree`.

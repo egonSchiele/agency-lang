@@ -323,6 +323,17 @@ function summarizeEditCount(_value: unknown, args: ToolArgs): string | null {
  *  (`outputFailure` in stdlib/safeBash.agency). */
 const EXIT_STATUS = /^Command exited with code (\d+)$/;
 const STOPPED_STATUS = /^\[stopped at the time limit of \d+ seconds\]$/;
+/** A line that stopped before a step whose plan changed after approval. */
+const PLAN_CHANGED_STATUS = /^\[stopped: the plan changed\]$/;
+
+/** A status line in words, or null for a line that is not a status line. */
+function statusInWords(line: string): string | null {
+  const exit = EXIT_STATUS.exec(line);
+  if (exit !== null) return `exit ${exit[1]}`;
+  if (STOPPED_STATUS.test(line)) return "timed out";
+  if (PLAN_CHANGED_STATUS.test(line)) return "stopped";
+  return null;
+}
 
 /**
  * A safeBash failure is the command's output, then a status line, then
@@ -338,9 +349,8 @@ const STOPPED_STATUS = /^\[stopped at the time limit of \d+ seconds\]$/;
 function safeBashFailure(message: string): { line: string | null; detail: string | null } | null {
   const lines = message.split("\n");
   for (let at = lines.length - 1; at >= 0; at--) {
-    const exit = EXIT_STATUS.exec(lines[at]);
-    if (exit === null && !STOPPED_STATUS.test(lines[at])) continue;
-    const line = exit === null ? "timed out" : `exit ${exit[1]}`;
+    const line = statusInWords(lines[at]);
+    if (line === null) continue;
     return { line, detail: commandDetail(lines.slice(0, at).join("\n"), "") };
   }
   return null;

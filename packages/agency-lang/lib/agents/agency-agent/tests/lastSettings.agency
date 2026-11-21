@@ -22,11 +22,21 @@ static const SMALL = { provider: "anthropic", pin: "claude-sonnet-4-6" }
 
 // Options can name a server, so they are never kept for new chats.
 node keepsNoOptions(): string {
-  const kept = lastSettingsOf("big", {
+  const kept = lastSettingsOf("", {
     pin: "opus",
     slots: {},
     effort: "high",
     llmOptions: { temperature: 0.2 }
+  })
+  return JSON.stringify(kept)
+}
+
+// Changes made under a preset are not kept: new chats get the preset.
+node presetKeepsOnlyItsName(): string {
+  const kept = lastSettingsOf("big", {
+    pin: "opus",
+    slots: { router: "openrouter/jev-1.14" },
+    effort: "high"
   })
   return JSON.stringify(kept)
 }

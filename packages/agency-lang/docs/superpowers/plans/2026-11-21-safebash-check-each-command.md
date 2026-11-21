@@ -4,7 +4,9 @@
 
 **Goal:** A narrow `safeBash` line runs one step at a time, and each step is planned again against the disk just before it runs, so a question that was approved is still true when its command starts.
 
-**Architecture:** The classifier already walks the command tree and returns effects per node. It gains one more output: a list of steps, each with the model's command, the folder it was planned in, and its approved effects. A new runner, written in Agency beside `runChain`, runs the steps with bash's rules for `;`, `&&`, and `||`. Before each step it resolves its folder again, classifies the step again, and stops the line when either differs from what was approved.
+**Architecture:** The classifier already walks the command tree and returns effects per node. It gains one more output: a list of steps, each with the model's command, the folder it was planned in, and its approved effects. One runner, written in Agency, runs the steps with bash's rules for `;`, `&&`, and `||`. Before each step that goes through bash, it resolves its folder again, classifies the step again, and stops the line when either differs from what was approved. Today's in-process chain becomes a step list in which every step runs in process, so the plan ends with one step type, one runner, and one execution kind for a line of steps. `ChainStep`, `ChainExec`, the `chain` kind, and `runChain` are deleted.
+
+This plan was revised after `2026-11-21-safebash-check-each-command-architecture-review.md`, which sits beside it.
 
 **Tech Stack:** Agency (`stdlib/safeBash.agency`, `stdlib/safeBash/actions.agency`), TypeScript host helpers (`lib/stdlib/`), Agency tests (`tests/agency/safeBash*.agency`).
 
@@ -66,7 +68,10 @@ export type RunStep = {
   source: Command;
   cwd: string;
   effects: Effect[];
-  readsStatus: boolean
+  readsStatus: boolean;
+  /** Null when the step goes through bash. Otherwise the in-process
+    execution, which is the existing `StepExec`. */
+  inProcess: StepExec | null
 }
 
 /** A `cd`. `dir` is the real folder the plan resolved. */
@@ -79,13 +84,9 @@ export type GroupStep = { kind: "group"; join: Join; steps: LineStep[] }
 - Produces, in `safeBash.agency`: `Classified` and `ClassifiedAll` each gain `steps: LineStep[]`.
 - `Join` is the existing type that `ChainLink` uses (`"seq" | "and" | "or"`). If it is defined in `safeBash.agency`, move it to `actions.agency` so both files can name it.
 
-- [ ] **Step 1: Write the failing test.** Add a node `stepsOfALine` to `tests/agency/safeBash.agency`. It needs a helper that reads the steps. Export one from `safeBash.agency`:
+This task has no test of its own, because nothing outside the classifier can read the steps until Task 2 puts them in the plan. Task 2's first step adds the test below. Do not export a helper to read the steps: every exported stdlib function is a tool and gets a page in the generated docs.
 
-```
-export def stepsFor(source: string, cwd: string): LineStep[]
-```
-
-It returns `classifyAll`'s `steps` for a line that parses and classifies, and `[]` otherwise. The node returns, for each line below, a summary of each step: its `kind`, its `join`, the verb of its source, and its effect names.
+- [ ] **Step 1: (in Task 2) the test this task must satisfy.** The node `stepsOfALine` in `tests/agency/safeBash.agency` reads `planFor(line, FILES_FIXTURE).execution.steps`. It returns, for each line below, a summary of each step: its `kind`, its `join`, the verb of its source, and its effect names.
 
 ```
 pnpm build && cat one.txt
@@ -101,13 +102,9 @@ timeout 5 pnpm test
 
 Expected shapes to check by eye once the actual value is in: the third line is `[cd seq, run and]`; the fifth is `[group seq [cd seq, run and], run seq]`; the sixth has a pipeline as one `run` step; the eighth has `readsStatus: true` on the `echo`.
 
-- [ ] **Step 2: Run it and confirm it fails** because `stepsFor` does not exist.
+- [ ] **Step 2: Implement.** Each classifier function returns the steps for its node:
 
-Run: `node ./dist/scripts/agency.js test tests/agency/safeBash.agency --check-capabilities > <log> 2>&1`
-
-- [ ] **Step 3: Implement.** Each classifier function returns the steps for its node:
-
-- `classifySimple` and `classifyPipeline`: one `RunStep` with `source` set to the command it was given (not the rewritten one), `cwd: line.cwd`, and `join: "seq"`. `readsStatus` is true when any word of the command holds the variable named `?`. `knownOrExitStatus` already finds that variable; reuse its test.
+- `classifySimple` and `classifyPipeline`: one `RunStep` with `source` set to the command it was given (not the rewritten one), `cwd: line.cwd`, `join: "seq"`, and `inProcess: null`. `readsStatus` is true when any word of the command holds the variable named `?`. `knownOrExitStatus` already finds that variable; reuse its test.
 - `cdStep`, and the `cd` branch of `classifyAll`: one `CdStep` with `dir` set to the folder `cdTarget` returned.
 - `classifyAnd` and `classifyOr`: the left side's steps, then the right side's steps with the `join` of the first right step set to `"and"` or `"or"`. Write one helper for this: `def joined(steps: LineStep[], join: Join): LineStep[]`.
 - `classifyGroup`: one `GroupStep` holding the inner steps.
@@ -115,11 +112,13 @@ Run: `node ./dist/scripts/agency.js test tests/agency/safeBash.agency --check-ca
 
 The parser is left-associative, so a flat list with a join per step runs in bash's order. `linksOf` has a comment that explains why; point to it.
 
-- [ ] **Step 4: Run `make`, check the log for `error`, run the test, and fill the expected value.**
+- [ ] **Step 3: Run `make` and check the log for `error`.**
 
-- [ ] **Step 5: Run the whole `safeBash.agency` and `safeBash-corpus.agency` test files.** Every other expected value must be unchanged, because no effect and no rewritten command changed.
+Run the tests like this, and save the output: `node ./dist/scripts/agency.js test tests/agency/safeBash.agency --check-capabilities > <log> 2>&1`
 
-- [ ] **Step 6: Commit.**
+- [ ] **Step 4: Run the whole `safeBash.agency` and `safeBash-corpus.agency` test files.** Every expected value must be unchanged, because no effect and no rewritten command changed.
+
+- [ ] **Step 5: Commit.**
 
 ### Task 2: The `steps` execution kind
 
@@ -144,18 +143,20 @@ The parser is left-associative, so a flat list with a join per step runs in bash
 
 - Produces: `def stepsPlan(command: string, steps: LineStep[], effects: Effect[], verbs: string[], origin: GhRepo | null): Plan`.
 
-- [ ] **Step 1: Write the failing test.** Add rows to the node that pins `outcomeOf` (search `tests/agency/safeBash.agency` for `planOutcome(`): `pnpm build && cat one.txt` is `narrow`, a lone `pnpm test` is `narrow`, `pwd` is `narrow`, and `ls $X` is `broad`. Add a node `narrowLinesPlanAsSteps` that returns `planFor(line, FILES_FIXTURE).execution.kind` for the same four lines. Expected: `steps`, `steps`, `bash`, `bash`.
+- [ ] **Step 1: Write the failing tests.** Add the node `stepsOfALine` described in Task 1. Add rows to the node that pins `outcomeOf` (search `tests/agency/safeBash.agency` for `planOutcome(`): `pnpm build && cat one.txt` is `narrow`, a lone `pnpm test` is `narrow`, `pwd` is `narrow`, `ls $X` is `broad`, and `echo a; cat one.txt` is `shellFree`. Add a node `narrowLinesPlanAsSteps` that returns `planFor(line, FILES_FIXTURE).execution.kind` for the same five lines. Expected: `steps`, `steps`, `bash`, `bash`, `steps`.
 
 - [ ] **Step 2: Run it and confirm the new node fails.**
 
 - [ ] **Step 3: Implement.**
 
 - In `planLine`, the last line, `return bashPlan(rebuilt.value, narrow, verbs, null)`, becomes `return stepsPlan(rebuilt.value, classified.value.steps, narrow, verbs, origin)`. The readonly branch above it and every `broadPlan` stay as they are, so a `bash` execution now means "broad or readonly".
-- `outcomeOf`: `"steps" => "narrow"`.
-- `stepExecOf`: `{ kind: "steps" } => failure("a stepped line is not a chain step")`.
+- `tryShellFreeChain` keeps its walk (`chainLinks`, `linksOf`) and its rule that every command must plan through `tryShellFreeStep`. It now returns a `stepsPlan` whose steps each have `inProcess` set to the step's `StepExec`, `cwd` set to the folder, and the step's own effects. This is the only place in this plan where `inProcess` is set, so a step runs in process exactly when it does today.
+- Delete `ChainStep`, `ChainExec`, and the `chain` member of `Execution`. `ChainLink` stays, as the type `linksOf` returns.
+- `outcomeOf`: a `steps` plan is `shellFree` when every step has `inProcess` set, and `narrow` otherwise. Write one helper, `def allInProcess(steps: LineStep[]): boolean`, that looks inside groups.
+- `stepExecOf`: replace the `chain` arm with `{ kind: "steps" } => failure("a stepped line is not a step")`.
 - `planRecord`: record the rebuilt `command` and the number of steps.
-- `approvedPlan`: `asJob` is true for `exec.kind == "bash"` or `exec.kind == "steps"`. A job still launches `exec.command`, the whole text. Follow the match near line 6185 to the launch and make it accept both kinds.
-- `runPlanned`: `{ kind: "steps" } => runBash(exec.command, dir, command, timeout, plan.verbs, plan.savedPaths)` for now. Task 3 replaces this arm.
+- `approvedPlan`: `asJob` is true for `exec.kind == "bash"`, and for a `steps` plan that is not all in process. A job still launches `exec.command`, the whole text. Follow the match near line 6185 to the launch and make it accept both kinds. An all-in-process line runs in the foreground, as a chain does today.
+- `runPlanned`: for now, a `steps` plan that is all in process goes to `runChain`, changed to read `LineStep[]`, and any other goes to `runBash(exec.command, dir, command, timeout, plan.verbs, plan.savedPaths)`. Task 3 replaces both with one runner and deletes `runChain`.
 
 - [ ] **Step 4: `make`, check the log, run `safeBash.agency`, `safeBash-corpus.agency`, `safeBashSavedOutput.agency`, `safeBashAccesses.agency`, and `jobs.agency`.** Only the new node's value and nothing else may differ.
 
@@ -192,6 +193,8 @@ def runOneStep(step: RunStep, state: StepsState, origin: GhRepo | null): StepsSt
 ```
 
 `StepsExec` is the name for the `steps` member of `Execution`; define it in `actions.agency` the way `ChainExec` is defined.
+
+- [ ] **Step 0: Prove the test technique before anything else.** The tests in this task and in Tasks 5 and 6 change the disk between the plan and the run, from inside a handler. That is not verified. Write a five-line node: a handler around `safeBash("pnpm --version; ls", cwd: FIXTURE)` whose body writes a marker file and returns `approve()`, and check the `ls` output holds the marker. A handler body that calls a stdlib file function raises that function's own interrupt, which may not be allowed inside a handler. If it is not, use an agency-js test (`tests/agency-js/`): TypeScript receives the interrupt, changes the disk with `fs`, and then responds. Pick one technique here and use it for every such test in this plan.
 
 - [ ] **Step 1: Write the failing tests.** The new test file has a fixture folder made the way `makeFilesFixture` makes one (copy that helper's approach; do not import a private one). One helper runs a line both ways and returns both results:
 
@@ -232,7 +235,9 @@ A test changes the disk between the plan and the run with a handler. Every quest
   - `RunStep`: `runOneStep`.
   - `CdStep`: set `cwd` to `step.dir` and `status` to 0. If the folder is not there, set `status` to 1 and `stopped` to "`cd` could not enter the folder", which is what the `cd ... || exit 1` guard does today.
   - `GroupStep`: call `runStepList` on its steps with a copy of the state, then keep everything from the result except `cwd`.
-- `runOneStep`, in this task, classifies nothing. It builds the text from the step's source: `classify(step.source, freshLine(state.cwd), origin, false)`, then `rebuild([classified.command])`. Task 5 adds the comparison at this same point. If the step reads the status (`step.readsStatus`), the text is `(exit ${state.status}); ${text}`.
+- `runOneStep` handles both forms. A step with `inProcess` set runs `printStep(step.inProcess)`, inside `destructive { }` when it is a write, exactly as `runChain` does today. A failure there sets `status` to 1 and puts the message in `stderr`. Then delete `runChain`.
+- For a step that goes through bash, `runOneStep` builds the text from the step's source: `classify(step.source, freshLine(state.cwd), origin, false)`, then `rebuild([classified.command])`. Task 5 adds the comparison at this same point. If the step reads the status (`step.readsStatus`), the text is `(exit ${state.status}); ${text}`.
+- The texts of the steps must add up to the line the up-front plan rebuilt. Add a node `stepTextsMatchTheLine` that, for each line of `stepsMatchOneBash`, joins the step texts with their joins and compares the result with `planFor(line, FIXTURE).execution.command`. Without it, this pull request could change what runs and no test would notice. Reading a step's text needs no export: the node can rebuild it from `execution.steps` with `planFor` on the step's own text and compare the `command` fields.
 - It runs `_bash(text, state.cwd, state.leftMs, "", {})`, measures the time the call took with the stdlib clock that `timeoutFailure`'s caller uses (find how `runBash`'s callers measure time; if nothing in this file reads a clock, import `now` from `std::date` and check its name there first), and returns the state with stdout and stderr appended, `status` set to the exit code, `leftMs` reduced, and `timedOut` copied.
 - Back in `runSteps`: a `timedOut` state returns `timeoutFailure(label, timeout, stdout, stderr)`; a `stopped` state or a non-zero `status` returns `exitFailure(status, stdout, stderr, label, note)` with the gh login note when `isGhLoginFailure` says so; otherwise `success(keepOutput(stdout, 0, label))`. `label` is the model's text, as in `runBash`.
 - Point the `steps` arm of `runPlanned` at `runSteps`.
@@ -250,7 +255,7 @@ Do not wrap any step in `destructive { }`.
 **Files:**
 - Test: `tests/agency/safeBash.agency`, `tests/agency/safeBash.test.json`
 
-- [ ] **Step 1: Write the test.** Export `BUILTIN_VERBS` for tests if it is not already reachable (`import test` cannot import an unexported static value, ADI-296; if that blocks it, export a function `builtinVerbs(): string[]`). The node `noNarrowRuleChangesTheShell` plans `<verb> x` for every name in the list and returns the names whose outcome is `narrow`. Expected: `["cd", "echo", "pwd", "true", "false", ":", "printf", "type"]` in the list's own order, or whatever subset the run shows; compare it with the list in the spec's section "Why splitting a line is safe" and stop if a name outside that list appears.
+- [ ] **Step 1: Write the test.** The node `noNarrowRuleChangesTheShell` holds its own copy of bash's builtin names, copied from `BUILTIN_VERBS`. Bash's builtins do not change, and exporting the list would add a tool and a docs page for one test. The node plans `<verb> x` for every name and returns the names whose outcome is `narrow`. Expected: `["cd", "echo", "pwd", "true", "false", ":", "printf", "type"]` in the list's own order, or whatever subset the run shows; compare it with the list in the spec's section "Why splitting a line is safe" and stop if a name outside that list appears.
 
 - [ ] **Step 2: Add `$_`.** In `simpleCommandRule`, a command with a word that holds the variable named `_` fails with "`$_` reads the command before it". Add rows `ls src; echo $_` (broad) and `echo $_` (broad) to the node that pins `echo` lines.
 
@@ -297,6 +302,9 @@ Use a real program for the first step where the row says so, because `printf` ra
 - A stop sets `state.stopped` to `stopMessage(...)` and `status` to 1, and runs nothing. `runSteps` returns it as `failure(text, { type: "planChanged" })`, with the output so far in the text the way `failedOutput` joins it.
 - The message names the step as the model wrote it, the approved effect and path, what the fresh plan found, how many steps already ran, and ends with "Run the rest as a new command if you still want it." Use the spec's example as the model for the wording.
 - Log each check with `_debug("safeBash step check", { step, same })` and each stop with `_debug("safeBash step stopped", { ... })`.
+- A step with `inProcess` set is not checked. The stdlib tool checks the path when it opens it, which is the check this task adds for bash.
+- Look for a deep-equality helper in the stdlib before writing one for `sameEffects`, and name the one used in the commit message.
+- **The tool trace.** The agent's trace reads a failed command's last line to find its exit status (see the comment in `exitFailure`, and `safeBashFailure` in `docs/dev/agents/tool-output.md`). A stop has no exit status of its own. Give it its own last line, "[stopped: the plan changed]", the way `timeoutFailure` has one, teach `safeBashFailure` to show it as "stopped" on the tool's line, and add a case to the test that `tool-output.md` names.
 
 - [ ] **Step 4: `make`, run, fill, and rerun the files from Task 2.**
 
@@ -308,16 +316,23 @@ Use a real program for the first step where the row says so, because `printf` ra
 - Modify: `stdlib/safeBash.agency` (`runStepList`, `runOneStep`)
 - Test: `tests/agency/safeBashSteps.agency`
 
+**Files, also:**
+- Modify: `lib/stdlib/safeBashRemove.ts` and its test (new `_realFolder`)
+
 **Interfaces:**
-- Consumes: `_realPathIn` (already imported) to resolve a folder through links.
+- Produces, in `lib/stdlib/safeBashRemove.ts`: `export async function _realFolder(dir: string): Promise<string>`, which returns `currentHost().files.realDir(dir)`.
+- Do not use `_realPathIn` for this. It ends in `files.realPath`, which does not follow a link in the last step of a path, and a folder that became a link is a link in the last step. `files.realDir` follows it. The first version of `isSymlink` in #1523 made this mistake.
 
 - [ ] **Step 1: Write the failing tests** in the same node style:
 
-| Line | What the handler does | Expected |
-|---|---|---|
-| `git status; cd sub && git status` | replaces `sub` with a link to a second git repository outside the fixture | fails with a stop before the `cd`; the other repository's status is not in the output |
-| `cd sub && pnpm --version` | replaces `sub` with a link to a folder outside | fails with a stop |
-| `cd sub && ls` | nothing | succeeds |
+| Line | Run from | What changes the disk | Expected |
+|---|---|---|---|
+| `git status; cd sub && git status` | the fixture | `sub` becomes a link to a second git repository outside the fixture | fails with a stop before the `cd`; the other repository's status is not in the output |
+| `cd sub && pnpm --version` | the fixture | `sub` becomes a link to a folder outside | fails with a stop |
+| `cd sub && ls` | the fixture | nothing | succeeds |
+| `git status; git log --oneline -1` | `<fixture>/sub` | `sub` becomes a link to a second git repository | fails with a stop before the second command |
+
+The last row is the only one that reaches the folder check without going through a `cd`. It must fail when the check uses `_realPathIn` and pass with `_realFolder`. Add a unit test for `_realFolder` beside the others in `lib/stdlib/safeBashRemove.test.ts`: a link to a folder resolves to the folder.
 
 The fixture for the first row needs `git init` in the fixture folder and in the outside folder. `tests/agency/safeBash.agency` has git fixtures; follow how they set one up.
 
@@ -326,7 +341,7 @@ The fixture for the first row needs `git init` in the fixture folder and in the 
 - [ ] **Step 3: Implement.**
 
 - `CdStep`: before moving, resolve the `cd`'s target again from the runner's folder with `cdTarget(step.source, freshLine(state.cwd))`. Stop when it fails or when the result is not `step.dir`.
-- `RunStep`: before the effect check, resolve `state.cwd` with `_realPathIn(".", state.cwd, "literal", "path")` and stop when the result is not `step.cwd`.
+- `RunStep`: before the effect check, resolve `state.cwd` with `_realFolder(state.cwd)` and stop when the result is not `step.cwd`.
 - Both stops use `stopMessage` with a folder wording: "it was approved to run in `<a>`, and that folder now leads to `<b>`".
 
 - [ ] **Step 4: `make`, run, fill, rerun the files from Task 2.**
@@ -388,32 +403,13 @@ The fixture for the first row needs `git init` in the fixture folder and in the 
 
 ---
 
-## Pull request 4: in-process steps in a mixed line
+## Not in this plan: in-process steps in a mixed line
 
-This is the part of the spec under "Steps that run in process". It is last because it changes payloads (an in-process `grep` asks the in-process payload), and nothing before it depends on it.
-
-### Task 10: A step may run in process
-
-**Files:**
-- Modify: `stdlib/safeBash/actions.agency` (`RunStep` gains `inProcess: StepExec | null`)
-- Modify: `stdlib/safeBash.agency` (`classifySimple`, `runOneStep`, `planLine`)
-- Test: `tests/agency/safeBash.agency`, `tests/agency/safeBashSteps.agency`
-
-- [ ] **Step 1: Write the failing tests.** `git status; grep -rn hello .` asks `std::git::status` and the `std::grep` payload a lone `grep -rn hello .` asks (regex translated, `maxResults: 1000`). `grep hello nope.txt; printf 'exit=%s\n' "$?"` prints `exit=2`, so the `grep` ran through bash. `printf 'a\n' > f.txt; pnpm --version` writes through bash.
-
-- [ ] **Step 2: Implement.** In `classifySimple`, try `tryShellFreeStep(command, line.cwd)` first when `readsStdin` is false. When it succeeds and its execution is a `grep` or a `read`, the step's effects are that plan's effects and `inProcess` holds its `StepExec`. A `write` or an `echo` execution is not taken here: a write must not run in process in a mixed line, and an `echo` has nothing to gain. After the walk, in `classifyAll`, clear `inProcess` on any step whose next step has `readsStatus`, and classify that step again through the bash form so its effects are the bash form's.
-- In `runOneStep`, a step with `inProcess` set is planned again with `tryShellFreeStep`, compared with `sameEffects`, and run with `printStep`. A failure there is status 1.
-- `tryShellFreeChain` and the `chain` execution stay for a line whose every step is in process, because that is the one case where a write runs in process.
-
-- [ ] **Step 3: `make`, run, and read every changed expected value.** Each must be a `std::grep` or `std::read` payload changing to the in-process form inside a line of more than one step.
-
-- [ ] **Step 4: Update `safe-bash.md`,** "In process when it translates" and "Chains in process".
-
-- [ ] **Step 5: Commit, and open pull request 4** with a before and after table of the changed payloads.
+In this plan a step runs in process only when every step of its line does, which is today's behaviour. Running a `grep` or a read in process inside a line that also has bash steps is ADI-360. It changes payloads and needs the exit status of an in-process step to match the real program's, so it gets a design of its own, with ADI-261.
 
 ---
 
 ## After the last pull request
 
-- Close ADI-358, and link the four pull requests in it.
+- Close ADI-358, and link the three pull requests in it.
 - Read the `_debug` stop events in `~/.agency-agent/perry-log.jsonl` after a week of use. A stop on a harmless line is a bug in `sameEffects` or in a rule that reads the disk in a way that changes between two plans.

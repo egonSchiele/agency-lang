@@ -29,9 +29,14 @@ broad `std::bash` question. The rule works, and it has two costs:
 - **It is a guess.** Every effect has to be placed in a list by hand. A
   wrong placement is a hole. Five holes of this kind were found in two
   days.
-- **It costs prompts.** `git checkout main && cat package.json` is a
-  common, harmless line. It used to ask two narrow questions and now asks
-  `std::bash`.
+- **It blocks the direction below.** safeBash should run an Agency
+  function for every command it can, and an Agency function cannot run
+  in the middle of one `bash -c`.
+
+The rule also makes a harmless line such as `git checkout main && cat
+package.json` ask `std::bash`. That is not a reason to do this work. Of
+the 130 lines in `tests/agency/safeBash-corpus.json`, that line is the
+only one the rule makes broad, and #1523 added it as an example.
 
 ## The idea in one paragraph
 
@@ -40,6 +45,25 @@ one step at a time. Just before each step runs, plan that one step again
 against the disk as it is now, and compare the result with what was
 approved. If they match, run it. If they differ, stop the line. safeBash
 never asks a question in the middle of a line.
+
+## The cheaper design that was set aside
+
+safeBash could keep one `bash -c` and write a guard in front of each
+command, as it already does for `cd` and `git diff`:
+
+```
+git checkout evil; [ "$(realpath README.md)" = /abs/repo/README.md ] || exit 97; cat README.md
+```
+
+That is about two days of work against six to eight, and a background
+job would run as it does today. It was set aside for two reasons
+(owner, 2026-11-21):
+
+- Bash would resolve the path with one piece of code and safeBash with
+  another, and the two would have to agree. A disagreement is a false
+  stop or a hole.
+- Bash stays in charge of the whole line, so no command in it could
+  ever be handed to an Agency function.
 
 ## What the person sees
 
@@ -202,6 +226,11 @@ Three pieces of state remain:
 | The last argument, `$_` | `ls src; echo $_` | A word that holds `$_` makes its command unrecognized, so the line asks `std::bash` and runs whole. |
 
 ## Steps that run in process
+
+**This section is not built by ADI-358. It is ADI-360.** In ADI-358 a
+step runs in process only when every step of its line does, which is
+what a chain does today. The text below is the starting point for
+ADI-360's design.
 
 A step that runs in process behaves as the same command does today when
 it is alone. That differs from the real program in two known ways: the

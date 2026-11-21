@@ -19,6 +19,20 @@ function holds(folder: string, inner: string): boolean {
   return folder === inner || inner.startsWith(prefix);
 }
 
+/** A step bash expands before it opens the path: a glob, a brace list, or
+ *  a variable. */
+const EXPANDED_STEP = /[*?[{$]/;
+
+// Whether a `..` comes after a step bash expands, as in `l*/../x` or
+// `$D/../x`. Such a step may expand to a symlink, and no one can tell
+// where the `..` lands until bash runs. Every `..` counts, not only the
+// first: in `a/../l*/../x` the second one follows the glob.
+function dotDotAfterUnknownStep(text: string): boolean {
+  const steps = text.split("/");
+  const lastDotDot = steps.lastIndexOf("..");
+  return steps.slice(0, Math.max(lastDotDot, 0)).some((step) => EXPANDED_STEP.test(step));
+}
+
 /**
  * Why `rm` or `rmdir` may not delete `target` from `cwd`, or "" when it may.
  * The rule is the remove tool's own (`rejectDangerousPath`): never the
@@ -32,6 +46,7 @@ function holds(folder: string, inner: string): boolean {
  *   rm -rf *            refused: everything in the working directory
  *   rm -rf link/../x    refused when `link` is a symlink: bash deletes `x`
  *                       beside the link's target, not the `x` named here
+ *   rm -rf $D/../x      refused: `$D`, or a glob there, may be a symlink
  *   rm -rf build        ""
  *
  * `target` is the text of one argument with each variable written as
@@ -56,10 +71,14 @@ export async function _removeRefusal(target: string, cwd: string): Promise<strin
   if (text === "*" || text === ".*") {
     text = ".";
   }
+  const written = text.replace(HOME_VARIABLE, "~");
+  if (dotDotAfterUnknownStep(written)) {
+    return "a `..` after a glob or a variable may follow a symlink";
+  }
   try {
     // Throws for a `..` after a symlink, which is a refusal here: the path
     // read from the text is not the one bash would delete.
-    const named = await resolveBashPath(text.replace(HOME_VARIABLE, "~"), cwd, "expand", "rm");
+    const named = await resolveBashPath(written, cwd, "expand", "rm");
     if (holds(named, resolveAgainstCwd(".", cwd, "literal", "rm"))) {
       return "that is the working directory or a folder that holds it";
     }

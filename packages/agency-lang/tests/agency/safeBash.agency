@@ -1064,6 +1064,7 @@ node dotDotAfterALinkHasNoRule() {
     fileRow("pnpm test | tee link/../log.txt"),
     fileRow("cd link/.. && ls"),
     fileRow("rm link/../creds"),
+    fileRow("rm -rf */../creds"),
     fileRow("mkdir link/../made"),
     fileRow("git -C link/.. status"),
     fileRow("cat sub/../creds | head"),

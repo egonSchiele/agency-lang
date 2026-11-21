@@ -73,6 +73,19 @@ describe("_removeRefusal", () => {
     }
   });
 
+  // A glob or a variable may expand to a symlink, so a `..` after one is
+  // refused without looking at the disk.
+  it.each(["*/../me", "l*/../me", "$D/../me", "a/../l*/../me", "{a,link}/../me", "l?nk/../me"])(
+    "refuses %s",
+    async (target) => {
+      expect(await _removeRefusal(target, cwd)).toContain("after a glob or a variable");
+    },
+  );
+
+  it.each(["lib/../build/*.o", "lib/../$BUILD"])("allows %s", async (target) => {
+    expect(await _removeRefusal(target, cwd)).toBe("");
+  });
+
   it("says why", async () => {
     expect(await _removeRefusal("/", cwd)).toBe("that is the filesystem root");
     expect(await _removeRefusal("$X/*", cwd)).toBe("if $X is unset, that is the filesystem root");
@@ -93,6 +106,7 @@ describe("_unparsedRemoveRefusal", () => {
     "x=`rm -rf ~`",
     'sh -c "rm -rf /"',
     "sh -c 'rm -rf ~/*'",
+    "rm -rf ${D}/../me",
   ])("refuses %s", async (source) => {
     expect(await _unparsedRemoveRefusal(source, cwd)).not.toBe("");
   });

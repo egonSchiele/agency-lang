@@ -192,6 +192,10 @@ node harmlessLinesDoNotStop() {
     ranWithoutStop("mkdir -p build && cd build && pnpm --version"),
     ranWithoutStop("pnpm --version > v.txt && cat v.txt"),
     ranWithoutStop("pnpm --version > v.txt; pnpm --version >> v.txt"),
+    // A folder a program makes, which is how `pnpm build && ls dist` runs
+    // the first time, and a listing of a file the line wrote.
+    ranWithoutStop("node -e \"require('fs').mkdirSync('d')\" && ls d"),
+    ranWithoutStop("pnpm --version > v.txt; ls -la v.txt"),
   ]
 }
 

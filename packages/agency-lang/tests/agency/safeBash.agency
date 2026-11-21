@@ -1137,6 +1137,10 @@ node aPipelineHasOneStageThatAsks() {
     "(git checkout x && cd sub && pnpm test) | cat",
     "(pnpm build && pnpm test) | tail -5",
     "(cd sub && pnpm test) | tail -5",
+    // A `cd` is not one of the group's commands: the check resolves it
+    // again and runs the real folder.
+    "(cd sub && ls) | head",
+    "(cd sub && git status && git log) | head",
   ]]
   remove(FILES_FIXTURE) with approve
   return rows

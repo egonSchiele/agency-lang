@@ -442,8 +442,9 @@ between its commands either. When the pipeline asks anything other than
 `std::exec`, a stage that is a group of more than one command asks
 `std::bash`: `(git checkout x && cat README.md) | cat`, and `(git checkout
 x && cd sub && pnpm test) | cat`, where `pnpm` would run in a folder the
-checkout may have swapped. The rule is coarse: `(cd lib && ls) | head`
-asks `std::bash` too, while `cd lib && ls | head` stays narrow. A group of
+checkout may have swapped. A `cd` is not counted as one of the group's
+commands, so `(cd lib && ls) | head` stays narrow: the check resolves the
+`cd` again and writes the real folder into the text it runs. A group of
 programs, `(pnpm build && pnpm test) | tail`, stays narrow.
 
 A dup redirect
@@ -1078,6 +1079,15 @@ folder has approved seeing every entry in it. `tree` of a file prints
 the name and an error, so it's refused, and so is `find` of a file,
 because `std::glob` searches a folder. `requireFolder` is the one place
 that refusal is written.
+
+A path that is missing when the plan is made is asked about as the folder
+it would be: `pnpm build && ls dist` with no `dist` asks `std::ls` for
+`<cwd>/dist`. Once the build has made `dist`, the plan made just before
+the step asks the same thing, so the line runs. If it asked for the
+folder that would hold it, the two plans would differ and the line would
+stop. The one exception is a file the line itself wrote, as in `pnpm test
+> out.txt; ls -la out.txt`, which is known to be a file and asks for its
+folder.
 
 `mergeListings` asks once per folder. `ls one.txt two.txt` in one folder
 is one question, and a folder named twice is recursive if either path
@@ -2302,7 +2312,7 @@ shows as "stopped":
 
 ```
 Stopped before `cat README.md`: it was approved to read
-/repo/README.md, and that path now leads to /outside/secret.
+/repo/README.md, and it now asks to read /outside/secret.
 `git checkout evil` already ran. Run the rest as a new command if you
 still want it.
 [stopped: the plan changed]

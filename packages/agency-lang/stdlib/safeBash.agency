@@ -109,7 +109,7 @@ import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget, _missingTarget } from "agency-lang/stdlib-lib/fs.js"
 import { _searchTargetIn, _bash, _grep, _skipDirNames } from "agency-lang/stdlib-lib/shell.js"
 import { _launchJob, _jobStartRefusal } from "agency-lang/stdlib-lib/jobs.js"
-import { basename as lastSegment, dirname as parentOf } from "std::path"
+import { basename as lastSegment, dirname as parentOf, join as joinPath } from "std::path"
 import { now } from "std::date"
 import { _grepPatternToRegex, _renderGrepOutput, _skippedDirsNote } from "agency-lang/stdlib-lib/grepDialect.js"
 import { _renderReadView } from "agency-lang/stdlib-lib/readDialect.js"
@@ -2146,7 +2146,16 @@ def listTargetOf(text: string, word: Word, line: LineState): Result<ListTarget> 
     if (missing == null) {
       return target
     }
-    return success({ target: { dir: missing.dir, file: missing.filename, argument: text }, linked: false })
+    // A file the line wrote will be a file, and a listing of a file asks
+    // for the folder that holds it.
+    const wrote = [entry for entry in line.written if entry.dir == missing.dir && entry.filename == missing.filename]
+    if (wrote.length > 0) {
+      return success({ target: { dir: missing.dir, file: missing.filename, argument: text }, linked: false })
+    }
+    // `pnpm build && ls dist`: any other missing path is asked about as
+    // the folder it would be. The runner plans this step again just before
+    // it runs, and once `dist` is a folder that plan asks the same thing.
+    return success({ target: { dir: joinPath(missing.dir, missing.filename), file: null, argument: text }, linked: false })
   }
   const linked = lastStepIsLink(target.value, line.cwd)?
   return success({ target: target.value, linked: linked })
@@ -5463,7 +5472,10 @@ def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | 
     if (asksBeyondExec(classified.effects)) {
       asking = asking + 1
     }
-    if (stage.tag == "parens" && flattenOne(stage).length > 1) {
+    // A `cd` is not counted: the check resolves it again and writes the
+    // real folder into the text, so `(cd sub && ls) | head` is as safe as
+    // one command.
+    if (stage.tag == "parens" && [flat for flat in flattenOne(stage) if asCd(flat.command) == null].length > 1) {
       severalInAGroup = true
     }
     effects = [...effects, ...classified.effects]
@@ -7263,7 +7275,7 @@ def stopBefore(step: string, state: StepsState, found: string): StepsState {
 }
 
 // Stopped before `cat README.md`: it was approved to read
-// /repo/README.md, and that path now leads to /outside/secret.
+// /repo/README.md, and it now asks to read /outside/secret.
 // `git checkout evil` already ran. Run the rest as a new command if you
 // still want it.
 def stopMessage(step: string, found: string, ran: string[]): string {
@@ -7343,11 +7355,6 @@ def changeOf(approved: Effect[], fresh: Effect[]): string {
 }
 
 def differenceOf(approved: Effect, fresh: Effect): string {
-  const before = accessesOf([approved])
-  const after = accessesOf([fresh])
-  if (before.length > 0 && after.length > 0 && before[0].mode == after[0].mode) {
-    return "it was approved to ${describeEffect(approved)}, and that path now leads to ${after[0].path}"
-  }
   return "it was approved to ${describeEffect(approved)}, and it now asks to ${describeEffect(fresh)}"
 }
 

@@ -27,7 +27,7 @@
   { "command": "ls lib/stdlib | head", "outcome": "narrow", "effects": ["std::ls"] },
   { "command": "ls -la stdlib/safeBash", "outcome": "narrow", "effects": ["std::ls"] },
   { "command": "ls nope 2>/dev/null || echo missing", "outcome": "narrow", "effects": ["std::ls"] },
-  { "command": "ls -la package.json nope.txt", "outcome": "narrow", "effects": ["std::ls"] },
+  { "command": "ls -la package.json nope.txt", "outcome": "narrow", "effects": ["std::ls", "std::ls"] },
   { "command": "tree -L 2 lib | head", "outcome": "narrow", "effects": ["std::ls"] },
   { "command": "du -sh lib", "outcome": "narrow", "effects": ["std::ls"] },
   { "command": "ls *.json", "outcome": "broad", "effects": ["std::bash"] },

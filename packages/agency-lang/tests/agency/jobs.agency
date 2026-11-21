@@ -311,7 +311,7 @@ node aJobWhoseFileChangedDoesNotStart() {
   }
   bash("rm -f one.txt", cwd: JOBS_FIXTURE) with approve
   remove(JOBS_FIXTURE) with approve
-  return [isFailure(result), isFailure(result) && result.error.includes("now leads to"), jobs.length]
+  return [isFailure(result), isFailure(result) && result.error.includes("it now asks to read"), jobs.length]
 }
 
 node timeLimitCarriesTheLimit() {

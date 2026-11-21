@@ -71,23 +71,26 @@ Its data is what a front-end shows and saves between turns: `thread`,
 - `fixedProvider` is the provider the session is fixed to, by the name a
   person sees, or "". `--provider`, a preset that names a provider, or
   `settings.model` fixes one.
-- `presetChanges` is what the session changed from its preset as it took
-  it, one line a field in `/preset save`'s words, trimmed, such as
-  `effort: (none) → low` (`presetChanges` in `lib/session.agency`). It
-  compares with a snapshot of the startup flags and the preset with no
-  choices, taken at start (`notePresetBaseline`), at each switch, and
-  after a save to the active preset. Not with the preset as saved: a
-  saved preset's form (a bare `pin`) can differ from a snapshot's while
-  meaning the same models, and a startup flag such as
-  `--max-tool-rounds` is in the snapshot on both sides, so neither shows
-  as a change. It reads only memory. It is empty with no active preset (a
-  deleted one is no longer active) and after `/local`. A session resumed
-  from a version that kept no snapshot reports none until its next pick
-  or save. A front-end offers Save as a `savePreset` answer naming the preset, and
-  Revert as a `preset` answer with the same name. Changes under a preset
-  are not kept for new sessions (agent-presets.md, "The last settings").
-  The terminal does not draw this field yet. The driver reads it as `[]`
-  from a pause that lacks it.
+- `presetChanges` lists what the session changed from its preset, one
+  line per field, such as `effort: (none) → low`. The lines use
+  `/preset save`'s words, trimmed (`presetChanges` in
+  `lib/session.agency`). The session compares itself with a snapshot of
+  the preset as it took it: the startup flags plus the preset, with no
+  choices. It takes that snapshot at start (`notePresetBaseline`), at
+  each switch, and after a save to the active preset. It does not compare
+  with the preset as saved, because a saved preset can store the same
+  models in a different form, such as a bare `pin`. A startup flag such as
+  `--max-tool-rounds` is in both snapshots, so it never shows as a change.
+  - It reads only memory, so the pause can build it.
+  - It is empty with no active preset (a deleted one is no longer active)
+    and after `/local`. A session resumed from a version that kept no
+    snapshot reports none until its next pick or save.
+  - A front-end offers Save as a `savePreset` answer naming the preset,
+    and Revert as a `preset` answer with the same name. Changes under a
+    preset are not kept for new sessions (agent-presets.md, "The last
+    settings").
+  - The terminal does not draw this field yet. The driver reads it as
+    `[]` from a pause that lacks it.
 
 **Answers.** A front-end answers the pause with an `Answer`:
 

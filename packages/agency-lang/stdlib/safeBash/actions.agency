@@ -677,7 +677,7 @@ export def pendingLookups(effects: Effect[]): string[] {
 // exhaustively, so adding a variant is a type error at the dispatch rather
 // than a silent fall-through.
 /** What happens if every effect in the plan is approved. */
-export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec | GrepExec | ReadExec | ChainExec
+export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec | GrepExec | ReadExec | StepsExec
 
 export type BashExec = {
   kind: "bash";
@@ -842,16 +842,16 @@ export type GroupStep = {
   steps: LineStep[]
 }
 
-export type ChainStep = {
-  join: Join;
-  execution: StepExec
-}
-
-/** Several in-process commands joined by `;`, `&&`, or `||`, run left to
- right with bash's rule for each join. */
-export type ChainExec = {
-  kind: "chain";
-  steps: ChainStep[]
+/** A line that runs a step at a time, with bash's rule for each join.
+ Every step runs in process, or every step that is not a `cd` or a group
+ runs through bash. */
+export type StepsExec = {
+  kind: "steps";
+  /** The whole rebuilt line, which a background job still runs as one text. */
+  command: string;
+  steps: LineStep[];
+  /** The repository a `gh` step was planned with, for planning it again. */
+  origin: GhRepo | null
 }
 
 /**

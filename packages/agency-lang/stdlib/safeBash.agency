@@ -58,10 +58,9 @@ import {
   GrepExec,
   GrepRender,
   GrepFileNames,
-  ChainExec,
+  StepsExec,
   Execution,
   StepExec,
-  ChainStep,
   Join,
   accessesOf,
   SavedPath,
@@ -4457,7 +4456,11 @@ def tryShellFreeChain(commands: Command[], cwd: string): Result<Plan> {
   if (links.value.length < 2) {
     return failure("not a chain")
   }
-  let steps: ChainStep[] = []
+  const real = try _realFolder(cwd)
+  if (real is failure(why)) {
+    return failure("the folder `${cwd}` cannot be resolved: ${why}")
+  }
+  let steps: LineStep[] = []
   let effects: Effect[] = []
   for (link in links.value) {
     const plan = tryShellFreeStep(link.command, cwd)
@@ -4468,16 +4471,21 @@ def tryShellFreeChain(commands: Command[], cwd: string): Result<Plan> {
     if (isFailure(execution)) {
       return execution
     }
-    steps.push({ join: link.join, execution: execution.value })
+    steps.push({
+      kind: "run",
+      join: link.join,
+      source: link.command,
+      cwd: cwd,
+      realCwd: real.value,
+      text: stepText(link.command),
+      effects: plan.value.effects,
+      readsStatus: false,
+      inProcess: execution.value
+    })
     effects = [...effects, ...plan.value.effects]
   }
-  return success({
-    effects: effects,
-    execution: { kind: "chain", steps: steps },
-    broadReason: null,
-    verbs: verbNames([link.command for link in links.value]),
-    savedPaths: []
-  })
+  const whole = rebuild(commands)?
+  return success(stepsPlan(whole, steps, effects, verbNames([link.command for link in links.value]), null))
 }
 
 // Keep this match exhaustive so every new execution kind gets a chain decision.
@@ -4493,7 +4501,7 @@ def stepExecOf(exec: Execution): Result<StepExec> {
     { kind: "bash" } => failure("a shell is not a chain step")
     { kind: "agency" } => failure("an agency command is not a chain step")
     { kind: "refuse" } => failure("a refused command is not a chain step")
-    { kind: "chain" } => failure("a chain is not a chain step")
+    { kind: "steps" } => failure("a stepped line is not a step")
   }
 }
 
@@ -4673,6 +4681,38 @@ def broadPlan(command: string, verbs: string[], reason: BroadReason): Plan {
   return bashPlan(command, [BASH_EFFECT], verbs, reason)
 }
 
+/* A line that runs a step at a time. Every narrow question was asked, so
+ it has effects of its own and never needs `BASH_EFFECT`. */
+def stepsPlan(command: string, steps: LineStep[], effects: Effect[], verbs: string[], origin: GhRepo | null): Plan {
+  return {
+    effects: effects,
+    execution: {
+      kind: "steps",
+      command: command,
+      steps: steps,
+      origin: origin
+    },
+    broadReason: null,
+    verbs: verbs,
+    savedPaths: []
+  }
+}
+
+/* Whether every step runs in process, looking inside groups. */
+def allInProcess(steps: LineStep[]): boolean {
+  for (step in steps) {
+    const inProcess = match(step) {
+      { kind: "run" } => step.inProcess != null
+      { kind: "group" } => allInProcess(step.steps)
+      { kind: "cd" } => false
+    }
+    if (!inProcess) {
+      return false
+    }
+  }
+  return true
+}
+
 /* The command word of each simple command, "" for an assignment-only one. */
 def verbNames(commands: SimpleCommand[]): string[] {
   return [verbName(command) for command in commands]
@@ -4696,10 +4736,20 @@ export def outcomeOf(plan: Plan): string {
     "write" => "shellFree"
     "grep" => "shellFree"
     "read" => "shellFree"
-    "chain" => "shellFree"
     "agency" => "agency"
     "bash" => bashOutcome(plan)
+    "steps" => stepsOutcome(plan)
   }
+}
+
+def stepsOutcome(plan: Plan): string {
+  const exec = plan.execution
+  if (exec is { kind: "steps" }) {
+    if (allInProcess(exec.steps)) {
+      return "shellFree"
+    }
+  }
+  return "narrow"
 }
 
 def bashOutcome(plan: Plan): string {
@@ -5230,7 +5280,7 @@ def planLine(source: string, parsed: Result<BashAST>, cwd: string, origin: GhRep
     // hard rule.
     return broadPlan(source, verbs, { kind: "unrenderable", detail: why })
   }
-  return bashPlan(rebuilt.value, narrow, verbs, null)
+  return stepsPlan(rebuilt.value, classified.value.steps, narrow, verbs, origin)
 }
 
 /** The effects of a command, the line once it has run, and the command as
@@ -6041,10 +6091,10 @@ def approvedPlan(command: string, dir: string, timeoutMs: number, jobMs: number 
   }
 
   // Decided from the plan, not from the caller, so a question always
-  // describes what will run: only a plan of kind bash becomes a job.
+  // describes what will run: only a plan that starts a shell becomes a job.
   let asJob = false
   let limitMs = timeoutMs
-  if (jobMs != null && exec.kind == "bash") {
+  if (jobMs != null && jobText(exec) != null) {
     asJob = true
     limitMs = jobMs
   }
@@ -6079,12 +6129,37 @@ def runPlanned(plan: Plan, dir: string, command: string, timeout: number): Resul
     { kind: "agency", args } => runAgency(args, dir, command)
     { kind: "grep" } => runGrep(exec, command)
     { kind: "read" } => runRead(exec, command)
-    { kind: "chain" } => runChain(exec, command)
+    { kind: "steps" } => runStepsPlan(exec, plan, dir, command, timeout)
     { kind: "bash", command as text } => runBash(text, dir, command, timeout, plan.verbs, plan.savedPaths)
     // Unreachable — approvedPlan already returned a refusal. The arm
     // exists only to keep the match exhaustive over Execution.
     { kind: "refuse", reason } => failure(reason)
   }
+}
+
+def runStepsPlan(exec: StepsExec, plan: Plan, dir: string, command: string, timeout: number): Result<string> {
+  if (allInProcess(exec.steps)) {
+    // Bound to a local, so the failure's own `destructiveRan` decides. A
+    // bare `return runChain(...)` would mark this call destructive even
+    // when `&&` skipped the write (docs/dev/language/destructive-regions.md).
+    const ran = runChain(exec.steps, command)
+    return ran
+  }
+  return runBash(exec.command, dir, command, timeout, plan.verbs, plan.savedPaths)
+}
+
+/* The text a job launches, or null for a plan that starts no shell: a
+ job runs its line whole, under one shell. */
+def jobText(exec: Execution): string | null {
+  if (exec is { kind: "bash", command }) {
+    return command
+  }
+  if (exec is { kind: "steps" }) {
+    if (!allInProcess(exec.steps)) {
+      return exec.command
+    }
+  }
+  return null
 }
 
 // A parameter default must be a literal, so startJob's signature repeats
@@ -6173,8 +6248,8 @@ export def startShellJob(
     return approved
   }
   const plan = approved.value
-  const exec = plan.execution
-  if (exec is { kind: "bash", command as text }) {
+  const text = jobText(plan.execution)
+  if (text != null) {
     // `_launchJob` runs a command with no interrupt of its own, as `_bash`
     // does in runBash, and it is safe for the reason runBash's comment
     // gives: the only path here runs through an approvedPlan that raised
@@ -6262,6 +6337,12 @@ def planRecord(plan: Plan, command: string, cwd: string): Record<string, any> {
     reason = plan.broadReason.kind
     detail = plan.broadReason.detail
   }
+  let rebuilt = ""
+  let steps = 0
+  if (plan.execution is { kind: "steps" }) {
+    rebuilt = plan.execution.command
+    steps = plan.execution.steps.length
+  }
   return {
     command: command,
     cwd: cwd,
@@ -6270,7 +6351,9 @@ def planRecord(plan: Plan, command: string, cwd: string): Record<string, any> {
     detail: detail,
     verbs: plan.verbs,
     effects: [e.name for e in plan.effects],
-    accesses: accessesOf(plan.effects)
+    accesses: accessesOf(plan.effects),
+    rebuilt: rebuilt,
+    steps: steps
   }
 }
 
@@ -6943,7 +7026,7 @@ def runWrite(exec: WriteExec): Result<string> {
 }
 
 @capabilities(fileRead, fileWrite)
-def runChain(exec: ChainExec, command: string): Result<string> {
+def runChain(steps: LineStep[], command: string): Result<string> {
   """
   Execute approved in-process commands with Bash-style ;, &&, and || joins.
   Return a failure when the last command executed failed.
@@ -6951,19 +7034,23 @@ def runChain(exec: ChainExec, command: string): Result<string> {
   let out = ""
   let ok = true
   let lastError = ""
-  for (step in exec.steps) {
+  for (step in steps) {
     if (skipsStep(step.join, ok)) {
       continue
     }
+    if (!(step is { kind: "run" }) || step.inProcess == null) {
+      return failure("an in-process line holds a step that is not in process")
+    }
+    const execution = step.inProcess
     let printed: Result<string> = success("")
-    if (step.execution.kind == "write") {
+    if (execution.kind == "write") {
       // Mark this activation too: a later failure must not let the tool
       // loop retry the chain and repeat an earlier write.
       destructive {
-        printed = printStep(step.execution)
+        printed = printStep(execution)
       }
     } else {
-      printed = printStep(step.execution)
+      printed = printStep(execution)
     }
     if (printed is success(text)) {
       out = out + text

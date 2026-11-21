@@ -7,10 +7,13 @@ import { Ctx } from "../lib/resolution.agency"
 import { activePresetName, readPresetTable, refreshPresetTable, setPresetTable } from "../lib/presets.agency"
 import {
   Session,
+  applyModelRequest,
   applySessionLlmOptions,
   currentModelRequest,
+  notePresetBaseline,
   parsePresetCommand,
   presetChanges,
+  refreshAndSavePreset,
   saveSessionPreset,
   setStartupModelFlags,
   switchModel,
@@ -379,13 +382,49 @@ node savedChangesLeaveNone(): string {
   return JSON.stringify(presetChanges(lowEffort()))
 }
 
-// A preset deleted from settings.json can't be saved back to: no changes.
+// A deleted preset is no longer the active one, so there is nothing to
+// report changes from.
 node deletedPresetHasNoChanges(): string {
   if (!useSavedPresets(SAVED_PRESETS)) {
     return "not sandboxed"
   }
   setPresetTable(readPresetTable({ big: SAVED_PRESETS.big }))
   return JSON.stringify(presetChanges(lowEffort()))
+}
+
+// The comparison is with the preset as taken, not as saved: a bare preset
+// changed once reports only that change, not its saved form.
+node bareChangedPresetShowsOnlyEffort(): string {
+  if (!useSavedPresets({ small: { pin: "claude-sonnet-4-6" } })) {
+    return "not sandboxed"
+  }
+  return JSON.stringify(presetChanges(lowEffort()))
+}
+
+// At start, a session can already hold choices (an older last-settings
+// file). The snapshot is of the preset alone, so they show as changes.
+node startSnapshotLeavesOutChoices(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  const choices: ModelChoices = { pin: "claude-opus-4-8", slots: {} }
+  applyModelRequest(currentModelRequest(choices), {})
+  notePresetBaseline()
+  return JSON.stringify(presetChanges(choices))
+}
+
+// Save reads the presets again first. A preset deleted elsewhere since is
+// not created again.
+node saveRefusesAPresetDeletedElsewhere(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  write(SETTINGS_FILE, JSON.stringify({ presets: { big: SAVED_PRESETS.big } }), POLICY_DIR) with approve
+  const saved = refreshAndSavePreset("small", lowEffort()) with approve
+  if (saved is failure(reason)) {
+    return "${reason} | recreated: ${JSON.parse(settingsText()).presets.small != null}"
+  }
+  return "saved: ${saved.value.join(" ")}"
 }
 
 // Another chat, or the terminal, may save a preset while this run holds

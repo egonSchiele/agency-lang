@@ -1,11 +1,12 @@
 /** @module
   @summary The last settings: what a new session starts with. The preset
   the person last chose, or with no preset the model choices, in any
-  session, kept in `last-settings.json` in the agent home. The session core writes them
-  after a model, effort or preset answer, and a run that names no preset,
-  model or effort flag starts from them. They replace the default preset:
-  a preset marked default only seeds the start until the first change.
-  See "The last settings" in docs/dev/agents/agent-presets.md.
+  session, kept in `last-settings.json` in the agent home. The session
+  core writes them after a model, effort or preset answer, and a run that
+  names no preset, model or effort flag starts from them. They replace
+  the default preset: a preset marked default only seeds the start until
+  the first change. See "The last settings" in
+  docs/dev/agents/agent-presets.md.
 */
 import { _readLastSettings, _writeLastSettings } from "agency-lang/stdlib-lib/agentLastSettings.js"
 
@@ -197,13 +198,12 @@ def startWithout(start: StartRequest, warning: string): Result<string[]> {
 }
 
 /** Keep this session's preset, or with no preset its choices, for new
-  chats (`lastSettingsOf`). Only a session
-  that is saved, and that started with no model or effort flag, writes
-  them. An incognito session has no record, so it writes nothing. Nor does
-  one `/local` moved: its choices no longer describe the models it runs,
-  and its resolved slots are local (`/preset save` refuses it the same
-  way). A write that fails is a warning: the change it follows still
-  counts. */
+  chats (`lastSettingsOf`). Only a session that is saved, and that started
+  with no model or effort flag, writes them. An incognito session has no
+  record, so it writes nothing. Nor does one `/local` moved: its choices
+  no longer describe the models it runs, and its resolved slots are local
+  (`/preset save` refuses it the same way). A write that fails is a
+  warning: the change it follows still counts. */
 export def rememberSettings(preset: string, choices: ModelChoices) {
   if (currentRecord() == null || startedWithModelFlags()) {
     return

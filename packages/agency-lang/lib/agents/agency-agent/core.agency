@@ -51,8 +51,8 @@ import {
   fixedProvider,
   modelChoices,
   presetChanges,
+  refreshAndSavePreset,
   useLocalModel,
-  writeSessionPreset,
  } from "./lib/session.agency"
 import { setSessionFolder } from "./lib/sessionFolder.agency"
 import { SessionRecord } from "./lib/sessions.agency"
@@ -304,8 +304,8 @@ def compactNotice(keep: string) {
 
 def savePresetNotice(name: string) {
   // Compared with the preset as saved now, not as this run first read it.
-  refreshPresetTable() with approve
-  const saved = writeSessionPreset(name, modelChoices())
+  // The user asked for this save, so the core approves its reads and write.
+  const saved = refreshAndSavePreset(name, modelChoices()) with approve
   if (saved is success(lines)) {
     notice(lines.join("\n"))
   } else if (saved is failure(reason)) {

@@ -27,7 +27,6 @@ import {
   ModelChoices,
   ModelFlags,
   ModelRequest,
-  choosesNothing,
   hasModelFlags,
   localModelOf,
   modelFlagsFromArgs,
@@ -47,7 +46,14 @@ import {
   Resolved,
   takesSlashModelNames,
  } from "./models.agency"
-import { activePreset, activePresetName, editPresets, findPreset, setActivePreset } from "./presets.agency"
+import {
+  activePreset,
+  activePresetName,
+  editPresets,
+  findPreset,
+  refreshPresetTable,
+  setActivePreset,
+ } from "./presets.agency"
 import { checkPreset, Preset } from "./presetRules.agency"
 import { presetChangeLines, sessionPreset } from "./presetSnapshot.agency"
 import { configureSearch, getSearchSession } from "./search.agency"
@@ -817,16 +823,55 @@ type PresetComparison = {
   changes: string[]
 }
 
-// What a save would write, and the lines that say how it differs. A save
-// and the pause's `presetChanges` both use this, so a session just saved
-// reports no changes.
+// The preset `/preset save` would write for these choices and models.
+def sessionSnapshot(choices: ModelChoices, resolved: Record<string, Resolved>): Preset {
+  const settingsFixProvider = (_startupModelSettings.provider ?? "") != ""
+  return sessionPreset(currentModelRequest(choices), startupLimitFlags(), resolved, settingsFixProvider)
+}
+
+// The active preset as this session took it: the snapshot of its startup
+// flags and the preset, with no /model choices. Taken at start
+// (`notePresetBaseline`), at each switch, and after a save to the active
+// preset. `presetChanges` compares with it, not with the preset as saved:
+// a saved preset's form (a bare `pin`) can differ from a snapshot's while
+// meaning the same models. Null with no preset, and in a session resumed
+// from before this was kept.
+let _presetBaseline: Preset | null = null
+
+// The snapshot of the active preset alone, resolved on its own, since the
+// session's models may already hold choices. Null with no preset, or when
+// its models don't resolve.
+def presetBaseline(): Preset | null {
+  if (activePreset() == null) {
+    return null
+  }
+  const request = currentModelRequest(noModelChoices())
+  if (localModelOf(request) != null) {
+    // A local snapshot reads the request, not the resolved slots.
+    return sessionSnapshot(noModelChoices(), {})
+  }
+  const resolved = resolveHostedModels(request, _startupModelSettings, startupDefaultSlots())
+  if (resolved is success(slots)) {
+    return sessionSnapshot(noModelChoices(), slots)
+  }
+  return null
+}
+
+/** Take the snapshot of the active preset that `presetChanges` compares
+  with. The program calls this once its start has applied the preset, the
+  models and the tool limits. A switch and a save take their own. */
+export def notePresetBaseline() {
+  _presetBaseline = presetBaseline()
+}
+
+// What a save would write, and the lines that say how it differs from the
+// preset saved under `target`.
 def compareWithPreset(target: string, choices: ModelChoices): Result<PresetComparison> {
   const request = currentModelRequest(choices)
   if (movedByLocalCommand(request)) {
     return failure("Not saved: this session moved to or from a local model with /local, which a save cannot copy. Start with --local or a local preset, then save.")
   }
-  const settingsFixProvider = (_startupModelSettings.provider ?? "") != ""
-  const preset = sessionPreset(request, startupLimitFlags(), getResolvedSlots(), settingsFixProvider)
+  const preset = sessionSnapshot(choices, getResolvedSlots())
   const checked = checkPreset(target, preset, false)
   if (checked is failure(reason)) {
     return failure("Not saved: ${reason}")
@@ -844,28 +889,39 @@ def compareWithPreset(target: string, choices: ModelChoices): Result<PresetCompa
   })
 }
 
-/** What this session changed from its active preset: the lines
-  `/preset save` would print, such as `effort: (none) → low`. Empty with
-  no active preset, with no choices made on top of it (a preset's saved
-  form can differ from a snapshot's while meaning the same models), when
-  the preset is gone, and when the session can't be saved to it. */
+/** What this session changed from its active preset as it took it: one
+  line a field, in `/preset save`'s words, such as `effort: (none) → low`.
+  Empty with no active preset (a deleted one is no longer active), and
+  after `/local`, which a save can't copy. Reads only memory, so the pause
+  can call it. */
 export def presetChanges(choices: ModelChoices): string[] {
-  const active = activePresetName()
-  if (active == "" || choosesNothing(choices)) {
+  const baseline = _presetBaseline
+  if (activePresetName() == "" || baseline == null) {
     return []
   }
-  const compared = compareWithPreset(active, choices)
-  if (compared is success(comparison)) {
-    if (comparison.before == null) {
-      return []
-    }
-    let trimmed: string[] = []
-    for (line in comparison.changes) {
-      trimmed.push(line.trim())
-    }
-    return trimmed
+  if (movedByLocalCommand(currentModelRequest(choices))) {
+    return []
   }
-  return []
+  let trimmed: string[] = []
+  for (line in presetChangeLines(baseline, sessionSnapshot(choices, getResolvedSlots()))) {
+    trimmed.push(line.trim())
+  }
+  return trimmed
+}
+
+/** Save to a preset as `writeSessionPreset` does, after reading the saved
+  presets again: another session or the terminal may have changed them
+  since this run read them. A preset that was active and has since been
+  deleted is refused rather than created again. The reads and the write
+  are the caller's to decide. */
+export def refreshAndSavePreset(name: string, choices: ModelChoices): Result<string[]> {
+  const wasActive = activePresetName()
+  refreshPresetTable()
+  const namesTheActive = name == "" || name == wasActive
+  if (wasActive != "" && namesTheActive && activePresetName() == "") {
+    return failure("The '${wasActive}' preset was deleted, so there is nothing to save to.")
+  }
+  return writeSessionPreset(name, choices)
 }
 
 /** `saveSessionPreset`, with a save that was refused as a failure that
@@ -890,6 +946,10 @@ export def writeSessionPreset(name: string, choices: ModelChoices): Result<strin
   const edited = editPresets({ kind: "save", name: target, preset: compared.value.preset }) with approve
   if (edited is failure(reason)) {
     return failure("Not saved: ${reason}")
+  }
+  // Saved to the active preset, the session now matches it as taken.
+  if (target == activePresetName()) {
+    _presetBaseline = sessionSnapshot(choices, getResolvedSlots())
   }
   const heading = if edited.value.existed then "Saved the '${target}' preset:" else "Created the '${target}' preset:"
   return success([heading, ...changes])
@@ -920,6 +980,8 @@ export def switchPreset(name: string): Result<PresetSwitch> {
   followLocality(requestIsLocal(request))
   setActivePreset(name)
   const after = getResolvedSlots()
+  // The slots now hold the preset alone, so they make its snapshot.
+  _presetBaseline = sessionSnapshot(noModelChoices(), after)
   return success({
     session: noModelChoices(),
     resolved: after,

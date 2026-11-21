@@ -23,6 +23,7 @@ import { startPresetAndModels } from "./lib/lastSettings.agency"
 import { ModelFlags } from "./lib/modelRequest.agency"
 import { notice } from "./lib/notice.agency"
 import { activePreset } from "./lib/presets.agency"
+import { notePresetBaseline } from "./lib/session.agency"
 import { loadSettings } from "./lib/settings.agency"
 import { LimitFlags, applyToolLimits, setStartupLimitFlags } from "./lib/toolLimits.agency"
 import {
@@ -117,6 +118,9 @@ node main(start: ProgramStart!) {
   // A one-shot run gets more tool rounds by default, as `-p` does: no one
   // is there to ask for more.
   applyToolLimits(activePreset(), start.oneShot ?? false)
+  // What the pause reports a preset's changes against: the preset as this
+  // session took it, without choices an older last-settings file held.
+  notePresetBaseline()
   const capsMaxTokens = getCapabilities().maxTokens
   if (capsMaxTokens != null) {
     setLlmOptions({

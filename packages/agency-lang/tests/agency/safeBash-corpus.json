@@ -109,6 +109,8 @@
   { "command": "mkdir -p build && cd build && pnpm test", "outcome": "narrow", "effects": ["std::mkdir", "std::exec"] },
   { "command": "pnpm build && cd lib && ls", "outcome": "narrow", "effects": ["std::exec", "std::ls"] },
   { "command": "git log --oneline | sed -n 1,5p", "outcome": "narrow", "effects": ["std::git::log"] },
+  { "command": "git checkout main && pnpm test", "outcome": "narrow", "effects": ["std::git::checkout", "std::exec"] },
+  { "command": "git checkout main && cat package.json", "outcome": "broad", "effects": ["std::bash"] },
   { "command": "shasum -a 256 package.json", "outcome": "narrow", "effects": ["std::read"] },
   { "command": "touch notes.txt", "outcome": "narrow", "effects": ["std::write"] },
   { "command": "cp package.json /tmp/x", "outcome": "broad", "effects": ["std::bash"] },

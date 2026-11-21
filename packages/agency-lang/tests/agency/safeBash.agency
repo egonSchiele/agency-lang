@@ -977,9 +977,8 @@ node missingPathsResolveByParent() {
 }
 
 // A folder the line made with mkdir can be named by a later command: a
-// listing of it, a file in it, a cd into it. It is forgotten after a
-// command that could put a link there, and never remembered when an
-// opaque command ran before the mkdir.
+// listing of it, a file in it, a cd into it, and so can a folder above it
+// that `mkdir -p` made. It stays remembered after a program or `rm`.
 node foldersTheLineMade() {
   makeFilesFixture()
   const rows = [
@@ -990,6 +989,11 @@ node foldersTheLineMade() {
     fileRow("mkdir -p build && cd build && ls"),
     executionCommandIn("mkdir -p build && cd build && ls", FILES_FIXTURE).split(resolve(FILES_FIXTURE)).join("<fix>"),
     fileRow("mkdir -p a/b && ls a/b"),
+    fileRow("mkdir -p a/b && ls a"),
+    fileRow("mkdir -p a/b && ls -R a"),
+    fileRow("mkdir -p a/b && cd a && ls"),
+    fileRow("mkdir -p out && pnpm build && ls out"),
+    fileRow("mkdir x && tree x"),
     fileRow("cd nope && ls"),
     fileRow("mkdir out && cat out/nope.txt"),
     fileRow("pnpm build; mkdir -p out; ls out"),
@@ -997,6 +1001,46 @@ node foldersTheLineMade() {
     fileRow("mkdir x; rm -r x; ls x"),
     fileRow("pnpm build | mkdir x; ls x"),
     fileRow("git checkout main; mkdir -p build && cd build && ls"),
+  ]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
+// Every payload is resolved against the disk before the line runs. After
+// a command that can put a link where a file or folder was, no later
+// command in the line may name a path. A program, `rm`, `git add`, and
+// `git commit` cannot do that under their approvals, so paths after them
+// keep their rules.
+node noPathAfterACommandThatReplacesPaths() {
+  makeFilesFixture()
+  const rows = [
+    fileRow("git checkout main; cat one.txt"),
+    fileRow("git stash pop && cat one.txt"),
+    fileRow("git switch main && head -5 one.txt"),
+    fileRow("git stash; cat one.txt"),
+    fileRow("git checkout main; echo x >> one.txt"),
+    fileRow("git checkout main; pnpm test > out.txt"),
+    fileRow("git checkout main; grep -rn x sub"),
+    fileRow("git checkout main; ls sub"),
+    fileRow("git checkout main; ls"),
+    fileRow("git checkout main; rm one.txt"),
+    fileRow("git checkout main; mkdir x"),
+    fileRow("git checkout main && cd sub && pnpm test"),
+    fileRow("git checkout main; cd sub; pnpm test"),
+    fileRow("git checkout main; git -C sub status"),
+    fileRow("git checkout main; echo x >> out.txt; cat out.txt"),
+    fileRow("git checkout main; pnpm test; cat one.txt"),
+    fileRow("git checkout main 2>&1 | tee log.txt"),
+    fileRow("git checkout main; timeout 5 cat one.txt"),
+    fileRow("git checkout main && pnpm test"),
+    fileRow("git checkout main; git status; git log --oneline -3"),
+    fileRow("git stash; pnpm test; git stash pop"),
+    fileRow("git checkout main 2>&1 | tail -5"),
+    fileRow("git checkout main; echo ok"),
+    fileRow("cat one.txt; git checkout main"),
+    fileRow("rm -rf sub && pnpm build && ls sub"),
+    fileRow("git add one.txt && git commit -m x && cat one.txt"),
+    fileRow("pnpm build; cat one.txt"),
   ]
   remove(FILES_FIXTURE) with approve
   return rows
@@ -1035,8 +1079,8 @@ node missingPathAfterAProgramIsBroad() {
     fileRow("ln -sf /etc/hosts out.txt > out.txt; cat out.txt"),
     fileRow("pnpm test; cat nope.txt"),
     fileRow("pnpm test | cat nope.txt"),
-    // A narrow command that can put a link where a file was forgets the
-    // files the line wrote.
+    // After a narrow command that can put a link where a file was, no
+    // command may name a path, a file the line wrote included.
     fileRow("echo a > out.txt; rm out.txt; git checkout main; cat out.txt"),
     fileRow("echo a > out.txt; git stash pop; cat out.txt"),
     fileRow("git checkout main > out.txt; cat out.txt"),

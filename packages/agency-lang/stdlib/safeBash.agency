@@ -2107,20 +2107,31 @@ def resolveTarget(text: string, word: Word, cwd: string): Result<PathTarget> {
 /** What the classifier knows about a line as it walks it, command by
  command: the working directory after each `cd`; the `std::write`
  payloads the line has asked for so far; the folders it has asked
- `std::mkdir` for, by real path; and whether it has run a command
- safeBash cannot see into. `strict` is false for a lookup that may name a
- path that does not exist yet. */
+ `std::mkdir` for, by real path; and what the commands so far may have
+ done to the disk. `strict` is false for a lookup that may name a path
+ that does not exist yet. */
 type LineState = {
   cwd: string;
   written: WritePayload[];
   made: string[];
-  opaque: boolean;
+  disk: DiskState;
   strict: boolean
 }
 
+/** What the commands a line has run so far may have done to the disk,
+ which the plan read before any of them ran.
+ - "known": nothing but reads, writes safeBash named, and `mkdir`.
+ - "changed": a command ran that can make or remove a path, but whose
+   approval covers what it could then read: a program, or `rm`.
+ - "replaced": a command ran that can put a link where a file or folder
+   was, under an approval that lets it read nothing outside the
+   repository, such as `git checkout`. Every path the plan resolved may
+   now lead somewhere else, so no later command may name one. */
+type DiskState = "known" | "changed" | "replaced"
+
 /* The state of a line before its first command. */
 def freshLine(cwd: string): LineState {
-  return { cwd: cwd, written: [], made: [], opaque: false, strict: false }
+  return { cwd: cwd, written: [], made: [], disk: "known", strict: false }
 }
 
 /* The same line, for a lookup where a missing path has no rule: `find`,
@@ -2131,11 +2142,11 @@ def strictLine(line: LineState): LineState {
 }
 
 /** The effects that read, list, or search and change nothing, by name.
- Every other effect makes the rest of the line opaque. The list is by
- name, never by prefix: `git checkout` and `git stash pop` are `std::git`
- effects too, and either can put a symlink that a commit holds into the
- working folder. An effect added to safeBash later makes the line opaque
- until someone adds it here. */
+ The list is by name, never by prefix: `git checkout` and `git stash pop`
+ are `std::git` effects too, and either can put a symlink that a commit
+ holds into the working folder. An effect that is in none of the three
+ lists here counts as replacing paths (see `DiskState`) until someone
+ adds it to one. */
 static const SEE_THROUGH_EFFECTS: string[] = [
   "std::read", "std::grep", "std::ls", "std::glob",
   "std::git::status", "std::git::log", "std::git::diff", "std::git::show",
@@ -2146,40 +2157,105 @@ static const SEE_THROUGH_EFFECTS: string[] = [
   "std::github::issueSearch"
 ]
 
+/** The effects that make, move, or remove nothing safeBash can name:
+ `echo x > f` makes the file its payload names, and `mkdir` makes a new
+ folder or fails. Neither can turn a path that exists into anything
+ else, so the disk stays "known" after them. */
+static const NAMED_CHANGE_EFFECTS: string[] = ["std::write", "std::mkdir"]
+
+/** The effects that leave the disk "changed" and not "replaced".
+ - `std::exec`: a program can do anything to the disk, and its approval
+   already lets it read any file itself, so a later read of a path it
+   swapped shows nothing the program could not have printed.
+ - `std::remove`: `rm` takes paths away and puts nothing in their place.
+ - `git add`, `git commit`, and making or deleting a branch change the
+   index and the refs, not the files in the working folder. A commit
+   hook is a program, as above. */
+static const CHANGING_EFFECTS: string[] = [
+  "std::exec", "std::remove",
+  "std::git::add", "std::git::commit", "std::git::branchCreate", "std::git::branchDelete"
+]
+
+/* What a command that asked these effects may have done to the disk. */
+def diskAfter(effects: Effect[]): DiskState {
+  const beyondNamed = [effect for effect in effects if !SEE_THROUGH_EFFECTS.includes(effect.name) && !NAMED_CHANGE_EFFECTS.includes(effect.name)]
+  if (beyondNamed.length == 0) {
+    return "known"
+  }
+  const replacing = [effect for effect in beyondNamed if !CHANGING_EFFECTS.includes(effect.name)]
+  if (replacing.length > 0) {
+    return "replaced"
+  }
+  return "changed"
+}
+
+/* The later of two states: "replaced" over "changed" over "known". */
+def worseDisk(a: DiskState, b: DiskState): DiskState {
+  if (a == "replaced" || b == "replaced") {
+    return "replaced"
+  }
+  if (a == "changed" || b == "changed") {
+    return "changed"
+  }
+  return "known"
+}
+
+/** The effects whose payload names a file or a folder on the disk. */
+static const PATH_EFFECTS: string[] = [
+  "std::read", "std::write", "std::grep", "std::ls", "std::glob", "std::remove", "std::mkdir"
+]
+
+/* Whether a command names a path: by a file effect, or by running in
+ another folder than the line's, as `git -C dir status` does. */
+def namesPath(effects: Effect[], cwd: string): boolean {
+  for (effect in effects) {
+    if (PATH_EFFECTS.includes(effect.name)) {
+      return true
+    }
+    // Not every effect has a payload, and not every payload a `cwd`.
+    const loose: any = effect
+    const payload: any = loose.payload
+    if (payload != null && payload.cwd != null && payload.cwd != cwd) {
+      return true
+    }
+  }
+  return false
+}
+
+// Every payload was resolved against the disk before the line ran. After
+// `git checkout evil`, `README.md` may be a link to a key, and `cat
+// README.md` would print the key under an approval that names the file in
+// the project. The stdlib's symlink checks do not run for a command bash
+// runs. So once the disk is "replaced", a command that names a path has
+// no rule, and the line asks std::bash, which shows all of it.
+def refuseStalePath(line: LineState, effects: Effect[]): Result {
+  if (line.disk == "replaced" && namesPath(effects, line.cwd)) {
+    return failure("a command names a path after one that can replace it, such as `git checkout`")
+  }
+  return success(null)
+}
+
 // The line after a command that asked these effects. A `std::write` is
-// remembered, so a later read of the same file has a rule (`missingPath`).
-// A command that asked anything that is not a read or a write makes the
-// line opaque: it ran a program safeBash cannot see into, which may have
-// made any path into something else. A written file stays remembered
-// after a `std::exec` program, whose approval already lets it read any
-// file itself. Any other opaque command forgets every written file, its
-// own redirect's included: `git checkout` and `git stash pop` can put a
-// link that a commit holds where the file was, and their approvals let
-// them read nothing outside the repository.
-//
-// A `std::mkdir` does not make the line opaque: `mkdir` makes a new folder
-// or fails, and cannot turn a path that exists into anything else. Its
-// folder is remembered too, so a later command can name it (`madeFolder`),
-// but only when nothing opaque ran before it or beside it. After an opaque
-// command the path may already be a link to another folder, and `mkdir -p`
-// of such a link succeeds without a word. A command that forgets the
-// written files forgets the made folders as well: `git checkout` can put a
-// link where an empty folder was.
+// remembered, so a later read of the same file has a rule (`missingPath`),
+// and so is the folder of a `std::mkdir` (`madeFolder`). Both stay
+// remembered after a "changed" command: a program's approval already lets
+// it read any file itself. After a "replaced" one nothing may name a
+// path at all (`refuseStalePath`), so what is remembered no longer
+// matters.
 def afterCommand(line: LineState, effects: Effect[]): LineState {
   const writes: WritePayload[] = [effect.payload for effect in effects if effect.name == "std::write"]
   const folders: string[] = [effect.payload.dir for effect in effects if effect.name == "std::mkdir"]
-  const unseen = [effect for effect in effects if effect.name != "std::write" && effect.name != "std::mkdir" && !SEE_THROUGH_EFFECTS.includes(effect.name)]
-  const swappers = [effect for effect in unseen if effect.name != "std::exec"]
-  if (swappers.length > 0) {
-    return { ...line, written: [], made: [], opaque: true }
+  return {
+    ...line,
+    written: [...line.written, ...writes],
+    made: [...line.made, ...folders],
+    disk: worseDisk(line.disk, diskAfter(effects))
   }
-  const opaque = line.opaque || unseen.length > 0
-  const made: string[] = if (opaque) then line.made else [...line.made, ...folders]
-  return { ...line, written: [...line.written, ...writes], made: made, opaque: opaque }
 }
 
 /* The real path of the folder a word names, when the line made a folder
- there, and null otherwise. */
+ there or below it, and null otherwise. `mkdir -p a/b` makes `a` too, so
+ a path that is missing now and lies above a made folder is one. */
 @capabilities(fileRead)
 def madeFolder(text: string, word: Word, line: LineState): string | null {
   if (line.made.length == 0) {
@@ -2189,8 +2265,10 @@ def madeFolder(text: string, word: Word, line: LineState): string | null {
   if (real is failure(why)) {
     return null
   }
-  if (line.made.includes(real.value)) {
-    return real.value
+  const path = real.value
+  const within = [dir for dir in line.made if dir == path || dir.startsWith("${path}/")]
+  if (within.length > 0) {
+    return path
   }
   return null
 }
@@ -2219,15 +2297,15 @@ def missingWhere(text: string, word: Word, line: LineState): NewFile | null {
 // A path that does not exist when the plan is made, and its parent folder
 // does. When an earlier command in the line asked std::write for that very
 // file, it will exist, made by the redirect as its command started. When
-// nothing opaque has run yet, nothing can have made it into something
+// the disk is still "known", nothing can have made it into something
 // else, such as a link to a key: `ln -s ~/.ssh/id_rsa x; cat x`. A file
 // the line wrote can still be swapped by a program run after the write,
 // as in `ln -sf <key> out.txt > out.txt; cat out.txt`. That adds nothing
 // for a general program such as `pnpm test`, whose approval already lets
 // it read any file itself; `ln`, `cp`, and `mv` ask std::bash, so the line
-// above has no rule (see `NO_EXEC_PROGRAMS`), and a narrow command that
-// can swap a file, such as `git checkout`, forgets the files the line
-// wrote (see `afterCommand`).
+// above has no rule (see `NO_EXEC_PROGRAMS`), and after a narrow command
+// that can swap a file, such as `git checkout`, no command may name a
+// path (see `refuseStalePath`).
 @capabilities(fileRead)
 def missingPath(text: string, word: Word, line: LineState): WritePayload | null {
   if (line.strict) {
@@ -2241,7 +2319,7 @@ def missingPath(text: string, word: Word, line: LineState): WritePayload | null 
   if (wrote.length > 0) {
     return wrote[0]
   }
-  if (line.opaque) {
+  if (line.disk != "known") {
     return null
   }
   return { dir: where.dir, filename: where.filename, content: "", mode: "overwrite" }
@@ -2933,7 +3011,7 @@ def gitLeadingFlags(words: Word[], cwd: string): Result<GitLead> {
     if (name == "--no-pager") {
       index = index + 1
     } else if (name == "-C" && index + 1 < words.length) {
-      dir = cdTarget(cdCommandOf(words[index + 1]), dir)?
+      dir = cdTarget(cdCommandOf(words[index + 1]), freshLine(dir))?
       index = index + 2
     } else {
       return failure("the git subcommand is not a plain word")
@@ -5296,7 +5374,7 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
   for (command, index in commands) {
     const cd = asCd(command)
     if (cd != null) {
-      const moved = cdTargetIn(cd, line)?
+      const moved = cdTarget(cd, line)?
       rewritten.push(cdOrExit(cd, moved))
       line = { ...line, cwd: moved }
       continue
@@ -5332,9 +5410,11 @@ def classifySimple(command: SimpleCommand, line: LineState, origin: GhRepo | nul
   const timed = unwrapTimeout(command)
   if (timed == null) {
     const rule = simpleCommandRule(command, line, origin, readsStdin)?
+    refuseStalePath(line, rule.effects)?
     return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: rule.command })
   }
   const rule = simpleCommandRule(timed.inner, line, origin, readsStdin)?
+  refuseStalePath(line, rule.effects)?
   const wrapped = withTimeout(timed, rule.command)?
   return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: wrapped })
 }
@@ -5436,12 +5516,15 @@ def withTimeout(timed: Timed, ran: Command): Result<Command> {
 def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   let effects: Effect[] = []
   let rewritten: any[] = []
-  const together = { ...line, opaque: true }
+  const together: LineState = { ...line, disk: worseDisk(line.disk, "changed") }
   for (stage, index in stages) {
     const classified = classify(stage, together, origin, readsStdin || index > 0)?
     effects = [...effects, ...classified.effects]
     rewritten.push(classified.command)
   }
+  // A stage that can replace paths runs beside the others, so none of
+  // them may name one: `git checkout main | tee log.txt`.
+  refuseStalePath({ ...line, disk: diskAfter(effects) }, effects)?
   return success({ effects: effects, line: afterCommand(line, effects), command: { tag: "pipeline", stages: rewritten } })
 }
 
@@ -5463,41 +5546,13 @@ def classifyGroup(inner: Command, line: LineState, origin: GhRepo | null, readsS
 // `b` is classified in `x` as well.
 @capabilities(fileRead)
 def classifyAnd(left: Command, right: Command, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
-  const cd = asCd(left)
-  if (cd != null) {
-    const moved = cdTargetIn(cd, line)?
-    // `cd x && cd y`: the second is read from where the first leads.
-    const next = asCd(right)
-    if (next != null) {
-      const further = cdTargetIn(next, { ...line, cwd: moved })?
-      return success({
-        effects: [],
-        line: { ...line, cwd: further },
-        command: { tag: "and", left: cdTo(cd, moved), right: cdTo(next, further) }
-      })
-    }
-    const rest = classify(right, { ...line, cwd: moved }, origin, readsStdin)?
-    return success({
-      effects: rest.effects,
-      line: rest.line,
-      command: { tag: "and", left: cdTo(cd, moved), right: rest.command }
-    })
-  }
-  const first = classify(left, line, origin, readsStdin)?
-  // `a && cd dir`, as in `mkdir -p build && cd build && cmake ..`, which
-  // is `(mkdir -p build && cd build) && cmake ..`. Whatever follows with
-  // `&&` runs only when the `cd` worked. `;` and `||` after it are refused
-  // by `classifyAll` and `classifyOr`, which see the directory changed.
-  const later = asCd(right)
-  if (later != null) {
-    const moved = cdTargetIn(later, first.line)?
-    return success({
-      effects: first.effects,
-      line: { ...first.line, cwd: moved },
-      command: { tag: "and", left: first.command, right: cdTo(later, moved) }
-    })
-  }
-  const second = classify(right, first.line, origin, readsStdin)?
+  // Either side may be a `cd`. On the right, as in `mkdir -p build && cd
+  // build && cmake ..`, which is `(mkdir -p build && cd build) && cmake
+  // ..`, whatever follows with `&&` runs only when the `cd` worked. `;`
+  // and `||` after it are refused by `classifyAll` and `classifyOr`, which
+  // see the directory changed.
+  const first = andSide(left, line, origin, readsStdin)?
+  const second = andSide(right, first.line, origin, readsStdin)?
   return success({
     effects: [...first.effects, ...second.effects],
     line: second.line,
@@ -5570,15 +5625,20 @@ def asCd(command: Command): SimpleCommand | null {
   return null
 }
 
-// The directory a `cd` moves to. It has to exist now, because every payload
-// to the right of the `cd` names it. `cd` alone goes home, `cd -` goes to
-// the previous directory, and a variable is unknown until bash expands it,
-// so none of those has a directory to name.
+// The directory a `cd` moves to. Every payload to the right of the `cd`
+// names it, so it has to exist now, or be a folder the line made, as in
+// `mkdir -p build && cd build && cmake ..`. `cd` alone goes home, `cd -`
+// goes to the previous directory, and a variable is unknown until bash
+// expands it, so none of those has a directory to name. A `cd` names a
+// path, so it has no rule once the disk is "replaced" (`DiskState`).
 @capabilities(fileRead)
-def cdTarget(command: SimpleCommand, cwd: string): Result<string> {
+def cdTarget(command: SimpleCommand, line: LineState): Result<string> {
   """
-  Resolve the one literal directory a cd command names.
+  Resolve the one literal directory a cd command names: one that exists, or one the line made.
   """
+  if (line.disk == "replaced") {
+    return failure("a `cd` follows a command that can replace a folder, such as `git checkout`")
+  }
   if (command.assignments.length > 0 || command.redirects.length > 0) {
     return failure("`cd` with an assignment or a redirect")
   }
@@ -5593,38 +5653,46 @@ def cdTarget(command: SimpleCommand, cwd: string): Result<string> {
   if (text.value == "-") {
     return failure("`cd -` goes to the previous directory, which is not known here")
   }
-  const target = resolveTarget(text.value, word, cwd)?
-  if (target.file != null) {
-    return failure("`cd` names a file")
-  }
+  const dir = cdFolder(text.value, word, line)?
   // The directory is rebuilt inside single quotes, which cannot hold one.
-  if (target.dir.includes("'")) {
+  if (dir.includes("'")) {
     return failure("the `cd` directory has a single quote in its path")
   }
-  return success(target.dir)
+  return success(dir)
 }
 
-// `mkdir -p build && cd build && cmake ..`: the folder a `cd` names may be
-// one the line made, which does not exist when the plan is made.
+/* The folder a `cd` word names: one on the disk, or one the line made. */
 @capabilities(fileRead)
-def cdTargetIn(command: SimpleCommand, line: LineState): Result<string> {
-  """
-  Resolve the directory a cd names: one that exists, or one the line made.
-  """
-  const target = cdTarget(command, line.cwd)
-  if (isSuccess(target) || command.assignments.length > 0 || command.redirects.length > 0 || command.args.length != 1) {
-    return target
+def cdFolder(text: string, word: Word, line: LineState): Result<string> {
+  const target = resolveTarget(text, word, line.cwd)
+  if (isFailure(target)) {
+    const made = madeFolder(text, word, line)
+    if (made == null) {
+      return target
+    }
+    return success(made)
   }
-  const word = command.args[0]
-  const text = literalTextOf(word)
-  if (text == "" || text == "-") {
-    return target
+  if (target.value.file != null) {
+    return failure("`cd` names a file")
   }
-  const made = madeFolder(text, word, line)
-  if (made == null || made.includes("'")) {
-    return target
+  return success(target.value.dir)
+}
+
+/* One side of an `&&`: a `cd`, or any other command. */
+@capabilities(fileRead)
+def andSide(side: Command, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+  const cd = asCd(side)
+  if (cd != null) {
+    return cdStep(cd, line)
   }
-  return success(made)
+  return classify(side, line, origin, readsStdin)
+}
+
+/* A `cd` as one side of an `&&`: it asks nothing and moves the line. */
+@capabilities(fileRead)
+def cdStep(cd: SimpleCommand, line: LineState): Result<Classified> {
+  const moved = cdTarget(cd, line)?
+  return success({ effects: [], line: { ...line, cwd: moved }, command: cdTo(cd, moved) })
 }
 
 /** Commands we decline to run even when a human approves. */

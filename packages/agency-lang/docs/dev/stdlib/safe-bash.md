@@ -747,52 +747,75 @@ what it knows about the line as it walks it, command by command, in a
 - `cwd`, the working directory after each `cd`;
 - `written`, the `std::write` payloads the line has asked for so far;
 - `made`, the folders the line has asked `std::mkdir` for, by real path;
-- `opaque`, whether the line has run a command safeBash cannot see into;
+- `disk`, what the commands so far may have done to the disk (below);
 - `strict`, set for a lookup that needs a real path (below).
 
-`afterCommand` updates it after each command. A `std::write` goes in
-`written`. Any effect that is not in `SEE_THROUGH_EFFECTS`, the reads,
-listings, and searches, the git reads, and the GitHub reads, each by
-name, makes the line opaque. The list is by name and never by prefix:
-`git checkout` and `git stash pop` are `std::git` effects too, and either
-can put a symlink a commit holds into the working folder. An effect added
-to safeBash later makes the line opaque until someone adds it here.
+### What a command may have done to the disk
 
-An opaque effect other than `std::exec` also empties `written`. A
-`std::exec` program's approval already lets it read any file, so a file
-written before it stays remembered. `git checkout` and `git stash pop`
-are approved to change the repository only, yet either can put a link
-where the written file was, so after one of them `echo a > out.txt; rm
-out.txt; git checkout main; cat out.txt` asks `std::bash`.
+Every payload is resolved against the disk when the plan is made, before
+any command in the line runs. The stdlib's symlink checks run when a
+stdlib tool opens a file, so they do not run for a command bash runs. A
+command early in a line can therefore make a later payload false. With a
+branch that holds `README.md` as a link to a key, `git checkout evil; cat
+README.md` would print the key under a question that names the file in
+the project.
 
-A `std::mkdir` does not make the line opaque. `mkdir` makes a new folder
-or fails, and cannot turn a path that exists into anything else. Its
-folder goes in `made`, and three lookups accept a made folder that is not
-on the disk yet:
+`disk` has three values, and `diskAfter` picks one from a command's
+effects. Each effect is placed by name in a list:
+
+| `disk` | Effects | What they can do |
+|---|---|---|
+| `known` | `SEE_THROUGH_EFFECTS` (the reads, listings, searches, git reads, and GitHub reads), `std::write`, `std::mkdir` | Nothing safeBash cannot name. A write makes the file in its payload, and `mkdir` makes a new folder or fails. |
+| `changed` | `CHANGING_EFFECTS`: `std::exec`, `std::remove`, `git add`, `git commit`, making or deleting a branch | Make or remove a path. A program's approval already lets it read any file itself. `rm` puts nothing in a path's place. The git commands change the index and the refs, and a commit hook is a program. |
+| `replaced` | every other effect: `git checkout`, `git switch`, `git stash`, `git stash pop`, `git restore`, and any effect added later | Put a link a commit holds where a file or folder was, under an approval that lets them read nothing outside the repository. |
+
+The lists are by name and never by prefix. An effect added to safeBash
+later counts as `replaced` until someone places it.
+
+**Once the disk is `replaced`, no later command in the line may name a
+path** (`refuseStalePath`, and `cdTarget` for a `cd`). A command names a
+path when it asks `std::read`, `std::write`, `std::grep`, `std::ls`,
+`std::glob`, `std::remove`, or `std::mkdir`, when it is a `cd`, or when
+its payload's `cwd` is not the line's, as with `git -C dir status`. Such
+a line asks `std::bash`, which shows all of it. Commands that name no
+path keep their rules: `git checkout main && pnpm test`, and `git stash;
+pnpm test; git stash pop`. In a pipeline the stages run at the same
+time, so a stage that replaces paths and a stage that names one are
+refused together: `git checkout main | tee log.txt`.
+`noPathAfterACommandThatReplacesPaths` pins the rule.
+
+This rule predicts what a command can do. The plan to check each command
+against the disk just before it runs, which would replace it, is ADI-358.
+
+### Files the line wrote and folders it made
+
+`afterCommand` updates the line after each command. A `std::write` goes
+in `written`, and the folder of a `std::mkdir` goes in `made`. Both stay
+remembered when the disk is `changed`, before or after: a program could
+swap either one, and its approval already lets it read any file. When the
+disk is `replaced` nothing may name a path, so they no longer matter.
+
+Three lookups accept a made folder that is not on the disk yet:
 
 - a listing of it (`listTargetOf`): `mkdir -p out && ls out` asks
   `std::mkdir` and `std::ls` for `out`;
 - a file directly inside it (`missingWhere`): in `mkdir -p out && pnpm
   build > out/log.txt; tail out/log.txt` the read names `out/log.txt`;
-- a `cd` into it (`cdTargetIn`): `mkdir -p build && cd build && cmake ..`
+- a `cd` into it (`cdTarget`): `mkdir -p build && cd build && cmake ..`
   classifies `cmake` in `build`.
 
-Only the folder the `mkdir` names is remembered, not the folders above it
-that `-p` also makes. The folder is remembered only when nothing opaque
-ran before the `mkdir` or beside it in a pipeline. After `pnpm build` the
-path may already be a link to another folder, and `mkdir -p` of such a
-link succeeds without a word, so `pnpm build; mkdir -p out; ls out` asks
-`std::bash`. An effect that empties `written` empties `made` too: `git
-checkout` can put a link where an empty folder was.
+`mkdir -p a/b` makes `a` as well, so `madeFolder` accepts a missing path
+that lies above a made folder: `mkdir -p a/b && ls -R a` asks a recursive
+`std::ls` for `a`. A strict lookup accepts a made folder too. `tree` is
+strict because it refuses a file, and a made folder is a folder.
 
 A path that does not exist when the plan is made has a rule
-(`missingPath`) when its parent folder exists:
+(`missingPath`) when its parent folder exists or the line made it:
 
-1. When the line wrote that very file earlier, and `written` still holds
-   it, it resolves to it, even if the line is opaque: `pnpm test >
-   out.txt 2>&1; tail -50 out.txt`
+1. When the line wrote that very file earlier, it resolves to it, even
+   if the disk is `changed`: `pnpm test > out.txt 2>&1; tail -50 out.txt`
    asks `std::exec`, `std::write`, and `std::read` for the same file.
-2. Otherwise, when nothing opaque has run, it resolves by its parent:
+2. Otherwise, when the disk is `known`, it resolves by its parent:
    `cat nope.txt` asks `std::read` for that name in the folder, and `ls
    nope` asks `std::ls` for the folder, as `ls file` does.
 3. Otherwise it has no rule, as before. In `ln -s ~/.ssh/id_rsa x; cat
@@ -822,12 +845,12 @@ list closes it.
 The stages of a pipeline run at the same time, so another stage may make
 a path before this one reads it: in `pnpm test | cat nope.txt`, `pnpm
 test` runs alongside the `cat`. Each stage is classified in the line as
-it was before the pipeline, marked opaque, so inside a pipeline only rule
-1 applies, for a file written before the pipeline began. Parentheses end
-a `cd`, but not what the line wrote or ran.
+it was before the pipeline, with the disk at least `changed`, so inside a
+pipeline only rule 1 applies, for a file written before the pipeline
+began. Parentheses end a `cd`, but not what the line wrote or ran.
 
-Some lookups set `strict` and never use the rules above, because each
-needs a real path: `find`, `tree`, `grep -r`, `diff`, `cmp`, an input
+Some lookups set `strict` and never use the three rules above, because
+each needs a real path: `find`, `tree`, `grep -r`, `diff`, `cmp`, an input
 redirect, and the shell-free paths. A lone `cat nope.txt` therefore goes
 to bash, which runs real cat, and the model reads cat's own error.
 
@@ -2017,15 +2040,14 @@ and `cd x; echo hi` both ask `std::bash` and run the original text.
 with it. The refuse wall still reads the flat list from
 `flattenCommands`. Each tree node has a rule:
 
-- **`and`**: when the left side is a `cd`, `cdTargetIn` resolves its
-  directory and the right side is classified there. Otherwise the left
-  side is classified, and the directory it ends in is passed to the right
-  side. `&&` groups to the left, so `cd x && a && b` is
-  `(cd x && a) && b`, and that hand-over is how `b` is classified in `x`.
-  When the right side is a `cd`, as in `a && cd x`, the node ends in `x`.
-  `a && cd x && b` is `(a && cd x) && b`, so `b` is classified in `x`,
-  and it runs only when the `cd` worked. The rules below refuse the same
-  `cd` followed by `;` or `||`.
+- **`and`**: each side is classified in turn (`andSide`), the right one
+  in the line the left one ended with. A side that is a `cd` asks nothing
+  and moves the line to the directory `cdTarget` resolves. `&&` groups to
+  the left, so `cd x && a && b` is `(cd x && a) && b`, and that hand-over
+  is how `b` is classified in `x`. `a && cd x && b` is
+  `(a && cd x) && b`, so `b` is classified in `x` too, and it runs only
+  when the `cd` worked. The rules below refuse the same `cd` followed by
+  `;` or `||`.
 - **`or`**: a left side that ends in another directory is unrecognized,
   so `cd x && a || b` is broad.
 - **parentheses and pipeline stages**: each is a subshell, so the
@@ -2037,8 +2059,8 @@ with it. The refuse wall still reads the flat list from
   `a; cd x && b` is not.
 
 `cdTarget` accepts one literal argument that resolves to a directory that
-exists. `cdTargetIn` also accepts a folder the line made (see `made`
-above). `cd` alone, `cd -`, a variable, a second argument, a redirect, or
+exists, or to a folder the line made (see `made` above). It refuses every
+`cd` once the disk is `replaced`. `cd` alone, `cd -`, a variable, a second argument, a redirect, or
 an assignment is unrecognized. A `cd` in any other position is a simple
 command like any other, and `execEffects` refuses it as a builtin. That
 covers a `cd` on the right of `||` and a `cd` in a pipeline.

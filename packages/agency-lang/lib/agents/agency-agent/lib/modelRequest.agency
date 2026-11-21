@@ -71,6 +71,12 @@ export def noModelChoices(): ModelChoices {
   }
 }
 
+/** Whether the choices change nothing: no model, slot, effort or option.
+  A preset leaves a session with none until something is chosen on top. */
+export def choosesNothing(choices: ModelChoices): boolean {
+  return choices.pin == "" && Object.keys(choices.slots).length == 0 && choices.effort == null && choices.llmOptions == null
+}
+
 /** What parseModelFlag returns: a slot ("" for a bare model) and a model. */
 type ParsedModelFlag = {
   slot: string;

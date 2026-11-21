@@ -310,6 +310,56 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "noPresetHasNoChanges",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bareFreshPresetHasNoChanges",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "effortChangeShowsInChanges",
+      "input": "",
+      "expectedOutput": "\"[\\\"effort: (none) → low\\\"]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "savedChangesLeaveNone",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "deletedPresetHasNoChanges",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

@@ -36,6 +36,7 @@ function reported(model: string): PauseData {
     record: null,
     models: { main: { model, provider: "anthropic", via: "" } },
     preset: "",
+    presetChanges: [],
     fixedProvider: "",
     effort: "",
     budget: { maxCost: 1, maxTime: 1 },

@@ -1,7 +1,7 @@
 import { setEnv } from "std::system"
 
 import { POLICY_DIR, SETTINGS_FILE, usingDefaultAgentHome } from "../lib/config.agency"
-import { noModelChoices, noModelFlags, requestLlmOptions } from "../lib/modelRequest.agency"
+import { ModelChoices, noModelChoices, noModelFlags, requestLlmOptions } from "../lib/modelRequest.agency"
 import { Resolved } from "../lib/models.agency"
 import { Ctx } from "../lib/resolution.agency"
 import { activePresetName, readPresetTable, setPresetTable } from "../lib/presets.agency"
@@ -10,6 +10,7 @@ import {
   applySessionLlmOptions,
   currentModelRequest,
   parsePresetCommand,
+  presetChanges,
   saveSessionPreset,
   setStartupModelFlags,
   switchModel,
@@ -342,4 +343,47 @@ node saveRefusesABadName(): boolean {
     return false
   }
   return saveSessionPreset("Bad Name", noModelChoices())[0].startsWith("Not saved:")
+}
+
+// What a session changed from its preset: the lines /preset save would
+// print. None without a preset.
+def lowEffort(): ModelChoices {
+  return { ...noModelChoices(), effort: "low" }
+}
+
+node noPresetHasNoChanges(): string {
+  return JSON.stringify(presetChanges(lowEffort()))
+}
+
+// A preset that names no provider is saved as `pin`, and its snapshot
+// holds both chat slots instead. Just picked, it has changed nothing.
+node bareFreshPresetHasNoChanges(): string {
+  if (!useSavedPresets({ small: { pin: "claude-sonnet-4-6" } })) {
+    return "not sandboxed"
+  }
+  return JSON.stringify(presetChanges(noModelChoices()))
+}
+
+node effortChangeShowsInChanges(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  return JSON.stringify(presetChanges(lowEffort()))
+}
+
+node savedChangesLeaveNone(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  saveSessionPreset("", lowEffort())
+  return JSON.stringify(presetChanges(lowEffort()))
+}
+
+// A preset deleted from settings.json can't be saved back to: no changes.
+node deletedPresetHasNoChanges(): string {
+  if (!useSavedPresets(SAVED_PRESETS)) {
+    return "not sandboxed"
+  }
+  setPresetTable(readPresetTable({ big: SAVED_PRESETS.big }))
+  return JSON.stringify(presetChanges(lowEffort()))
 }

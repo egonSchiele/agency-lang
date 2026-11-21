@@ -27,6 +27,7 @@ import {
   ModelChoices,
   ModelFlags,
   ModelRequest,
+  choosesNothing,
   hasModelFlags,
   localModelOf,
   modelFlagsFromArgs,
@@ -808,15 +809,18 @@ export def saveSessionPreset(name: string, choices: ModelChoices): string[] {
   return saved.value
 }
 
-/** `saveSessionPreset`, with a save that was refused as a failure that
-  holds the line saying why. Success holds the lines to show, which say
-  what was saved, or that there was nothing to save. The session core
-  sends a failure as an error notice. */
-export def writeSessionPreset(name: string, choices: ModelChoices): Result<string[]> {
-  const target = if name == "" then activePresetName() else name
-  if (target == "") {
-    return failure("No preset is active. Name one: /preset save <name>")
-  }
+/** This session as a preset named `target`, against the one saved under
+  that name. `before` is null for a name with no valid preset. */
+type PresetComparison = {
+  before: Preset | null;
+  preset: Preset;
+  changes: string[]
+}
+
+// What a save would write, and the lines that say how it differs. A save
+// and the pause's `presetChanges` both use this, so a session just saved
+// reports no changes.
+def compareWithPreset(target: string, choices: ModelChoices): Result<PresetComparison> {
   const request = currentModelRequest(choices)
   if (movedByLocalCommand(request)) {
     return failure("Not saved: this session moved to or from a local model with /local, which a save cannot copy. Start with --local or a local preset, then save.")
@@ -833,13 +837,57 @@ export def writeSessionPreset(name: string, choices: ModelChoices): Result<strin
   if (found is success(saved)) {
     before = saved
   }
-  const changes = presetChangeLines(before, checked.value)
-  if (changes.length == 0 && before != null) {
+  return success({
+    before: before,
+    preset: checked.value,
+    changes: presetChangeLines(before, checked.value)
+  })
+}
+
+/** What this session changed from its active preset: the lines
+  `/preset save` would print, such as `effort: (none) → low`. Empty with
+  no active preset, with no choices made on top of it (a preset's saved
+  form can differ from a snapshot's while meaning the same models), when
+  the preset is gone, and when the session can't be saved to it. */
+export def presetChanges(choices: ModelChoices): string[] {
+  const active = activePresetName()
+  if (active == "" || choosesNothing(choices)) {
+    return []
+  }
+  const compared = compareWithPreset(active, choices)
+  if (compared is success(comparison)) {
+    if (comparison.before == null) {
+      return []
+    }
+    let trimmed: string[] = []
+    for (line in comparison.changes) {
+      trimmed.push(line.trim())
+    }
+    return trimmed
+  }
+  return []
+}
+
+/** `saveSessionPreset`, with a save that was refused as a failure that
+  holds the line saying why. Success holds the lines to show, which say
+  what was saved, or that there was nothing to save. The session core
+  sends a failure as an error notice. */
+export def writeSessionPreset(name: string, choices: ModelChoices): Result<string[]> {
+  const target = if name == "" then activePresetName() else name
+  if (target == "") {
+    return failure("No preset is active. Name one: /preset save <name>")
+  }
+  const compared = compareWithPreset(target, choices)
+  if (isFailure(compared)) {
+    return compared
+  }
+  const changes = compared.value.changes
+  if (changes.length == 0 && compared.value.before != null) {
     return success(["Nothing to save: this session matches the '${target}' preset."])
   }
   // The user asked for this write, so this handler does not object. A
   // policy in the chain still decides.
-  const edited = editPresets({ kind: "save", name: target, preset: checked.value }) with approve
+  const edited = editPresets({ kind: "save", name: target, preset: compared.value.preset }) with approve
   if (edited is failure(reason)) {
     return failure("Not saved: ${reason}")
   }

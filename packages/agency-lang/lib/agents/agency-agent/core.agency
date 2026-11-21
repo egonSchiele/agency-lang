@@ -50,6 +50,7 @@ import {
   askedEffort,
   fixedProvider,
   modelChoices,
+  presetChanges,
   useLocalModel,
   writeSessionPreset,
  } from "./lib/session.agency"
@@ -78,6 +79,10 @@ export type PauseData = {
   models: Record<string, Resolved>;
   // The active preset's name, or "".
   preset: string;
+  // What the session changed from that preset: the lines `/preset save`
+  // would print, such as "effort: (none) → low". Empty when it matches
+  // the preset or has none.
+  presetChanges: string[];
   // The provider the session is fixed to, or "". When one is fixed, a
   // `model` answer's spec is read whole, as a model of that provider.
   fixedProvider: string;
@@ -102,6 +107,7 @@ effect agent::sessionInput {
   record: any;
   models: any;
   preset: string;
+  presetChanges: any;
   fixedProvider: string;
   effort: string;
   budget: any;
@@ -232,6 +238,7 @@ def pauseData(budget: TurnBudget): PauseData {
     record: currentRecord(),
     models: getResolvedSlots(),
     preset: activePresetName(),
+    presetChanges: presetChanges(modelChoices()),
     fixedProvider: fixedProvider(),
     effort: askedEffort(),
     budget: budget,

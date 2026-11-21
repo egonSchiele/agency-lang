@@ -58,8 +58,8 @@ of them is not refused:
 
 **The pause.** The core waits with one interrupt, `agent::sessionInput`.
 Its data is what a front-end shows and saves between turns: `thread`,
-`cwd`, `record`, `models`, `preset`, `fixedProvider`, `effort`, `budget`,
-`context`, `brain`, `search`.
+`cwd`, `record`, `models`, `preset`, `presetChanges`, `fixedProvider`,
+`effort`, `budget`, `context`, `brain`, `search`.
 
 - `search` is the web search backend in force: `hosted`, `tavily`,
   `brave` or `off`. The driver reads it as "" from a pause that lacks it.
@@ -71,6 +71,16 @@ Its data is what a front-end shows and saves between turns: `thread`,
 - `fixedProvider` is the provider the session is fixed to, by the name a
   person sees, or "". `--provider`, a preset that names a provider, or
   `settings.model` fixes one.
+- `presetChanges` is what the session changed from its preset: the lines
+  `/preset save` would print, trimmed, such as `effort: (none) → low`
+  (`presetChanges` in `lib/session.agency`, which compares the way a save
+  does). It is empty with no preset, before anything is chosen on top of
+  one, once the session is saved to it, and when the preset is gone. A
+  front-end offers Save as a `savePreset` answer naming the preset, and
+  Revert as a `preset` answer with the same name. Changes under a preset
+  are not kept for new sessions (agent-presets.md, "The last settings").
+  The terminal does not draw this field yet. The driver reads it as `[]`
+  from a pause that lacks it.
 
 **Answers.** A front-end answers the pause with an `Answer`:
 

@@ -90,6 +90,9 @@ export type Sampling = {
  *  (apache-2.0 / mit), with the one exception described on `license`.
  *  Every repo comes from an uploader known to be legitimate: the lab
  *  that made the model, unsloth for GGUF, or mlx-community for MLX.
+ *  One MLX entry, `glm-5.3-flash-mlx`, comes from Jundot, who wrote the
+ *  oMLX server that runs it; mlx-community has no build of that model
+ *  that runs well on a Mac.
  *  Ordered roughly by size within each grouping. */
 export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   // ── General ─────────────────────────────────────────────────────────────
@@ -547,6 +550,19 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description: "The MLX build of qwen3-coder-30b-a3b. Small, fast agentic coder.",
     sampling: { temperature: 0.7, topP: 0.8, topK: 20 },
   },
+  "glm-5.3-flash-mlx": {
+    backend: "mlx",
+    uri: "mlx:Jundot/GLM-5.3-Flash-oQ4e-mtp",
+    params: "320B (A18B)",
+    sizeBytes: 186420000000,
+    kind: "chat",
+    tags: [],
+    contextWindow: 1048576,
+    license: "mit",
+    description:
+      "glm-5.3-flash at 4.6 bits, with its multi-token prediction head. Serve it with oMLX; mlx-lm cannot load it yet.",
+    sampling: { temperature: 1.0, topP: 0.95 },
+  },
   "qwen3-235b-a22b-2507-mlx": {
     backend: "mlx",
     uri: "mlx:mlx-community/Qwen3-235B-A22B-Instruct-2507-4bit",
@@ -722,6 +738,19 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description:
       "The MLX build of gemma-4-26b-a4b. Gemma 4's MoE, 3.8B active: 12B speed with 27B quality on a 32 GB Mac.",
     sampling: { temperature: 1.0, topP: 0.95, topK: 64 },
+  },
+  "inkling-2-mini-mlx": {
+    backend: "mlx",
+    uri: "mlx:mlx-community/Inkling-2-Mini-4bit",
+    params: "26B (A3.4B)",
+    sizeBytes: 17330000000,
+    kind: "chat",
+    tags: ["reasoning"],
+    contextWindow: 1048576,
+    license: "apache-2.0",
+    description:
+      "Thinking Machines' looped MoE for a 32 GB Mac. Needs mlx-lm from PR #2086 until a release supports it.",
+    sampling: { temperature: 1.0, topP: 1.0 },
   },
   "qwen3.5-27b-mlx": {
     backend: "mlx",

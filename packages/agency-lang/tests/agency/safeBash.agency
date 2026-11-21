@@ -936,6 +936,10 @@ node readsByOtherNames() {
     fileRow("sed -n '1,5p;7p' one.txt"),
     fileRow("sed -n p one.txt"),
     fileRow("git log | sed -n 1,5p"),
+    fileRow("git log | sed -n '1e true'"),
+    fileRow("sed -n 1,5p"),
+    fileRow("shasum -a 256 one.txt"),
+    fileRow("shasum -a x one.txt"),
     fileRow("stat one.txt"),
     fileRow("stat sub"),
     fileRow("shasum one.txt"),
@@ -972,13 +976,61 @@ node missingPathsResolveByParent() {
   return rows
 }
 
+// A folder the line made with mkdir can be named by a later command: a
+// listing of it, a file in it, a cd into it. It is forgotten after a
+// command that could put a link there, and never remembered when an
+// opaque command ran before the mkdir.
+node foldersTheLineMade() {
+  makeFilesFixture()
+  const rows = [
+    fileRow("mkdir x; ls x"),
+    fileRow("mkdir -p out && ls -la out"),
+    fileRow("mkdir -p out && pnpm build > out/log.txt 2>&1; tail -5 out/log.txt"),
+    fileRow("mkdir -p build && cd build && pnpm test"),
+    fileRow("mkdir -p build && cd build && ls"),
+    executionCommandIn("mkdir -p build && cd build && ls", FILES_FIXTURE).split(resolve(FILES_FIXTURE)).join("<fix>"),
+    fileRow("mkdir -p a/b && ls a/b"),
+    fileRow("cd nope && ls"),
+    fileRow("mkdir out && cat out/nope.txt"),
+    fileRow("pnpm build; mkdir -p out; ls out"),
+    fileRow("mkdir x; git checkout main; ls x"),
+    fileRow("mkdir x; rm -r x; ls x"),
+    fileRow("pnpm build | mkdir x; ls x"),
+    fileRow("git checkout main; mkdir -p build && cd build && ls"),
+  ]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
+// `a && cd dir && b`: `b` runs only when the `cd` worked, so it is
+// classified in `dir`. After `;`, `||`, or in a pipe, where it would run
+// either way, the line has no rule.
+node cdOnTheRightOfAnd() {
+  makeFilesFixture()
+  const rows = [
+    fileRow("pnpm build && cd sub && ls"),
+    executionCommandIn("pnpm build && cd sub && ls", FILES_FIXTURE).split(resolve(FILES_FIXTURE)).join("<fix>"),
+    fileRow("pnpm build && cd sub && cd .. && ls"),
+    fileRow("(pnpm build && cd sub) && ls"),
+    fileRow("pnpm build && cd sub; ls"),
+    fileRow("pnpm build && cd sub && ls; ls"),
+    fileRow("pnpm build && cd sub || ls"),
+    fileRow("pnpm build && cd sub | ls"),
+    fileRow("pnpm build && cd nope && ls"),
+    fileRow("pnpm build && cd $HOME && ls"),
+    fileRow("pnpm build && X=1 cd sub && ls"),
+    fileRow("pnpm build && cd sub && git checkout ."),
+  ]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
 // After a command that ran a program safeBash cannot see into, a missing
 // path has no rule: the program may have made it into anything.
 node missingPathAfterAProgramIsBroad() {
   makeFilesFixture()
   const rows = [
     fileRow("ln -s /etc/hosts x; cat x"),
-    fileRow("mkdir x; ls x"),
     fileRow("cp one.txt y; cat y"),
     fileRow("ln -sf /etc/hosts out.txt > out.txt; cat out.txt"),
     fileRow("pnpm test; cat nope.txt"),
@@ -1951,6 +2003,8 @@ node cdMovesTheRestOfAnAndChain() {
     cdSummary("cd ./grep-fixtures/ && ls"),
     cdSummary("ls && cd grep-fixtures && ls"),
     rebuiltEndsWith("cd grep-fixtures && ls", "/stdlib/grep-fixtures' && ls"),
+    cdSummary("ls && cd grep-fixtures"),
+    cdSummary("cd grep-fixtures && cd ../read-fixtures && ls"),
   ]
 }
 
@@ -2005,7 +2059,6 @@ node cdAnywhereElseIsBroad() {
   return [
     cdSummary("cd grep-fixtures"),
     cdSummary("cd grep-fixtures || ls"),
-    cdSummary("ls && cd grep-fixtures"),
     cdSummary("cd grep-fixtures | ls"),
     cdSummary("cd missing && ls"),
     cdSummary("cd grep-fixtures/one.txt && ls"),
@@ -2014,7 +2067,6 @@ node cdAnywhereElseIsBroad() {
     cdSummary("cd $HOME && ls"),
     cdSummary("cd grep-fixtures read-fixtures && ls"),
     cdSummary("cd grep-fixtures > out.txt && ls"),
-    cdSummary("cd grep-fixtures && cd ../read-fixtures && ls"),
     cdSummary("ls || cd grep-fixtures && ls"),
   ]
 }

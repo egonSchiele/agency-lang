@@ -746,6 +746,7 @@ what it knows about the line as it walks it, command by command, in a
 
 - `cwd`, the working directory after each `cd`;
 - `written`, the `std::write` payloads the line has asked for so far;
+- `made`, the folders the line has asked `std::mkdir` for, by real path;
 - `opaque`, whether the line has run a command safeBash cannot see into;
 - `strict`, set for a lookup that needs a real path (below).
 
@@ -763,6 +764,26 @@ written before it stays remembered. `git checkout` and `git stash pop`
 are approved to change the repository only, yet either can put a link
 where the written file was, so after one of them `echo a > out.txt; rm
 out.txt; git checkout main; cat out.txt` asks `std::bash`.
+
+A `std::mkdir` does not make the line opaque. `mkdir` makes a new folder
+or fails, and cannot turn a path that exists into anything else. Its
+folder goes in `made`, and three lookups accept a made folder that is not
+on the disk yet:
+
+- a listing of it (`listTargetOf`): `mkdir -p out && ls out` asks
+  `std::mkdir` and `std::ls` for `out`;
+- a file directly inside it (`missingWhere`): in `mkdir -p out && pnpm
+  build > out/log.txt; tail out/log.txt` the read names `out/log.txt`;
+- a `cd` into it (`cdTargetIn`): `mkdir -p build && cd build && cmake ..`
+  classifies `cmake` in `build`.
+
+Only the folder the `mkdir` names is remembered, not the folders above it
+that `-p` also makes. The folder is remembered only when nothing opaque
+ran before the `mkdir` or beside it in a pipeline. After `pnpm build` the
+path may already be a link to another folder, and `mkdir -p` of such a
+link succeeds without a word, so `pnpm build; mkdir -p out; ls out` asks
+`std::bash`. An effect that empties `written` empties `made` too: `git
+checkout` can put a link where an empty folder was.
 
 A path that does not exist when the plan is made has a rule
 (`missingPath`) when its parent folder exists:
@@ -833,18 +854,21 @@ hold a count.
 | `cut` | `-d C`, `-f F`, `-c C` | any number |
 | `nl` | `-b B` | any number |
 | `tac`, `rev` | none | any number |
-| `md5sum`, `shasum`, `sha256sum` | none | any number |
+| `md5sum`, `sha256sum` | none | any number |
+| `shasum` | `-a N` | any number |
 | `file` | none | any number |
 
 `file` opens the file and prints what its first bytes say, such as
-`OpenSSH private key`, so it is a read. The checksums take no flag:
-`shasum -c` reads every file a list names.
+`OpenSSH private key`, so it is a read. The checksums take no flag but
+`shasum -a` with a number, which picks the algorithm: `shasum -c` reads
+every file a list names.
 
 `sed -n Np` and `sed -n N,Mp` of one file is how models read a range of
 lines, so `sedEffects` asks `std::read` for that one shape: the flag
 `-n`, a script of digits, an optional comma and digits, then `p`, and one
-path. Every other sed has no rule: `w` in a script writes a file, and
-GNU sed's `e` runs a command.
+path. With no path and a pipe feeding it, as in `git log | sed -n 1,5p`,
+it is a stage like `head` and adds no question. Every other sed has no
+rule: `w` in a script writes a file, and GNU sed's `e` runs a command.
 
 Every letter means the same thing in GNU coreutils, BSD coreutils, and
 busybox. These are left out on purpose:
@@ -1993,11 +2017,15 @@ and `cd x; echo hi` both ask `std::bash` and run the original text.
 with it. The refuse wall still reads the flat list from
 `flattenCommands`. Each tree node has a rule:
 
-- **`and`**: when the left side is a `cd`, `cdTarget` resolves its
+- **`and`**: when the left side is a `cd`, `cdTargetIn` resolves its
   directory and the right side is classified there. Otherwise the left
   side is classified, and the directory it ends in is passed to the right
   side. `&&` groups to the left, so `cd x && a && b` is
   `(cd x && a) && b`, and that hand-over is how `b` is classified in `x`.
+  When the right side is a `cd`, as in `a && cd x`, the node ends in `x`.
+  `a && cd x && b` is `(a && cd x) && b`, so `b` is classified in `x`,
+  and it runs only when the `cd` worked. The rules below refuse the same
+  `cd` followed by `;` or `||`.
 - **`or`**: a left side that ends in another directory is unrecognized,
   so `cd x && a || b` is broad.
 - **parentheses and pipeline stages**: each is a subshell, so the
@@ -2009,12 +2037,11 @@ with it. The refuse wall still reads the flat list from
   `a; cd x && b` is not.
 
 `cdTarget` accepts one literal argument that resolves to a directory that
-exists. `cd` alone, `cd -`, a variable, a second argument, a redirect, or
+exists. `cdTargetIn` also accepts a folder the line made (see `made`
+above). `cd` alone, `cd -`, a variable, a second argument, a redirect, or
 an assignment is unrecognized. A `cd` in any other position is a simple
 command like any other, and `execEffects` refuses it as a builtin. That
-covers a `cd` on the right of `&&` or `||`, a `cd` in a pipeline, and
-`cd x && cd y && a`, where the second `cd` is the right side of the inner
-`&&`.
+covers a `cd` on the right of `||` and a `cd` in a pipeline.
 
 The rebuilt text does not keep the word the model wrote. Each recognized
 `cd` is rebuilt with the directory `cdTarget` resolved, as an absolute

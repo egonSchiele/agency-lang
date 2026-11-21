@@ -606,7 +606,7 @@ def verbEffects(verb: string, command: SimpleCommand, line: LineState, readsStdi
     "echo" => success(redirects)
     "tr" => trEffects(command, readsStdin, redirects)
     "tee" => teeEffects(command, line.cwd, readsStdin, redirects)
-    "sed" => sedEffects(command, line, redirects)
+    "sed" => sedEffects(command, line, readsStdin, redirects)
     "find" => findEffects(command, line.cwd, redirects)
     _ => otherVerbEffects(verb, command, line, readsStdin, redirects)
   }
@@ -1810,7 +1810,8 @@ export type ReadVerb = {
  macOS; the line is recognized and the shell reports it missing. sort
  may spill a large input to files under $TMPDIR, which no payload
  names. The checksums read the whole file; `shasum -c` would read every
- file a list names, so no flag is in their rows. `file` opens the file
+ file a list names, so the only flag in their rows is shasum's `-a`, which
+ picks the algorithm by number (`shasum -a 256 file`). `file` opens the file
  and prints what its first bytes say, such as `OpenSSH private key`, so
  it is a read too. */
 export static const READ_VERBS: Record<string, ReadVerb> = {
@@ -1880,9 +1881,9 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
     countFlags: []
   },
   shasum: {
-    flags: { plain: [], valued: [], optionsFirst: true },
+    flags: { plain: [], valued: ["a"], optionsFirst: true },
     paths: ANY_NUMBER,
-    countFlags: []
+    countFlags: ["a"]
   },
   sha256sum: {
     flags: { plain: [], valued: [], optionsFirst: true },
@@ -1975,20 +1976,25 @@ static const SED_FLAGS: FlagSpec = { plain: ["n"], valued: [], optionsFirst: tru
 
 // `sed -n 10,20p file` is how models read a range of lines, so that one
 // shape is a read: `-n`, a script of digits, an optional comma and digits,
-// then `p`, and one file. Every other sed has no rule: `w` in a script
-// writes a file, and GNU sed's `e` runs a command.
+// then `p`, and one file, or no file when a pipe feeds it. Every other sed
+// has no rule: `w` in a script writes a file, and GNU sed's `e` runs a
+// command.
 @capabilities(fileRead)
-def sedEffects(command: SimpleCommand, line: LineState, redirects: Effect[]): Result<Effect[]> {
+def sedEffects(command: SimpleCommand, line: LineState, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   """
-  Ask std::read for a sed that prints a range of a file's lines, and refuse every other sed.
+  Ask std::read for a sed that prints a range of a file's lines, ask nothing more for one that prints a range of a pipe's lines, and refuse every other sed.
   """
   const split = splitFlags("sed", command, SED_FLAGS)
-  if (isFailure(split) || !split.value.plain.includes("n") || split.value.positionals.length != 2) {
+  if (isFailure(split) || !split.value.plain.includes("n")) {
     return failure("no rule for `sed`")
   }
   const words = split.value.positionals
-  if (!isLineRange(literalTextOf(words[0]))) {
+  if (words.length == 0 || words.length > 2 || !isLineRange(literalTextOf(words[0]))) {
     return failure("no rule for `sed`")
+  }
+  // With no file it prints a range of the pipe's lines, as `head` does.
+  if (words.length == 1) {
+    return stdinStage("sed", readsStdin, redirects)
   }
   const text = literalWordText(words[1])
   if (text is failure(why)) {
@@ -2100,19 +2106,21 @@ def resolveTarget(text: string, word: Word, cwd: string): Result<PathTarget> {
 
 /** What the classifier knows about a line as it walks it, command by
  command: the working directory after each `cd`; the `std::write`
- payloads the line has asked for so far; and whether it has run a command
+ payloads the line has asked for so far; the folders it has asked
+ `std::mkdir` for, by real path; and whether it has run a command
  safeBash cannot see into. `strict` is false for a lookup that may name a
  path that does not exist yet. */
 type LineState = {
   cwd: string;
   written: WritePayload[];
+  made: string[];
   opaque: boolean;
   strict: boolean
 }
 
 /* The state of a line before its first command. */
 def freshLine(cwd: string): LineState {
-  return { cwd: cwd, written: [], opaque: false, strict: false }
+  return { cwd: cwd, written: [], made: [], opaque: false, strict: false }
 }
 
 /* The same line, for a lookup where a missing path has no rule: `find`,
@@ -2148,14 +2156,64 @@ static const SEE_THROUGH_EFFECTS: string[] = [
 // own redirect's included: `git checkout` and `git stash pop` can put a
 // link that a commit holds where the file was, and their approvals let
 // them read nothing outside the repository.
+//
+// A `std::mkdir` does not make the line opaque: `mkdir` makes a new folder
+// or fails, and cannot turn a path that exists into anything else. Its
+// folder is remembered too, so a later command can name it (`madeFolder`),
+// but only when nothing opaque ran before it or beside it. After an opaque
+// command the path may already be a link to another folder, and `mkdir -p`
+// of such a link succeeds without a word. A command that forgets the
+// written files forgets the made folders as well: `git checkout` can put a
+// link where an empty folder was.
 def afterCommand(line: LineState, effects: Effect[]): LineState {
   const writes: WritePayload[] = [effect.payload for effect in effects if effect.name == "std::write"]
-  const unseen = [effect for effect in effects if effect.name != "std::write" && !SEE_THROUGH_EFFECTS.includes(effect.name)]
+  const folders: string[] = [effect.payload.dir for effect in effects if effect.name == "std::mkdir"]
+  const unseen = [effect for effect in effects if effect.name != "std::write" && effect.name != "std::mkdir" && !SEE_THROUGH_EFFECTS.includes(effect.name)]
   const swappers = [effect for effect in unseen if effect.name != "std::exec"]
   if (swappers.length > 0) {
-    return { ...line, written: [], opaque: true }
+    return { ...line, written: [], made: [], opaque: true }
   }
-  return { ...line, written: [...line.written, ...writes], opaque: line.opaque || unseen.length > 0 }
+  const opaque = line.opaque || unseen.length > 0
+  const made: string[] = if (opaque) then line.made else [...line.made, ...folders]
+  return { ...line, written: [...line.written, ...writes], made: made, opaque: opaque }
+}
+
+/* The real path of the folder a word names, when the line made a folder
+ there, and null otherwise. */
+@capabilities(fileRead)
+def madeFolder(text: string, word: Word, line: LineState): string | null {
+  if (line.made.length == 0) {
+    return null
+  }
+  const real = try _realPathIn(text, line.cwd, tildeModeFor(word), "path")
+  if (real is failure(why)) {
+    return null
+  }
+  if (line.made.includes(real.value)) {
+    return real.value
+  }
+  return null
+}
+
+/* Where a missing path would be: in a parent folder that exists, or in
+ one the line made. Null when something is there, or the parent is neither. */
+@capabilities(fileRead)
+def missingWhere(text: string, word: Word, line: LineState): NewFile | null {
+  const found = try _missingTarget(text, line.cwd, tildeModeFor(word))
+  if (found is success(where)) {
+    return { dir: where.dir, filename: where.filename }
+  }
+  if (line.made.length == 0) {
+    return null
+  }
+  const inMade = try _resolveRedirectTarget(text, line.cwd, tildeModeFor(word))
+  if (inMade is failure(why)) {
+    return null
+  }
+  if (line.made.includes(inMade.value.dir)) {
+    return { dir: inMade.value.dir, filename: inMade.value.filename }
+  }
+  return null
 }
 
 // A path that does not exist when the plan is made, and its parent folder
@@ -2175,11 +2233,10 @@ def missingPath(text: string, word: Word, line: LineState): WritePayload | null 
   if (line.strict) {
     return null
   }
-  const found = try _missingTarget(text, line.cwd, tildeModeFor(word))
-  if (found is failure(why)) {
+  const where = missingWhere(text, word, line)
+  if (where == null) {
     return null
   }
-  const where = found.value
   const wrote = [entry for entry in line.written if entry.dir == where.dir && entry.filename == where.filename]
   if (wrote.length > 0) {
     return wrote[0]
@@ -2216,6 +2273,11 @@ def resolveTargets(verb: string, words: Word[], line: LineState): Result<ListTar
 def listTargetOf(text: string, word: Word, line: LineState): Result<ListTarget> {
   const target = resolveTarget(text, word, line.cwd)
   if (isFailure(target)) {
+    // `mkdir -p out && ls out`: the folder is not there yet, and will be.
+    const made = madeFolder(text, word, line)
+    if (made != null) {
+      return success({ target: { dir: made, file: null, argument: text }, linked: false })
+    }
     const missing = missingPath(text, word, line)
     if (missing == null) {
       return target
@@ -5234,7 +5296,7 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
   for (command, index in commands) {
     const cd = asCd(command)
     if (cd != null) {
-      const moved = cdTarget(cd, line.cwd)?
+      const moved = cdTargetIn(cd, line)?
       rewritten.push(cdOrExit(cd, moved))
       line = { ...line, cwd: moved }
       continue
@@ -5403,7 +5465,17 @@ def classifyGroup(inner: Command, line: LineState, origin: GhRepo | null, readsS
 def classifyAnd(left: Command, right: Command, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   const cd = asCd(left)
   if (cd != null) {
-    const moved = cdTarget(cd, line.cwd)?
+    const moved = cdTargetIn(cd, line)?
+    // `cd x && cd y`: the second is read from where the first leads.
+    const next = asCd(right)
+    if (next != null) {
+      const further = cdTargetIn(next, { ...line, cwd: moved })?
+      return success({
+        effects: [],
+        line: { ...line, cwd: further },
+        command: { tag: "and", left: cdTo(cd, moved), right: cdTo(next, further) }
+      })
+    }
     const rest = classify(right, { ...line, cwd: moved }, origin, readsStdin)?
     return success({
       effects: rest.effects,
@@ -5412,6 +5484,19 @@ def classifyAnd(left: Command, right: Command, line: LineState, origin: GhRepo |
     })
   }
   const first = classify(left, line, origin, readsStdin)?
+  // `a && cd dir`, as in `mkdir -p build && cd build && cmake ..`, which
+  // is `(mkdir -p build && cd build) && cmake ..`. Whatever follows with
+  // `&&` runs only when the `cd` worked. `;` and `||` after it are refused
+  // by `classifyAll` and `classifyOr`, which see the directory changed.
+  const later = asCd(right)
+  if (later != null) {
+    const moved = cdTargetIn(later, first.line)?
+    return success({
+      effects: first.effects,
+      line: { ...first.line, cwd: moved },
+      command: { tag: "and", left: first.command, right: cdTo(later, moved) }
+    })
+  }
   const second = classify(right, first.line, origin, readsStdin)?
   return success({
     effects: [...first.effects, ...second.effects],
@@ -5517,6 +5602,29 @@ def cdTarget(command: SimpleCommand, cwd: string): Result<string> {
     return failure("the `cd` directory has a single quote in its path")
   }
   return success(target.dir)
+}
+
+// `mkdir -p build && cd build && cmake ..`: the folder a `cd` names may be
+// one the line made, which does not exist when the plan is made.
+@capabilities(fileRead)
+def cdTargetIn(command: SimpleCommand, line: LineState): Result<string> {
+  """
+  Resolve the directory a cd names: one that exists, or one the line made.
+  """
+  const target = cdTarget(command, line.cwd)
+  if (isSuccess(target) || command.assignments.length > 0 || command.redirects.length > 0 || command.args.length != 1) {
+    return target
+  }
+  const word = command.args[0]
+  const text = literalTextOf(word)
+  if (text == "" || text == "-") {
+    return target
+  }
+  const made = madeFolder(text, word, line)
+  if (made == null || made.includes("'")) {
+    return target
+  }
+  return success(made)
 }
 
 /** Commands we decline to run even when a human approves. */

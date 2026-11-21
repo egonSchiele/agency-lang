@@ -779,7 +779,7 @@ node newShapes() {
     planSummary("shred x | cat"),
     planSummary("make 2>&1 | tail -100"),
     planReason("git status | head"),
-    executionCommand("git    status |  git   log"),
+    executionCommand("git    status |  head"),
   ]
 }
 
@@ -1067,7 +1067,7 @@ node readsByOtherNames() {
 }
 
 // A path that does not exist when the plan is made resolves by its
-// parent, when the parent exists and nothing opaque has run before it.
+// parent, when the parent exists.
 node missingPathsResolveByParent() {
   makeFilesFixture()
   const rows = [
@@ -1119,12 +1119,72 @@ node foldersTheLineMade() {
   return rows
 }
 
-// Every payload is resolved against the disk before the line runs. After
-// a command that can put a link where a file or folder was, no later
-// command in the line may name a path. A program, `rm`, `git add`, and
-// `git commit` cannot do that under their approvals, so paths after them
-// keep their rules.
-node noPathAfterACommandThatReplacesPaths() {
+// A pipeline is one step, so the runner cannot check between its stages,
+// which run at the same time. At most one stage may ask anything other
+// than std::exec, whose approval already lets a program read any file.
+node aPipelineHasOneStageThatAsks() {
+  makeFilesFixture()
+  const rows = [[line, outcomeOf(planFor(line, FILES_FIXTURE))] for line in [
+    "git checkout x | cat one.txt",
+    "git checkout main | tee log.txt",
+    "cat one.txt | grep version",
+    "pnpm test 2>&1 | tee out.log | tail -30",
+    "git log --oneline | head > out.txt",
+    "pnpm test | cat nope.txt",
+    // A group runs as part of its stage, so a check before the pipeline
+    // cannot see between its commands.
+    "(git checkout x && cat one.txt) | cat",
+    "(git checkout x && cd sub && pnpm test) | cat",
+    "(pnpm build && pnpm test) | tail -5",
+    "(cd sub && pnpm test) | tail -5",
+    // A `cd` is not one of the group's commands: the check resolves it
+    // again and runs the real folder.
+    "(cd sub && ls) | head",
+    "(cd sub && git status && git log) | head",
+  ]]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
+// `rm -rf link/` follows the link and deletes what it points to, while the
+// std::remove payload names the link itself. So a `/` after a link has no
+// rule. Planned only: nothing here deletes anything.
+node aSlashAfterALinkHasNoRule() {
+  makeFilesFixture()
+  bash("ln -s sub link", cwd: FILES_FIXTURE) with approve
+  const rows = [[line, outcomeOf(planFor(line, FILES_FIXTURE))] for line in [
+    "rm -rf link/",
+    "rmdir link/",
+    "rm -rf link",
+    "rm -rf sub/",
+  ]]
+  bash("rm -f link", cwd: FILES_FIXTURE) with approve
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
+// The spec's table "Lines that get their narrow questions back", in the
+// fixture's files. Each step is checked just before it runs, so a command
+// that can replace paths no longer sends the paths after it to std::bash.
+node linesThatGetTheirNarrowQuestionsBack() {
+  makeFilesFixture()
+  const rows = [
+    fileRow("git checkout main && cat one.txt"),
+    fileRow("git stash pop && ls"),
+    fileRow("git checkout -b new && ls"),
+    fileRow("git switch main; grep -rn TODO sub"),
+    fileRow("pnpm build && cat out.txt"),
+  ]
+  remove(FILES_FIXTURE) with approve
+  return [[row[0], row[1]] for row in rows]
+}
+
+// A command that can put a link where a file or folder was, such as `git
+// checkout`, no longer sends the paths after it to std::bash. The runner
+// checks each later step just before it runs; `aCheckoutThatSwapsAPathStops`
+// in safeBashSteps.agency runs the attack these lines used to guard
+// against.
+node aLineAfterACheckoutIsNarrow() {
   makeFilesFixture()
   const rows = [
     fileRow("git checkout main; cat one.txt"),
@@ -1210,9 +1270,11 @@ node cdOnTheRightOfAnd() {
   return rows
 }
 
-// After a command that ran a program safeBash cannot see into, a missing
-// path has no rule: the program may have made it into anything.
-node missingPathAfterAProgramIsBroad() {
+// A missing path after a program, or after a command that can put a link
+// where a file was, is asked about where it would be. The runner plans the
+// step that reads it again just before it runs, so a program that made it
+// into a link stops the line. `ln`, `cp`, and `mv` still have no rule.
+node missingPathAfterAProgram() {
   makeFilesFixture()
   const rows = [
     fileRow("ln -s /etc/hosts x; cat x"),
@@ -1220,8 +1282,6 @@ node missingPathAfterAProgramIsBroad() {
     fileRow("ln -sf /etc/hosts out.txt > out.txt; cat out.txt"),
     fileRow("pnpm test; cat nope.txt"),
     fileRow("pnpm test | cat nope.txt"),
-    // After a narrow command that can put a link where a file was, no
-    // command may name a path, a file the line wrote included.
     fileRow("echo a > out.txt; rm out.txt; git checkout main; cat out.txt"),
     fileRow("echo a > out.txt; git stash pop; cat out.txt"),
     fileRow("git checkout main > out.txt; cat out.txt"),

@@ -424,8 +424,30 @@ parenthesized group; `flattenOne` flattens it through `flattenCommands`,
 so the refuse wall sees every stage and classification needs no new
 branch: a pipeline is recognized when every stage is, its effects are
 the union, and it runs through bash as the rebuilt text (`git status |
-git log` and `git status | head` are narrow; `git status | xargs echo` is
-broad). A dup redirect
+head` is narrow; `git status | xargs echo` is broad).
+
+A pipeline is one step, so the runner checks it once, before any stage
+starts, and cannot check between stages that run at the same time. So
+**at most one stage may ask anything other than `std::exec`**, whose
+approval already lets a program read and change any file. `git checkout
+x | cat README.md` could read a file the checkout swapped a moment
+before, so it asks `std::bash`, and so do `git status | git log` and
+`git log | head > out.txt`. `cat package.json | grep version` and `pnpm
+test 2>&1 | tee out.log | tail -30` stay narrow. The rule names no
+effect but `std::exec`, so an effect added later counts against the
+limit (`aPipelineHasOneStageThatAsks`).
+
+A group of several commands is part of one stage, so the check cannot see
+between its commands either. When the pipeline asks anything other than
+`std::exec`, a stage that is a group of more than one command asks
+`std::bash`: `(git checkout x && cat README.md) | cat`, and `(git checkout
+x && cd sub && pnpm test) | cat`, where `pnpm` would run in a folder the
+checkout may have swapped. A `cd` is not counted as one of the group's
+commands, so `(cd lib && ls) | head` stays narrow: the check resolves the
+`cd` again and writes the real folder into the text it runs. A group of
+programs, `(pnpm build && pnpm test) | tail`, stays narrow.
+
+A dup redirect
 (`2>&1`, op `>&`) moves a stream and writes no file, so `redirectEffect`
 skips it; `prepareRedirectWrite` stays strict, because the shell-free
 write path computes the bytes it writes and a dup changes which stream
@@ -750,46 +772,22 @@ what it knows about the line as it walks it, command by command, in a
 - `disk`, what the commands so far may have done to the disk (below);
 - `strict`, set for a lookup that needs a real path (below).
 
-### What a command may have done to the disk
+### What an earlier command did to the disk
 
 Every payload is resolved against the disk when the plan is made, before
-any command in the line runs. The stdlib's symlink checks run when a
-stdlib tool opens a file, so they do not run for a command bash runs. A
-command early in a line can therefore make a later payload false. With a
-branch that holds `README.md` as a link to a key, `git checkout evil; cat
-README.md` would print the key under a question that names the file in
-the project.
-
-`disk` has three values, and `diskAfter` picks one from a command's
-effects. Each effect is placed by name in a list:
-
-| `disk` | Effects | What they can do |
-|---|---|---|
-| `known` | `SEE_THROUGH_EFFECTS` (the reads, listings, searches, git reads, and GitHub reads), `std::write`, `std::mkdir` | Nothing safeBash cannot name. A write makes the file in its payload, and `mkdir` makes a new folder or fails. |
-| `changed` | `CHANGING_EFFECTS`: `std::exec`, `std::remove`, `git add`, `git commit`, making or deleting a branch | Make or remove a path. A program's approval already lets it read any file itself. `rm` puts nothing in a path's place. The git commands change the index and the refs, and a commit hook is a program. |
-| `replaced` | every other effect: `git checkout`, `git switch`, `git stash`, `git stash pop`, `git restore`, and any effect added later | Put a link a commit holds where a file or folder was, under an approval that lets them read nothing outside the repository. |
-
-The lists are by name and never by prefix. An effect added to safeBash
-later counts as `replaced` until someone places it.
-
-**Once the disk is `replaced`, no later command in the line may name a
-path** (`refuseStalePath`, and `cdTarget` for a `cd`). A command names a
-path when it asks `std::read`, `std::write`, `std::grep`, `std::ls`,
-`std::glob`, `std::remove`, or `std::mkdir`, when it is a `cd`, or when
-its payload's `cwd` is not the line's, as with `git -C dir status`. Such
-a line asks `std::bash`, which shows all of it. Commands that name no
-path keep their rules: `git checkout main && pnpm test`, and `git stash;
-pnpm test; git stash pop`. In a pipeline the stages run at the same
-time, so a stage that replaces paths and a stage that names one are
-refused together: `git checkout main | tee log.txt`.
-`noPathAfterACommandThatReplacesPaths` pins the rule.
-
-This rule predicts what a command can do. The plan to check each command
-against the disk just before it runs, which would replace it, is ADI-358.
+any command in the line runs, and an earlier command can change the
+disk. With a branch that holds `README.md` as a link to a key, `git
+checkout evil; cat README.md` would print the key under a question that
+names the file in the project. The plan does not try to predict this.
+The runner plans each step again just before it runs and stops the line
+when a path now leads somewhere else (see "Each step is checked just
+before it runs"). `aCheckoutThatSwapsAPathStops` in
+`tests/agency/safeBashSteps.agency` runs that attack.
 
 ### A `..` after a symlink
 
-The same gap between the plan and bash exists inside one word. Every
+A gap between the plan and bash also exists inside one word, and checking
+later does not close it. Every
 resolver makes the word absolute with `path.resolve`, which removes a
 `..` from the text. The kernel applies a `..` after following a link.
 With `link` pointing at `/elsewhere/inner`, `link/../creds` is
@@ -825,10 +823,10 @@ refusal there, and the line asks `std::bash`.
 ### Files the line wrote and folders it made
 
 `afterCommand` updates the line after each command. A `std::write` goes
-in `written`, and the folder of a `std::mkdir` goes in `made`. Both stay
-remembered when the disk is `changed`, before or after: a program could
-swap either one, and its approval already lets it read any file. When the
-disk is `replaced` nothing may name a path, so they no longer matter.
+in `written`, and the folder of a `std::mkdir` goes in `made`. What they
+let the plan ask is a prediction. When the step runs, the runner plans it
+again in a fresh line, and the fresh plan finds the file or folder on the
+disk; when the two disagree, the line stops.
 
 Three lookups accept a made folder that is not on the disk yet:
 
@@ -847,15 +845,13 @@ strict because it refuses a file, and a made folder is a folder.
 A path that does not exist when the plan is made has a rule
 (`missingPath`) when its parent folder exists or the line made it:
 
-1. When the line wrote that very file earlier, it resolves to it, even
-   if the disk is `changed`: `pnpm test > out.txt 2>&1; tail -50 out.txt`
-   asks `std::exec`, `std::write`, and `std::read` for the same file.
-2. Otherwise, when the disk is `known`, it resolves by its parent:
-   `cat nope.txt` asks `std::read` for that name in the folder, and `ls
-   nope` asks `std::ls` for the folder, as `ls file` does.
-3. Otherwise it has no rule, as before. In `ln -s ~/.ssh/id_rsa x; cat
-   x`, `x` is missing when the plan is made, and the `cat` would read the
-   key under a question that names `x`.
+1. When the line wrote that very file earlier, it resolves to it: `pnpm
+   test > out.txt 2>&1; tail -50 out.txt` asks `std::exec`, `std::write`,
+   and `std::read` for the same file.
+2. Otherwise it resolves by its parent: `cat nope.txt` asks `std::read`
+   for that name in the folder, and `ls nope` asks `std::ls` for the
+   folder, as `ls file` does. After a program too: `pnpm build && cat
+   dist/out.txt` asks `std::read` for `dist/out.txt`.
 
 `_missingTarget` finds the place with `_resolveRedirectTarget`, the
 resolver `>` uses, so a read and a write of one new file name one
@@ -864,25 +860,20 @@ parent is a folder that exists. The walk keeps every step after the first
 missing one as written, so without the second check `cat nodir/nope.txt`
 would resolve too.
 
-Rule 1 is safe for this reason. The file a redirect made can still be
-swapped by a program that runs after it, as in `ln -sf ~/.ssh/id_rsa
-out.txt > out.txt; cat out.txt`. For a general program such as `pnpm
-test` that adds nothing: its approval already lets it read any file and
-print it. It adds something only for a program that does one narrow
-thing, where a person would approve it without thinking of reads. `ln`,
-`cp`, and `mv` are such programs, and they ask `std::bash` (see
-"Programs with no rule"), so the line above has no rule. A new narrow
-program that can replace a file must join that list before it gets any
-rule. The same swap is possible for a file that exists when the plan is
-made, as in `ln -sf ~/.ssh/id_rsa one.txt; cat one.txt`, and the same
-list closes it.
+Both rules are safe because the read is planned again just before it
+runs. If `pnpm build` made `dist/out.txt` a link to a key, the fresh plan
+resolves the link, the payload differs from the approved one, and the
+line stops before the `cat`. `ln`, `cp`, and `mv` still ask `std::bash`
+(see "Programs with no rule"), so `ln -s ~/.ssh/id_rsa x; cat x` has no
+narrow question at all.
 
-The stages of a pipeline run at the same time, so another stage may make
-a path before this one reads it: in `pnpm test | cat nope.txt`, `pnpm
-test` runs alongside the `cat`. Each stage is classified in the line as
-it was before the pipeline, with the disk at least `changed`, so inside a
-pipeline only rule 1 applies, for a file written before the pipeline
-began. Parentheses end a `cd`, but not what the line wrote or ran.
+The stages of a pipeline run at the same time, and the runner checks a
+pipeline as one step, before any stage starts. So each stage is
+classified in the line as it was before the pipeline, and at most one
+stage may ask anything other than `std::exec` (see "Pipelines, dup
+redirects, and glob words"). In `pnpm test | cat nope.txt` only the
+`cat` asks, so a read of a missing file beside a program stays narrow.
+Parentheses end a `cd`, but not what the line wrote or ran.
 
 Some lookups set `strict` and never use the three rules above, because
 each needs a real path: `find`, `tree`, `grep -r`, `diff`, `cmp`, an input
@@ -1088,6 +1079,15 @@ folder has approved seeing every entry in it. `tree` of a file prints
 the name and an error, so it's refused, and so is `find` of a file,
 because `std::glob` searches a folder. `requireFolder` is the one place
 that refusal is written.
+
+A path that is missing when the plan is made is asked about as the folder
+it would be: `pnpm build && ls dist` with no `dist` asks `std::ls` for
+`<cwd>/dist`. Once the build has made `dist`, the plan made just before
+the step asks the same thing, so the line runs. If it asked for the
+folder that would hold it, the two plans would differ and the line would
+stop. The one exception is a file the line itself wrote, as in `pnpm test
+> out.txt; ls -la out.txt`, which is known to be a file and asks for its
+folder.
 
 `mergeListings` asks once per folder. `ls one.txt two.txt` in one folder
 is one question, and a folder named twice is recursive if either path
@@ -2094,8 +2094,7 @@ with it. The refuse wall still reads the flat list from
   `a; cd x && b` is not.
 
 `cdTarget` accepts one literal argument that resolves to a directory that
-exists, or to a folder the line made (see `made` above). It refuses every
-`cd` once the disk is `replaced`. `cd` alone, `cd -`, a variable, a second argument, a redirect, or
+exists, or to a folder the line made (see `made` above). `cd` alone, `cd -`, a variable, a second argument, a redirect, or
 an assignment is unrecognized. A `cd` in any other position is a simple
 command like any other, and `execEffects` refuses it as a builtin. That
 covers a `cd` on the right of `||` and a `cd` in a pipeline.
@@ -2255,7 +2254,7 @@ shell.
 
 The runner raises nothing. Every question was raised in `approvedPlan`
 before the first step runs. The plan also keeps the whole rebuilt line in
-`command`, which a background job launches as one text.
+`command`, which the debug log records.
 
 ### Each step is checked just before it runs
 
@@ -2298,7 +2297,12 @@ and a second write to that file they give the same ones
 A step that runs in process is not checked. The stdlib tool checks the
 path when it opens it. The refuse wall is not run again either. It reads
 the disk only for `rm`, and a changed `rm` target changes the
-`std::remove` payload, so the plan check stops the line.
+`std::remove` payload, so the plan check stops the line. The payload keeps
+a link in the last step as written, which is right for `rm link`, so for
+`rm -rf build/` after `build` became a link to another folder it would
+not change, and `rm` would delete the link's target. `removeEffects`
+gives a `/` after a link no rule (`aSlashAfterALinkHasNoRule`), so the
+fresh plan of that step fails and the line stops.
 
 A stop runs nothing more. The failure has `data.type` `"planChanged"`,
 and its text is the output so far, a sentence that names the step, what
@@ -2308,7 +2312,7 @@ shows as "stopped":
 
 ```
 Stopped before `cat README.md`: it was approved to read
-/repo/README.md, and that path now leads to /outside/secret.
+/repo/README.md, and it now asks to read /outside/secret.
 `git checkout evil` already ran. Run the rest as a new command if you
 still want it.
 [stopped: the plan changed]
@@ -2439,11 +2443,16 @@ write a file, or read a file with no approval at all.
 because the two share `approvedPlan`, which plans the command, returns a
 refusal, and calls `raiseAll`. Both raise the effect set
 `SafeBashEffects`, so an effect added for `safeBash` is added for both. `safeBash` then runs the plan with
-`runPlanned`. `startJob` starts a plan of kind `bash` with `_startJob`, and
-runs any other plan with `runPlanned`, in the foreground. `_startJob` is
-the second place a command runs with no interrupt of its own, and it is
-safe for the same reason as the executors: the only path to it runs
-through `approvedPlan`.
+`runPlanned`. `startJob` starts a plan that starts a shell with
+`_launchJob`, and runs any other plan with `runPlanned`, in the
+foreground. `_launchJob` is the second place a command runs with no
+interrupt of its own, and it is safe for the same reason as the
+executors: the only path to it runs through `approvedPlan`.
+
+A job runs its line whole, where the runner is not present, so as a job a
+narrow line may be only one step, or a `cd` and one step. Any other line
+of several steps asks `std::bash` as a job. The rule and the launch check
+are in `docs/dev/stdlib/jobs.md`, "Approvals".
 
 `approvedPlan` decides from the plan, not from the caller, whether the
 command runs as a job. When it does, `raiseOne` puts "in the background"
@@ -2561,7 +2570,8 @@ nothing more, as it does for a file on disk.
   `makeAsksLikeTheTools`, `fileProgramsAskBash`,
   `teeWritesLikeARedirect`, and `readsByOtherNames`. The missing-path
   nodes are `missingPathsResolveByParent`,
-  `missingPathAfterAProgramIsBroad`, and `readsOfFilesTheLineWrote`.
+  `missingPathAfterAProgram`, and `readsOfFilesTheLineWrote`. The runner's
+  nodes, and the attacks that stop, are in `tests/agency/safeBashSteps.agency`.
 - `tests/agency/safeBash-corpus.agency` and `safeBash-corpus.json`: the
   measurement. Each row is a common coding line with the outcome and
   effect names it plans to, so a rule change shows as rows that moved.

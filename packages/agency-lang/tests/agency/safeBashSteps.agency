@@ -192,6 +192,10 @@ node harmlessLinesDoNotStop() {
     ranWithoutStop("mkdir -p build && cd build && pnpm --version"),
     ranWithoutStop("pnpm --version > v.txt && cat v.txt"),
     ranWithoutStop("pnpm --version > v.txt; pnpm --version >> v.txt"),
+    // A folder a program makes, which is how `pnpm build && ls dist` runs
+    // the first time, and a listing of a file the line wrote.
+    ranWithoutStop("node -e \"require('fs').mkdirSync('d')\" && ls d"),
+    ranWithoutStop("pnpm --version > v.txt; ls -la v.txt"),
   ]
 }
 
@@ -250,6 +254,52 @@ node aChangedFolderStopsTheLine() {
     folderRow("cd sub && pnpm --version", FIXTURE, TO_OUTSIDE),
     folderRow("cd sub && ls", FIXTURE, ""),
     folderRow("git status; git log --oneline -1", FIXTURE + "/sub", TO_OUTSIDE),
+  ]
+}
+
+/* The fixture as a git repository of its own whose branch `evil` turns
+ `one.txt` into a link to the outside secret and `sub` into a link to the
+ outside folder. `main` is checked out. */
+def makeCheckoutRepo() {
+  makeFixture()
+  makeOutside()
+  const commit = "git -c user.email=t@example.com -c user.name=t commit -qm"
+  bash("git init -q -b main && git add . && ${commit} one && git checkout -qb evil && rm one.txt && ln -s ${OUTSIDE}/secret.txt one.txt && rm -r sub && ln -s ${OUTSIDE}/dir sub && git add -A && ${commit} evil && git checkout -q main", cwd: FIXTURE) with approve
+}
+
+/* A line run in the checkout repository with every question approved. */
+// Every narrow question is approved and the broad one rejected, as a
+// policy that trusts narrow questions would answer. A line that went broad
+// runs nothing.
+def checkoutRow(line: string): any {
+  makeCheckoutRepo()
+  let out: Result<string> = success("")
+  handle {
+    out = safeBash(line, cwd: FIXTURE)
+  } with (intr) {
+    if (intr.effect == "std::bash") {
+      return reject("no broad questions")
+    }
+    return approve()
+  }
+  const text = textOf(out)
+  remove(FIXTURE) with approve
+  remove(OUTSIDE) with approve
+  const stoppedBefore = if (text.includes("Stopped before `")) then text.split("Stopped before `")[1].split("`")[0] else ""
+  return [line, isSuccess(out), stoppedBefore, text.includes("SECRET") || text.includes("b.txt")]
+}
+
+// The attack the prediction rule guarded against, run for real: the
+// checkout puts links where a file and a folder were, the line is narrow,
+// and the step that names the swapped path stops the line before it
+// prints anything from outside.
+node aCheckoutThatSwapsAPathStops() {
+  return [
+    checkoutRow("git checkout evil; cat one.txt"),
+    checkoutRow("git checkout evil && ls sub"),
+    checkoutRow("git checkout evil && cd sub && git status"),
+    // A group in a pipeline runs as one step, so it asks std::bash.
+    checkoutRow("(git checkout evil && cat one.txt) | cat"),
   ]
 }
 

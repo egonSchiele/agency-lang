@@ -109,7 +109,7 @@ import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget, _missingTarget } from "agency-lang/stdlib-lib/fs.js"
 import { _searchTargetIn, _bash, _grep, _skipDirNames } from "agency-lang/stdlib-lib/shell.js"
 import { _launchJob, _jobStartRefusal } from "agency-lang/stdlib-lib/jobs.js"
-import { basename as lastSegment, dirname as parentOf } from "std::path"
+import { basename as lastSegment, dirname as parentOf, join as joinPath } from "std::path"
 import { now } from "std::date"
 import { _grepPatternToRegex, _renderGrepOutput, _skippedDirsNote } from "agency-lang/stdlib-lib/grepDialect.js"
 import { _renderReadView } from "agency-lang/stdlib-lib/readDialect.js"
@@ -2008,32 +2008,21 @@ def resolveTarget(text: string, word: Word, cwd: string): Result<PathTarget> {
 
 /** What the classifier knows about a line as it walks it, command by
  command: the working directory after each `cd`; the `std::write`
- payloads the line has asked for so far; the folders it has asked
- `std::mkdir` for, by real path; and what the commands so far may have
- done to the disk. `strict` is false for a lookup that may name a path
- that does not exist yet. */
+ payloads the line has asked for so far; and the folders it has asked
+ `std::mkdir` for, by real path. `strict` is false for a lookup that may
+ name a path that does not exist yet. What an earlier command did to the
+ disk is not predicted: each step is planned again just before it runs
+ (see `runBashStep`). */
 type LineState = {
   cwd: string;
   written: WritePayload[];
   made: string[];
-  disk: DiskState;
   strict: boolean
 }
 
-/** What the commands a line has run so far may have done to the disk,
- which the plan read before any of them ran.
- - "known": nothing but reads, writes safeBash named, and `mkdir`.
- - "changed": a command ran that can make or remove a path, but whose
-   approval covers what it could then read: a program, or `rm`.
- - "replaced": a command ran that can put a link where a file or folder
-   was, under an approval that lets it read nothing outside the
-   repository, such as `git checkout`. Every path the plan resolved may
-   now lead somewhere else, so no later command may name one. */
-type DiskState = "known" | "changed" | "replaced"
-
 /* The state of a line before its first command. */
 def freshLine(cwd: string): LineState {
-  return { cwd: cwd, written: [], made: [], disk: "known", strict: false }
+  return { cwd: cwd, written: [], made: [], strict: false }
 }
 
 /* The same line, for a lookup where a missing path has no rule: `find`,
@@ -2043,115 +2032,18 @@ def strictLine(line: LineState): LineState {
   return { ...line, strict: true }
 }
 
-/** The effects that read, list, or search and change nothing, by name.
- The list is by name, never by prefix: `git checkout` and `git stash pop`
- are `std::git` effects too, and either can put a symlink that a commit
- holds into the working folder. An effect that is in none of the three
- lists here counts as replacing paths (see `DiskState`) until someone
- adds it to one. */
-static const SEE_THROUGH_EFFECTS: string[] = [
-  "std::read", "std::grep", "std::ls", "std::glob",
-  "std::git::status", "std::git::log", "std::git::diff", "std::git::show",
-  "std::git::blame", "std::git::branchList", "std::git::remoteList", "std::git::stashList",
-  "std::github::prList", "std::github::prGet", "std::github::prDiff", "std::github::prFiles",
-  "std::github::prReviewList", "std::github::prReviewCommentList", "std::github::prChecks",
-  "std::github::issueList", "std::github::issueGet", "std::github::issueCommentList",
-  "std::github::issueSearch"
-]
-
-/** The effects that make, move, or remove nothing safeBash can name:
- `echo x > f` makes the file its payload names, and `mkdir` makes a new
- folder or fails. Neither can turn a path that exists into anything
- else, so the disk stays "known" after them. */
-static const NAMED_CHANGE_EFFECTS: string[] = ["std::write", "std::mkdir"]
-
-/** The effects that leave the disk "changed" and not "replaced".
- - `std::exec`: a program can do anything to the disk, and its approval
-   already lets it read any file itself, so a later read of a path it
-   swapped shows nothing the program could not have printed.
- - `std::remove`: `rm` takes paths away and puts nothing in their place.
- - `git add`, `git commit`, and making or deleting a branch change the
-   index and the refs, not the files in the working folder. A commit
-   hook is a program, as above. */
-static const CHANGING_EFFECTS: string[] = [
-  "std::exec", "std::remove",
-  "std::git::add", "std::git::commit", "std::git::branchCreate", "std::git::branchDelete"
-]
-
-/* What a command that asked these effects may have done to the disk. */
-def diskAfter(effects: Effect[]): DiskState {
-  const beyondNamed = [effect for effect in effects if !SEE_THROUGH_EFFECTS.includes(effect.name) && !NAMED_CHANGE_EFFECTS.includes(effect.name)]
-  if (beyondNamed.length == 0) {
-    return "known"
-  }
-  const replacing = [effect for effect in beyondNamed if !CHANGING_EFFECTS.includes(effect.name)]
-  if (replacing.length > 0) {
-    return "replaced"
-  }
-  return "changed"
-}
-
-/* The later of two states: "replaced" over "changed" over "known". */
-def worseDisk(a: DiskState, b: DiskState): DiskState {
-  if (a == "replaced" || b == "replaced") {
-    return "replaced"
-  }
-  if (a == "changed" || b == "changed") {
-    return "changed"
-  }
-  return "known"
-}
-
-/** The effects whose payload names a file or a folder on the disk. */
-static const PATH_EFFECTS: string[] = [
-  "std::read", "std::write", "std::grep", "std::ls", "std::glob", "std::remove", "std::mkdir"
-]
-
-/* Whether a command names a path: by a file effect, or by running in
- another folder than the line's, as `git -C dir status` does. */
-def namesPath(effects: Effect[], cwd: string): boolean {
-  for (effect in effects) {
-    if (PATH_EFFECTS.includes(effect.name)) {
-      return true
-    }
-    // Not every effect has a payload, and not every payload a `cwd`.
-    const loose: any = effect
-    const payload: any = loose.payload
-    if (payload != null && payload.cwd != null && payload.cwd != cwd) {
-      return true
-    }
-  }
-  return false
-}
-
-// Every payload was resolved against the disk before the line ran. After
-// `git checkout evil`, `README.md` may be a link to a key, and `cat
-// README.md` would print the key under an approval that names the file in
-// the project. The stdlib's symlink checks do not run for a command bash
-// runs. So once the disk is "replaced", a command that names a path has
-// no rule, and the line asks std::bash, which shows all of it.
-def refuseStalePath(line: LineState, effects: Effect[]): Result {
-  if (line.disk == "replaced" && namesPath(effects, line.cwd)) {
-    return failure("a command names a path after one that can replace it, such as `git checkout`")
-  }
-  return success(null)
-}
-
 // The line after a command that asked these effects. A `std::write` is
 // remembered, so a later read of the same file has a rule (`missingPath`),
-// and so is the folder of a `std::mkdir` (`madeFolder`). Both stay
-// remembered after a "changed" command: a program's approval already lets
-// it read any file itself. After a "replaced" one nothing may name a
-// path at all (`refuseStalePath`), so what is remembered no longer
-// matters.
+// and so is the folder of a `std::mkdir` (`madeFolder`). What they let the
+// plan ask is a prediction: the runner plans the step again just before it
+// runs, and a prediction the disk no longer bears out stops the line.
 def afterCommand(line: LineState, effects: Effect[]): LineState {
   const writes: WritePayload[] = [effect.payload for effect in effects if effect.name == "std::write"]
   const folders: string[] = [effect.payload.dir for effect in effects if effect.name == "std::mkdir"]
   return {
     ...line,
     written: [...line.written, ...writes],
-    made: [...line.made, ...folders],
-    disk: worseDisk(line.disk, diskAfter(effects))
+    made: [...line.made, ...folders]
   }
 }
 
@@ -2198,16 +2090,11 @@ def missingWhere(text: string, word: Word, line: LineState): NewFile | null {
 
 // A path that does not exist when the plan is made, and its parent folder
 // does. When an earlier command in the line asked std::write for that very
-// file, it will exist, made by the redirect as its command started. When
-// the disk is still "known", nothing can have made it into something
-// else, such as a link to a key: `ln -s ~/.ssh/id_rsa x; cat x`. A file
-// the line wrote can still be swapped by a program run after the write,
-// as in `ln -sf <key> out.txt > out.txt; cat out.txt`. That adds nothing
-// for a general program such as `pnpm test`, whose approval already lets
-// it read any file itself; `ln`, `cp`, and `mv` ask std::bash, so the line
-// above has no rule (see `NO_EXEC_PROGRAMS`), and after a narrow command
-// that can swap a file, such as `git checkout`, no command may name a
-// path (see `refuseStalePath`).
+// file, it will exist, made by the redirect as its command started. Any
+// other missing path is asked about where it would be, as in `pnpm build
+// && cat dist/out.txt`. If an earlier step makes it a link to something
+// else, the step that reads it plans to the link's target just before it
+// runs, and the line stops.
 @capabilities(fileRead)
 def missingPath(text: string, word: Word, line: LineState): WritePayload | null {
   if (line.strict) {
@@ -2220,9 +2107,6 @@ def missingPath(text: string, word: Word, line: LineState): WritePayload | null 
   const wrote = [entry for entry in line.written if entry.dir == where.dir && entry.filename == where.filename]
   if (wrote.length > 0) {
     return wrote[0]
-  }
-  if (line.disk != "known") {
-    return null
   }
   return { dir: where.dir, filename: where.filename, content: "", mode: "overwrite" }
 }
@@ -2262,7 +2146,16 @@ def listTargetOf(text: string, word: Word, line: LineState): Result<ListTarget> 
     if (missing == null) {
       return target
     }
-    return success({ target: { dir: missing.dir, file: missing.filename, argument: text }, linked: false })
+    // A file the line wrote will be a file, and a listing of a file asks
+    // for the folder that holds it.
+    const wrote = [entry for entry in line.written if entry.dir == missing.dir && entry.filename == missing.filename]
+    if (wrote.length > 0) {
+      return success({ target: { dir: missing.dir, file: missing.filename, argument: text }, linked: false })
+    }
+    // `pnpm build && ls dist`: any other missing path is asked about as
+    // the folder it would be. The runner plans this step again just before
+    // it runs, and once `dist` is a folder that plan asks the same thing.
+    return success({ target: { dir: joinPath(missing.dir, missing.filename), file: null, argument: text }, linked: false })
   }
   const linked = lastStepIsLink(target.value, line.cwd)?
   return success({ target: target.value, linked: linked })
@@ -5462,12 +5355,10 @@ def classifySimple(command: SimpleCommand, line: LineState, origin: GhRepo | nul
   const timed = unwrapTimeout(command)
   if (timed == null) {
     const rule = simpleCommandRule(command, line, origin, readsStdin)?
-    refuseStalePath(line, rule.effects)?
     const steps = runStepOf(command, rule.command, line, rule.effects)?
     return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: rule.command, steps: steps })
   }
   const rule = simpleCommandRule(timed.inner, line, origin, readsStdin)?
-  refuseStalePath(line, rule.effects)?
   const wrapped = withTimeout(timed, rule.command)?
   const steps = runStepOf(command, wrapped, line, rule.effects)?
   return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: wrapped, steps: steps })
@@ -5562,27 +5453,54 @@ def withTimeout(timed: Timed, ran: Command): Result<Command> {
 // stage reads a pipe. Each stage runs in a subshell of its own, so a `cd`
 // inside one moves nothing outside it. The stages run at the same time,
 // so each is classified in the line as it was before the pipeline, and
-// what the line knows afterwards takes in every stage. Because they run at
-// the same time, another stage may make a path before this one reads it,
-// as in `pnpm test | cat nope.txt`, so inside a pipeline a missing path
-// has a rule only when the line wrote it before the pipeline began.
+// what the line knows afterwards takes in every stage.
+//
+// A pipeline is one step, so the runner checks it once, before any stage
+// starts, and cannot check between stages. So at most one stage may ask
+// anything other than std::exec, whose approval already lets a program
+// read and change any file: `git checkout x | cat README.md` could read a
+// file the checkout just swapped. Any other effect, one added later
+// included, counts, so a mistake asks the broad question.
 @capabilities(fileRead)
 def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   let effects: Effect[] = []
   let rewritten: any[] = []
-  const together: LineState = { ...line, disk: worseDisk(line.disk, "changed") }
+  let asking = 0
+  let severalInAGroup = false
   for (stage, index in stages) {
-    const classified = classify(stage, together, origin, readsStdin || index > 0)?
+    const classified = classify(stage, line, origin, readsStdin || index > 0)?
+    if (asksBeyondExec(classified.effects)) {
+      asking = asking + 1
+    }
+    // A `cd` is not counted: the check resolves it again and writes the
+    // real folder into the text, so `(cd sub && ls) | head` is as safe as
+    // one command.
+    if (stage.tag == "parens" && [flat for flat in flattenOne(stage) if asCd(flat.command) == null].length > 1) {
+      severalInAGroup = true
+    }
     effects = [...effects, ...classified.effects]
     rewritten.push(classified.command)
   }
-  // A stage that can replace paths runs beside the others, so none of
-  // them may name one: `git checkout main | tee log.txt`.
-  refuseStalePath({ ...line, disk: diskAfter(effects) }, effects)?
+  if (asking > 1) {
+    return failure("two stages of a pipeline each ask a question, and they run at the same time")
+  }
+  // A group's commands run inside one stage, so the check before the
+  // pipeline cannot see between them either: in `(git checkout x && cat
+  // README.md) | cat` the cat reads after the checkout, and in `(git
+  // checkout x && cd sub && pnpm test) | cat` pnpm runs in a folder the
+  // checkout may have swapped.
+  if (asking > 0 && severalInAGroup) {
+    return failure("a group of several commands in a pipeline runs as one step, and the pipeline asks a question")
+  }
   const ran: Command = { tag: "pipeline", stages: rewritten }
   // The stages run at the same time, so a pipeline is one step.
   const steps = runStepOf({ tag: "pipeline", stages: stages }, ran, line, effects)?
   return success({ effects: effects, line: afterCommand(line, effects), command: ran, steps: steps })
+}
+
+/* Whether a stage asks anything other than std::exec. */
+def asksBeyondExec(effects: Effect[]): boolean {
+  return [effect for effect in effects if effect.name != "std::exec"].length > 0
 }
 
 // Parentheses run a subshell, so a `cd` inside them ends with them. A file
@@ -5693,16 +5611,13 @@ def asCd(command: Command): SimpleCommand | null {
 // names it, so it has to exist now, or be a folder the line made, as in
 // `mkdir -p build && cd build && cmake ..`. `cd` alone goes home, `cd -`
 // goes to the previous directory, and a variable is unknown until bash
-// expands it, so none of those has a directory to name. A `cd` names a
-// path, so it has no rule once the disk is "replaced" (`DiskState`).
+// expands it, so none of those has a directory to name. The runner
+// resolves the target again just before the `cd` runs (`runCd`).
 @capabilities(fileRead)
 def cdTarget(command: SimpleCommand, line: LineState): Result<string> {
   """
   Resolve the one literal directory a cd command names: one that exists, or one the line made.
   """
-  if (line.disk == "replaced") {
-    return failure("a `cd` follows a command that can replace a folder, such as `git checkout`")
-  }
   if (command.assignments.length > 0 || command.redirects.length > 0) {
     return failure("`cd` with an assignment or a redirect")
   }
@@ -5857,6 +5772,17 @@ def removeEffects(verb: string, command: SimpleCommand, cwd: string, spec: FlagS
     const target = try _realPathIn(text.value, cwd, tildeModeFor(word), verb)
     if (isFailure(target)) {
       return target
+    }
+    // The payload keeps the last step of the path as written, which is
+    // right for `rm link`: it removes the link. With a `/` after it, `rm
+    // -rf link/` follows the link and deletes what it points to, which the
+    // payload does not name. `_realFolder` follows the last step, so it
+    // differs from the payload exactly when that step is a link.
+    if (text.value.endsWith("/") && text.value != "/") {
+      const followed = try _realFolder(target.value)
+      if (isFailure(followed) || followed.value != target.value) {
+        return failure("a `/` after a link makes `${verb}` delete what the link points to")
+      }
     }
     effects.push(removeEffect({ target: target.value }))
   }
@@ -6121,25 +6047,26 @@ def approvedPlan(command: string, dir: string, timeoutMs: number, jobMs: number 
   // describes what will run: only a plan that starts a shell becomes a job.
   let asJob = false
   let limitMs = timeoutMs
-  if (jobMs != null && jobText(exec) != null) {
+  if (jobMs != null && startsShell(exec)) {
     asJob = true
     limitMs = jobMs
   }
-  const raised = raiseAll(plan.effects, command, dir, limitMs, asJob)
+  const toRaise = if (asJob) then asJobPlan(plan, command) else plan
+  const raised = raiseAll(toRaise.effects, command, dir, limitMs, asJob)
   // The rejection is passed on as it came, not rebuilt with `failure()`,
   // which would drop its `rejected` flag. Without the flag the tool loop
   // shows the user's reason as a tool error and says to call again.
   if (isFailure(raised)) {
-    if (plan.broadReason == null) {
+    if (toRaise.broadReason == null) {
       return raised
     }
     // A rejected broad question tells the model why no narrower one was
     // available, so its next attempt can take the narrower path. On its
     // own line: the rejection text comes from the handler or a policy
     // rejectMessage and may or may not end in a period.
-    return _addLine(raised, "${broadExplanation(plan.broadReason)}${toolHint(plan.verbs)}")
+    return _addLine(raised, "${broadExplanation(toRaise.broadReason)}${toolHint(toRaise.verbs)}")
   }
-  return success(plan)
+  return success(toRaise)
 }
 
 // Runs a plan approvedPlan returned, in the foreground.
@@ -6164,18 +6091,89 @@ def runPlanned(plan: Plan, dir: string, command: string, timeout: number): Resul
   }
 }
 
-/* The text a job launches, or null for a plan that starts no shell: a
- job runs its line whole, under one shell. */
-def jobText(exec: Execution): string | null {
-  if (exec is { kind: "bash", command }) {
-    return command
+/* Whether a plan starts a shell, which is what a job can run. */
+def startsShell(exec: Execution): boolean {
+  if (exec is { kind: "bash" }) {
+    return true
   }
   if (exec is { kind: "steps" }) {
-    if (!allInProcess(exec.steps)) {
-      return exec.command
-    }
+    return !allInProcess(exec.steps)
+  }
+  return false
+}
+
+/** The one step a job launches, and the folder of a `cd` before it. */
+type JobShape = {
+  cdStep: CdStep | null;
+  step: RunStep
+}
+
+// A job's line runs in the job's own process, where nothing checks it a
+// step at a time. So a job may be one step, or a `cd` and one step: the
+// `cd` is checked at launch, and the step starts in its folder.
+def jobShape(steps: LineStep[]): JobShape | null {
+  if (steps.length == 1 && steps[0] is { kind: "run" }) {
+    return { cdStep: null, step: steps[0] }
+  }
+  if (steps.length == 2 && steps[0] is { kind: "cd" } && steps[1] is { kind: "run" }) {
+    return { cdStep: steps[0], step: steps[1] }
   }
   return null
+}
+
+/* The plan a job raises: a stepped line of any other shape asks the
+ broad question and runs whole. */
+def asJobPlan(plan: Plan, command: string): Plan {
+  const exec = plan.execution
+  if (exec is { kind: "steps" }) {
+    if (jobShape(exec.steps) == null) {
+      const reason: BroadReason = { kind: "unrecognized", detail: "a job runs its line whole, so only one command, or a `cd` and one command, gets narrow questions" }
+      return { ...broadPlan(command, plan.verbs, reason), savedPaths: plan.savedPaths }
+    }
+  }
+  return plan
+}
+
+/** What a job launches: the text, and the folder it starts in. */
+type JobLaunch = {
+  text: string;
+  cwd: string
+}
+
+// The text and folder a job launches. A broad plan launches its whole
+// text. A stepped plan launches its one step, after the `cd` before it is
+// resolved again and the step gets the check the runner makes before a
+// step (`checkedStep`): a folder or a path that leads somewhere else since
+// approval starts nothing.
+@capabilities(fileRead)
+def jobLaunch(exec: Execution, dir: string, command: string): Result<JobLaunch> {
+  if (exec is { kind: "bash", command as text }) {
+    return success({ text: text, cwd: dir })
+  }
+  if (!(exec is { kind: "steps" })) {
+    return failure("`${command}` was not run: only a shell command can run as a job")
+  }
+  const shape = jobShape(exec.steps)
+  if (shape == null) {
+    return failure("`${command}` was not run: a job runs only one command, or a `cd` and one command")
+  }
+  let folder = dir
+  const cdStep = shape.cdStep
+  if (cdStep != null) {
+    const target = cdTarget(cdStep.source, freshLine(dir))
+    if (target is failure(why)) {
+      return failure("`${command}` was not run: the `cd` no longer has a rule: ${why}")
+    }
+    if (target.value != cdStep.dir) {
+      return failure("`${command}` was not run: it was approved to enter ${cdStep.dir}, and that folder now leads to ${target.value}")
+    }
+    folder = cdStep.dir
+  }
+  const checked = checkedStep(shape.step, folder, exec.origin)
+  if (checked is failure(why)) {
+    return failure("`${command}` was not run: ${why}")
+  }
+  return success({ text: checked.value, cwd: folder })
 }
 
 // A parameter default must be a literal, so startJob's signature repeats
@@ -6264,19 +6262,19 @@ export def startShellJob(
     return approved
   }
   const plan = approved.value
-  const text = jobText(plan.execution)
-  if (text != null) {
+  if (startsShell(plan.execution)) {
     // `_launchJob` runs a command with no interrupt of its own, as `_bash`
     // does in runBash, and it is safe for the reason runBash's comment
     // gives: the only path here runs through an approvedPlan that raised
     // every effect in the plan and returned success. Do not add a caller
     // that skips approvedPlan. The saved-output copies are written first,
     // for the reason runBash gives.
+    const launch = jobLaunch(plan.execution, dir, command)?
     const copied = try _prepareSpillFiles(plan.savedPaths)
     if (copied is failure(why)) {
       return failure("`${command}` was not run: ${why}")
     }
-    const started = try _launchJob(text, label, dir, minutes * 60000)
+    const started = try _launchJob(launch.text, label, launch.cwd, minutes * 60000)
     if (started is failure(why)) {
       return failure("`${command}` was not run: ${why}")
     }
@@ -7194,33 +7192,49 @@ def runInProcess(exec: StepExec, state: StepsState): StepsState {
 // Otherwise the step runs the text the new plan rebuilt, which describes
 // the disk as it is now.
 //
-// The refuse wall is not run again. It reads the disk only for `rm`, and
-// a changed `rm` target changes its std::remove payload, so this check
-// stops the line.
+// The refuse wall is not run again. It reads the disk only for `rm`. A
+// changed `rm` target changes its std::remove payload, so this check
+// stops the line, with one exception the rule closes itself: the payload
+// keeps a link as written, so `rm -rf build/` after `build` became a link
+// would delete the link's target under the same payload. `removeEffects`
+// gives a `/` after a link no rule, so the fresh plan fails and the line
+// stops.
 //
+// A job's one step gets the same check at launch (`jobLaunch`).
+@capabilities(fileRead)
+def checkedStep(step: RunStep, cwd: string, origin: GhRepo | null): Result<string> {
+  """
+  Plan a step again in the folder it is about to run in. Return the text to run, or a failure that says what changed since approval.
+  """
+  const moved = folderChange(step, cwd)
+  if (moved != "") {
+    return failure(moved)
+  }
+  const fresh = classify(step.source, freshLine(cwd), origin, false)
+  if (fresh is failure(why)) {
+    return failure("it no longer has a rule: ${why}")
+  }
+  const same = sameEffects(step.effects, fresh.value.effects)
+  _debug("safeBash step check", { step: stepText(step.source), cwd: cwd, same: same })
+  if (!same) {
+    return failure(changeOf(step.effects, fresh.value.effects))
+  }
+  const planned = stepText(fresh.value.command)
+  if (planned == "") {
+    return failure("it can no longer be written as a command")
+  }
+  return success(planned)
+}
+
 // `_bash`, for the reason runBash's comment gives: the only path here runs
 // through runPlanned, after approvedPlan raised every effect of the plan.
 @capabilities(fileRead, subprocess)
 def runBashStep(step: RunStep, state: StepsState, origin: GhRepo | null): StepsState {
-  const name = stepText(step.source)
-  const moved = folderChange(step, state)
-  if (moved != "") {
-    return stopBefore(name, state, moved)
+  const planned = checkedStep(step, state.cwd, origin)
+  if (planned is failure(why)) {
+    return stopBefore(stepText(step.source), state, "${why}")
   }
-  const fresh = classify(step.source, freshLine(state.cwd), origin, false)
-  if (fresh is failure(why)) {
-    return stopBefore(name, state, "it no longer has a rule: ${why}")
-  }
-  const same = sameEffects(step.effects, fresh.value.effects)
-  _debug("safeBash step check", { step: name, cwd: state.cwd, same: same })
-  if (!same) {
-    return stopBefore(name, state, changeOf(step.effects, fresh.value.effects))
-  }
-  const planned = stepText(fresh.value.command)
-  if (planned == "") {
-    return stopBefore(name, state, "it can no longer be written as a command")
-  }
-  const text = if (step.readsStatus) then "(exit ${state.status}); ${planned}" else planned
+  const text = if (step.readsStatus) then "(exit ${state.status}); ${planned.value}" else planned.value
   const limit = if (state.limited) then state.leftMs else 0
   const started = now()
   const attempt = try _bash(text, state.cwd, limit, "", {})
@@ -7261,7 +7275,7 @@ def stopBefore(step: string, state: StepsState, found: string): StepsState {
 }
 
 // Stopped before `cat README.md`: it was approved to read
-// /repo/README.md, and that path now leads to /outside/secret.
+// /repo/README.md, and it now asks to read /outside/secret.
 // `git checkout evil` already ran. Run the rest as a new command if you
 // still want it.
 def stopMessage(step: string, found: string, ran: string[]): string {
@@ -7290,8 +7304,8 @@ def runCd(step: CdStep, state: StepsState): StepsState {
 // folder swapped for a link to another repository leaves the payload the
 // same; this is the check that sees it.
 @capabilities(fileRead)
-def folderChange(step: RunStep, state: StepsState): string {
-  const real = try _realFolder(state.cwd)
+def folderChange(step: RunStep, cwd: string): string {
+  const real = try _realFolder(cwd)
   if (real is failure(why)) {
     return "it was approved to run in ${step.realCwd}, and that folder can no longer be resolved: ${why}"
   }
@@ -7341,11 +7355,6 @@ def changeOf(approved: Effect[], fresh: Effect[]): string {
 }
 
 def differenceOf(approved: Effect, fresh: Effect): string {
-  const before = accessesOf([approved])
-  const after = accessesOf([fresh])
-  if (before.length > 0 && after.length > 0 && before[0].mode == after[0].mode) {
-    return "it was approved to ${describeEffect(approved)}, and that path now leads to ${after[0].path}"
-  }
   return "it was approved to ${describeEffect(approved)}, and it now asks to ${describeEffect(fresh)}"
 }
 

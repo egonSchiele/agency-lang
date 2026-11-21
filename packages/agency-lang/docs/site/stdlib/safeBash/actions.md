@@ -1062,7 +1062,7 @@ A line that runs a step at a time, with bash's rule for each join.
  runs through bash. */
 export type StepsExec = {
   kind: "steps";
-  /** The whole rebuilt line, which a background job still runs as one text. */
+  /** The whole rebuilt line, which the debug log records. */
   command: string;
   steps: LineStep[];
   /** The repository a `gh` step was planned with, for planning it again. */

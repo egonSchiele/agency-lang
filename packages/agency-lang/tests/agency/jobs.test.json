@@ -78,6 +78,34 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "aJobIsOneStepOrACdAndOneStep",
+      "description": "Each row: the line, the questions it asked as a job (the effect, and whether its folder is the cd's folder), and whether the job started. A cd and one command asks std::exec in the cd's folder. Two commands ask one std::bash, because a job runs its line whole where nothing checks it a step at a time. One command asks what it asks in the foreground.",
+      "input": "",
+      "expectedOutput": "[[\"cd stdlib && pnpm --version\",[[\"std::exec\",true]],true],[\"pnpm --version && pnpm --version\",[[\"std::bash\",false]],true],[\"pnpm --version\",[[\"std::exec\",false]],true]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "aJobRunsInItsCdFolder",
+      "description": "A job of a cd and one command starts that command in the cd's folder: the listing shows a folder inside tests/agency/stdlib and not a file of tests/agency.",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "aJobWhoseCdChangedDoesNotStart",
+      "description": "When the cd's folder is swapped for a link after the questions were answered, the folder no longer leads where it was approved to, so the job fails at launch and nothing starts.",
+      "input": "",
+      "expectedOutput": "[true,true,0]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "aJobWhoseFileChangedDoesNotStart",
+      "description": "When a file the job's one command reads is swapped for a link after the questions were answered, the command plans to the link's target, which was not approved, so the job fails at launch and nothing starts.",
+      "input": "",
+      "expectedOutput": "[true,true,0]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "timeLimitCarriesTheLimit",
       "description": "The question for a job carries the job's limit in milliseconds as its timeout.",
       "input": "",

@@ -1,5 +1,7 @@
 import { jobOutput, stopJob, listJobs } from "std::jobs"
 import { safeBash, startJob } from "std::safeBash"
+import { mkdir, remove } from "std::fs"
+import { bash } from "std::shell"
 
 // Each node is its own run, with its own jobs. A job outlives the run that
 // started it, so every node stops each job it starts, and every job has a
@@ -210,6 +212,106 @@ node missingFolder() {
     return approve()
   }
   return [isFailure(result), result.error.includes("was not run"), listJobs().length]
+}
+
+/* The questions a line asks as a job, each as its effect and the end of
+ its folder, and whether the job started. Every job it starts is
+ stopped. */
+def jobQuestions(line: string): any {
+  let asked: any[] = []
+  let result: any = null
+  handle {
+    result = startJob(line, cwd: __dirname, maxMinutes: 1)
+    for (job in listJobs()) {
+      stopJob(job.id)
+    }
+  } with (intr) {
+    const folder: string = intr.data.cwd ?? ""
+    asked.push([intr.effect, folder.endsWith("/tests/agency/stdlib")])
+    return approve()
+  }
+  return [line, asked, isSuccess(result)]
+}
+
+// A job's line runs whole in the job's own process, where nothing checks
+// it a step at a time. So only one command, or a `cd` and one command,
+// gets narrow questions as a job: the `cd` is checked at launch and the
+// command starts in its folder. Any other line of several steps asks
+// std::bash.
+node aJobIsOneStepOrACdAndOneStep() {
+  return [
+    jobQuestions("cd stdlib && pnpm --version"),
+    jobQuestions("pnpm --version && pnpm --version"),
+    jobQuestions("pnpm --version"),
+  ]
+}
+
+// The job starts in the cd's folder: its listing shows a folder that is
+// only inside tests/agency/stdlib, and not the tests folder's own files.
+node aJobRunsInItsCdFolder() {
+  let output: any = null
+  handle {
+    const id = heldId(startJob("cd stdlib && ls", cwd: __dirname, maxMinutes: 1))
+    output = jobOutput(id, wait: 10)
+    stopJob(id)
+  } with (intr) {
+    return approve()
+  }
+  return [output.value.stdout.includes("grep-fixtures"), output.value.stdout.includes("jobs.agency")]
+}
+
+/** A folder of its own, with `sub` and `other` in it. */
+static const JOBS_FIXTURE = __dirname + "/stdlib/__jobs_cd__"
+
+// The handler swaps `sub` for a link while it answers, so at launch the
+// cd's folder leads somewhere other than the folder that was approved, and
+// no job starts.
+node aJobWhoseCdChangedDoesNotStart() {
+  remove(JOBS_FIXTURE) with approve
+  mkdir(JOBS_FIXTURE) with approve
+  bash("mkdir sub other", cwd: JOBS_FIXTURE) with approve
+  let result: any = null
+  let swapped: boolean[] = []
+  handle {
+    result = startJob("cd sub && ls", cwd: JOBS_FIXTURE, maxMinutes: 1)
+  } with (intr) {
+    if (swapped.length == 0) {
+      bash("rm -r sub && ln -s other sub", cwd: JOBS_FIXTURE) with approve
+      swapped.push(true)
+    }
+    return approve()
+  }
+  const jobs = listJobs().length
+  bash("rm -f sub", cwd: JOBS_FIXTURE) with approve
+  remove(JOBS_FIXTURE) with approve
+  return [isFailure(result), isFailure(result) && result.error.includes("now leads to"), jobs]
+}
+
+// The handler swaps `one.txt` for a link to another file while it answers.
+// A job's one step gets the check a foreground step gets, so the read now
+// plans to the link's target, which nobody approved, and no job starts.
+node aJobWhoseFileChangedDoesNotStart() {
+  remove(JOBS_FIXTURE) with approve
+  mkdir(JOBS_FIXTURE) with approve
+  bash("mkdir sub && printf 'one\\n' > one.txt && printf 'SECRET\\n' > sub/secret.txt", cwd: JOBS_FIXTURE) with approve
+  let result: any = null
+  let swapped: boolean[] = []
+  handle {
+    result = startJob("cat one.txt | head -1", cwd: JOBS_FIXTURE, maxMinutes: 1)
+  } with (intr) {
+    if (swapped.length == 0) {
+      bash("rm one.txt && ln -s sub/secret.txt one.txt", cwd: JOBS_FIXTURE) with approve
+      swapped.push(true)
+    }
+    return approve()
+  }
+  const jobs = listJobs()
+  for (job in jobs) {
+    stopJob(job.id)
+  }
+  bash("rm -f one.txt", cwd: JOBS_FIXTURE) with approve
+  remove(JOBS_FIXTURE) with approve
+  return [isFailure(result), isFailure(result) && result.error.includes("it now asks to read"), jobs.length]
 }
 
 node timeLimitCarriesTheLimit() {

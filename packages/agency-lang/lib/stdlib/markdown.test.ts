@@ -1,19 +1,29 @@
 import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
+import type { Frontmatter } from "tarsec/parsers/markdown";
 import { _parseFrontmatter, _parseMarkdown } from "./markdown.js";
+
+function isFrontmatter(node: unknown): node is Frontmatter {
+  return (node as { type: string }).type === "frontmatter";
+}
 
 /** What `frontmatter()` returned when it parsed the whole document: the
  *  data of its frontmatter block, or null when there was none. */
 function frontmatterFromWholeDocument(input: string): unknown {
   const parsed = _parseMarkdown(input);
-  if (!parsed.success) return null;
-  const block = parsed.blocks.find((b) => (b as { type: string }).type === "frontmatter");
-  return block ? (block as unknown as { data: unknown }).data : null;
+  if (!parsed.success) {
+    return null;
+  }
+  // `blocks` is typed `Block[]`, which leaves out `Frontmatter`.
+  const nodes: unknown[] = parsed.blocks;
+  const block = nodes.find(isFrontmatter);
+  return block ? block.data : null;
 }
 
 function markdownFiles(dir: string): string[] {
-  return fs.readdirSync(dir, { recursive: true, encoding: "utf8" })
+  return fs
+    .readdirSync(dir, { recursive: true, encoding: "utf8" })
     .filter((name) => name.endsWith(".md"))
     .map((name) => path.join(dir, name));
 }
@@ -25,7 +35,7 @@ describe("_parseFrontmatter", () => {
     const input = [
       "---",
       "name: debug-run",
-      "description: \"Find out: why a run failed\"",
+      'description: "Find out: why a run failed"',
       "tags: [one, two]",
       "count: 3",
       "user-invocable: false",
@@ -59,17 +69,21 @@ describe("_parseFrontmatter", () => {
   });
 
   // The header parser is the one the whole-document parser runs first, so
-  // the two must agree on every real file: the fixtures and bundled skills.
-  it("matches the whole-document parse on every Markdown fixture and skill", () => {
+  // the two must agree on every real file: the fixtures, the bundled skills,
+  // and the docs that `make` copies into `stdlib/docs`.
+  it("matches the whole-document parse on every Markdown fixture, skill and doc", () => {
     const files = [
       ...markdownFiles(path.join(packageRoot, "tests")),
       ...markdownFiles(path.join(packageRoot, "skills")),
+      ...markdownFiles(path.join(packageRoot, "docs/site")),
     ];
     expect(files.length).toBeGreaterThan(10);
     for (const file of files) {
       const input = fs.readFileSync(file, "utf8");
       const header = _parseFrontmatter(input);
-      expect(header.success ? header.data : null, file).toEqual(frontmatterFromWholeDocument(input));
+      expect(header.success ? header.data : null, file).toEqual(
+        frontmatterFromWholeDocument(input),
+      );
     }
   });
 });

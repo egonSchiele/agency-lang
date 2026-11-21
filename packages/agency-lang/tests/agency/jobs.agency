@@ -287,6 +287,33 @@ node aJobWhoseCdChangedDoesNotStart() {
   return [isFailure(result), isFailure(result) && result.error.includes("now leads to"), jobs]
 }
 
+// The handler swaps `one.txt` for a link to another file while it answers.
+// A job's one step gets the check a foreground step gets, so the read now
+// plans to the link's target, which nobody approved, and no job starts.
+node aJobWhoseFileChangedDoesNotStart() {
+  remove(JOBS_FIXTURE) with approve
+  mkdir(JOBS_FIXTURE) with approve
+  bash("mkdir sub && printf 'one\\n' > one.txt && printf 'SECRET\\n' > sub/secret.txt", cwd: JOBS_FIXTURE) with approve
+  let result: any = null
+  let swapped: boolean[] = []
+  handle {
+    result = startJob("cat one.txt | head -1", cwd: JOBS_FIXTURE, maxMinutes: 1)
+  } with (intr) {
+    if (swapped.length == 0) {
+      bash("rm one.txt && ln -s sub/secret.txt one.txt", cwd: JOBS_FIXTURE) with approve
+      swapped.push(true)
+    }
+    return approve()
+  }
+  const jobs = listJobs()
+  for (job in jobs) {
+    stopJob(job.id)
+  }
+  bash("rm -f one.txt", cwd: JOBS_FIXTURE) with approve
+  remove(JOBS_FIXTURE) with approve
+  return [isFailure(result), isFailure(result) && result.error.includes("now leads to"), jobs.length]
+}
+
 node timeLimitCarriesTheLimit() {
   let result: any = null
   handle {

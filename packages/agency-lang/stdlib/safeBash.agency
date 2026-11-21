@@ -6129,9 +6129,10 @@ type JobLaunch = {
 }
 
 // The text and folder a job launches. A broad plan launches its whole
-// text. A stepped plan launches its one step, after the `cd` before it and
-// the step's folder are resolved again, as the runner does before a step:
-// a folder that leads somewhere else since approval starts nothing.
+// text. A stepped plan launches its one step, after the `cd` before it is
+// resolved again and the step gets the check the runner makes before a
+// step (`checkedStep`): a folder or a path that leads somewhere else since
+// approval starts nothing.
 @capabilities(fileRead)
 def jobLaunch(exec: Execution, dir: string, command: string): Result<JobLaunch> {
   if (exec is { kind: "bash", command as text }) {
@@ -6156,14 +6157,11 @@ def jobLaunch(exec: Execution, dir: string, command: string): Result<JobLaunch> 
     }
     folder = cdStep.dir
   }
-  const real = try _realFolder(folder)
-  if (real is failure(why)) {
-    return failure("`${command}` was not run: the folder ${folder} can no longer be resolved: ${why}")
+  const checked = checkedStep(shape.step, folder, exec.origin)
+  if (checked is failure(why)) {
+    return failure("`${command}` was not run: ${why}")
   }
-  if (real.value != shape.step.realCwd) {
-    return failure("`${command}` was not run: it was approved to run in ${shape.step.realCwd}, and that folder now leads to ${real.value}")
-  }
-  return success({ text: shape.step.text, cwd: folder })
+  return success({ text: checked.value, cwd: folder })
 }
 
 // A parameter default must be a literal, so startJob's signature repeats
@@ -7190,29 +7188,41 @@ def runInProcess(exec: StepExec, state: StepsState): StepsState {
 // gives a `/` after a link no rule, so the fresh plan fails and the line
 // stops.
 //
+// A job's one step gets the same check at launch (`jobLaunch`).
+@capabilities(fileRead)
+def checkedStep(step: RunStep, cwd: string, origin: GhRepo | null): Result<string> {
+  """
+  Plan a step again in the folder it is about to run in. Return the text to run, or a failure that says what changed since approval.
+  """
+  const moved = folderChange(step, cwd)
+  if (moved != "") {
+    return failure(moved)
+  }
+  const fresh = classify(step.source, freshLine(cwd), origin, false)
+  if (fresh is failure(why)) {
+    return failure("it no longer has a rule: ${why}")
+  }
+  const same = sameEffects(step.effects, fresh.value.effects)
+  _debug("safeBash step check", { step: stepText(step.source), cwd: cwd, same: same })
+  if (!same) {
+    return failure(changeOf(step.effects, fresh.value.effects))
+  }
+  const planned = stepText(fresh.value.command)
+  if (planned == "") {
+    return failure("it can no longer be written as a command")
+  }
+  return success(planned)
+}
+
 // `_bash`, for the reason runBash's comment gives: the only path here runs
 // through runPlanned, after approvedPlan raised every effect of the plan.
 @capabilities(fileRead, subprocess)
 def runBashStep(step: RunStep, state: StepsState, origin: GhRepo | null): StepsState {
-  const name = stepText(step.source)
-  const moved = folderChange(step, state)
-  if (moved != "") {
-    return stopBefore(name, state, moved)
+  const planned = checkedStep(step, state.cwd, origin)
+  if (planned is failure(why)) {
+    return stopBefore(stepText(step.source), state, "${why}")
   }
-  const fresh = classify(step.source, freshLine(state.cwd), origin, false)
-  if (fresh is failure(why)) {
-    return stopBefore(name, state, "it no longer has a rule: ${why}")
-  }
-  const same = sameEffects(step.effects, fresh.value.effects)
-  _debug("safeBash step check", { step: name, cwd: state.cwd, same: same })
-  if (!same) {
-    return stopBefore(name, state, changeOf(step.effects, fresh.value.effects))
-  }
-  const planned = stepText(fresh.value.command)
-  if (planned == "") {
-    return stopBefore(name, state, "it can no longer be written as a command")
-  }
-  const text = if (step.readsStatus) then "(exit ${state.status}); ${planned}" else planned
+  const text = if (step.readsStatus) then "(exit ${state.status}); ${planned.value}" else planned.value
   const limit = if (state.limited) then state.leftMs else 0
   const started = now()
   const attempt = try _bash(text, state.cwd, limit, "", {})
@@ -7282,8 +7292,8 @@ def runCd(step: CdStep, state: StepsState): StepsState {
 // folder swapped for a link to another repository leaves the payload the
 // same; this is the check that sees it.
 @capabilities(fileRead)
-def folderChange(step: RunStep, state: StepsState): string {
-  const real = try _realFolder(state.cwd)
+def folderChange(step: RunStep, cwd: string): string {
+  const real = try _realFolder(cwd)
   if (real is failure(why)) {
     return "it was approved to run in ${step.realCwd}, and that folder can no longer be resolved: ${why}"
   }

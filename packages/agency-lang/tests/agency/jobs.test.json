@@ -99,6 +99,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "aJobWhoseFileChangedDoesNotStart",
+      "description": "When a file the job's one command reads is swapped for a link after the questions were answered, the command plans to the link's target, which was not approved, so the job fails at launch and nothing starts.",
+      "input": "",
+      "expectedOutput": "[true,true,0]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "timeLimitCarriesTheLimit",
       "description": "The question for a job carries the job's limit in milliseconds as its timeout.",
       "input": "",

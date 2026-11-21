@@ -244,8 +244,10 @@ step at a time (`docs/dev/stdlib/safe-bash.md`, "Each step is checked just
 before it runs"). So a narrow line becomes a job only when it is one
 command, or a `cd` and one command (`jobShape`). `startJob("cd app && pnpm
 dev")` asks `std::exec` for `pnpm dev` in `app`; at launch, `jobLaunch`
-resolves the `cd` and the folder again, starts nothing if either now leads
-somewhere else, and starts `pnpm dev` in `app`. Any other line of several
+resolves the `cd` again and gives the step the check the runner gives a
+foreground step (`checkedStep`). It starts nothing if the folder, or a path
+the step names, now leads somewhere else, and otherwise starts `pnpm dev`
+in `app`. Any other line of several
 steps asks `std::bash` as a job and runs whole (`asJobPlan`), while the
 same line keeps its narrow questions in the foreground.
 

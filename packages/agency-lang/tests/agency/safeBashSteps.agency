@@ -2,6 +2,8 @@ import { mkdir, remove } from "std::fs"
 import { planFor, safeBash } from "std::safeBash"
 import { bash, exists } from "std::shell"
 import { now } from "std::date"
+import { relative } from "std::path"
+import { cwd } from "std::system"
 
 /** A folder of its own, so these tests never touch another file's fixture. */
 static const FIXTURE = __dirname + "/stdlib/__safebash_steps__"
@@ -203,6 +205,74 @@ node aGhLookupDoesNotStop() {
   const out = safeBash("gh pr view 1 --json title; ls sub", cwd: FIXTURE) with approve
   remove(FIXTURE) with approve
   return textOf(out).includes("Stopped before")
+}
+
+/* The outside folder as a git repository with an untracked file, so its
+ `git status` prints a name the fixture's never does. */
+def makeOutsideRepo() {
+  makeOutside()
+  bash("git init -q && printf 'x\\n' > OUTSIDE_MARK.txt", cwd: OUTSIDE) with approve
+}
+
+/* A line run from `cwd` with `change` run in the fixture while the first
+ question is answered: whether it succeeded, the step it stopped before,
+ and whether the outside repository's status leaked. */
+def folderRow(line: string, cwd: string, change: string): any {
+  makeFixture()
+  makeOutsideRepo()
+  let out: Result<string> = success("")
+  let changed: boolean[] = []
+  handle {
+    out = safeBash(line, cwd: cwd)
+  } with (intr) {
+    if (changed.length == 0 && change != "") {
+      bash(change, cwd: FIXTURE) with approve
+      changed.push(true)
+    }
+    return approve()
+  }
+  const text = textOf(out)
+  remove(FIXTURE) with approve
+  remove(OUTSIDE) with approve
+  const stoppedBefore = if (text.includes("Stopped before `")) then text.split("Stopped before `")[1].split("`")[0] else ""
+  return [line, isSuccess(out), stoppedBefore, text.includes("OUTSIDE_MARK")]
+}
+
+static const TO_OUTSIDE = "rm -r sub && ln -s ${OUTSIDE} sub"
+
+// The folder a step runs in, and the folder a `cd` enters, are resolved
+// again just before the step, with every link followed. A folder that now
+// leads somewhere else stops the line, even when the step's own payload,
+// which names the folder as a string, is the same.
+node aChangedFolderStopsTheLine() {
+  return [
+    folderRow("git status; cd sub && git status", FIXTURE, TO_OUTSIDE),
+    folderRow("cd sub && pnpm --version", FIXTURE, TO_OUTSIDE),
+    folderRow("cd sub && ls", FIXTURE, ""),
+    folderRow("git status; git log --oneline -1", FIXTURE + "/sub", TO_OUTSIDE),
+  ]
+}
+
+/** A link to the fixture, to run a line from a folder spelled through it. */
+static const FIXTURE_LINK = __dirname + "/stdlib/__safebash_steps_link__"
+
+// The folder check compares real folders. The starting folder a line is
+// planned in can be ".", a relative path, or a path through a link, and
+// none of those stops a line whose folder did not change.
+node anUnchangedFolderSpelledAnotherWayRuns() {
+  makeFixture()
+  remove(FIXTURE_LINK) with approve
+  bash("ln -s ${FIXTURE} ${FIXTURE_LINK}") with approve
+  const fromDot = safeBash("pnpm --version; ls", cwd: ".") with approve
+  const fromLink = safeBash("pnpm --version; ls", cwd: FIXTURE_LINK) with approve
+  const fromRelative = safeBash("pnpm --version; ls", cwd: relative(cwd(), FIXTURE)) with approve
+  remove(FIXTURE_LINK) with approve
+  remove(FIXTURE) with approve
+  return [
+    [".", textOf(fromDot).includes("Stopped before")],
+    ["link", textOf(fromLink).includes("Stopped before")],
+    ["relative", textOf(fromRelative).includes("Stopped before")],
+  ]
 }
 
 // Three steps share one limit of 2 seconds: the line stops at 2 seconds

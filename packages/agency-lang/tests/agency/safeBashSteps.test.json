@@ -78,6 +78,28 @@
       ]
     },
     {
+      "nodeName": "aChangedFolderStopsTheLine",
+      "description": "Each row: the line, whether it succeeded, the step it stopped before, and whether the outside repository's status was printed. A folder swapped for a link to another repository after approval stops the line before the cd that enters it, and before a step that runs in it from the start, where the step's own payload names the folder as an unchanged string. With nothing swapped the line runs.",
+      "input": "",
+      "expectedOutput": "[[\"git status; cd sub && git status\",false,\"cd sub\",false],[\"cd sub && pnpm --version\",false,\"cd sub\",false],[\"cd sub && ls\",true,\"\",false],[\"git status; git log --oneline -1\",false,\"git status\",false]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "anUnchangedFolderSpelledAnotherWayRuns",
+      "description": "The folder check compares real folders, so a line planned in \".\", in a folder spelled through a link, or in a relative folder does not stop when nothing changed.",
+      "input": "",
+      "expectedOutput": "[[\".\",false],[\"link\",false],[\"relative\",false]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "stepsShareOneTimeLimit",
       "description": "The time limit covers the whole line: three steps under a 2 second limit stop at 2 seconds in total.",
       "input": "",

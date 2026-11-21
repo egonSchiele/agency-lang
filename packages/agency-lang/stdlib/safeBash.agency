@@ -7148,7 +7148,7 @@ def runStepList(steps: LineStep[], state: StepsState, origin: GhRepo | null): St
     }
     current = match(step) {
       { kind: "run" } => runOneStep(step, current, origin)
-      { kind: "cd" } => ({ ...current, cwd: step.dir, status: 0, missingFolderStops: step.guarded })
+      { kind: "cd" } => runCd(step, current)
       { kind: "group" } => runGroup(step, current, origin)
     }
     if (current.stopped == "" && step.kind != "group") {
@@ -7204,18 +7204,23 @@ def runInProcess(exec: StepExec, state: StepsState): StepsState {
 // through runPlanned, after approvedPlan raised every effect of the plan.
 @capabilities(fileRead, subprocess)
 def runBashStep(step: RunStep, state: StepsState, origin: GhRepo | null): StepsState {
+  const name = stepText(step.source)
+  const moved = folderChange(step, state)
+  if (moved != "") {
+    return stopBefore(name, state, moved)
+  }
   const fresh = classify(step.source, freshLine(state.cwd), origin, false)
   if (fresh is failure(why)) {
-    return stopBefore(step, state, "it no longer has a rule: ${why}")
+    return stopBefore(name, state, "it no longer has a rule: ${why}")
   }
   const same = sameEffects(step.effects, fresh.value.effects)
-  _debug("safeBash step check", { step: stepText(step.source), cwd: state.cwd, same: same })
+  _debug("safeBash step check", { step: name, cwd: state.cwd, same: same })
   if (!same) {
-    return stopBefore(step, state, changeOf(step.effects, fresh.value.effects))
+    return stopBefore(name, state, changeOf(step.effects, fresh.value.effects))
   }
   const planned = stepText(fresh.value.command)
   if (planned == "") {
-    return stopBefore(step, state, "it can no longer be written as a command")
+    return stopBefore(name, state, "it can no longer be written as a command")
   }
   const text = if (step.readsStatus) then "(exit ${state.status}); ${planned}" else planned
   const limit = if (state.limited) then state.leftMs else 0
@@ -7250,9 +7255,10 @@ static const PLAN_CHANGED = "planChanged"
 /** The last line of that failure, which the agent's trace reads. */
 static const PLAN_CHANGED_LINE = "[stopped: the plan changed]"
 
-/* The state of a line that stops before `step`, which runs nothing. */
-def stopBefore(step: RunStep, state: StepsState, found: string): StepsState {
-  _debug("safeBash step stopped", { step: stepText(step.source), cwd: state.cwd, found: found })
+/* The state of a line that stops before a step, named as the model wrote
+ it, and runs nothing more. */
+def stopBefore(step: string, state: StepsState, found: string): StepsState {
+  _debug("safeBash step stopped", { step: step, cwd: state.cwd, found: found })
   return { ...state, status: 1, stopped: stopMessage(step, found, state.ran), planChanged: true }
 }
 
@@ -7260,8 +7266,41 @@ def stopBefore(step: RunStep, state: StepsState, found: string): StepsState {
 // /repo/README.md, and that path now leads to /outside/secret.
 // `git checkout evil` already ran. Run the rest as a new command if you
 // still want it.
-def stopMessage(step: RunStep, found: string, ran: string[]): string {
-  return "Stopped before `${stepText(step.source)}`: ${found}. ${ranSentence(ran)} Run the rest as a new command if you still want it."
+def stopMessage(step: string, found: string, ran: string[]): string {
+  return "Stopped before `${step}`: ${found}. ${ranSentence(ran)} Run the rest as a new command if you still want it."
+}
+
+// A `cd` is resolved again from the runner's folder before it moves. A
+// target that changed or vanished after approval is not the folder that
+// was approved, so the line stops there, whether the `cd` is guarded or
+// not.
+@capabilities(fileRead)
+def runCd(step: CdStep, state: StepsState): StepsState {
+  const name = stepText(step.source)
+  const target = cdTarget(step.source, freshLine(state.cwd))
+  if (target is failure(why)) {
+    return stopBefore(name, state, "it was approved to enter ${step.dir}, and it no longer has a rule: ${why}")
+  }
+  if (target.value != step.dir) {
+    return stopBefore(name, state, "it was approved to enter ${step.dir}, and that folder now leads to ${target.value}")
+  }
+  return { ...state, cwd: step.dir, status: 0, missingFolderStops: step.guarded }
+}
+
+// The folder a step runs in, with every link followed, against the one the
+// plan resolved. A git or exec payload names its folder as a string, so a
+// folder swapped for a link to another repository leaves the payload the
+// same; this is the check that sees it.
+@capabilities(fileRead)
+def folderChange(step: RunStep, state: StepsState): string {
+  const real = try _realFolder(state.cwd)
+  if (real is failure(why)) {
+    return "it was approved to run in ${step.realCwd}, and that folder can no longer be resolved: ${why}"
+  }
+  if (real.value != step.realCwd) {
+    return "it was approved to run in ${step.realCwd}, and that folder now leads to ${real.value}"
+  }
+  return ""
 }
 
 def ranSentence(ran: string[]): string {

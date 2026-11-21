@@ -254,15 +254,12 @@ Rough size: five to seven days.
   and stop if the file turns out to be a link. That would remove more
   prompts, and it is a separate change.
 
-## Decisions for the owner
+## Decisions (owner, 2026-11-20)
 
-1. **The job rule.** Accept that a job line with more than one step asks
-   `std::bash`, apart from a leading `cd`? The other choice is to keep
-   the prediction rule alive for jobs only, which means nothing is
-   deleted.
-2. **Stop, or run the rest of the line?** This design stops the whole
-   line at the first step that does not match. The other choice is to
-   skip that step and carry on, which is harder to reason about.
-3. **The table of lines that become narrow again.** These lines ask a
-   read or listing question up front and rely on the check. Confirm that
-   is wanted for all four.
+1. **The job rule.** A job line with more than one step asks
+   `std::bash`, apart from a leading `cd`. The prediction rule is not
+   kept alive for jobs.
+2. **Stop.** The whole line stops at the first step that does not match.
+   It does not skip that step and carry on.
+3. **The lines that become narrow again.** All four lines in the table
+   ask their narrow questions up front and rely on the check.

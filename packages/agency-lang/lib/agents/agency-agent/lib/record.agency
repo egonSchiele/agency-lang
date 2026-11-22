@@ -87,6 +87,18 @@ export def renameSession(title: string): Result<Renamed> {
   return success({ title: clean })
 }
 
+/** A `folder` answer moved the session: the record says its new folder,
+  and it was active now, so a front-end that keeps the newer of two copies
+  keeps the moved one. Does nothing for a run with no session. */
+export def moveRecord(cwd: string) {
+  const record = _current
+  if (record == null) {
+    return
+  }
+  record.cwd = cwd
+  record.lastActive = now()
+}
+
 /** The id of the session this run writes to, or "" when it has none. */
 export def currentSessionId(): string {
   const record = _current

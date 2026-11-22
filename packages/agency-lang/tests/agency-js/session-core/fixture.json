@@ -214,6 +214,20 @@
       "record": null
     }
   },
+  "folder": {
+    "moved": { "level": "info", "text": true, "cwd": true, "recordCwd": true, "lastActiveMoved": true },
+    "trailingSlash": { "cwd": true, "recordCwd": true },
+    "dotDot": { "cwd": true, "recordCwd": true },
+    "sameFolder": { "level": "info", "cwd": true, "recordCwd": true },
+    "relative": {
+      "notice": { "level": "error", "text": "Could not move the session to relative/dir: the path is not absolute." },
+      "cwd": true,
+      "recordCwd": true
+    },
+    "missing": { "level": "error", "text": true, "cwd": true, "recordCwd": true },
+    "aFile": { "level": "error", "text": true, "cwd": true, "recordCwd": true },
+    "notSaved": { "level": "info", "cwd": true, "record": null }
+  },
   "fork": {
     "noTurns": {
       "notice": { "level": "error", "text": "Could not fork the session: it has no turns yet." },

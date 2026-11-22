@@ -652,6 +652,54 @@ const unsaved = await startSession({ session: { ...startData().session, record: 
 await unsaved.answer({ kind: "rename", title: "a title" });
 result.rename.notSaved = { notice: lastNotice(unsaved), record: pauseData(unsaved).record };
 
+// `folder`. Temp paths change every run, so a check that holds one is a
+// boolean.
+const moveTarget = mkdtempSync(path.join(os.tmpdir(), "session-core-move-"));
+const notAFolder = path.join(moveTarget, "a-file.txt");
+writeFileSync(notAFolder, "not a folder");
+const mover = await startSession();
+const lastActiveBefore = pauseData(mover).record.lastActive;
+await mover.answer({ kind: "folder", cwd: moveTarget });
+const movedTo = (session) => ({
+  cwd: pauseData(session).cwd === moveTarget,
+  recordCwd: pauseData(session).record?.cwd === moveTarget,
+});
+result.folder = {
+  moved: {
+    level: lastNotice(mover).level,
+    text: lastNotice(mover).text === `Moved the session to ${moveTarget}.`,
+    ...movedTo(mover),
+    lastActiveMoved: pauseData(mover).record.lastActive > lastActiveBefore,
+  },
+};
+await mover.answer({ kind: "folder", cwd: `${moveTarget}/` });
+result.folder.trailingSlash = movedTo(mover);
+await mover.answer({ kind: "folder", cwd: `${moveTarget}/x/..` });
+result.folder.dotDot = movedTo(mover);
+await mover.answer({ kind: "folder", cwd: moveTarget });
+result.folder.sameFolder = { level: lastNotice(mover).level, ...movedTo(mover) };
+await mover.answer({ kind: "folder", cwd: "relative/dir" });
+result.folder.relative = { notice: lastNotice(mover), ...movedTo(mover) };
+await mover.answer({ kind: "folder", cwd: path.join(moveTarget, "missing") });
+result.folder.missing = {
+  level: lastNotice(mover).level,
+  text: lastNotice(mover).text?.endsWith(": it is not a folder."),
+  ...movedTo(mover),
+};
+await mover.answer({ kind: "folder", cwd: notAFolder });
+result.folder.aFile = {
+  level: lastNotice(mover).level,
+  text: lastNotice(mover).text?.endsWith(": it is not a folder."),
+  ...movedTo(mover),
+};
+const unsavedMover = await startSession({ session: { ...startData().session, record: null } });
+await unsavedMover.answer({ kind: "folder", cwd: moveTarget });
+result.folder.notSaved = {
+  level: lastNotice(unsavedMover).level,
+  cwd: pauseData(unsavedMover).cwd === moveTarget,
+  record: pauseData(unsavedMover).record,
+};
+
 // `fork`. It needs a turn to copy.
 await renamer.answer({ kind: "fork" });
 result.fork = { noTurns: { notice: lastNotice(renamer), idKept: pauseData(renamer).record.id } };

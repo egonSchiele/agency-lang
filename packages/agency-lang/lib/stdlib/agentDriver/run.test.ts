@@ -12,7 +12,7 @@ import {
   resumeRun,
   startRun,
   toStep,
-  withCancelNote,
+  cancelNote,
   type AgentModule,
   type ResumeOptions,
   type StartOptions,
@@ -169,23 +169,23 @@ describe("startRun and resumeRun", () => {
   });
 });
 
-describe("withCancelNote", () => {
-  it("prefixes the exact note", () => {
-    expect(withCancelNote({ message: "next", cancelledTexts: [] })).toBe("next");
-    expect(withCancelNote({ message: "next", cancelledTexts: ["do x"] })).toBe(
-      '(The user cancelled their previous request, "do x", partway through. Some of its changes may already have been made.)\n\nnext',
+describe("cancelNote", () => {
+  it("is the exact note, or null when nothing was dropped", () => {
+    expect(cancelNote({ cancelledTexts: [] })).toBe(null);
+    expect(cancelNote({ cancelledTexts: ["do x"] })).toBe(
+      '(The user cancelled their previous request, "do x", partway through. Some of its changes may already have been made.)',
     );
-    expect(withCancelNote({ message: "next", cancelledTexts: ["a", "b"] })).toBe(
-      '(The user cancelled their previous requests, "a", "b", partway through. Some of their changes may already have been made.)\n\nnext',
+    expect(cancelNote({ cancelledTexts: ["a", "b"] })).toBe(
+      '(The user cancelled their previous requests, "a", "b", partway through. Some of their changes may already have been made.)',
     );
   });
 
   it("words a failed request, alone or beside a cancelled one", () => {
-    expect(withCancelNote({ message: "next", cancelledTexts: [], failedTexts: ["do x"] })).toBe(
-      '(The user\'s previous request, "do x", failed partway through. Some of its changes may already have been made.)\n\nnext',
+    expect(cancelNote({ cancelledTexts: [], failedTexts: ["do x"] })).toBe(
+      '(The user\'s previous request, "do x", failed partway through. Some of its changes may already have been made.)',
     );
-    expect(withCancelNote({ message: "next", cancelledTexts: ["a"], failedTexts: ["b"] })).toBe(
-      '(The user cancelled their previous request, "a", partway through. Their previous request, "b", failed partway through. Some of their changes may already have been made.)\n\nnext',
+    expect(cancelNote({ cancelledTexts: ["a"], failedTexts: ["b"] })).toBe(
+      '(The user cancelled their previous request, "a", partway through. Their previous request, "b", failed partway through. Some of their changes may already have been made.)',
     );
   });
 });

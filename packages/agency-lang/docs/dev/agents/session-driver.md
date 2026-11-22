@@ -54,9 +54,11 @@ from there, with the conversation as it was before the turn.
 
 - **A cancel** (an abort, or `approvalCancelled` at a prompt) drops the
   turn and reports `turnCancelled`. Its text goes into `cancelledTexts`.
-  The next message starts with a note that names it, because the agent
-  forgets the request but its changes to files stay
-  (`withCancelNote`).
+  The next message carries a note that names it, because the agent
+  forgets the request but its changes to files stay (`cancelNote`). The
+  note is sent as the message's last note, so the message's `text` is
+  what the person typed, and the session core puts the note just above
+  it.
 - **A turn that finishes** reports `turnFinished`: a leg came back and
   the run waits for a message again. A front-end saves and closes any
   tool calls that never got an end.
@@ -435,7 +437,7 @@ REPL ends.
 | ---------------------------------------- | ----------------------------------------------------------- |
 | `lib/stdlib/agentDriver/index.ts`        | The entry point.                                            |
 | `lib/stdlib/agentDriver/interface.ts`    | The core's interface: `ProgramStart`, `PauseData`, `Answer`. |
-| `lib/stdlib/agentDriver/run.ts`          | `startRun`, `resumeRun`, `toStep`, `withCancelNote`.        |
+| `lib/stdlib/agentDriver/run.ts`          | `startRun`, `resumeRun`, `toStep`, `cancelNote`.            |
 | `lib/stdlib/agentDriver/policy.ts`       | `withPauseLeftAlone`, `sessionRunPolicy`.                   |
 | `lib/stdlib/agentDriver/sessionPolicy.ts` | The session's policy file.                                 |
 | `lib/stdlib/agentDriver/approvals.ts`    | The approval queue.                                         |

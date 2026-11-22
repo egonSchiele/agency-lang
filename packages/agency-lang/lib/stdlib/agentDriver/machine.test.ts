@@ -13,9 +13,19 @@ import {
   type Happened,
   type Leg,
 } from "./machine.js";
-import { withCancelNote, type AgentStep } from "./run.js";
+import { cancelNote, type AgentStep } from "./run.js";
 import type { SessionRecord } from "../agentSessions.js";
 import type { HeldJob } from "../../runtime/jobs/heldJobs.js";
+
+/** The answer for `text` typed after a cancel or a failure: the text as
+ *  typed, and the note about the dropped requests as its last note. */
+function answerWithNote(
+  text: string,
+  dropped: { cancelledTexts: string[]; failedTexts?: string[] },
+  notes: string[] = [],
+) {
+  return { ...messageAnswer(text), notes: [...notes, cancelNote(dropped)] };
+}
 
 function interrupt(effect: string, id: string): Interrupt {
   return {
@@ -131,8 +141,20 @@ describe("a turn", () => {
     expect(cancelled.happened.at(-1)).toEqual({ type: "turnCancelled" });
 
     const next = run([{ type: "submitted", text: "next" }], cancelled.phase);
-    const note = withCancelNote({ message: "next", cancelledTexts: ["slow"] });
-    expect(legOf(next.phase).responses).toEqual([approve(messageAnswer(note))]);
+    expect(legOf(next.phase).responses).toEqual([
+      approve(answerWithNote("next", { cancelledTexts: ["slow"] })),
+    ]);
+  });
+
+  it("the cancel note comes after the user's own notes", () => {
+    const cancelled = run(
+      [{ type: "submitted", text: "slow" }, step({ kind: "cancelled" })],
+      waiting,
+    );
+    const next = run([{ type: "submitted", text: "next", notes: ["NOTE-A"] }], cancelled.phase);
+    expect(legOf(next.phase).responses).toEqual([
+      approve(answerWithNote("next", { cancelledTexts: ["slow"] }, ["NOTE-A"])),
+    ]);
   });
 
   it("cancelled twice names both in the note", () => {
@@ -146,8 +168,9 @@ describe("a turn", () => {
       ],
       waiting,
     );
-    const note = withCancelNote({ message: "next", cancelledTexts: ["slow", "again"] });
-    expect(legOf(twice.phase).responses).toEqual([approve(messageAnswer(note))]);
+    expect(legOf(twice.phase).responses).toEqual([
+      approve(answerWithNote("next", { cancelledTexts: ["slow", "again"] })),
+    ]);
   });
 
   it("that fails goes back to the same pause with the error, and remembers the request", () => {
@@ -172,8 +195,9 @@ describe("a turn", () => {
       ],
       waiting,
     );
-    const note = withCancelNote({ message: "next", cancelledTexts: ["slow"], failedTexts: ["hi"] });
-    expect(legOf(next.phase).responses).toEqual([approve(messageAnswer(note))]);
+    expect(legOf(next.phase).responses).toEqual([
+      approve(answerWithNote("next", { cancelledTexts: ["slow"], failedTexts: ["hi"] })),
+    ]);
   });
 
   it("that finishes after a failure drops the failure's note", () => {
@@ -337,10 +361,9 @@ describe("a settings answer", () => {
       ],
       cancelled,
     );
-    const note = withCancelNote({ message: "next", cancelledTexts: ["slow"] });
     expect(legOf(next.phase)).toEqual({
       interrupts: applied,
-      responses: [approve(messageAnswer(note))],
+      responses: [approve(answerWithNote("next", { cancelledTexts: ["slow"] }))],
     });
   });
 

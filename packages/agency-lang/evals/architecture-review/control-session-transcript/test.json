@@ -1,0 +1,10 @@
+{
+  "description": "Control: an approved plan in which the session core records what the user typed and the reply in a list of its own, and a reopened session shows that list.",
+  "tags": ["control"],
+  "files": "./files",
+  "input": {
+    "plan": "plan.md",
+    "commit": "3c1def0b5d7183dd485dbe06e4417342947914b7",
+    "task": "It is a plan for making a reopened agent session show what the user typed and what the agent replied, without the notes, context, and runtime messages that sit on the conversation thread as user messages."
+  }
+}

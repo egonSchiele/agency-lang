@@ -1,0 +1,10 @@
+{
+  "description": "A plan marks messages on the model's thread as hidden, and splits messages apart so the marks apply, so that a reopened session shows only what the user typed.",
+  "tags": ["flawed", "wrong-layer", "too-complex"],
+  "files": "./files",
+  "input": {
+    "plan": "plan.md",
+    "commit": "223e644391c31b1c49b4395fb453b37e4132843b",
+    "task": "It is a plan for making a reopened agent session show what the user typed, without the notes, context, and runtime messages that sit on the conversation thread as user messages."
+  }
+}

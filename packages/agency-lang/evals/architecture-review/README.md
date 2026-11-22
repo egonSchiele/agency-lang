@@ -1,6 +1,8 @@
 # architecture-review: does a reviewer catch a bad design?
 
-Each test is a plan or spec for a change to this repository, taken as it was when its author first showed it to the owner. Six are designs the owner rejected. Three are designs the owner approved, as controls.
+Each test is a plan or spec for a change to this repository, taken as it was when its author first showed it to the owner. Seven are designs the owner rejected. Four are designs the owner approved, as controls.
+
+Two of the tests are a pair. `hidden-messages` is a rejected plan, and `control-session-transcript` is the plan that replaced it for the same problem.
 
 The rejected designs are the kind that pass tests and still should not be built:
 

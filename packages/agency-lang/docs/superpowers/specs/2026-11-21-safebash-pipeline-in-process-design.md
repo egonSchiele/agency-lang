@@ -148,19 +148,30 @@ anything runs. The runner raises nothing. Three payloads change:
    `content: ""` today and would ask with `content: "hi\n"`.
 3. **`grep -rn x node_modules | head`** asks `std::bash` today, while
    the same grep alone runs in process. Under this rule it asks
-   `std::grep`. I have not yet read why the bash path refuses it, and I
-   will before the plan is written.
+   `std::grep`. The bash path refuses it for a reason that does not
+   apply in process: the grep it writes excludes every folder name the
+   grep tool skips (`--exclude-dir=node_modules`), so a search of a
+   folder with that name would find nothing, while the tool does search
+   a folder it is given (`grepSearchRule`).
 
 No effect is added to or removed from any other line.
 
 ## Where the output can differ from bash
 
-- **A search that skips folders.** The stdlib grep skips ignored
-  folders such as `node_modules`, stops at 1000 matches, and says so in
-  a note. A lone `grep -rn x .` works this way today. Followed by
-  `| head`, or placed after `pnpm build;`, the same search runs real
-  grep today and would run the stdlib search. A note is printed after
-  the last stage, so `| head` does not cut it off.
+- **A search stops at 1000 matches.** The stdlib grep stops there and
+  says so in a note. A lone `grep -rn x .` works this way today.
+  Followed by `| head`, or placed after `pnpm build;`, the same search
+  runs real grep today, which has no limit. Both paths skip the same
+  folders: the grep the bash path writes excludes every name the tool
+  skips. A note is printed after the last stage, so `| head` does not
+  cut it off.
+- **A swapped folder is refused, not checked for.** A bash step earlier
+  in the line can replace a folder with a link. A bash step after it is
+  planned again and the line stops. An in-process step is not planned
+  again: its stdlib tool opens the approved folder with `fixedRoot`,
+  which refuses a link anywhere in the path
+  (`docs/dev/stdlib/contained-files.md`), so the step fails with the
+  tool's message.
 - **A stage that fails.** In bash, a failing first stage prints its
   error and the later stages still run on empty input. A file that is
   missing when the line is planned is not accepted by the table, so that

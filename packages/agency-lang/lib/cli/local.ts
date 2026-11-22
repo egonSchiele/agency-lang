@@ -35,6 +35,7 @@ import { readDownloadManifest } from "../stdlib/localModelManifest.js";
 import type { DownloadEvent } from "../stdlib/hubDownload.js";
 import { ttyColor } from "../utils/termcolors.js";
 import { terminalSafe } from "./remote/secretsInput.js";
+import { errorMessage } from "../serve/util.js";
 
 /** Install-gate for I/O commands. Honors the AGENCY_LLAMA_PROVIDER_MODULE
  *  override the same way `requireSupport()` in `localModels.ts` does — a
@@ -185,14 +186,20 @@ export async function runDownload(value?: string, kind?: string): Promise<void> 
     gate();
   }
   const source = resolved.target;
+  const printer = printDownloadEvent(process.stdout.isTTY === true);
   let modelPath: string;
   try {
-    modelPath = await _downloadModel(picked, "", {
-      onEvent: printDownloadEvent(process.stdout.isTTY === true),
-      kind: givenKind,
-    });
+    modelPath = await _downloadModel(picked, "", { onEvent: printer, kind: givenKind });
   } catch (error) {
+    // A download that fails partway through leaves the progress counter
+    // without its closing newline, and the message would be glued to it.
+    printer.end();
     console.error(downloadFailureMessage(picked, error));
+    // The message alone hides the stack of a real bug, such as a TypeError
+    // inside the download code. DEBUG prints it for a bug report.
+    if (process.env.DEBUG !== undefined && process.env.DEBUG !== "" && error instanceof Error) {
+      console.error(error.stack);
+    }
     process.exit(1);
   }
   if (source !== modelPath) {
@@ -217,8 +224,7 @@ export function downloadFailureMessage(model: string, error: unknown): string {
   const name = terminalSafe(model);
   const status = httpStatusOf(error);
   if (status === null) {
-    const message = error instanceof Error ? error.message : String(error);
-    return `Could not download ${name}: ${terminalSafe(message)}`;
+    return `Could not download ${name}: ${terminalSafe(errorMessage(error))}`;
   }
   const file = fileNameInUrl(error);
   const refused = file === null ? "the server refused a request" : `the server refused ${file}`;
@@ -226,7 +232,7 @@ export function downloadFailureMessage(model: string, error: unknown): string {
   if (status === 401 || status === 403) {
     lines.push(
       "Hugging Face download links expire after a while, so a long download can be refused partway through.",
-      "Run the same command again: the parts that already finished are kept.",
+      "Run the same command again: it picks up where this one stopped.",
       "If it is refused again straight away, the model may need a Hugging Face token: set HF_TOKEN and retry.",
     );
   } else if (status >= 500) {
@@ -260,6 +266,10 @@ function fileNameInUrl(error: unknown): string | null {
   return name === null ? null : terminalSafe(name);
 }
 
+/** The event printer, plus `end`, which finishes the byte counter's line
+ *  when the download stops before reaching 100%. */
+export type DownloadPrinter = ((e: DownloadEvent) => void) & { end: () => void };
+
 /** One line per event. The byte counter rewrites one terminal line with
  *  the percent, the rate, and the time left, and off a terminal prints a
  *  line at every tenth percent instead, so a log of a long download still
@@ -268,7 +278,7 @@ export function printDownloadEvent(
   tty: boolean,
   write: (s: string) => void = (s) => process.stdout.write(s),
   now: () => number = Date.now,
-): (e: DownloadEvent) => void {
+): DownloadPrinter {
   const rate = new RateMeter(now);
   let counterShown = false;
   let lastTenth = -1;
@@ -278,7 +288,7 @@ export function printDownloadEvent(
       counterShown = false;
     }
   };
-  return (e) => {
+  const print = (e: DownloadEvent): void => {
     if (e.kind === "bytes") {
       const percent = e.total === 0 ? 100 : Math.floor((100 * e.done) / e.total);
       const line = `  ${formatGB(e.done)} / ${formatGB(e.total)}  ${percent}%`;
@@ -307,6 +317,7 @@ export function printDownloadEvent(
       write(e.ok ? `  verified ${name}\n` : `  ${name} failed verification\n`);
     }
   };
+  return Object.assign(print, { end: endCounter });
 }
 
 /** The download rate over the last few seconds and the time it implies

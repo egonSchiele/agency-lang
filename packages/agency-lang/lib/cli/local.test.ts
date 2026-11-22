@@ -577,6 +577,23 @@ describe("checkedKind", () => {
   });
 });
 
+describe("printDownloadEvent end", () => {
+  it("finishes a counter line that stopped partway, so the next line starts on its own", () => {
+    const out: string[] = [];
+    const print = printDownloadEvent(true, (s) => out.push(s));
+    print({ kind: "bytes", done: 30, total: 100 });
+    print.end();
+    expect(out.join("").endsWith("30%\n")).toBe(true);
+  });
+
+  it("writes nothing when no counter is showing", () => {
+    const out: string[] = [];
+    const print = printDownloadEvent(true, (s) => out.push(s));
+    print.end();
+    expect(out).toEqual([]);
+  });
+});
+
 describe("downloadFailureMessage", () => {
   /** Shaped like ipull's StatusCodeError: a Hugging Face CDN URL that names
    *  the file by hash and puts the real name in a query parameter. */
@@ -600,6 +617,10 @@ describe("downloadFailureMessage", () => {
     expect(message).toContain("Run the same command again");
     expect(message).not.toContain("Signature");
     expect(message).not.toContain("https://");
+  });
+
+  it("gives a 401 the same hints as a 403", () => {
+    expect(downloadFailureMessage("m", refusedRequest(401))).toContain("HF_TOKEN");
   });
 
   it("takes the file name from the end of a plain URL", () => {

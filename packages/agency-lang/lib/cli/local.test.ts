@@ -15,6 +15,7 @@ import {
   runAliasRemove,
   runDownload,
   printDownloadEvent,
+  downloadFailureMessage,
   downloadChoices,
   CUSTOM_CHOICE,
   checkedKind,
@@ -572,6 +573,56 @@ describe("checkedKind", () => {
   it("refuses anything else, naming the kinds", () => {
     expect(() => checkedKind("video")).toThrow(
       '"video" is not a kind of model. The kinds are chat, embedding, speech, image, vision, controlnet.',
+    );
+  });
+});
+
+describe("downloadFailureMessage", () => {
+  /** Shaped like ipull's StatusCodeError: a Hugging Face CDN URL that names
+   *  the file by hash and puts the real name in a query parameter. */
+  function refusedRequest(statusCode: number): Error {
+    const disposition = encodeURIComponent(
+      `attachment; filename*=UTF-8''model-00002-of-00004.gguf; filename="model-00002-of-00004.gguf";`,
+    );
+    const url = `https://us.aws.cdn.hf.co/xet-bridge-us/abc/7f97f554?response-content-disposition=${disposition}&Signature=SECRET`;
+    return Object.assign(new Error(`Url: ${url}, Status code: ${statusCode}`), {
+      url,
+      statusCode,
+      statusText: "",
+    });
+  }
+
+  it("names the file and the status for a refused request, and leaves out the URL", () => {
+    const message = downloadFailureMessage("qwen-flash", refusedRequest(403));
+    expect(message.split("\n")[0]).toBe(
+      "Could not download qwen-flash: the server refused model-00002-of-00004.gguf (HTTP 403).",
+    );
+    expect(message).toContain("Run the same command again");
+    expect(message).not.toContain("Signature");
+    expect(message).not.toContain("https://");
+  });
+
+  it("takes the file name from the end of a plain URL", () => {
+    const error = Object.assign(new Error("refused"), {
+      url: "https://huggingface.co/org/repo/resolve/main/model.gguf",
+      statusCode: 404,
+    });
+    expect(downloadFailureMessage("hf:org/repo", error)).toBe(
+      "Could not download hf:org/repo: the server refused model.gguf (HTTP 404).",
+    );
+  });
+
+  it("says the server had a problem on a 5xx", () => {
+    const error = Object.assign(new Error("refused"), { statusCode: 503 });
+    expect(downloadFailureMessage("m", error)).toBe(
+      "Could not download m: the server refused a request (HTTP 503).\n" +
+        "The server had a problem. Run the same command again in a few minutes.",
+    );
+  });
+
+  it("prints any other error's message", () => {
+    expect(downloadFailureMessage("m", new Error("m is a GGUF model."))).toBe(
+      "Could not download m: m is a GGUF model.",
     );
   });
 });

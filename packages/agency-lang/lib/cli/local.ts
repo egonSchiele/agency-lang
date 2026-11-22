@@ -185,14 +185,79 @@ export async function runDownload(value?: string, kind?: string): Promise<void> 
     gate();
   }
   const source = resolved.target;
-  const modelPath = await _downloadModel(picked, "", {
-    onEvent: printDownloadEvent(process.stdout.isTTY === true),
-    kind: givenKind,
-  });
+  let modelPath: string;
+  try {
+    modelPath = await _downloadModel(picked, "", {
+      onEvent: printDownloadEvent(process.stdout.isTTY === true),
+      kind: givenKind,
+    });
+  } catch (error) {
+    console.error(downloadFailureMessage(picked, error));
+    process.exit(1);
+  }
   if (source !== modelPath) {
     console.log(`source: ${source}`);
   }
   console.log(`model:  ${modelPath}`);
+}
+
+/** What `agency local download` prints when a download fails, in place of
+ *  a stack trace.
+ *
+ *  The GGUF downloader throws an error with a `statusCode` when a server
+ *  refuses a request. Its message holds the signed download URL, which runs
+ *  to over a thousand characters, so this names the file and the status
+ *  instead:
+ *
+ *    Could not download qwen3.8-flash-next: the server refused
+ *    Qwen3.8-Flash-Next-UD-Q4_K_XL-00002-of-00004.gguf (HTTP 403).
+ *
+ *  Any other error prints its own message. */
+export function downloadFailureMessage(model: string, error: unknown): string {
+  const name = terminalSafe(model);
+  const status = httpStatusOf(error);
+  if (status === null) {
+    const message = error instanceof Error ? error.message : String(error);
+    return `Could not download ${name}: ${terminalSafe(message)}`;
+  }
+  const file = fileNameInUrl(error);
+  const refused = file === null ? "the server refused a request" : `the server refused ${file}`;
+  const lines = [`Could not download ${name}: ${refused} (HTTP ${status}).`];
+  if (status === 401 || status === 403) {
+    lines.push(
+      "Hugging Face download links expire after a while, so a long download can be refused partway through.",
+      "Run the same command again: the parts that already finished are kept.",
+      "If it is refused again straight away, the model may need a Hugging Face token: set HF_TOKEN and retry.",
+    );
+  } else if (status >= 500) {
+    lines.push("The server had a problem. Run the same command again in a few minutes.");
+  }
+  return lines.join("\n");
+}
+
+function httpStatusOf(error: unknown): number | null {
+  if (typeof error !== "object" || error === null || !("statusCode" in error)) {
+    return null;
+  }
+  return typeof error.statusCode === "number" ? error.statusCode : null;
+}
+
+/** The file a refused request was for. A Hugging Face CDN URL names its file
+ *  by hash, with the real name in its `response-content-disposition`
+ *  parameter; other URLs end in the file name. Null when neither says. */
+function fileNameInUrl(error: unknown): string | null {
+  if (typeof error !== "object" || error === null || !("url" in error)) {
+    return null;
+  }
+  if (typeof error.url !== "string" || !URL.canParse(error.url)) {
+    return null;
+  }
+  const url = new URL(error.url);
+  const disposition = url.searchParams.get("response-content-disposition") ?? "";
+  const quoted = /filename="([^"]+)"/.exec(disposition);
+  const last = path.posix.basename(url.pathname);
+  const name = quoted !== null ? quoted[1] : last.includes(".") ? last : null;
+  return name === null ? null : terminalSafe(name);
 }
 
 /** One line per event. The byte counter rewrites one terminal line with

@@ -47,11 +47,12 @@ describe("prefixChoices", () => {
   it("never offers a prefix of no items, which would cover any arguments", () => {
     expect(prefixChoices(3).some((choice) => choice.keep === 0 && choice.rest)).toBe(false);
   });
-  it("keeps the narrowest choices and the widest when there are too many", () => {
+  it("keeps the exact choice and the widest ones when there are too many", () => {
+    // For a command the wide choices are the likely picks: `pnpm run
+    // agency …` must stay on offer for a long `pnpm run agency test` line.
     const many = prefixChoices(20);
+    expect(many.map((choice) => choice.id)).toEqual(["exact", "7", "6", "5", "4", "3", "2", "1"]);
     expect(many).toHaveLength(MAX_PREFIX_CHOICES);
-    expect(many[0].id).toBe(EXACT_PREFIX);
-    expect(many[many.length - 1]).toEqual({ id: "1", keep: 1, rest: true });
   });
 });
 

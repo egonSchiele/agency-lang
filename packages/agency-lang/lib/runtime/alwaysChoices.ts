@@ -69,17 +69,20 @@ function narrowestAndWidest<T>(choices: T[], max: number): T[] {
 }
 
 /** The widths a rule for a list of `itemCount` items can have, narrowest
- *  first: the whole list, then the first `itemCount` items followed by
- *  anything, down to the first item followed by anything. There is no
- *  choice that keeps no items: it would cover the program with any
- *  arguments, which is broader than any rule the prompt saved before. */
+ *  first: the whole list, then the first n items followed by anything,
+ *  down to the first item followed by anything. When there are too many,
+ *  the whole list stays and the widest ones fill the rest: for a command
+ *  the wide choices are the likely picks, such as `pnpm run agency …` for a
+ *  long `pnpm run agency test` line. There is no choice that keeps no
+ *  items: it would cover the program with any arguments, which is broader
+ *  than any rule the prompt saved before. */
 export function prefixChoices(itemCount: number): PrefixChoice[] {
-  const widths = Array.from({ length: itemCount }, (_, index) => itemCount - index);
-  const all = [
+  const widest = Math.min(itemCount, MAX_PREFIX_CHOICES - 1);
+  const widths = Array.from({ length: widest }, (_, index) => widest - index);
+  return [
     { id: EXACT_PREFIX, keep: itemCount, rest: false },
     ...widths.map((keep) => ({ id: String(keep), keep, rest: true })),
   ];
-  return narrowestAndWidest(all, MAX_PREFIX_CHOICES);
 }
 
 /** The pattern a choice saves: the kept items, each escaped so it matches

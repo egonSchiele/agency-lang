@@ -541,9 +541,11 @@ whole list, then the first n items followed by anything, down to the
 first item followed by anything. There is no choice that keeps no items:
 it would approve the program with any arguments. The widest choice is the
 program and its first argument, which is what the rule pinned before the
-step existed. At most eight choices are listed, the narrowest ones and
-the widest. A command with no arguments has one choice, so the step is
-skipped.
+step existed. At most eight choices are listed: the whole command and the
+seven widest. For a command the wide choices are the likely picks, so a
+long `pnpm run agency test <file> --flag …` line still offers
+`pnpm run agency …`. A command with no arguments has one choice, so the
+step is skipped.
 
 A label is the values of the effect's exact fields, then the kept items,
 each cut to 60 characters with `…`. A newline in a label or in the detail

@@ -2145,6 +2145,8 @@ node pipelinesMatchRealTools() {
     pipeParityOf("cat one.txt | grep -E \"hello|goodbye\"", FIXTURES),
     pipeParityOf("cat one.txt | grep -F \"o w\"", FIXTURES),
     pipeParityOf("cat one.txt | grep -e hello", FIXTURES),
+    pipeParityOf("cat one.txt | grep hello -v", FIXTURES),
+    pipeParityOf("cat one.txt | grep -h -s --color=never hello", FIXTURES),
     pipeParityOf("cat one.txt | grep nomatch", FIXTURES),
     pipeParityOf("cat one.txt | grep nomatch | head", FIXTURES),
     pipeParityOf("grep -n hello one.txt | tail -1", FIXTURES),

@@ -211,9 +211,9 @@
     },
     {
       "nodeName": "anInProcessReadRefusesASwappedPath",
-      "description": "Each row: the line, whether it succeeded, whether it stopped, and whether anything from the outside folder was printed. A file or a folder swapped for a link to the outside folder after approval fails a cat that safeBash runs itself, because the read tool refuses a link in the path it opens. The line fails with no stop and prints nothing from outside.",
+      "description": "Each row: the line, whether it succeeded, whether it stopped, and whether anything from the outside folder was printed. A file or a folder swapped for a link to the outside folder after approval fails a cat that safeBash runs itself, because the read tool refuses a link in the path it opens. The line fails with no stop and prints nothing from outside. The last two rows are pipelines safeBash runs itself, one that starts with a cat and one that starts with a folder search: the first stage makes the same call, so they fail the same way.",
       "input": "",
-      "expectedOutput": "[[\"pnpm --version; cat one.txt\",false,false,false],[\"pnpm --version; cat sub/a.txt\",false,false,false]]",
+      "expectedOutput": "[[\"pnpm --version; cat one.txt\",false,false,false],[\"pnpm --version; cat sub/a.txt\",false,false,false],[\"cat one.txt | head -1\",false,false,false],[\"grep -rn . sub | head -1\",false,false,false]]",
       "evaluationCriteria": [
         {
           "type": "exact"

@@ -1182,9 +1182,9 @@
     },
     {
       "nodeName": "pipelinesMatchRealTools",
-      "description": "Each row runs a pipeline safeBash runs itself and the same pipeline under real bash, and compares the text and whether it succeeded. The later stages are cat, head, tail, and grep with -n, -v, -i, -w, -E, -F, and -e. The status is the last stage's: a first stage that matches nothing is not a failure, and a last grep that keeps no line is. The files include one with no final newline, an empty one, and one with Windows line endings. Each row first checks that its pipeline really runs in process.",
+      "description": "Each row runs a pipeline safeBash runs itself and the same pipeline under real bash, and compares the text and whether it succeeded. The later stages are cat, head, tail, and grep with -n, -v, -i, -w, -E, -F, -e, the three flags that do nothing to piped text (-h, -s, --color=never), and a flag after the pattern. The status is the last stage's: a first stage that matches nothing is not a failure, and a last grep that keeps no line is. The files include one with no final newline, an empty one, and one with Windows line endings. Each row first checks that its pipeline really runs in process.",
       "input": "",
-      "expectedOutput": "[true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]",
+      "expectedOutput": "[true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]",
       "evaluationCriteria": [
         {
           "type": "exact"

@@ -131,6 +131,39 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "aLineWithAVariableRuns",
+      "description": "A line with a variable in an echo runs to the end: the std::env question sits on the echo's step, so the plan made just before the step asks it again and matches what was approved.",
+      "input": "",
+      "expectedOutput": "[\"pnpm --version; echo $HOME\",true,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aVariableIsAskedOnce",
+      "description": "Two commands that read the same variable ask std::env for it once. The row is the questions asked, whether the line succeeded, and whether ran.txt exists.",
+      "input": "",
+      "expectedOutput": "[[[\"std::env\",\"HOME\"]],true,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aRejectedVariableRunsNothing",
+      "description": "Every question is asked before anything runs, so when std::env is rejected the line fails and the write before the echo never happens: ran.txt does not exist. The row is the questions asked, whether the line succeeded, and whether ran.txt exists.",
+      "input": "",
+      "expectedOutput": "[[[\"std::exec\",\"\"],[\"std::write\",\"\"],[\"std::env\",\"HOME\"]],false,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

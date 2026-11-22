@@ -30,6 +30,7 @@ import {
   ExecPayload,
   removeEffect,
   mkdirEffect,
+  envEffect,
   gitStatusEffect,
   gitLogEffect,
   gitDiffEffect,
@@ -496,9 +497,11 @@ def withAssignments(command: Command, assignments: Assignment[]): Command {
 }
 
 // `echo` contributes nothing on its own, whatever its arguments: bash
-// runs it and expands anything in it, so `echo $HOME` and `echo -n hi`
-// are both fine on this path. The flag and literal-argument restrictions
-// belong to the shell-free path, which computes the output itself.
+// runs it and expands anything in it, so `echo -n hi` is fine on this
+// path. A variable in its words asks std::env, which `classifySimple`
+// adds for every command (`envEffects`). The flag and literal-argument
+// restrictions belong to the shell-free path, which computes the output
+// itself.
 @capabilities(fileRead)
 def verbEffects(verb: string, command: SimpleCommand, line: LineState, readsStdin: boolean, redirects: Effect[]): Result<Effect[]> {
   """
@@ -5147,14 +5150,16 @@ def planLine(source: string, parsed: Result<BashAST>, cwd: string, origin: GhRep
     // runs, because that is what the human read.
     return broadPlan(source, verbs, { kind: "unrecognized", detail: firstMiss })
   }
-  const narrow: Effect[] = classified.value.effects
+  const narrow: Effect[] = askedOnce(classified.value.effects)
   if (narrow.length == 0) {
     // Everything recognized but nothing contributed an effect: a string
     // of nothing but quiet commands, a filter fed by one, or a `cd` with
     // nothing after it that asks a question. Every shell start raises an
     // effect, so this asks std::bash::readonly when every word is known
-    // now, and std::bash, for the original text, when one is not: `echo
-    // $GITHUB_TOKEN` would print a variable no std::env question named.
+    // now, and std::bash, for the original text, when one is not. A word
+    // that holds an environment variable asked std::env (`envEffects`),
+    // so the line has an effect and never gets here; what is left is a
+    // name bash computes, as in `echo $RANDOM`.
     if (!everyWordKnown(commands)) {
       return broadPlan(source, verbs, { kind: "noEffects", detail: "" })
     }
@@ -5307,34 +5312,81 @@ def readsAny(command: Command, names: string[]): boolean {
  or "". */
 def heldVariable(command: Command, names: string[]): string {
   for (entry in flattenOne(command)) {
-    const words = [...commandWords(entry.command), ...[assignment.value for assignment in entry.command.assignments if assignment.value != null]]
-    for (word in words) {
-      const held = variableIn(word, names)
-      if (held != "") {
-        return held
+    for (word in expandedWords(entry.command)) {
+      for (name in variablesOf(word)) {
+        if (names.includes(name)) {
+          return name
+        }
       }
     }
   }
   return ""
 }
 
-def variableIn(word: Word, names: string[]): string {
+/* Every variable name a word holds, in order, a repeat included: alone
+ (`$X`), inside double quotes (`"t: $X"`), or joined to text (`pre$X`). */
+def variablesOf(word: Word): string[] {
   return match(word) {
-    { tag: "variable", name } if (names.includes(name)) => name
-    { tag: "doubleQuoted", parts } => firstVariableIn(parts, names)
-    { tag: "interpolatedVariable", parts } => firstVariableIn(parts, names)
-    _ => ""
+    { tag: "variable", name } => [name]
+    { tag: "doubleQuoted", parts } => variablesOfParts(parts)
+    { tag: "interpolatedVariable", parts } => variablesOfParts(parts)
+    _ => []
   }
 }
 
-def firstVariableIn(parts: Word[], names: string[]): string {
+def variablesOfParts(parts: Word[]): string[] {
+  let names: string[] = []
   for (part in parts) {
-    const held = variableIn(part, names)
-    if (held != "") {
-      return held
+    names = [...names, ...variablesOf(part)]
+  }
+  return names
+}
+
+/* The words of a command bash may expand: its own, and the values of its
+ assignments. */
+def expandedWords(command: SimpleCommand): Word[] {
+  return [...commandWords(command), ...[assignment.value for assignment in command.assignments if assignment.value != null]]
+}
+
+/** Names bash computes itself, which hold nothing from the environment:
+ the last exit status, the shell's process id, the count of arguments and
+ the arguments, which a `bash -c` line has none of, and two counters. */
+static const COMPUTED_VARIABLES: string[] = ["?", "$", "#", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "RANDOM", "SECONDS"]
+
+// `git status && echo $GITHUB_TOKEN`: bash expands the variable and the
+// model reads it, so the line asks the question the `env` tool asks, once
+// per name. A command that asks std::exec adds nothing: a program can
+// read any variable itself (`printenv X`), so its approval covers that.
+def envEffects(command: SimpleCommand, own: Effect[]): Effect[] {
+  if ([effect for effect in own if effect.name == "std::exec"].length > 0) {
+    return []
+  }
+  let names: string[] = []
+  for (word in expandedWords(command)) {
+    for (name in variablesOf(word)) {
+      if (!COMPUTED_VARIABLES.includes(name) && !names.includes(name)) {
+        names.push(name)
+      }
     }
   }
-  return ""
+  return [envEffect(name) for name in names]
+}
+
+/* The effects with each std::env name asked once: `echo $A; echo $A`
+ reads `A` twice and asks once. */
+def askedOnce(effects: Effect[]): Effect[] {
+  let kept: Effect[] = []
+  let names: string[] = []
+  for (effect in effects) {
+    if (effect is { name: "std::env", payload }) {
+      if (names.includes(payload.name)) {
+        continue
+      }
+      names.push(payload.name)
+    }
+    kept.push(effect)
+  }
+  return kept
 }
 
 @capabilities(fileRead)
@@ -5355,13 +5407,17 @@ def classifySimple(command: SimpleCommand, line: LineState, origin: GhRepo | nul
   const timed = unwrapTimeout(command)
   if (timed == null) {
     const rule = simpleCommandRule(command, line, origin, readsStdin)?
-    const steps = runStepOf(command, rule.command, line, rule.effects)?
-    return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: rule.command, steps: steps })
+    // The std::env questions go on the command's own step, so the plan
+    // made just before the step asks them again and matches.
+    const effects = [...rule.effects, ...envEffects(command, rule.effects)]
+    const steps = runStepOf(command, rule.command, line, effects)?
+    return success({ effects: effects, line: afterCommand(line, effects), command: rule.command, steps: steps })
   }
   const rule = simpleCommandRule(timed.inner, line, origin, readsStdin)?
   const wrapped = withTimeout(timed, rule.command)?
-  const steps = runStepOf(command, wrapped, line, rule.effects)?
-  return success({ effects: rule.effects, line: afterCommand(line, rule.effects), command: wrapped, steps: steps })
+  const effects = [...rule.effects, ...envEffects(command, rule.effects)]
+  const steps = runStepOf(command, wrapped, line, effects)?
+  return success({ effects: effects, line: afterCommand(line, effects), command: wrapped, steps: steps })
 }
 
 /** A `timeout <duration> <command>` line: the wrapper's words, and the
@@ -5964,7 +6020,7 @@ def resolvedPlan(first: Plan, source: string, cwd: string): Result<Plan> {
 
 /** Every effect `safeBash` can raise. `startJob` raises the same ones,
   since both ask through `approvedPlan`, so both signatures name this set. */
-export effectSet SafeBashEffects = <std::bash, std::bash::readonly, std::write, std::remove, std::mkdir, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::github::prGet, std::github::prDiff, std::github::issueGet, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueCommentList, std::github::prList, std::github::issueList, std::github::issueSearch, std::read, std::ls, std::glob, std::exec, std::run, std::guard>
+export effectSet SafeBashEffects = <std::bash, std::bash::readonly, std::write, std::remove, std::mkdir, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::github::prGet, std::github::prDiff, std::github::issueGet, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueCommentList, std::github::prList, std::github::issueList, std::github::issueSearch, std::read, std::ls, std::glob, std::exec, std::env, std::run, std::guard>
 
 export def safeBash(
   command: string,
@@ -6517,6 +6573,14 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string, timeoutMs: number
       raise std::mkdir("Are you sure you want to create this directory?", {
         dir: effect.payload.dir,
         command: fullCommand
+      })
+      return success(null)
+    }
+    // The payload is the `env` tool's, which has no field for the command,
+    // so the command goes in the message.
+    "std::env" => {
+      raise std::env("A shell command reads this environment variable${where}: `${fullCommand}`", {
+        name: effect.payload.name
       })
       return success(null)
     }

@@ -155,6 +155,31 @@ describe("builtinPolicy", () => {
     expect(builtinPolicy("minimal", "/tmp/base")!["std::bash::readonly"]).toBeUndefined();
   });
 
+  it("approves reading a variable that holds no secret under 'recommended' only", () => {
+    const dirs: PolicyDirs = {
+      cwd: "/work",
+      agentHome: "/work/agent-home",
+      home: "/home/me",
+      agencyInstallDir: null,
+    };
+    const read = (name: string) => ({
+      effect: "std::env",
+      message: "",
+      data: { name },
+      origin: "test",
+    });
+    const recommended = builtinPolicy("recommended", "/work")!;
+    for (const name of ["HOME", "PATH", "TMPDIR"]) {
+      expect(checkPolicyExplicit(recommended, read(name), dirs), name).toEqual({ type: "approve" });
+    }
+    // A name that only looks like one on the list, and a secret.
+    for (const name of ["GITHUB_TOKEN", "HOMEX", "MY_HOME", "home", "HOME,PWD"]) {
+      expect(checkPolicyExplicit(recommended, read(name), dirs)?.type, name).not.toBe("approve");
+    }
+    const minimal = builtinPolicy("minimal", "/work")!;
+    expect(checkPolicyExplicit(minimal, read("HOME"), dirs)?.type).not.toBe("approve");
+  });
+
   it("leaves the toolbox review and save to the prompt", () => {
     expect(builtinPolicy("recommended", "/tmp/base")!["std::toolbox::review"]).toBeUndefined();
     expect(builtinPolicy("recommended", "/tmp/base")!["std::toolbox::save"]).toBeUndefined();

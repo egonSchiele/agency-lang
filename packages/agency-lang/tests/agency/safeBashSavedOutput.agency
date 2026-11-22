@@ -243,8 +243,9 @@ node aLineWithAnExpansionKeepsItsReadQuestion() {
   const old = useTemp(TEMP)
   const name = savedName()
   const path = "${TEMP}/agency-spill-${userId()}/${name}"
-  // echo raises nothing, but the shell expands the variable, so a line
-  // with no question left could print a secret the process inherited.
+  // The shell expands what echo prints, so a line with no question left
+  // could print what nobody was asked about. A variable asks std::env, and
+  // that is the first question of its line; the others keep std::read.
   let seen: string[] = []
   let results: string[] = []
   handle {

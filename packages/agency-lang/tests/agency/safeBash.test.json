@@ -79,9 +79,9 @@
     },
     {
       "nodeName": "shellFreeEcho",
-      "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a sequence, a flag other than -n, a flag after the first word, or a quoted word that starts with a dash sends it to bash, because bash reads the quoted dash as the option too. There it asks std::bash::readonly when every word is known, and std::bash when one is an expansion.",
+      "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a sequence, a flag other than -n, a flag after the first word, or a quoted word that starts with a dash sends it to bash, because bash reads the quoted dash as the option too. There it asks std::bash::readonly when every word is known, and std::env for an environment variable one of its words expands.",
       "input": "",
-      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"echo\",\"hi\",[]],[\"steps\",\"\",[]],[\"echo\",\"\",[]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"echo\",\"hi\",[]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"bash\",\"\",[\"std::bash::readonly\"]]]",
+      "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"steps\",\"\",[\"std::env\"]],[\"steps\",\"\",[\"std::env\"]],[\"echo\",\"a b c\\n\",[]],[\"echo\",\"hi\",[]],[\"steps\",\"\",[]],[\"echo\",\"\",[]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"echo\",\"hi\",[]],[\"bash\",\"\",[\"std::bash::readonly\"]],[\"bash\",\"\",[\"std::bash::readonly\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -90,9 +90,9 @@
     },
     {
       "nodeName": "shellFreeWrite",
-      "description": "A single literal redirected echo computes its content and writes it, with no shell. The `>` and `>>` rows differ only in mode, which is the difference between overwriting and appending. A variable TARGET is unrecognized entirely; a variable in the ARGUMENTS is still recognized and goes to bash raising std::write with no content — approval of the destination, not the bytes. Non-write plans report only the fields their Execution variant carries.",
+      "description": "A single literal redirected echo computes its content and writes it, with no shell. The `>` and `>>` rows differ only in mode, which is the difference between overwriting and appending. A variable TARGET is unrecognized entirely; a variable in the ARGUMENTS is still recognized and goes to bash raising std::write with no content — approval of the destination, not the bytes — and std::env for the variable. Non-write plans report only the fields their Execution variant carries.",
       "input": "",
-      "expectedOutput": "[[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"append\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"steps\",[\"std::write\"]],[\"write\",\"hi\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]]]",
+      "expectedOutput": "[[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"append\",[\"std::write\"]],[\"bash\",[\"std::bash\"]],[\"steps\",[\"std::write\",\"std::env\"]],[\"write\",\"hi\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -581,9 +581,9 @@
     },
     {
       "nodeName": "exitStatusInEcho",
-      "description": "`$?`, the exit status, is a number, so `pnpm test; echo \"exit=$?\"` asks only what pnpm asks and runs as written, and a lone echo of it asks std::bash::readonly. A lone echo of it beside another variable asks std::bash. Where a word names a file, a folder, a program, a ref, a pattern, a duration, or an assignment's value, `$?` is a variable like any other and the line asks std::bash.",
+      "description": "`$?`, the exit status, is a number, so `pnpm test; echo \"exit=$?\"` asks only what pnpm asks and runs as written, and a lone echo of it asks std::bash::readonly. A lone echo of it beside an environment variable asks std::env for that variable. Where a word names a file, a folder, a program, a ref, a pattern, a duration, or an assignment's value, `$?` is a variable like any other and the line asks std::bash.",
       "input": "",
-      "expectedOutput": "[[\"pnpm test; echo \\\"exit=$?\\\"\",\"narrow\",[\"std::exec\"]],[\"pnpm test; echo $?\",\"narrow\",[\"std::exec\"]],[\"pnpm test; printf 'exit=%s\\\\n' $?\",\"narrow\",[\"std::exec\"]],\"pnpm test; echo \\\"exit=$?\\\"\",[\"echo \\\"exit=$?\\\"\",\"narrow\",[\"std::bash::readonly\"]],[\"echo \\\"$HOME $?\\\"\",\"broad\",[\"std::bash\"]],[\"cat $?\",\"broad\",[\"std::bash\"]],[\"cat x$?.txt\",\"broad\",[\"std::bash\"]],[\"echo hi > $?\",\"broad\",[\"std::bash\"]],[\"echo hi > out$?.txt\",\"broad\",[\"std::bash\"]],[\"cat < $?\",\"broad\",[\"std::bash\"]],[\"TERM=$? ls\",\"broad\",[\"std::bash\"]],[\"grep -rn foo $?\",\"broad\",[\"std::bash\"]],[\"grep -rn $? lib\",\"broad\",[\"std::bash\"]],[\"rm $?\",\"broad\",[\"std::bash\"]],[\"mkdir $?\",\"broad\",[\"std::bash\"]],[\"touch $?\",\"broad\",[\"std::bash\"]],[\"ls | tee $?\",\"broad\",[\"std::bash\"]],[\"git log $?\",\"broad\",[\"std::bash\"]],[\"git -C $? status\",\"broad\",[\"std::bash\"]],[\"cd $? && ls\",\"broad\",[\"std::bash\"]],[\"timeout $? pnpm test\",\"broad\",[\"std::bash\"]],[\"sleep $?; ls\",\"broad\",[\"std::bash\"]],[\"which $?; ls\",\"broad\",[\"std::bash\"]],[\"pnpm test; exit $?\",\"broad\",[\"std::bash\"]],[\"pnpm run $?\",\"broad\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"pnpm test; echo \\\"exit=$?\\\"\",\"narrow\",[\"std::exec\"]],[\"pnpm test; echo $?\",\"narrow\",[\"std::exec\"]],[\"pnpm test; printf 'exit=%s\\\\n' $?\",\"narrow\",[\"std::exec\"]],\"pnpm test; echo \\\"exit=$?\\\"\",[\"echo \\\"exit=$?\\\"\",\"narrow\",[\"std::bash::readonly\"]],[\"echo \\\"$HOME $?\\\"\",\"narrow\",[\"std::env\"]],[\"cat $?\",\"broad\",[\"std::bash\"]],[\"cat x$?.txt\",\"broad\",[\"std::bash\"]],[\"echo hi > $?\",\"broad\",[\"std::bash\"]],[\"echo hi > out$?.txt\",\"broad\",[\"std::bash\"]],[\"cat < $?\",\"broad\",[\"std::bash\"]],[\"TERM=$? ls\",\"broad\",[\"std::bash\"]],[\"grep -rn foo $?\",\"broad\",[\"std::bash\"]],[\"grep -rn $? lib\",\"broad\",[\"std::bash\"]],[\"rm $?\",\"broad\",[\"std::bash\"]],[\"mkdir $?\",\"broad\",[\"std::bash\"]],[\"touch $?\",\"broad\",[\"std::bash\"]],[\"ls | tee $?\",\"broad\",[\"std::bash\"]],[\"git log $?\",\"broad\",[\"std::bash\"]],[\"git -C $? status\",\"broad\",[\"std::bash\"]],[\"cd $? && ls\",\"broad\",[\"std::bash\"]],[\"timeout $? pnpm test\",\"broad\",[\"std::bash\"]],[\"sleep $?; ls\",\"broad\",[\"std::bash\"]],[\"which $?; ls\",\"broad\",[\"std::bash\"]],[\"pnpm test; exit $?\",\"broad\",[\"std::bash\"]],[\"pnpm run $?\",\"broad\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -625,9 +625,9 @@
     },
     {
       "nodeName": "quietLinesAskTheQuietQuestion",
-      "description": "A line whose commands raise no question asks std::bash::readonly when every word is known now, and runs the rebuilt text, a cd included. A variable makes it ask std::bash. A lone literal echo still runs in process. A filter fed by an echo and a quiet assignment ask the quiet question too.",
+      "description": "A line whose commands raise no question asks std::bash::readonly when every word is known now, and runs the rebuilt text, a cd included. An environment variable makes it ask std::env. A lone literal echo still runs in process. A filter fed by an echo and a quiet assignment ask the quiet question too.",
       "input": "",
-      "expectedOutput": "[[\"pwd\",\"narrow\",[\"std::bash::readonly\"],\"pwd\"],[\"echo \\\"---\\\"\",\"narrow\",[\"std::bash::readonly\"],\"echo \\\"---\\\"\"],[\"which node; date\",\"narrow\",[\"std::bash::readonly\"],\"which node; date\"],[\"echo $HOME\",\"broad\",[\"std::bash\"],\"echo $HOME\"],[\"echo ~\",\"shellFree\",[],\"NOT-BASH\"],[\"cd lib\",\"narrow\",[\"std::bash::readonly\"],\"cd '<dir>/lib' || exit 1\"],[\"echo hi | grep h\",\"narrow\",[\"std::bash::readonly\"],\"echo hi | grep h\"],[\"TERM=dumb pwd\",\"narrow\",[\"std::bash::readonly\"],\"TERM=dumb pwd\"]]",
+      "expectedOutput": "[[\"pwd\",\"narrow\",[\"std::bash::readonly\"],\"pwd\"],[\"echo \\\"---\\\"\",\"narrow\",[\"std::bash::readonly\"],\"echo \\\"---\\\"\"],[\"which node; date\",\"narrow\",[\"std::bash::readonly\"],\"which node; date\"],[\"echo $HOME\",\"narrow\",[\"std::env\"],\"echo $HOME\"],[\"echo ~\",\"shellFree\",[],\"NOT-BASH\"],[\"cd lib\",\"narrow\",[\"std::bash::readonly\"],\"cd '<dir>/lib' || exit 1\"],[\"echo hi | grep h\",\"narrow\",[\"std::bash::readonly\"],\"echo hi | grep h\"],[\"TERM=dumb pwd\",\"narrow\",[\"std::bash::readonly\"],\"TERM=dumb pwd\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1416,6 +1416,17 @@
       "description": "cd before ||, in a pipeline, to a missing folder, to a file, with no argument, with -, with a variable, with two arguments, with a redirect, or on the right of || asks std::bash. A cd alone raises no effect, so it asks the quiet question.",
       "input": "",
       "expectedOutput": "[[\"narrow\",[[\"std::bash::readonly\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "variablesAskStdEnv",
+      "description": "A narrow line asks std::env once for each environment variable a word of it expands: alone, inside double quotes, joined to text, redirected to a file, in a group, in a pipe, behind timeout, and in a command that prints nothing. A line that is only an echo of a variable asks std::env and nothing else. Names bash computes itself ($?, $RANDOM, $1) ask nothing, so a line that is only echo $RANDOM still asks std::bash. printf, a read, and a program with a variable in their words have no rule and ask std::bash. A variable joined to a flag (--token=$TOKEN) is asked about like any other.",
+      "input": "",
+      "expectedOutput": "[[\"git status && echo $GITHUB_TOKEN\",\"narrow\",[\"std::git::status\",\"std::env GITHUB_TOKEN\"]],[\"git status && echo \\\"t: $GITHUB_TOKEN\\\"\",\"narrow\",[\"std::git::status\",\"std::env GITHUB_TOKEN\"]],[\"git status && echo pre$GITHUB_TOKEN\",\"narrow\",[\"std::git::status\",\"std::env GITHUB_TOKEN\"]],[\"git status && echo $A $A $B\",\"narrow\",[\"std::git::status\",\"std::env A\",\"std::env B\"]],[\"echo $A; echo $A\",\"narrow\",[\"std::env A\"]],[\"git status && echo $TOKEN > out.txt\",\"narrow\",[\"std::git::status\",\"std::write\",\"std::env TOKEN\"]],[\"git status; (echo $TOKEN)\",\"narrow\",[\"std::git::status\",\"std::env TOKEN\"]],[\"git status; echo $TOKEN | cat\",\"narrow\",[\"std::git::status\",\"std::env TOKEN\"]],[\"git status; timeout 5 echo $TOKEN\",\"narrow\",[\"std::git::status\",\"std::env TOKEN\"]],[\"git status && true $TOKEN\",\"narrow\",[\"std::git::status\",\"std::env TOKEN\"]],[\"echo $HOME\",\"narrow\",[\"std::env HOME\"]],[\"git status; echo $?\",\"narrow\",[\"std::git::status\"]],[\"git status; echo $RANDOM $1\",\"narrow\",[\"std::git::status\"]],[\"echo $RANDOM\",\"broad\",[\"std::bash\"]],[\"git status && printf '%s' $TOKEN\",\"broad\",[\"std::bash\"]],[\"git status; cat $F\",\"broad\",[\"std::bash\"]],[\"pnpm test $FLAGS\",\"broad\",[\"std::bash\"]],[\"git status && echo --token=$TOKEN\",\"narrow\",[\"std::git::status\",\"std::env TOKEN\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"

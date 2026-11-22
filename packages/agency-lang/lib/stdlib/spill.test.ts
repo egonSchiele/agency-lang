@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { inFrameOf, makeMockCtx } from "../runtime/__tests__/testHelpers.js";
 import type { Run } from "../runtime/asyncContext.js";
 import {
+  _grepPipedText,
   _grepSpill,
   _keepOutput,
   _prepareSpillFiles,
@@ -160,6 +161,40 @@ describe("spill", () => {
       expect(() => _grepSpill("x", "2026-01-01T00-00-00-000Z-ffffff.log", 10)).toThrow(
         "no longer available",
       );
+    });
+  });
+
+  describe("_grepPipedText", () => {
+    const query = {
+      pattern: "a",
+      flags: "u",
+      ignoreCase: false,
+      wholeWord: false,
+      filesOnly: false,
+      invert: false,
+    };
+
+    it("keeps every matching line, with its line number and no file name", () => {
+      expect(_grepPipedText("a\nb\nca\n", query)).toEqual([
+        { file: "", line: 1, text: "a" },
+        { file: "", line: 3, text: "ca" },
+      ]);
+    });
+
+    it("keeps the other lines when inverted, and a last line with no newline", () => {
+      expect(_grepPipedText("a\nb\nc", { ...query, invert: true })).toEqual([
+        { file: "", line: 2, text: "b" },
+        { file: "", line: 3, text: "c" },
+      ]);
+    });
+
+    it("finds nothing in an empty text", () => {
+      expect(_grepPipedText("", query)).toEqual([]);
+    });
+
+    it("does not stop at a number of matches", () => {
+      const text = "a\n".repeat(5000);
+      expect(_grepPipedText(text, query)).toHaveLength(5000);
     });
   });
 });

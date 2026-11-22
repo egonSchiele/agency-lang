@@ -54,6 +54,8 @@ import {
   pendingLookups,
   ReadPayload,
   ReadView,
+  TextFilter,
+  PipeExec,
   readExecution,
   ReadExec,
   GrepExec,
@@ -96,7 +98,7 @@ import {
   CdStep,
   GroupStep,
  } from "./safeBash/actions.agency"
-import { _prepareSpillFiles, _grepSaved, _readSpill, _spillPathParts, _savedPathsInText, _inSpillFolder } from "agency-lang/stdlib-lib/spill.js"
+import { _prepareSpillFiles, _grepSaved, _grepPipedText, _readSpill, _spillPathParts, _savedPathsInText, _inSpillFolder } from "agency-lang/stdlib-lib/spill.js"
 import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
 import { _removeRefusal, _realFolder, _realPathIn, _unparsedRemoveRefusal } from "agency-lang/stdlib-lib/safeBashRemove.js"
@@ -5402,6 +5404,10 @@ def withTimeout(timed: Timed, ran: Command): Result<Command> {
 // included, counts, so a mistake asks the broad question.
 @capabilities(fileRead)
 def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
+  const own = inProcessPipeline(stages, line, readsStdin)
+  if (own is success(classified)) {
+    return own
+  }
   let effects: Effect[] = []
   let rewritten: any[] = []
   let asking = 0
@@ -5436,6 +5442,96 @@ def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | 
   // The stages run at the same time, so a pipeline is one step.
   const steps = runStepOf({ tag: "pipeline", stages: stages }, ran, line, effects, null)?
   return success({ effects: effects, line: afterCommand(line, effects), command: ran, steps: steps })
+}
+
+// A pipeline runs in process when every stage can: the first is a
+// command the table takes, and each later one is a `cat`, `head`, `tail`,
+// or `grep` that names no file. Otherwise bash runs the whole pipeline,
+// because bash runs the stages at the same time: in `git log | head -5`
+// it stops git once head has five lines, which handing over finished
+// text cannot do. A failure means "not this path".
+@capabilities(fileRead)
+def inProcessPipeline(stages: PipelineStage[], line: LineState, readsStdin: boolean): Result<Classified> {
+  if (readsStdin || line.byBash || stages.length < 2) {
+    return failure("bash runs this pipeline")
+  }
+  const head = stages[0]
+  if (head.tag != "simpleCommand") {
+    return failure("a group is not a stage safeBash runs itself")
+  }
+  const first = tryShellFreeStep(head, line.cwd)?
+  const firstExec = first.exec
+  // An `echo hi > f | head` writes a file and hands nothing on.
+  if (firstExec.kind == "write" || firstExec.kind == "pipe") {
+    return failure("the first stage writes a file")
+  }
+  let filters: TextFilter[] = []
+  for (stage in stages.slice(1)) {
+    if (stage.tag != "simpleCommand") {
+      return failure("a group is not a stage safeBash runs itself")
+    }
+    const filter = stdinFilter(stage)?
+    filters.push(filter)
+  }
+  const source: Command = { tag: "pipeline", stages: stages }
+  const steps = runStepOf(source, source, line, first.effects, { kind: "pipe", first: firstExec, filters: filters })?
+  return success({ effects: first.effects, line: afterCommand(line, first.effects), command: source, steps: steps })
+}
+
+/** The grep letters that have no meaning for a search of piped text: a
+ folder walk, a list of file names, and a file name on every line. */
+static const NOT_FOR_PIPED_GREP: string[] = ["r", "l", "H"]
+
+// What a later stage does to the text handed to it. A stage that names a
+// file reads the file and not the pipe, and one with a redirect or an
+// assignment does more than filter, so bash runs those pipelines.
+def stdinFilter(command: SimpleCommand): Result<TextFilter> {
+  const name = command.command
+  if (name == null || name.tag != "literal") {
+    return failure("the stage's command word is not a literal")
+  }
+  if (command.assignments.length > 0 || command.redirects.length > 0) {
+    return failure("the stage has an assignment or a redirect")
+  }
+  const verb = name.text
+  if (SHELL_FREE_READ_VERBS.includes(verb)) {
+    const spec = READ_VERBS[verb]
+    if (spec == null) {
+      return failure("not a read")
+    }
+    const split = splitFlags(verb, command, spec.flags)?
+    checkCountFlags(split, spec.countFlags)?
+    if (split.positionals.length > 0) {
+      return failure("the stage names a file")
+    }
+    const view = readViewFor(verb, split, 0)?
+    return success({ kind: "view", view: view })
+  }
+  if (verb != "grep") {
+    return failure("`${verb}` is not a stage safeBash runs itself")
+  }
+  // No real grep reads these arguments, so a flag may follow the pattern,
+  // as it may for a lone grep safeBash runs itself.
+  const args = splitFlags("grep", command, SHELL_FREE_GREP_FLAGS)?
+  const words = grepWords(args)?
+  const letters = args.plain
+  if (words.paths.length > 0 || [letter for letter in letters if NOT_FOR_PIPED_GREP.includes(letter)].length > 0) {
+    return failure("the grep stage names a file, or has a flag for files")
+  }
+  const syntax = grepSyntax(letters)?
+  const regex = _grepPatternToRegex(words.pattern, syntax, letters.includes("w"))
+  if (regex == null) {
+    return failure("the pattern does not translate to the grep tool's regex")
+  }
+  return success({
+    kind: "match",
+    pattern: regex,
+    flags: SHELL_FREE_REGEX_FLAGS,
+    ignoreCase: letters.includes("i"),
+    wholeWord: letters.includes("w"),
+    invert: letters.includes("v"),
+    lineNumbers: letters.includes("n")
+  })
 }
 
 /* Whether a stage asks anything other than std::exec. */
@@ -7310,5 +7406,77 @@ def printStep(exec: StepExec): Result<string> {
     { kind: "write" } => runWrite(exec)
     { kind: "grep" } => printGrep(exec)
     { kind: "read" } => printRead(exec)
+    { kind: "pipe" } => printPipe(exec)
   }
+}
+
+/** The text a pipeline's first stage hands on, and the notes a search
+ adds, which are printed after the last stage so `| head` cannot cut
+ them off. */
+type PipedText = {
+  text: string;
+  notes: string
+}
+
+// Unlike a lone grep, a first stage that matches nothing is not a
+// failure: bash runs the later stages on empty input, and the pipeline's
+// status is its last stage's.
+@capabilities(fileRead)
+def firstStageText(first: EchoExec | GrepExec | ReadExec): Result<PipedText> {
+  return match(first) {
+    { kind: "echo", content } => success({ text: content, notes: "" })
+    { kind: "read" } => match(printRead(first)) {
+      success(text) => success({ text: text, notes: "" })
+      failure(why) => failure(why)
+    }
+    { kind: "grep" } => match(grepResults(first)) {
+      success(results) => success({ text: _renderGrepOutput(results, first.render), notes: grepNotes(first.payload, results.length) })
+      failure(why) => failure(why)
+    }
+  }
+}
+
+/** The lines of a text a `grep` stage keeps, printed as grep prints
+ lines read from a pipe: with no file name. */
+def matchedLines(text: string, filter: TextFilter): string {
+  if (!(filter is { kind: "match" })) {
+    return text
+  }
+  const query = {
+    pattern: filter.pattern,
+    flags: filter.flags,
+    ignoreCase: filter.ignoreCase,
+    wholeWord: filter.wholeWord,
+    filesOnly: false,
+    invert: filter.invert
+  }
+  const render: GrepRender = { lineNumbers: filter.lineNumbers, fileNames: "never", argument: "", oneFile: true }
+  return _renderGrepOutput(_grepPipedText(text, query), render)
+}
+
+// Each stage runs to its end before the next starts, and takes the text
+// of the stage before it. The pipeline fails only as its last stage
+// would: a `grep` that keeps no line is exit status 1.
+@capabilities(fileRead)
+def printPipe(exec: PipeExec): Result<string> {
+  """
+  Execute an approved in-process pipeline and return its last stage's output.
+  """
+  const first = firstStageText(exec.first)?
+  let text = first.text
+  let lastKeptNothing = false
+  for (filter in exec.filters) {
+    text = match(filter) {
+      { kind: "view", view } => _renderReadView(text, view)
+      { kind: "match" } => matchedLines(text, filter)
+    }
+    lastKeptNothing = filter.kind == "match" && text == ""
+  }
+  if (lastKeptNothing) {
+    return failure(first.notes)
+  }
+  if (first.notes == "") {
+    return success(text)
+  }
+  return success("${text}${first.notes}\n")
 }

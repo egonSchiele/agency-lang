@@ -167,9 +167,9 @@
     },
     {
       "nodeName": "eachStepDecidesForItself",
-      "description": "Each row: the line, whether safeBash runs each step itself (with \"cd\" for a cd and a list for a group), and the questions asked. A cat, a grep, or an echo is run by safeBash wherever it sits in the line, and bash runs the steps beside it. A pipeline, a command behind timeout, and a read of a file that does not exist when the line is planned stay with bash.",
+      "description": "Each row: the line, whether safeBash runs each step itself (with \"cd\" for a cd and a list for a group), and the questions asked. A cat, a grep, or an echo is run by safeBash wherever it sits in the line, and bash runs the steps beside it. A pipeline is one step, and safeBash runs it itself when every stage is a command it runs: `cat one.txt | head -1` is, and a pipeline with `sort` or a program in it is not. A command behind timeout and a read of a file that does not exist when the line is planned stay with bash.",
       "input": "",
-      "expectedOutput": "[[\"pnpm --version; cat one.txt\",[false,true],[\"std::exec\",\"std::read\"]],[\"cat one.txt && pnpm --version\",[true,false],[\"std::read\",\"std::exec\"]],[\"cd sub && cat a.txt\",[\"cd\",true],[\"std::read\"]],[\"(pnpm --version && cat one.txt)\",[[false,true]],[\"std::exec\",\"std::read\"]],[\"pnpm --version > made.txt; cat made.txt\",[false,false],[\"std::exec\",\"std::write\",\"std::read\"]],[\"timeout 5 cat one.txt\",[false],[\"std::read\"]],[\"cat one.txt | head -1\",[false],[\"std::read\"]],[\"pnpm --version; grep -n one one.txt\",[false,true],[\"std::exec\",\"std::grep\"]],[\"pnpm --version; echo hi > out.txt\",[false,true],[\"std::exec\",\"std::write\"]]]",
+      "expectedOutput": "[[\"pnpm --version; cat one.txt\",[false,true],[\"std::exec\",\"std::read\"]],[\"cat one.txt && pnpm --version\",[true,false],[\"std::read\",\"std::exec\"]],[\"cd sub && cat a.txt\",[\"cd\",true],[\"std::read\"]],[\"(pnpm --version && cat one.txt)\",[[false,true]],[\"std::exec\",\"std::read\"]],[\"pnpm --version > made.txt; cat made.txt\",[false,false],[\"std::exec\",\"std::write\",\"std::read\"]],[\"timeout 5 cat one.txt\",[false],[\"std::read\"]],[\"cat one.txt | head -1\",[true],[\"std::read\"]],[\"cat one.txt | sort\",[false],[\"std::read\"]],[\"pnpm --version | head -1\",[false],[\"std::exec\"]],[\"pnpm --version; cat one.txt | grep -n o | tail -1\",[false,true],[\"std::exec\",\"std::read\"]],[\"pnpm --version; grep -n one one.txt\",[false,true],[\"std::exec\",\"std::grep\"]],[\"pnpm --version; echo hi > out.txt\",[false,true],[\"std::exec\",\"std::write\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -211,9 +211,9 @@
     },
     {
       "nodeName": "anInProcessReadRefusesASwappedPath",
-      "description": "Each row: the line, whether it succeeded, whether it stopped, and whether anything from the outside folder was printed. A file or a folder swapped for a link to the outside folder after approval fails a cat that safeBash runs itself, because the read tool refuses a link in the path it opens. The line fails with no stop and prints nothing from outside.",
+      "description": "Each row: the line, whether it succeeded, whether it stopped, and whether anything from the outside folder was printed. A file or a folder swapped for a link to the outside folder after approval fails a cat that safeBash runs itself, because the read tool refuses a link in the path it opens. The line fails with no stop and prints nothing from outside. The last two rows are pipelines safeBash runs itself, one that starts with a cat and one that starts with a folder search: the first stage makes the same call, so they fail the same way.",
       "input": "",
-      "expectedOutput": "[[\"pnpm --version; cat one.txt\",false,false,false],[\"pnpm --version; cat sub/a.txt\",false,false,false]]",
+      "expectedOutput": "[[\"pnpm --version; cat one.txt\",false,false,false],[\"pnpm --version; cat sub/a.txt\",false,false,false],[\"cat one.txt | head -1\",false,false,false],[\"grep -rn . sub | head -1\",false,false,false]]",
       "evaluationCriteria": [
         {
           "type": "exact"

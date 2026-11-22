@@ -212,6 +212,9 @@ node eachStepDecidesForItself() {
     decidesRow("pnpm --version > made.txt; cat made.txt"),
     decidesRow("timeout 5 cat one.txt"),
     decidesRow("cat one.txt | head -1"),
+    decidesRow("cat one.txt | sort"),
+    decidesRow("pnpm --version | head -1"),
+    decidesRow("pnpm --version; cat one.txt | grep -n o | tail -1"),
     decidesRow("pnpm --version; grep -n one one.txt"),
     decidesRow("pnpm --version; echo hi > out.txt"),
   ]
@@ -264,6 +267,10 @@ node anInProcessReadRefusesASwappedPath() {
   return [
     stopRow("pnpm --version; cat one.txt", "rm one.txt && ln -s ${OUTSIDE}/secret.txt one.txt"),
     stopRow("pnpm --version; cat sub/a.txt", "rm -r sub && ln -s ${OUTSIDE}/dir sub && printf 'SECRET\\n' > ${OUTSIDE}/dir/a.txt"),
+    // A pipeline safeBash runs itself is one step, and its first stage
+    // makes the same call a lone read or a lone search makes.
+    stopRow("cat one.txt | head -1", "rm one.txt && ln -s ${OUTSIDE}/secret.txt one.txt"),
+    stopRow("grep -rn . sub | head -1", "rm -r sub && ln -s ${OUTSIDE}/dir sub && printf 'SECRET\\n' > ${OUTSIDE}/dir/a.txt"),
   ]
 }
 

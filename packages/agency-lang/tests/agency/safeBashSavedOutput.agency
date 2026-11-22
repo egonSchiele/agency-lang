@@ -156,7 +156,9 @@ node programsWithNoRuleAskTheirOwnQuestion() {
   handle {
     sliced = text(safeBash("awk 'NR==2,NR==3' ${path}"))
     // Naming a saved output reads nothing, so this still asks a question.
-    echoed = text(safeBash("echo ${path} | cat"))
+    // `tr` keeps the pipeline with bash: an `echo | cat` starts no shell
+    // and asks nothing.
+    echoed = text(safeBash("echo ${path} | tr a a"))
   } with (intr) {
     seen.push(intr.effect)
     return approve()

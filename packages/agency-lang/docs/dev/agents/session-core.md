@@ -202,7 +202,10 @@ did is a notice at level `info`, except a `model`, `options`, `budget`,
 
 - `notes` are lines put above the message. An image is sent as a note
   with its path, since the turn finds attachments by scanning the message
-  for paths.
+  for paths. After a cancel or a failed turn, the driver sends the note
+  that names the dropped requests as the last note, so `text` is what the
+  person typed. The core records `text` in the session's transcript
+  (`agent-sessions.md`, "The transcript").
 - `target` is a start target such as `code`, or "" for the main agent.
   One the brain does not have is refused with a `session.error`, and is
   not a turn.

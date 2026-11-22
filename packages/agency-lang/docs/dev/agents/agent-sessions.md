@@ -78,8 +78,8 @@ the next message says so.
 ## How a resume works
 
 `chooseSession` picks the record. The shell prints the saved conversation
-(`_savedTranscript`: the thread the pause names, read from the saved
-run's checkpoint) and calls `_resumeSession`, which takes hold of the
+(`_savedTranscript`: the session's transcript, read from the saved run's
+checkpoint) and calls `_resumeSession`, which takes hold of the
 session, loads the saved run, and goes on from where it was.
 
 Everything the session run holds comes back from the checkpoint: the
@@ -91,14 +91,64 @@ under it, with the flags given now laid on top (`session-driver.md`,
 
 ### The transcript
 
-The conversation is the run's active thread: a brain opens no `thread`
-block of its own, so every turn's `llm()` calls land on it. Before and
-after each turn, `runTurn` in `lib/turn.agency` records that thread's id
-with `setConversationThread` (`lib/record.agency`), and the pause reports
-it as `thread`. `recordTurn` copies the id into the session record as
-`conversationThread`. The title refresh, compaction, and the context
-percentage read the same thread. `showTranscript` in `transcript.agency`
-draws the messages with the renderers the live turns use.
+What a reopened session shows is its transcript: a list of what the
+person typed and the agent's final replies, in order. It is the same two
+things the live view draws for a turn. The conversation thread is not
+shown, because it also holds text the person never typed: notes and `!`
+output, the cancel note, the project block, an expanded slash command,
+subagent prompts, the runtime's own messages, and the compaction summary.
+
+The session core adds to the list in its `message` arm. It adds the
+`text` of the answer before the turn runs, and the reply after the turn
+when there is one. A turn whose `runTurn` returns a failure reports a
+`session.error` and adds no reply.
+
+The list is kept in the run's globals, in a module of its own named
+`__agentTranscript` (`lib/stdlib/agentTranscript.ts`, the only file that
+spells the name), the way the fetch cache keeps its state. So every
+checkpoint saves it and every restore brings it back:
+
+- A cancel goes back to the pause from before the turn, so the turn's
+  entry goes away with its messages. So does a turn the driver rolls back
+  because a leg failed or the process stopped.
+- A turn paused on an approval has its user entry in the approval's
+  checkpoint, and a resume does not add it again.
+- `/fork` keeps the list, since the fork goes on from the same run.
+
+The core adds entries at the top level of the run, outside any branch, so
+the list is in the root globals. A `fork` or `parallel` branch runs on its
+own copy of the globals: a call moved into a branch would write to that
+copy instead.
+
+`_readTranscript` in `agentSessions.ts` returns the list when the
+checkpoint has one. A session saved before the list existed has none, and
+`_readTranscript` reads the thread instead, so the session can still be
+shown and searched. Such a session cannot go on: its saved
+core code differs from the running one, so `canResume` refuses it
+(`docs/dev/runtime/checkpoint-code-fingerprints.md`). A run with no list
+is therefore always a new one, and its list starts empty.
+
+Compaction does not touch the list, so a compacted session reopens with
+its whole conversation.
+
+The list has no size limit, on purpose. It grows with every turn, and
+every checkpoint carries all of it: at about 3 KB a turn, a 500-turn
+session carries about 1.5 MB. That is fine because a session runs only in
+the terminal and under Perry, which save checkpoints to local files. A
+hosted resume has a size limit, which is why the fetch cache and the
+spill store cap themselves (`lib/runtime/fetchCache.ts`, `spill.md`). If
+a session run is ever resumed through a hosted server, this list needs a
+cap too.
+
+The conversation the model reads is the run's active thread: a brain
+opens no `thread` block of its own, so every turn's `llm()` calls land on
+it. Before and after each turn, `runTurn` in `lib/turn.agency` records
+that thread's id with `setConversationThread` (`lib/record.agency`), and
+the pause reports it as `thread`. `recordTurn` copies the id into the
+session record as `conversationThread`. The title refresh, compaction,
+and the context percentage read the thread. `showTranscript` in
+`transcript.agency` draws the transcript with the renderers the live
+turns use.
 
 The zod schemas in `lib/runtime/state/schemas.ts` must name every field the
 thread store serializes; a field missing there is dropped when the
@@ -138,9 +188,10 @@ directory, so the model can answer "what did we decide last week?".
 
 - **What is read.** `_searchSessions` in `agentSessions.ts` reads the 50
   most recently used sessions, newest first, in either format. For each
-  it reads the thread its record's `conversationThread` names, with
-  `_readTranscript`, so only user and assistant text is searched. The
-  running session is left out.
+  it reads the transcript with `_readTranscript`, so it searches what the
+  person typed and the final replies. A session saved before the
+  transcript existed is read from the thread its record's
+  `conversationThread` names. The running session is left out.
 - **What matches.** A message that holds every word of the query, in any
   order and letter case. No index is kept and no model is called.
 - **What comes back.** Up to 3 hits a session and 25 in all. A hit is the

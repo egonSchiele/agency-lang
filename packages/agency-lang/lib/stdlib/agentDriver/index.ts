@@ -31,10 +31,10 @@ export {
 export {
   PAUSE_WITH_OTHER_INTERRUPTS_ERROR,
   RUN_ENDED_ERROR,
+  cancelNote,
   resumeRun,
   startRun,
   toStep,
-  withCancelNote,
   type AgentModule,
   type AgentStep,
   type LegOutcome,

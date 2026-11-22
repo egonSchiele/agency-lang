@@ -23,7 +23,7 @@ import {
   type PauseData,
   type SettingsAnswer,
 } from "./interface.js";
-import { withCancelNote, type AgentStep } from "./run.js";
+import { cancelNote, type AgentStep } from "./run.js";
 
 /** One resume of the run: the interrupts it answers and the answers. */
 export type Leg = { interrupts: Interrupt[]; responses: InterruptResponse[] };
@@ -159,10 +159,11 @@ function submit(
   action: Extract<DriverAction, { type: "submitted" }>,
 ): DriverStep {
   const { text } = action;
-  const message = withCancelNote({ message: text, ...droppedOf(phase) });
+  // `text` stays as typed: the session core records it for the transcript.
+  const note = cancelNote(droppedOf(phase));
   const answer: MessageAnswer = {
-    ...messageAnswer(message),
-    notes: action.notes ?? [],
+    ...messageAnswer(text),
+    notes: [...(action.notes ?? []), ...(note === null ? [] : [note])],
     target: action.target ?? "",
   };
   return {

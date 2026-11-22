@@ -27,10 +27,12 @@ export function initLoopFrame(self: Record<string, any>, args: Record<string, an
   // (docs/dev/runtime/expiring-messages.md). Kept on the frame, so a resume
   // reads the same key.
   self.llmCallKey ??= nanoid();
-  // The cut-off retry's state, set outside the block above so a checkpoint
-  // from before these fields gets them (docs/dev/agents/tool-loop-guards.md).
+  // The final reply retry's state, set outside the block above so a
+  // checkpoint from before these fields gets them
+  // (docs/dev/agents/tool-loop-guards.md).
   self.cutOffAttempt ??= 0;
   self.cutOffPending ??= null;
   self.cutOffReason ??= null;
   self.lastStopReason ??= null;
+  self.lastRequestOfferedTools ??= null;
 }

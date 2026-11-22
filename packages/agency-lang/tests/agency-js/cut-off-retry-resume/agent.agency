@@ -25,6 +25,23 @@ node gatePause() {
   return { inner: r.value, after: after }
 }
 
+def lookUp(): string {
+  return "looked up"
+}
+
+// Like gatePause, but the call offers a tool. A lost tool call is only
+// retried when the request offered a tool to call.
+node droppedGatePause() {
+  const r = guard(cost: $0.000001, label: "budget") {
+    return llm("go", { tools: [lookUp] })
+  }
+  if (isFailure(r)) {
+    return "unexpected-failure"
+  }
+  const after = llm("again")
+  return { inner: r.value, after: after }
+}
+
 // The time guard kills the retried request, and the handler approves more
 // time, so the request body is sent again in process.
 node tripDuringRetry() {

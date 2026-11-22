@@ -17,12 +17,13 @@ import { type ProviderUsageKind } from "./invocationUsage.js";
 import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
 import type { FinalReplyRetryReason, RetryConfig } from "./llmRetry.js";
 import {
-  advanceCutOffAttempt,
-  cutOffDecision,
-  pushCutOffNote,
-  removeCutOffReply,
-  type CutOffFrame,
-} from "./cutOffRetry.js";
+  advanceRetryAttempt,
+  finalReplyDecision,
+  pushRetryNote,
+  RETRY_ERROR_TYPE,
+  removeRetriedReply,
+  type FinalReplyFrame,
+} from "./finalReplyRetry.js";
 import { mergeFields, withLocalDefaults, type ReplyLimits } from "./localDefaults.js";
 import { roundWarningSettings, type WarnAtRoundsLeft } from "./roundWarning.js";
 // See docs/dev/agents/promptRunner.md — the dispatch + retry driver lives next door.
@@ -223,7 +224,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   // desync: a replayed helper stole it and runPrompt restarted blank.
   claimFrameForScope(stack, "runPrompt", "", run.log);
   const self = stack.locals;
-  const cutOffFrame = self as CutOffFrame;
+  const finalReplyFrame = self as FinalReplyFrame;
 
   // Frame-backed locals (survive checkpoint/restore)
   initLoopFrame(self, args);
@@ -560,10 +561,11 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   };
   /** Send the thread to the model and keep what it returned. */
   const sendRequest = async (atCap: boolean): Promise<void> => {
+    const offered = toolsOffered(tools, exposedFunctions, atCap);
     const result = await _runPrompt({
       run,
       messages,
-      tools: toolsOffered(tools, exposedFunctions, atCap),
+      tools: offered,
       prompt,
       responseFormat,
       clientConfig: configOffered(clientConfig, atCap),
@@ -574,6 +576,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     messages = result.messages;
     toolCalls = result.toolCalls;
     self.lastStopReason = result.stopReason ?? null;
+    self.lastRequestOfferedTools = offered.length > 0;
     lastUsageKind = result.usageKind;
   };
 
@@ -646,7 +649,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   /** Remove the reply that cannot be the answer (cut off empty, or with
    *  its tool call lost) and send the request again, with a note that
    *  lasts for that one request. */
-  const retryCutOffReply = async (reason: FinalReplyRetryReason): Promise<void> => {
+  const retryFinalReply = async (reason: FinalReplyRetryReason): Promise<void> => {
     const attempt: number = self.cutOffPending ?? self.cutOffAttempt;
     const which = { cutOffRetry: attempt };
     const expiryKey = requestExpiryKey(which);
@@ -654,13 +657,13 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     const replacesFirstRequest = self.toolCallRound === 0;
     await resendRequest(
       which,
-      () => removeCutOffReply(run, messages, cutOffFrame, attempt, reason),
-      () => advanceCutOffAttempt(cutOffFrame, attempt),
+      () => removeRetriedReply(run, messages, finalReplyFrame, attempt, reason),
+      () => advanceRetryAttempt(finalReplyFrame, attempt),
       async () => {
         if (replacesFirstRequest) {
           await pushRecalledFacts(expiryKey);
         }
-        pushCutOffNote(messages, expiryKey, reason);
+        pushRetryNote(messages, expiryKey, reason);
       },
     );
   };
@@ -1654,20 +1657,22 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
       // Tool calls are drained. An empty reply the output limit cut off, or
       // a reply whose tool call was lost, is retried before anything reads
       // it, so validation never sees one.
-      const cutOff = cutOffDecision(cutOffFrame, messages);
-      if (cutOff.kind === "retry") {
-        await retryCutOffReply(cutOff.reason);
+      const finalReply = finalReplyDecision(finalReplyFrame, messages);
+      if (finalReply.kind === "retry") {
+        await retryFinalReply(finalReply.reason);
         continue;
       }
-      if (cutOff.kind === "surfaceFailure") {
+      if (finalReply.kind === "surfaceFailure") {
         await pr.step("guardGate.final", guardGate);
-        const errorType = cutOff.reason === "cutOff" ? "replyCutOff" : "droppedToolCall";
-        run.log.error({ errorType, message: cutOff.message });
-        return failure(cutOff.message);
+        run.log.error({
+          errorType: RETRY_ERROR_TYPE[finalReply.reason],
+          message: finalReply.message,
+        });
+        return failure(finalReply.message);
       }
-      if (cutOff.kind === "warn") {
+      if (finalReply.kind === "warn") {
         await pr.step("cutOff.warning", async () => {
-          void run.log.warn({ warnType: "replyCutOff", message: cutOff.message });
+          void run.log.warn({ warnType: "replyCutOff", message: finalReply.message });
         });
       }
       // No schema means nothing to validate; the

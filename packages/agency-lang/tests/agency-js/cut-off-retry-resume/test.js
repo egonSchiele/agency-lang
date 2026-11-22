@@ -1,6 +1,7 @@
 import {
   toolPause,
   gatePause,
+  droppedGatePause,
   tripDuringRetry,
   hasInterrupts,
   approve,
@@ -129,7 +130,7 @@ const out = {};
     { output: "after" },
   ]);
   __setLLMClient(client);
-  const paused = await gatePause();
+  const paused = await droppedGatePause();
   out.droppedPausePaused = hasInterrupts(paused.data);
   const final = await respondToInterrupts(paused.data, [approve({ maxCost: 0.0001 })]);
   out.droppedPauseResult = final.data;

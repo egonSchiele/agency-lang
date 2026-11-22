@@ -198,13 +198,46 @@ describe("a reply whose tool call was lost", () => {
     expect(s.client.requests).toHaveLength(3);
   });
 
-  it("shares the retry limit with cut-off replies in the same llm() call", async () => {
+  it("shares the retry limit with cut-off replies, and the failure names the last reply", async () => {
     const s = setup([EMPTY_CUT_OFF, DROPPED_CALL, DROPPED_CALL]);
     const result = await call(s, new MessageThread());
     expect(isFailure(result)).toBe(true);
     expect(s.client.requests).toHaveLength(3);
     expect(holdsNote(s.client.requests[1])).toBe(1);
     expect(holdsDroppedNote(s.client.requests[2])).toBe(1);
+    expect(result.error).toBe(
+      "The model stopped to call a tool, but no tool call arrived, and the retries ran out. " +
+        "Its server could not read the calls the model wrote.",
+    );
+  });
+
+  it("a cut-off reply last in the shared limit fails with the output-limit message", async () => {
+    const s = setup([DROPPED_CALL, DROPPED_CALL, EMPTY_CUT_OFF]);
+    const result = await call(s, new MessageThread());
+    expect(isFailure(result)).toBe(true);
+    expect(result.error).toBe(
+      "The model reached its output limit without writing any text or tool call, and the " +
+        "retries ran out. Lower reasoningEffort, or raise maxTokens.",
+    );
+  });
+
+  it("at the round cap, where the request offers no tools, is the answer and is not retried", async () => {
+    const s = setup([
+      { toolCall: { name: "ping" } },
+      { return: "Here is the answer.", stopReason: "tool_use" },
+    ]);
+    const result = await call(s, new MessageThread(), undefined, { maxToolCallRounds: 1 });
+    expect(result).toBe("Here is the answer.");
+    expect(s.client.requests).toHaveLength(2);
+    expect(s.client.offered).toEqual([["ping"], []]);
+    expect(holdsDroppedNote(s.client.requests[1])).toBe(0);
+  });
+
+  it("in a call with no tools, is the answer and is not retried", async () => {
+    const s = setup([{ return: "Here is the answer.", stopReason: "tool_use" }]);
+    const result = await call(s, new MessageThread(), undefined, { tools: [] });
+    expect(result).toBe("Here is the answer.");
+    expect(s.client.requests).toHaveLength(1);
   });
 
   it("reports the retry to the onLLMRetry hook with the droppedToolCall reason", async () => {

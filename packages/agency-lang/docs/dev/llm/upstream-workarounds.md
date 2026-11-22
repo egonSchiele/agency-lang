@@ -82,6 +82,17 @@ No workarounds. `docs/dev/llm/mlx-local-models.md`, under "Chat with
 pictures", lists its limits, such as a non-streaming reply that keeps
 running after its client has gone.
 
+### Not worked around here
+
+mlx_lm's `ToolCallFormatter` throws away a tool call its parser cannot
+read: it logs `Failed to parse tool call` and returns the reply with no
+tool calls, but the stop reason still says `tool_calls`. The script
+leaves this alone. The tool loop retries such a reply with a note asking
+for the call again ("A reply whose tool call was lost" in
+`docs/dev/agents/tool-loop-guards.md`), which also covers any other
+server that loses a call. In the SWE-bench runs it cost Gemma 4 31B about
+1 call in 400, and Qwen3 Coder Next its first call of a task.
+
 ## Elsewhere
 
 `packages/examples/benchmark/upstream-bug-reports.md` records the bugs found

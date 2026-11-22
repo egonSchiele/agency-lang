@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   classifyLlmError,
-  CUT_OFF_RETRIES,
-  decideCutOff,
+  decideFinalReplyRetry,
   decideRetry,
   decideValidationRetry,
   DEFAULT_RETRY_POLICY,
   enrichSchemaLimitationError,
+  FINAL_REPLY_RETRIES,
   resolveRetryPolicy,
   type RetryPolicy,
 } from "./llmRetry.js";
@@ -284,31 +284,100 @@ describe("decideValidationRetry", () => {
   });
 });
 
-describe("decideCutOff", () => {
+describe("decideFinalReplyRetry", () => {
   it("accepts any reply that did not stop on the length limit", () => {
-    expect(decideCutOff({ stopReason: "stop", content: "", attempt: 0 })).toEqual({
+    expect(
+      decideFinalReplyRetry({ stopReason: "stop", content: "", attempt: 0, offeredTools: true }),
+    ).toEqual({
       kind: "accept",
     });
   });
   it("retries a cut-off reply with no text", () => {
-    expect(decideCutOff({ stopReason: "length", content: "  \n", attempt: 0 })).toEqual({
+    expect(
+      decideFinalReplyRetry({
+        stopReason: "length",
+        content: "  \n",
+        attempt: 0,
+        offeredTools: true,
+      }),
+    ).toEqual({
       kind: "retry",
+      reason: "cutOff",
     });
-    expect(decideCutOff({ stopReason: "length", content: null, attempt: 1 })).toEqual({
+    expect(
+      decideFinalReplyRetry({
+        stopReason: "length",
+        content: null,
+        attempt: 1,
+        offeredTools: true,
+      }),
+    ).toEqual({
       kind: "retry",
+      reason: "cutOff",
     });
   });
-  it("fails after CUT_OFF_RETRIES retries", () => {
-    const decision = decideCutOff({
+  it("fails after FINAL_REPLY_RETRIES retries", () => {
+    const decision = decideFinalReplyRetry({
       stopReason: "length",
       content: null,
-      attempt: CUT_OFF_RETRIES,
+      attempt: FINAL_REPLY_RETRIES,
+      offeredTools: true,
     });
     expect(decision.kind).toBe("surfaceFailure");
-    expect((decision as any).message).toContain("output limit 3 times");
+    expect((decision as any).message).toContain("output limit");
+    expect((decision as any).message).toContain("the retries ran out");
   });
   it("warns about a cut-off reply with text", () => {
-    const decision = decideCutOff({ stopReason: "length", content: "Partial ans", attempt: 0 });
+    const decision = decideFinalReplyRetry({
+      stopReason: "length",
+      content: "Partial ans",
+      attempt: 0,
+      offeredTools: true,
+    });
     expect(decision.kind).toBe("warn");
+  });
+  it("retries a reply that stopped to call a tool, with or without text", () => {
+    expect(
+      decideFinalReplyRetry({
+        stopReason: "tool_use",
+        content: null,
+        attempt: 0,
+        offeredTools: true,
+      }),
+    ).toEqual({
+      kind: "retry",
+      reason: "droppedToolCall",
+    });
+    expect(
+      decideFinalReplyRetry({
+        stopReason: "tool_use",
+        content: "Let me look at the file.",
+        attempt: 1,
+        offeredTools: true,
+      }),
+    ).toEqual({ kind: "retry", reason: "droppedToolCall" });
+  });
+  it("fails after FINAL_REPLY_RETRIES retries of a lost tool call", () => {
+    const decision = decideFinalReplyRetry({
+      stopReason: "tool_use",
+      content: null,
+      attempt: FINAL_REPLY_RETRIES,
+      offeredTools: true,
+    });
+    expect(decision).toEqual(
+      expect.objectContaining({ kind: "surfaceFailure", reason: "droppedToolCall" }),
+    );
+    expect((decision as any).message).toContain("no tool call arrived");
+    expect((decision as any).message).toContain("the retries ran out");
+  });
+  it("accepts a reply that stopped to call a tool when the request offered no tools", () => {
+    expect(
+      decideFinalReplyRetry({
+        stopReason: "tool_use",
+        content: "Here is the answer.",
+        attempt: 0,
+        offeredTools: false,
+      }),
+    ).toEqual({ kind: "accept" });
   });
 });

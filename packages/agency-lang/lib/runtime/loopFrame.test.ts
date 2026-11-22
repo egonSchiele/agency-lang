@@ -13,7 +13,9 @@ describe("initLoopFrame", () => {
     initLoopFrame(self, {});
     expect(self.cutOffAttempt).toBe(0);
     expect(self.cutOffPending).toBeNull();
+    expect(self.cutOffReason).toBeNull();
     expect(self.lastStopReason).toBeNull();
+    expect(self.lastRequestOfferedTools).toBeNull();
     expect(self.validationAttempt).toBe(1);
   });
 });

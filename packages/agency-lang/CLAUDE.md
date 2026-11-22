@@ -319,7 +319,7 @@ Other process docs:
 - `docs/dev/agents/reply-attachments.md` — How a tool hands images back to the model, given that most providers reject image parts in tool results.
 - `docs/dev/agents/self-writing-agent.md` — Investigation notes from the experiment behind `why-agents-write-code.md`.
 - `docs/dev/agents/subagent-budgets.md` — How a deadline reaches a subagent, and the `@guard` decorator that enforces it and decides what counts as success.
-- `docs/dev/agents/tool-loop-guards.md` — The refusals that stop a model wasting rounds, such as a repeated call, and the retry of an empty reply that was cut off.
+- `docs/dev/agents/tool-loop-guards.md` — The refusals that stop a model wasting rounds, and the retry of a reply that was cut off empty or lost its tool call.
 - `docs/dev/agents/tool-output.md` — What each tool's line in the agent's trace shows, and the test that fails on a tool with no line defined.
 - `docs/dev/agents/why-agents-write-code.md` — The argument for letting an agent write and run programs instead of giving it more tools.
 - `docs/dev/agents/why-the-agent-writes-tools.md` — What tools are for, what each one costs in context, and when a tool is not worth writing.

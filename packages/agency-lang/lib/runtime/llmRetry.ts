@@ -11,7 +11,8 @@ export type LLMRetryReason =
   | "serverError"
   | "overloaded"
   | "invalidStructuredOutput"
-  | "cutOff";
+  | "cutOff"
+  | "droppedToolCall";
 
 export type Classification =
   | { kind: "retryable"; reason: LLMRetryReason; detail: string; retryAfterMs?: number }
@@ -354,33 +355,74 @@ export function decideValidationRetry(
   };
 }
 
-/** How many times one `llm()` call re-sends a request whose reply the
- *  output limit cut off before it held any text or tool call. */
-export const CUT_OFF_RETRIES = 2;
+/** How many times one `llm()` call re-sends a request whose final reply
+ *  cannot be the answer: one the output limit cut off before it held any
+ *  text or tool call, or one whose tool call was lost. Both reasons share
+ *  this one limit. */
+export const FINAL_REPLY_RETRIES = 2;
 
 /** The user message sent with a cut-off retry. It lasts for that one request. */
 export const CUT_OFF_NOTE =
   "Your last reply reached the output limit before it contained any text or tool call. " +
   "Reason more briefly, then reply or call a tool.";
 
-export type CutOffDecision =
+/** The user message sent with a retry of a reply whose tool call was lost.
+ *  It lasts for that one request. */
+export const DROPPED_TOOL_CALL_NOTE =
+  "Your last reply asked to call a tool, but the call could not be read, so no tool ran. " +
+  "Call the tool again, and write out the whole call.";
+
+/** Why the reply that ended the tool loop is sent again:
+ *  - `cutOff`: the output limit cut it off before it held any text.
+ *  - `droppedToolCall`: it stopped to call a tool, but carried no tool call.
+ *    A local model server drops a call it cannot parse; mlx_lm's
+ *    `ToolCallFormatter` logs "Failed to parse tool call" and goes on. */
+export type FinalReplyRetryReason = "cutOff" | "droppedToolCall";
+
+export type FinalReplyDecision =
   | { kind: "accept" }
   | { kind: "warn"; message: string }
-  | { kind: "retry" }
-  | { kind: "surfaceFailure"; message: string };
+  | { kind: "retry"; reason: FinalReplyRetryReason }
+  | { kind: "surfaceFailure"; reason: FinalReplyRetryReason; message: string };
 
 export type FinalReply = {
   stopReason: string | undefined;
   content: string | null;
-  /** Cut-off retries already sent in this llm() call. */
+  /** Retries of the final reply already sent in this llm() call, for
+   *  either reason. */
   attempt: number;
+  /** Whether the request offered any function tools. One at the round cap
+   *  usually offers none, and asking the model to call a tool again would
+   *  be asking for a tool it does not have. */
+  offeredTools: boolean;
 };
 
 /** What to do with the reply that ended the tool loop, which asked for no
  *  tool calls. A reasoning model can spend its whole output budget thinking
  *  and return nothing: that reply is retried, and a reply with some text is
- *  kept with a warning. See docs/dev/agents/tool-loop-guards.md. */
-export function decideCutOff(reply: FinalReply): CutOffDecision {
+ *  kept with a warning. A reply that stopped to call a tool but holds no
+ *  call lost the call on the way, so it is retried whatever its text says,
+ *  unless the request offered no tools to call.
+ *
+ *  The failure messages describe the last reply, not a count: both reasons
+ *  share one limit, so the replies before it may have failed the other way.
+ *  See docs/dev/agents/tool-loop-guards.md. */
+export function decideFinalReplyRetry(reply: FinalReply): FinalReplyDecision {
+  if (reply.stopReason === "tool_use") {
+    if (!reply.offeredTools) {
+      return { kind: "accept" };
+    }
+    if (reply.attempt < FINAL_REPLY_RETRIES) {
+      return { kind: "retry", reason: "droppedToolCall" };
+    }
+    return {
+      kind: "surfaceFailure",
+      reason: "droppedToolCall",
+      message:
+        "The model stopped to call a tool, but no tool call arrived, and the retries ran out. " +
+        "Its server could not read the calls the model wrote.",
+    };
+  }
   if (reply.stopReason !== "length") {
     return { kind: "accept" };
   }
@@ -390,13 +432,14 @@ export function decideCutOff(reply: FinalReply): CutOffDecision {
       message: "The model's reply reached the output limit and may be incomplete.",
     };
   }
-  if (reply.attempt < CUT_OFF_RETRIES) {
-    return { kind: "retry" };
+  if (reply.attempt < FINAL_REPLY_RETRIES) {
+    return { kind: "retry", reason: "cutOff" };
   }
   return {
     kind: "surfaceFailure",
+    reason: "cutOff",
     message:
-      `The model reached its output limit ${CUT_OFF_RETRIES + 1} times in a row without writing ` +
-      `any text or tool call. Lower reasoningEffort, or raise maxTokens.`,
+      "The model reached its output limit without writing any text or tool call, and the " +
+      "retries ran out. Lower reasoningEffort, or raise maxTokens.",
   };
 }

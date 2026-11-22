@@ -302,7 +302,7 @@ check the tool loop would return the empty text as the answer of the
 `llm()` call.
 
 After the tool loop has run every tool call, and before it returns or
-validates, `decideCutOff` in `lib/runtime/llmRetry.ts` looks at the last
+validates, `decideFinalReplyRetry` in `lib/runtime/llmRetry.ts` looks at the last
 reply:
 
 | Last reply | What happens |
@@ -326,15 +326,21 @@ has run yet, the retry replaces the call's first request, so it also
 carries the memory facts recalled for the prompt, which expire with it in
 the same way.
 
-The limit is the constant `CUT_OFF_RETRIES` (2), counted per `llm()`
+The limit is the constant `FINAL_REPLY_RETRIES` (2), counted per `llm()`
 call, not per round. A retry costs a full request, so a model that always
 overruns its budget stops after three requests. When the third reply is
 also cut off empty, the call returns a failure that names the output
 limit and suggests a lower `reasoningEffort` or a higher `maxTokens`, and
-logs an error event with `errorType: "replyCutOff"`.
+logs an error event with `errorType: "replyCutOff"`. The message does not
+say "3 times": the limit is shared with the lost-call retry below, so the
+replies before the last may have failed the other way.
 
 The decision and the steps of the retry live in
-`lib/runtime/cutOffRetry.ts`. The validation retry and the cut-off retry
+`lib/runtime/finalReplyRetry.ts`. Its functions are named for the final
+reply, not for a cut-off, because they serve the lost-call retry too. The
+frame fields (`cutOffAttempt`, `cutOffPending`, `cutOffReason`) and the
+step keys (`cutOff.<n>.feedback`) keep their old names, because
+checkpoints store them. The validation retry and the cut-off retry
 share one helper, `resendRequest` in `prompt.ts`. It runs three durable
 steps: a `<prefix>.feedback` step that edits the thread, the guard gate, and the
 request step, which advances the attempt counter. The prefix is
@@ -360,6 +366,68 @@ nothing the decision reads may be lost on resume:
    step keys.
 
 No tool runs during a retry, and no handler is pushed or popped.
+
+## A reply whose tool call was lost
+
+A local model server can lose a tool call between the model and the
+tool loop. The model writes a call, the server's parser cannot read it,
+and the server throws the call away but still reports the stop reason
+`tool_calls`. mlx_lm does this in `ToolCallFormatter`: it logs `Failed to
+parse tool call` and goes on. smoltalk turns that stop reason into
+`"tool_use"`, so the reply arrives with `stopReason: "tool_use"` and no
+tool calls. Without a check, the loop treats it like any reply with no
+tool calls and returns its text, often an empty string, as the answer.
+The model meant to keep working.
+
+This happened in the SWE-bench runs on a local Gemma 4 31B: about 1 model
+call in 400, and each one ended the agent's task, because the coder took
+the empty reply as its answer. With Qwen3 Coder Next it happened on the
+first call of a task. Some replies have text before the lost call
+("Let me search for the HTML writer first."), so text does not mean the
+reply is finished.
+
+The tool loop only ends on a reply with no tool calls. So when that
+reply says it stopped to call a tool, the call was lost, and
+`decideFinalReplyRetry` retries it:
+
+| Last reply | What happens |
+|---|---|
+| Stop reason `"tool_use"`, no tool calls, with or without text, and the request offered tools | Retry, up to 2 times, then return a failure |
+| Stop reason `"tool_use"`, no tool calls, and the request offered no tools | Return the reply as before |
+
+A request offers no tools in an `llm()` call that has none, and at the
+round cap, where only intrinsic tools like `saveDraft` are offered and
+usually there are none. There the note would ask the model to call a
+tool it does not have, so the reply is the answer, as it was before the
+retry existed. Hosted tools do not count: their calls run at the
+provider and never reach the tool loop, so none can be lost on the way.
+Each request step records on the frame whether it offered any tools,
+`self.lastRequestOfferedTools`, so a resumed decision reads the same
+answer. A checkpoint from before the field reads as tools offered.
+
+The retry is the cut-off retry with a different note,
+`DROPPED_TOOL_CALL_NOTE`, which tells the model its call could not be
+read and asks it to call the tool again. Everything else is shared: the
+reply is removed from the thread, the note expires when the request
+returns, and the limit of 2 counts cut-off retries and lost-call retries
+together for one `llm()` call. When the last reply allowed is a lost
+call, the call returns a failure that says no tool call arrived and the
+server could not read the calls, and logs an error event with
+`errorType: "droppedToolCall"`. The error type for each reason comes from
+`RETRY_ERROR_TYPE` in `finalReplyRetry.ts`, beside the note and the hook
+detail for that reason. The `onLLMRetry`
+hook gets the reason `droppedToolCall`.
+
+A retry that pauses has to send the right note when it resumes, and by
+then the reply is gone. So the `feedback` step records the reason on the
+frame, `self.cutOffReason`, beside `self.cutOffPending`, and the request
+step clears both. A checkpoint from before the field has no reason, and
+can only hold a cut-off retry, so a missing reason means `cutOff`.
+
+The retry does not fix the parser. A model whose calls the server can
+never read still fails, three requests later and with a message that
+says why. Fixing a parser belongs in the server
+(`docs/dev/llm/upstream-workarounds.md`).
 
 ## Tests
 
@@ -392,6 +460,13 @@ No tool runs during a retry, and no handler is pushed or popped.
   `tests/agency-js/cut-off-retry-resume` pauses a retry at its guard gate
   and in a tool call, resumes it, and trips a guard during the retried
   request.
+- A lost tool call: `lib/runtime/prompt.cutOff.test.ts` covers a lost
+  call with and without text, after tool rounds, three in a row, the
+  limit shared with cut-off retries in both orders (the failure names
+  the last reply), the round cap and a call with no tools (the reply is
+  the answer), and the hook's reason.
+  `tests/agency-js/cut-off-retry-resume` pauses a lost-call retry at its
+  guard gate and checks the resumed request carries the lost-call note.
 - Real wiring: `tests/agency-js/repeated-tool-calls` scripts five
   identical calls and one garbled one through a fake client and checks
   the tool ran four times (the fourth call was refused and the count

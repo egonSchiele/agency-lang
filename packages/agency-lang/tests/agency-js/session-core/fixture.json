@@ -10,6 +10,7 @@
   "reply": [
     "stub reply"
   ],
+  "transcriptAfterOneTurn": ["user: hello", "assistant: stub reply"],
   "turnsAfterOneMessage": 1,
   "badAnswer": "The run was sent an answer it can't read",
   "badAnswerPausedAgain": true,
@@ -36,6 +37,10 @@
   ],
   "pausedAgainAfterFailure": true,
   "turnsAfterTheFailedTurn": 3,
+  "transcriptAfterFailure": [
+    "user: fail this turn",
+    "assistant: The agent stopped before finishing: the test client was told to fail"
+  ],
   "replyAfterTheFailedTurn": "stub reply",
   "overBudgetTurn": {
     "budgetStops": [],
@@ -92,6 +97,17 @@
     "eventsAfterApproving": 1,
     "fileAfter": "first\nnew line\nlast\n"
   },
+  "transcriptAtApproval": [{ "role": "user", "content": "edit the note" }],
+  "transcriptAfterApproval": ["user: edit the note", "assistant: edited"],
+  "notedTranscriptUser": { "role": "user", "content": "hi" },
+  "notedModelSawNotes": true,
+  "refusedTargetTranscript": [],
+  "upgradedTranscript": [
+    "user: before the upgrade",
+    "assistant: stub reply",
+    "user: after the upgrade",
+    "assistant: stub reply"
+  ],
   "learnedScansAskNothing": {
     "pausedOn": "agent::sessionInput",
     "reply": "stub reply"

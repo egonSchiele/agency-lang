@@ -26,6 +26,7 @@ const { main, respondToInterrupts, approve, hasInterrupts, __setLLMClient } = pr
 const { _setLocalModelsAllowed, _setManySessions } =
   await import("../../../dist/lib/stdlib/agentProcess.js");
 _setManySessions(true);
+const { _readTranscript } = await import("../../../dist/lib/stdlib/agentSessions.js");
 
 const PAUSE = "agent::sessionInput";
 const PIN = { [PAUSE]: [{ action: "propagate" }] };
@@ -210,6 +211,11 @@ async function startSession(overrides = {}, policy = PIN, { keepLastSettings = f
 
 const message = (text) => ({ kind: "message", text, notes: [], target: "" });
 const pauseData = (session) => session.pause[0].data;
+// What a reopened session would show, read from the pause's checkpoint.
+const transcriptOf = (session) =>
+  _readTranscript(session.pause[0].checkpoint, pauseData(session).thread);
+const transcriptLines = (session) =>
+  transcriptOf(session).map((entry) => `${entry.role}: ${entry.content}`);
 const eventsOf = (session, type) => session.emitted.filter((event) => event.type === type);
 const errorText = (data) => String(data?.error ?? "");
 const withinFiveSeconds = (promise) =>
@@ -228,6 +234,7 @@ result.mainSlotIsSet = pauseData(chat).models.main?.model === "claude-sonnet-4-6
 result.recordHasTheRealBrain = pauseData(chat).record.brain;
 await chat.answer(message("hello"));
 result.reply = eventsOf(chat, "session.reply").map((event) => event.text);
+result.transcriptAfterOneTurn = transcriptLines(chat);
 result.turnsAfterOneMessage = pauseData(chat).record.turns;
 
 // An answer that is not an Answer.
@@ -282,6 +289,9 @@ result.failedTurnReplies = eventsOf(chat, "session.reply")
   .map((event) => event.text.slice(0, 34));
 result.pausedAgainAfterFailure = !chat.ended && chat.pause[0].effect === PAUSE;
 result.turnsAfterTheFailedTurn = pauseData(chat).record.turns;
+// The brain turns the failure into a reply, which the live view shows, so
+// the transcript keeps it after what the user typed.
+result.transcriptAfterFailure = transcriptLines(chat).slice(-2);
 await chat.answer(message("hello again"));
 result.replyAfterTheFailedTurn = eventsOf(chat, "session.reply").pop()?.text;
 
@@ -391,9 +401,33 @@ result.editThatIsAsked = {
   pausedOn: asker.pause[0].effect,
   eventsAtTheApproval: eventsOf(asker, "session.editDiff").length,
 };
+// The user's entry is in the approval's checkpoint, and is there once
+// after the resume. The approval's data is the edit's, so no thread id.
+result.transcriptAtApproval = _readTranscript(asker.pause[0].checkpoint, "");
 await asker.answer(undefined);
 result.editThatIsAsked.eventsAfterApproving = eventsOf(asker, "session.editDiff").length;
 result.editThatIsAsked.fileAfter = readFileSync(path.join(project, "note.txt"), "utf8");
+result.transcriptAfterApproval = transcriptLines(asker);
+
+// Notes go to the model above the message. The transcript has the
+// message as typed.
+const noted = await startSession();
+await noted.answer({ kind: "message", text: "hi", notes: ["NOTE-A", "NOTE-B"], target: "" });
+result.notedTranscriptUser = transcriptOf(noted)[0];
+result.notedModelSawNotes = userTextsSent.includes("NOTE-A\n\nNOTE-B\n\nhi");
+
+// A refused start target is not a turn, so it adds nothing.
+const refused = await startSession();
+await refused.answer({ kind: "message", text: "hi", notes: [], target: "nope" });
+result.refusedTargetTranscript = transcriptOf(refused);
+
+// A session saved before the transcript existed: its list is deleted from
+// the checkpoint. The next message starts the list from the thread.
+const old = await startSession();
+await old.answer(message("before the upgrade"));
+delete old.pause[0].checkpoint.globals.store.__agentTranscript;
+await old.answer(message("after the upgrade"));
+result.upgradedTranscript = transcriptLines(old);
 
 // The agent's own scans of what it learned are approved by the core: under
 // a policy with no rules, a turn asks nothing about them.

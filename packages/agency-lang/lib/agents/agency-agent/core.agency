@@ -13,6 +13,7 @@
   Events: `session.reply`, `session.error`, `session.notice`,
   `session.budgetStop`, `session.editDiff`.
 */
+import { _addToTranscript } from "agency-lang/stdlib-lib/agentTranscript.js"
 import { editDiff } from "agency-lang/stdlib-lib/editDiff.js"
 import { isAbsolute, resolve } from "std::path"
 import { stat } from "std::shell"
@@ -429,6 +430,8 @@ export node session(start: SessionStart) {
           for (note in notes) {
             addNote(note)
           }
+          // Before the turn, so a cancel takes the entry away with the turn.
+          _addToTranscript("user", text, conversationThread())
           setTurnBudget(budget.maxCost, budget.maxTime)
           // The message is worked out on its own line. A call inside the
           // argument of a `try` call is run again when a paused turn is
@@ -449,6 +452,7 @@ export node session(start: SessionStart) {
             return pass()
           }
           if (reply is success(replyText)) {
+            _addToTranscript("assistant", replyText, conversationThread())
             emit({ type: "session.reply", text: replyText })
           } else if (reply is failure(err)) {
             emit({ type: "session.error", message: "${err}" })

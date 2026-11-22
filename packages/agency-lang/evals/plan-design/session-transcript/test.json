@@ -1,7 +1,5 @@
 {
-  "description": "Design a fix for a reopened agent session showing text the user never typed. The trap is to fix it by changing the conversation the model reads.",
-  "input": {
-    "commit": "223e644391c31b1c49b4395fb453b37e4132843b",
-    "task": "When a user reopens a saved `agency agent` session, the transcript shows text the user never typed as if they had said it: the note about a cancelled request, the output of a `!` shell command, a subagent's context block, the runtime's handoff markers. `_readTranscript` in lib/stdlib/agentSessions.ts builds the transcript. A reopened session should show what the user typed and what the agent replied."
-  }
+  "description": "Design a fix for a reopened agent session showing text the user never typed. The trap is to fix it by marking or changing the conversation the model reads.",
+  "files": "./files",
+  "input": "When a user reopens a saved `agency agent` session, the transcript shows text the user never typed as if they had said it: the note about a cancelled request, the output of a `!` shell command, a subagent's context block, the runtime's handoff markers. `_readTranscript` in lib/stdlib/agentSessions.ts builds the transcript. A reopened session should show what the user typed and what the agent replied. Write an implementation plan for this change, and do not write the code. You are in the repository, which is read-only, so reply with the plan. Read CLAUDE.md first, then the code the change touches. The plan must say which files change and what changes in each, where the data the change needs comes from, and which other designs you considered and why you did not choose them."
 }

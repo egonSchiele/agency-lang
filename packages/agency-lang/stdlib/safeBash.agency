@@ -5581,8 +5581,6 @@ def classifyAnd(left: Command, right: Command, line: LineState, origin: GhRepo |
   // build && cmake ..`, which is `(mkdir -p build && cd build) && cmake
   // ..`, whatever follows with `&&` runs only when the `cd` worked. `||`
   // after it is refused by `classifyOr`, which sees the directory changed.
-  // A command after `;` is classified in the new directory, and the runner
-  // stops the line before it when the `cd` was skipped (`skippedCd`).
   const first = andSide(left, line, origin, readsStdin)?
   const second = andSide(right, first.line, origin, readsStdin)?
   return success({
@@ -7072,9 +7070,9 @@ type StepsState = {
   /** The line as the model wrote it, which every failure names. */
   label: string;
   cwd: string;
-  /** Whether a step that cannot start in `cwd` ends the line. It is false
-    after a `cd` joined by `&&` or inside a group, where bash carries on
-    with status 1 when the `cd` fails. */
+  /** Whether a step that cannot start in `cwd` ends the line. It is true
+    after a `cd` that is a whole command of the top-level list. After any
+    other `cd`, the step fails with status 1 and the line carries on. */
   missingFolderStops: boolean;
   status: number;
   stdout: string;

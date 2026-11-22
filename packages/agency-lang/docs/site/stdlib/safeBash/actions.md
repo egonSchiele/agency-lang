@@ -1051,14 +1051,16 @@ export type RunStep = {
 
 ### CdStep
 
-A `cd`. `dir` is the real folder the plan resolved. `guarded` is true
-  for a `cd` that is a whole command of the top-level list, which runs
-  as `cd '/abs' || exit 1` in one shell: when it fails, the line ends.
+A `cd`. `cwd` is the folder it was planned in, and `dir` is the real
+  folder the plan resolved. `guarded` is true for a `cd` that is a whole
+  command of the top-level list: after it, a step whose shell cannot
+  start in `dir` ends the line (`StepsState.missingFolderStops`).
 
 ```ts
-/** A `cd`. `dir` is the real folder the plan resolved. `guarded` is true
-  for a `cd` that is a whole command of the top-level list, which runs
-  as `cd '/abs' || exit 1` in one shell: when it fails, the line ends. */
+/** A `cd`. `cwd` is the folder it was planned in, and `dir` is the real
+  folder the plan resolved. `guarded` is true for a `cd` that is a whole
+  command of the top-level list: after it, a step whose shell cannot
+  start in `dir` ends the line (`StepsState.missingFolderStops`). */
 export type CdStep = {
   kind: "cd";
   join: Join;
@@ -1069,7 +1071,7 @@ export type CdStep = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L856))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L857))
 
 ### GroupStep
 
@@ -1084,7 +1086,7 @@ export type GroupStep = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L866))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L867))
 
 ### StepsExec
 
@@ -1106,7 +1108,7 @@ export type StepsExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L875))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L876))
 
 ### RefuseExec
 
@@ -1117,7 +1119,7 @@ export type RefuseExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L896))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L897))
 
 ### BroadReason
 
@@ -1141,7 +1143,7 @@ export type BroadReason = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L905))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L906))
 
 ### Plan
 
@@ -1163,7 +1165,7 @@ export type Plan = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L911))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L912))
 
 ### FileAccess
 
@@ -1187,7 +1189,7 @@ export type FileAccess = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L927))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L928))
 
 ## Functions
 
@@ -1762,7 +1764,7 @@ Build file reads from the sources whose payloads `readEffect` asks about.
 
 **Returns:** [ReadExec](#readexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L887))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L888))
 
 ### accessesOf
 
@@ -1784,4 +1786,4 @@ accesses: `git checkout -- a.txt` overwrites a file, but its effect is
 
 **Returns:** `FileAccess[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L970))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L971))

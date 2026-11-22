@@ -2106,8 +2106,7 @@ want it.
 ```
 
 Both folders are strings the planner wrote, so they are compared as
-text. The stop reuses the label of the stop in "Each step is checked
-just before it runs".
+text.
 
 This is the one place a line runs differently from bash, which would
 run `cat out.txt` in `/repo`. The stop applies to a command that ignores
@@ -2118,16 +2117,7 @@ A `cd` that exists and cannot be entered is not caught by `runCd`. The
 line moves there, and each later command fails to start in it, so no
 question is false in that case either.
 
-After `||` the next command runs when the `cd` failed or when the
-command after it failed, so `cd x && a || b` is broad. The runner could
-stop it the same way, but not inside a group in a pipeline, which bash
-runs in one step: `(cd x && a || b) | head`. A `;` inside such a group
-would need the same care. Today the bash parser rejects it, and
-`cdDoesNotLeakOutOfItsChain` fails on the day it does not.
-
-A `cd` that is a whole command of the top-level list is rebuilt as
-`cd '/abs' || exit 1` in the plan's `command` text (`cdOrExit`). The
-debug log records that text, and nothing runs it.
+`cd x && a || b` is broad.
 
 A line where no command raises an effect is still broad. `cd x` alone
 and `cd x; echo hi` both ask `std::bash` and run the original text.

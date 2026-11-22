@@ -679,8 +679,15 @@ await mover.answer({ kind: "folder", cwd: `${moveTarget}/` });
 result.folder.trailingSlash = movedTo(mover);
 await mover.answer({ kind: "folder", cwd: `${moveTarget}/x/..` });
 result.folder.dotDot = movedTo(mover);
+// The folder it is in already: the record stays as it was, so a front-end
+// sorting by `lastActive` doesn't move the chat.
+const lastActiveInFolder = pauseData(mover).record.lastActive;
 await mover.answer({ kind: "folder", cwd: moveTarget });
-result.folder.sameFolder = { level: lastNotice(mover).level, ...movedTo(mover) };
+result.folder.sameFolder = {
+  level: lastNotice(mover).level,
+  ...movedTo(mover),
+  lastActiveKept: pauseData(mover).record.lastActive === lastActiveInFolder,
+};
 await mover.answer({ kind: "folder", cwd: "relative/dir" });
 result.folder.relative = { notice: lastNotice(mover), ...movedTo(mover) };
 await mover.answer({ kind: "folder", cwd: path.join(moveTarget, "missing") });

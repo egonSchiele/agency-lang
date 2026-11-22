@@ -2,19 +2,24 @@ import { positionalTagArguments, type Tag } from "../types/tag.js";
 import type { Expression } from "../types.js";
 import type { ScopedField } from "../runtime/alwaysScope.js";
 
-/** `@always(f1, f2)` and `@alwaysUnder(d1, d2)` on an effect declaration
- *  name the payload fields an "always approve when" policy rule pins.
- *  `@always` pins the exact value; `@alwaysUnder` pins the value and every
- *  subpath under it. See docs/dev/language/effect-always-tag.md. */
+/** `@always(f1, f2)`, `@alwaysUnder(d1, d2)`, and `@alwaysPrefix(l)` on an
+ *  effect declaration name the payload fields an "always approve when"
+ *  policy rule pins. `@always` pins the exact value; `@alwaysUnder` pins
+ *  the value and every subpath under it; `@alwaysPrefix` pins the leading
+ *  items of a list, as many as the person picks. See
+ *  docs/dev/language/effect-always-tag.md. */
 export const ALWAYS_TAG = "always";
 export const ALWAYS_UNDER_TAG = "alwaysUnder";
+export const ALWAYS_PREFIX_TAG = "alwaysPrefix";
+
+const ALWAYS_TAGS = [ALWAYS_TAG, ALWAYS_UNDER_TAG, ALWAYS_PREFIX_TAG];
 
 export type AlwaysProblemKind = "badArgument" | "repeatedTag" | "namedTwice";
 export type AlwaysTagProblem = { kind: AlwaysProblemKind; tag: string; loc: Tag["loc"] };
 export type AlwaysScope = { fields: ScopedField[]; problems: AlwaysTagProblem[] };
 
 export function isAlwaysTag(tag: Tag): boolean {
-  return tag.name === ALWAYS_TAG || tag.name === ALWAYS_UNDER_TAG;
+  return ALWAYS_TAGS.includes(tag.name);
 }
 
 export function hasAlwaysScope(tags: Tag[] = []): boolean {
@@ -47,21 +52,24 @@ function countOf(name: string, names: string[]): number {
 
 export function readAlwaysScope(tags: Tag[] = []): AlwaysScope {
   const exactTags = tags.filter((tag) => tag.name === ALWAYS_TAG);
+  const prefixTags = tags.filter((tag) => tag.name === ALWAYS_PREFIX_TAG);
   const underTags = tags.filter((tag) => tag.name === ALWAYS_UNDER_TAG);
-  const alwaysTags = [...exactTags, ...underTags];
+  const alwaysTags = [...exactTags, ...prefixTags, ...underTags];
   const exactNames = exactTags.flatMap(fieldNames);
+  const prefixNames = prefixTags.flatMap(fieldNames);
   const underNames = underTags.flatMap(fieldNames);
-  const allNames = [...exactNames, ...underNames];
+  const allNames = [...exactNames, ...prefixNames, ...underNames];
 
   const fields: ScopedField[] = [
     ...exactNames.map((field) => ({ field, matchSubpaths: false })),
+    ...prefixNames.map((field) => ({ field, matchSubpaths: false, matchPrefix: true })),
     ...underNames.map((field) => ({ field, matchSubpaths: true })),
   ];
 
   const badArgument = alwaysTags
     .filter(hasNonIdentifierArgument)
     .map((tag) => problem("badArgument", tag));
-  const repeatedTag = [exactTags, underTags]
+  const repeatedTag = [exactTags, prefixTags, underTags]
     .filter((group) => group.length > 1)
     .map((group) => problem("repeatedTag", group[1]));
   const namedTwice = alwaysTags

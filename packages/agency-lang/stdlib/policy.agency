@@ -197,10 +197,14 @@ export type Decision =
    Pass `true` for directory-like fields (so approving `/tmp/x`
    also approves `/tmp/x/sub/file.txt`). Pass `false` for opaque
    identifiers (commands, IDs, env names) that shouldn't fan out.
+ - `matchPrefix` — when `true`, the field is a list, and the rule pins its
+   leading items. The approval prompt asks how many. Leave it out, or
+   pass `false`, for every other field.
  */
 export type ScopedField = {
   field: string;
-  matchSubpaths: boolean
+  matchSubpaths: boolean;
+  matchPrefix?: boolean
 }
 
 /**

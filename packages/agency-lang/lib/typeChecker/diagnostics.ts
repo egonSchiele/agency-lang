@@ -477,6 +477,12 @@ export const DIAGNOSTICS = {
     severity: "error",
     message: "@{tag} is only valid on an effect declaration.",
   },
+  alwaysPrefixNotList: {
+    code: "AG3031",
+    severity: "error",
+    message:
+      "`@alwaysPrefix({field})` on effect `{effect}` needs a list field, and `{field}` is not one.",
+  },
   capabilityUnknown: {
     code: "AG3024",
     severity: "error",

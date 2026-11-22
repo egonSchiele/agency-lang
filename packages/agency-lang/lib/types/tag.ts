@@ -14,6 +14,7 @@ export const RESERVED_TAG_NAMES = [
   "hidden",
   "always",
   "alwaysUnder",
+  "alwaysPrefix",
   "optimize",
 ] as const;
 

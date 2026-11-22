@@ -296,13 +296,20 @@ def renameNotice(title: string) {
 
 // The path is resolved, so `/p`, `/p/` and `/p/x/..` are one folder and
 // one saved-sessions folder. `stat` raises no effect: the move asks no one.
+// It throws where it can't look (a dangling link, no permission), which
+// is refused with its reason.
 def folderNotice(cwd: string) {
   if (!isAbsolute(cwd)) {
     notice("Could not move the session to ${cwd}: the path is not absolute.", "error")
     return
   }
   const folder = resolve(cwd)
-  if (stat(folder).type != "dir") {
+  const info = try stat(folder)
+  if (info is failure(reason)) {
+    notice("Could not move the session to ${folder}: ${reason}", "error")
+    return
+  }
+  if (info.value.type != "dir") {
     notice("Could not move the session to ${folder}: it is not a folder.", "error")
     return
   }

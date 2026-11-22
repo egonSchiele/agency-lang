@@ -226,6 +226,7 @@
     },
     "missing": { "level": "error", "text": true, "cwd": true, "recordCwd": true },
     "aFile": { "level": "error", "text": true, "cwd": true, "recordCwd": true },
+    "danglingLink": { "level": "error", "saysWhy": true, "cwd": true, "recordCwd": true },
     "notSaved": { "level": "info", "cwd": true, "record": null }
   },
   "fork": {
@@ -256,7 +257,8 @@
     "nextMessage": {
       "reply": "stub reply",
       "longMessageSent": false,
-      "pausedOn": "agent::sessionInput"
+      "pausedOn": "agent::sessionInput",
+      "carriesNoBlock": true
     },
     "afterAMove": { "compacted": true, "namesTheNewFolder": true }
   },

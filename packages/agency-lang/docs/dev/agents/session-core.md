@@ -171,7 +171,11 @@ did is a notice at level `info`, except a `model`, `options`, `budget`,
   `/settings` screen draws. Only the terminal sends it.
 - **`folder`** takes an absolute path to a folder, resolved first, so
   `/p/` and `/p/x/..` are `/p`. A relative path, a missing one or a file
-  is refused. It sets the agent's working folder and the session's folder
+  is refused, and so is one `stat` can't look at (a dangling link, say),
+  with its reason. Naming the folder the record already names leaves the
+  record as it is, but still sets the agent's working folder back to it,
+  undoing a coder's move into a subfolder. It sets the agent's working
+  folder and the session's folder
   (`setAgentCwd`, `setSessionFolder`), and the record's `cwd` and
   `lastActive` (`moveRecord` in `lib/record.agency`), so the moved copy
   of a saved session is always the newer one. The driver reports `moved`.

@@ -1,7 +1,15 @@
 // Drives the agent's session program (lib/agents/agency-agent/program.agency)
 // the way a front-end does: start it, answer its pause, read its events.
 // No model is called: a test client answers every llm() call.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ToolCall } from "smoltalk";
@@ -702,6 +710,16 @@ result.folder.aFile = {
   text: lastNotice(mover).text?.endsWith(": it is not a folder."),
   ...movedTo(mover),
 };
+// A folder picked through a link whose target was deleted since. `stat`
+// can't look, and the refusal says why rather than "not a folder".
+const danglingLink = path.join(moveTarget, "gone-link");
+symlinkSync(path.join(moveTarget, "deleted-target"), danglingLink);
+await mover.answer({ kind: "folder", cwd: danglingLink });
+result.folder.danglingLink = {
+  level: lastNotice(mover).level,
+  saysWhy: !lastNotice(mover).text?.endsWith(": it is not a folder."),
+  ...movedTo(mover),
+};
 const unsavedMover = await startSession({ session: { ...startData().session, record: null } });
 await unsavedMover.answer({ kind: "folder", cwd: moveTarget });
 result.folder.notSaved = {
@@ -748,6 +766,11 @@ result.compact.nextMessage = {
   reply: eventsOf(compacter, "session.reply").pop()?.text,
   longMessageSent: longTextSent["after the compaction"],
   pausedOn: compacter.pause[0].effect,
+  // A session that never moved gets no project block after a compaction:
+  // the head still names its folder.
+  carriesNoBlock: !userTextsSent
+    .findLast((text) => text.includes("after the compaction"))
+    .includes("The working directory changed."),
 };
 
 // A move, then a compaction. The block that told the model about the move

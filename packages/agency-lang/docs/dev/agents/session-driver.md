@@ -69,6 +69,14 @@ from there, with the conversation as it was before the turn.
   `turnFinished`. The front-end
   shows what changed. When the core refused the change, the two are the
   same, and the core has already sent a notice that says why.
+- **A session that moved to another folder** reports
+  `{ type: "moved", from, to }` after `answered`, when `record.cwd`
+  changed across the answer (a `folder` answer). The pause's `cwd` is not
+  it: a coder moves that within a turn. The front-end has two jobs: move
+  the session's saved files to the folder for `to`, and resume the run on
+  a host for `to`, since the core does not move the host's folder and `.`
+  in a policy rule follows the host. See the `folder` answer in
+  `session-core.md`.
 
 ## Background jobs
 

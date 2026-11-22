@@ -2202,6 +2202,50 @@ node pipelinesThatStayWithBash() {
   ]
 }
 
+/* A line's kind, outcome, and questions. */
+def quietRow(source: string): any {
+  const plan = planFor(source, FIXTURES)
+  return [source, kindOf(plan), outcomeOf(plan), [effect.name for effect in plan.effects]]
+}
+
+// A command safeBash runs itself prints nothing to standard error when it
+// succeeds, so `2>/dev/null` on it is dropped and the command runs as it
+// does without it: alone, as the first stage of a pipeline, and as a
+// later stage. Any other redirect keeps the command with bash.
+node quietStderrIsDropped() {
+  return [
+    quietRow("grep -n hello one.txt 2>/dev/null"),
+    quietRow("grep -rn hello . 2>/dev/null"),
+    quietRow("cat one.txt 2>/dev/null"),
+    quietRow("head -2 one.txt 2> /dev/null"),
+    quietRow("echo hi 2>/dev/null"),
+    quietRow("echo hi > out.txt 2>/dev/null"),
+    quietRow("grep -rn hello . 2>/dev/null | head"),
+    quietRow("cat one.txt | grep hello 2>/dev/null | head -1"),
+    quietRow("pnpm --version; cat one.txt 2>/dev/null"),
+    quietRow("cat one.txt 2>err.txt"),
+    quietRow("cat one.txt 2>&1"),
+    quietRow("cat one.txt >/dev/null"),
+    quietRow("cat one.txt &>/dev/null"),
+    quietRow("cat one.txt 1>/dev/null 2>/dev/null"),
+    quietRow("cat nope.txt 2>/dev/null"),
+    quietRow("pnpm test 2>/dev/null"),
+  ]
+}
+
+// The same lines run, compared with real bash on text and on success.
+node quietStderrMatchesRealTools() {
+  return [
+    exactParityOf("grep -n hello one.txt 2>/dev/null", "grep", FIXTURES),
+    exactParityOf("cat one.txt 2>/dev/null", "read", FIXTURES),
+    exactParityOf("tail -1 one.txt 2>/dev/null", "read", FIXTURES),
+    exactParityOf("echo hi 2>/dev/null", "echo", FIXTURES),
+    pipeParityOf("cat one.txt 2>/dev/null | head -2", FIXTURES),
+    pipeParityOf("grep hello one.txt 2>/dev/null | grep -v again 2>/dev/null", FIXTURES),
+    pipeParityOf("cat one.txt | grep nomatch 2>/dev/null", FIXTURES),
+  ]
+}
+
 // The note a folder search adds is printed after the last stage, so
 // `| head -1` keeps one match and the note.
 node aSearchNoteFollowsTheLastStage() {

@@ -310,6 +310,20 @@ def discardsOutput(redirect: Redirect): boolean {
   return targetIsNull(redirect)
 }
 
+/* `2>/dev/null`: standard error, and nothing else, thrown away. */
+def discardsStderr(redirect: Redirect): boolean {
+  return (redirect.op == ">" || redirect.op == ">>") && redirect.fd == 2 && targetIsNull(redirect)
+}
+
+// A command safeBash runs itself writes nothing to standard error when it
+// succeeds, so `2>/dev/null` on it changes nothing. It is dropped before
+// the table reads the command, so `grep -rn x lib 2>/dev/null` is the
+// search `grep -rn x lib` is. When the step fails, its message is still
+// reported, where bash would have hidden the program's complaint.
+def withoutQuietStderr(command: SimpleCommand): SimpleCommand {
+  return { ...command, redirects: [redirect for redirect in command.redirects if !discardsStderr(redirect)] }
+}
+
 /* `< /dev/null`, with no descriptor: an empty stdin. */
 def emptyInput(redirect: Redirect): boolean {
   return redirect.op == "<" && redirect.fd == null && targetIsNull(redirect)
@@ -4341,15 +4355,16 @@ def tryShellFreeStep(command: SimpleCommand, cwd: string): Result<InProcess> {
   """
   Plan one supported echo, grep, or file read for in-process execution.
   """
-  const echo = trySeeIfShellFree(command, cwd)
+  const plain = withoutQuietStderr(command)
+  const echo = trySeeIfShellFree(plain, cwd)
   if (echo is success(plan)) {
     return echo
   }
-  const search = tryShellFreeGrep(command, cwd)
+  const search = tryShellFreeGrep(plain, cwd)
   if (search is success(plan)) {
     return search
   }
-  return tryShellFreeRead(command, cwd)
+  return tryShellFreeRead(plain, cwd)
 }
 
 def shellFreeReadOf(verb: string, found: FileRead, command: SimpleCommand): Result<InProcess> {
@@ -5483,9 +5498,11 @@ def inProcessPipeline(stages: PipelineStage[], line: LineState, readsStdin: bool
 static const NOT_FOR_PIPED_GREP: string[] = ["r", "l", "H"]
 
 // What a later stage does to the text handed to it. A stage that names a
-// file reads the file and not the pipe, and one with a redirect or an
-// assignment does more than filter, so bash runs those pipelines.
-def stdinFilter(command: SimpleCommand): Result<TextFilter> {
+// file reads the file and not the pipe, and one with an assignment, or
+// with a redirect other than `2>/dev/null`, does more than filter, so
+// bash runs those pipelines.
+def stdinFilter(written: SimpleCommand): Result<TextFilter> {
+  const command = withoutQuietStderr(written)
   const name = command.command
   if (name == null || name.tag != "literal") {
     return failure("the stage's command word is not a literal")

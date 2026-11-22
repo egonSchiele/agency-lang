@@ -1203,6 +1203,28 @@
       ]
     },
     {
+      "nodeName": "quietStderrIsDropped",
+      "description": "Each row: the line, its kind, its outcome, and the questions asked. `2>/dev/null` on a command safeBash runs itself is dropped, so a grep, a cat, a head, an echo, and an echo into a file run as they do without it, alone, in a pipeline, and after a program. A redirect of standard error to a file, `2>&1`, a redirect of standard output, and `&>` keep the command with bash, and so does a read of a missing file. A program keeps its own rule.",
+      "input": "",
+      "expectedOutput": "[[\"grep -n hello one.txt 2>/dev/null\",\"grep\",\"shellFree\",[\"std::grep\"]],[\"grep -rn hello . 2>/dev/null\",\"grep\",\"shellFree\",[\"std::grep\"]],[\"cat one.txt 2>/dev/null\",\"read\",\"shellFree\",[\"std::read\"]],[\"head -2 one.txt 2> /dev/null\",\"read\",\"shellFree\",[\"std::read\"]],[\"echo hi 2>/dev/null\",\"echo\",\"shellFree\",[]],[\"echo hi > out.txt 2>/dev/null\",\"write\",\"shellFree\",[\"std::write\"]],[\"grep -rn hello . 2>/dev/null | head\",\"pipe\",\"shellFree\",[\"std::grep\"]],[\"cat one.txt | grep hello 2>/dev/null | head -1\",\"pipe\",\"shellFree\",[\"std::read\"]],[\"pnpm --version; cat one.txt 2>/dev/null\",\"steps\",\"narrow\",[\"std::exec\",\"std::read\"]],[\"cat one.txt 2>err.txt\",\"steps\",\"narrow\",[\"std::read\",\"std::write\"]],[\"cat one.txt 2>&1\",\"steps\",\"narrow\",[\"std::read\"]],[\"cat one.txt >/dev/null\",\"steps\",\"narrow\",[\"std::read\"]],[\"cat one.txt &>/dev/null\",\"steps\",\"narrow\",[\"std::read\"]],[\"cat one.txt 1>/dev/null 2>/dev/null\",\"steps\",\"narrow\",[\"std::read\"]],[\"cat nope.txt 2>/dev/null\",\"steps\",\"narrow\",[\"std::read\"]],[\"pnpm test 2>/dev/null\",\"steps\",\"narrow\",[\"std::exec\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "quietStderrMatchesRealTools",
+      "description": "Each row runs a line with `2>/dev/null` that safeBash runs itself and the same line under real bash, and compares the text and whether it succeeded. Each row first checks that its line really runs in process.",
+      "input": "",
+      "expectedOutput": "[true,true,true,true,true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "aSearchNoteFollowsTheLastStage",
       "description": "A folder search safeBash runs itself adds a note about the folders it skips. In a pipeline the note is printed after the last stage, so `grep -rn hello . | head -1` prints one match and then the note.",
       "input": "",

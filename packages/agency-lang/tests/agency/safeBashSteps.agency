@@ -267,6 +267,29 @@ node anInProcessReadRefusesASwappedPath() {
   ]
 }
 
+/* A line run in the fixture with `change` run while the first question is
+ answered: the line, whether it succeeded, and what `check` prints
+ afterwards. */
+def writeSwapRow(line: string, change: string, check: string): any {
+  makeFixture()
+  makeOutside()
+  const out = changedWhileAsking(line, change)
+  const after: any = bash(check, cwd: OUTSIDE) with approve
+  remove(FIXTURE) with approve
+  remove(OUTSIDE) with approve
+  return [line, isSuccess(out), after.stdout]
+}
+
+// A write safeBash runs itself is not planned again either. The write
+// tool refuses a link at the file and a link in the folder, so the file
+// outside keeps its text and no file appears in the folder outside.
+node anInProcessWriteRefusesASwappedPath() {
+  return [
+    writeSwapRow("pnpm --version; echo hi > out.txt", "ln -s ${OUTSIDE}/secret.txt out.txt", "cat secret.txt"),
+    writeSwapRow("pnpm --version; echo hi > sub/out.txt", "rm -r sub && ln -s ${OUTSIDE}/dir sub", "ls dir"),
+  ]
+}
+
 // A rejected question runs nothing, the bash step before it included.
 node aRejectedReadRunsNothingInAMixedLine() {
   return askedBy("pnpm --version > ran.txt && cat one.txt", "std::read")
@@ -434,6 +457,9 @@ def checkoutRow(line: string): any {
 node aCheckoutThatSwapsAPathStops() {
   return [
     checkoutRow("git checkout evil; wc -l one.txt"),
+    // safeBash runs this cat itself, so nothing stops the line: the read
+    // tool refuses the link the checkout put there.
+    checkoutRow("git checkout evil; cat one.txt"),
     checkoutRow("git checkout evil && ls sub"),
     checkoutRow("git checkout evil && cd sub && git status"),
     // A group in a pipeline runs as one step, so it asks std::bash.

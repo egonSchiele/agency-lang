@@ -4,7 +4,7 @@
 it sits in a line. A pipeline runs in process only when every stage
 can.
 
-**Spec:** `docs/superpowers/specs/2026-11-21-safebash-pipeline-in-process-design.md`.
+**Spec:** `docs/superpowers/specs/2026-11-21-safebash-in-process-everywhere-design.md`.
 The owner approved its rule on 2026-11-21. Read it first.
 
 **Tickets:** ADI-360 (pull request 1), ADI-261 (pull request 2).
@@ -184,10 +184,11 @@ it names a deleted kind.
   no effect and starts no shell, so it must not ask
   `std::bash::readonly`.
 - `startsShell` already answers false for a line whose steps are all in
-  process. A job of one in-process step in a longer line is the new
-  case: `jobShape` must not hand an in-process step to `jobLaunch`. Such
-  a line asks the broad question through `asJobPlan`, as other shapes it
-  does not take do.
+  process. A `cd` counts as in process (`allInProcess`), because `runCd`
+  starts no shell. So `cd sub && cat a.txt` starts none, and as a job it
+  runs in the foreground, as a lone `cat` does. (Changed in the owner's
+  review of pull request 1: the first version counted a `cd` as a shell
+  and sent that job to the broad question.)
 
 **Tests:**
 

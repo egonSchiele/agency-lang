@@ -4492,13 +4492,15 @@ def stepsPlan(command: string, steps: LineStep[], effects: Effect[], verbs: stri
   }
 }
 
-/* Whether every step runs in process, looking inside groups. */
+/* Whether every step runs in process, looking inside groups. A `cd`
+ does: the runner resolves the folder itself and starts no shell
+ (`runCd`). */
 def allInProcess(steps: LineStep[]): boolean {
   for (step in steps) {
     const inProcess = match(step) {
       { kind: "run" } => step.inProcess != null
       { kind: "group" } => allInProcess(step.steps)
-      { kind: "cd" } => false
+      { kind: "cd" } => true
     }
     if (!inProcess) {
       return false
@@ -6049,10 +6051,7 @@ def jobShape(steps: LineStep[]): JobShape | null {
   if (steps.length == 1 && steps[0] is { kind: "run" }) {
     return { cdStep: null, step: steps[0] }
   }
-  // A job launches a shell, so the step after a `cd` must be one bash
-  // runs. One safeBash runs itself has a payload that describes the
-  // stdlib tool, which a shell would not run.
-  if (steps.length == 2 && steps[0] is { kind: "cd" } && steps[1] is { kind: "run", inProcess: null }) {
+  if (steps.length == 2 && steps[0] is { kind: "cd" } && steps[1] is { kind: "run" }) {
     return { cdStep: steps[0], step: steps[1] }
   }
   return null

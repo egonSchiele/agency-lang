@@ -160,6 +160,12 @@ anything runs. The runner raises nothing. Three payloads change:
    bash. Under the rule no shell starts, so there is nothing to ask.
    (Found while building the first pull request.)
 
+5. **A line of a `cd` and commands safeBash runs itself asks only their
+   questions.** `cd lib` alone and `cd sub && echo hi` ask
+   `std::bash::readonly` today. The runner moves folder with no shell,
+   so they ask nothing, and `cd sub && cat a.txt` asks only `std::read`.
+   (From the owner's review of the first pull request.)
+
 No effect is added to or removed from any other line.
 
 ## Where the output can differ from bash

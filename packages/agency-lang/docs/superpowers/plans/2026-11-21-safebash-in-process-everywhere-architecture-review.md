@@ -47,8 +47,8 @@ the grep row.
 
 **What this says about the design.** The table and the bash rules can
 describe the same command with different payloads, and anything that
-plans a command twice has to say which one it wants. There are two such
-places today (`checkedStep` and `jobShape`), and both are now explicit.
+plans a command twice has to say which one it wants. `checkedStep` is
+the one such place today, and it is now explicit.
 A third caller of `classify` would need the same care. The comment on
 `LineState` says so.
 
@@ -170,8 +170,10 @@ prints, so it stays with bash.
   change only lone commands and chains. That is the point of the rule,
   and it means a table change needs the corpus test run, which already
   happens.
-- **Jobs are deliberately not tied in.** A job launches a shell, so a
-  job never takes a step safeBash runs itself. `jobShape` says so.
+- **Jobs follow from one question.** A job is a shell, so `startsShell`
+  decides: a line that starts none runs in the foreground. After the
+  owner's review a `cd` counts as starting none, so `cd sub && cat
+  a.txt` is such a line.
 
 ## Changes made to the plan and the branch
 

@@ -1317,8 +1317,9 @@ with a `%n` conversion, modifiers or not, has no rule. A variable argument to
 ## A line that asks nothing
 
 When every command in a line is recognized and none raises an effect,
-`planLine` asks one question for the line. `pwd`, `echo "---"`, `which
-node; date`, a lone `cd lib`, and `echo hi | grep h` all end here. When
+`planLine` asks one question for the line, unless the line starts no
+shell (see "Each step decides for itself"). `pwd`, `echo "---"`, `which
+node; date`, and `echo hi | grep h` all end here. When
 every word in the line is known now (`everyWordKnown`: `isLiteralWord`,
 or a word made only of such text and `$?`), it asks
 `std::bash::readonly { command, cwd, timeout }` and runs the rebuilt
@@ -2207,11 +2208,15 @@ the bytes, in any position.
 
 A line whose every step is in process starts no shell, and its outcome
 is `shellFree`. A plan of one such step is how a lone `cat a.txt` runs.
-The refuse wall runs on every command of every line first, so `cat a.txt
-&& shred a.txt` is still refused.
+A `cd` counts as in process (`allInProcess`): `runCd` resolves the
+folder and moves the runner there with no shell. So `cd sub && cat
+a.txt` starts no shell, and a lone `cd lib` asks nothing. The refuse
+wall runs on every command of every line first, so `cat a.txt && shred
+a.txt` is still refused.
 
-A job launches a shell, so `jobShape` takes a step after a `cd` only
-when bash runs it. `startJob("cd sub && cat a.txt")` asks `std::bash`.
+A job is a shell, so a line that starts none is not one: `startJob("cd
+sub && cat a.txt")` runs in the foreground with the read's own question,
+as `startJob("cat a.txt")` does (`startsShell`).
 
 A line fails when the last step that ran failed, with the joined text as
 stdout. A failed in-process step adds its message to stderr and no text

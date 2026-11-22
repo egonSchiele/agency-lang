@@ -90,9 +90,9 @@
     },
     {
       "nodeName": "aCheckoutThatSwapsAPathStops",
-      "description": "Each row: the line, whether it succeeded, the step it stopped before, and whether anything from outside was printed. A git checkout that puts a link where a file or folder was is narrow, and the step that names the swapped path stops the line before it runs. Narrow questions are approved and the broad one rejected, so a checkout and a read in one group of a pipeline, which run as one step, ask std::bash and run nothing.",
+      "description": "Each row: the line, whether it succeeded, the step it stopped before, and whether anything from outside was printed. A git checkout that puts a link where a file or folder was is narrow, and a step bash runs that names the swapped path stops the line before it runs. A cat is run by safeBash itself, so nothing stops: the read tool refuses the link, and the line fails with nothing printed from outside. Narrow questions are approved and the broad one rejected, so a checkout and a read in one group of a pipeline, which run as one step, ask std::bash and run nothing.",
       "input": "",
-      "expectedOutput": "[[\"git checkout evil; wc -l one.txt\",false,\"wc -l one.txt\",false],[\"git checkout evil && ls sub\",false,\"ls sub\",false],[\"git checkout evil && cd sub && git status\",false,\"cd sub\",false],[\"(git checkout evil && cat one.txt) | cat\",false,\"\",false]]",
+      "expectedOutput": "[[\"git checkout evil; wc -l one.txt\",false,\"wc -l one.txt\",false],[\"git checkout evil; cat one.txt\",false,\"\",false],[\"git checkout evil && ls sub\",false,\"ls sub\",false],[\"git checkout evil && cd sub && git status\",false,\"cd sub\",false],[\"(git checkout evil && cat one.txt) | cat\",false,\"\",false]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -192,6 +192,17 @@
       "description": "Each row: the line, whether it succeeded, and its text. A line that mixes steps bash runs with steps safeBash runs itself prints each step's output in order, and a later step sees the status the step before it left: `echo $?` after a cat prints 0, after a grep that matched nothing prints 1, and `||` after that grep runs its right side.",
       "input": "",
       "expectedOutput": "[[\"pnpm --version > /dev/null; cat one.txt\",true,\"one\\ntwo\\n\"],[\"cat one.txt; echo $?\",true,\"one\\ntwo\\n0\\n\"],[\"grep nomatch one.txt || echo none\",true,\"none\\n\"],[\"grep nomatch one.txt; echo $?\",true,\"1\\n\"],[\"cd sub && cat a.txt && pwd > /dev/null\",true,\"a\\n\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "anInProcessWriteRefusesASwappedPath",
+      "description": "Each row: the line, whether it succeeded, and what is outside afterwards. An echo into a file is a write safeBash runs itself. With out.txt swapped for a link to a file outside after approval, the write fails and the file outside keeps its text. With the folder swapped for a link to a folder outside, the write fails and that folder holds only the file it had.",
+      "input": "",
+      "expectedOutput": "[[\"pnpm --version; echo hi > out.txt\",false,\"SECRET\\n\"],[\"pnpm --version; echo hi > sub/out.txt\",false,\"b.txt\\n\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"

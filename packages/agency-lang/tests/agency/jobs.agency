@@ -287,10 +287,11 @@ node aJobWhoseCdChangedDoesNotStart() {
   return [isFailure(result), isFailure(result) && result.error.includes("now leads to"), jobs]
 }
 
-// A job launches a shell. In the foreground, the `cat` after this `cd` is
-// run by safeBash itself, and its question describes the stdlib read, not
-// a program a shell runs. So as a job the line asks the broad question.
-node aJobOfAStepSafeBashRunsItselfAsksBroad() {
+// A `cd` and a `cat` start no shell: the runner moves folder itself and
+// the read tool reads the file. So there is nothing to run as a job, and
+// the line runs in the foreground with the read's own question, as a lone
+// `cat` does.
+node aLineThatStartsNoShellIsNotAJob() {
   remove(JOBS_FIXTURE) with approve
   mkdir(JOBS_FIXTURE) with approve
   bash("mkdir sub && printf 'a\\n' > sub/a.txt", cwd: JOBS_FIXTURE) with approve
@@ -300,11 +301,11 @@ node aJobOfAStepSafeBashRunsItselfAsksBroad() {
     result = startJob("cd sub && cat a.txt", cwd: JOBS_FIXTURE, maxMinutes: 1)
   } with (intr) {
     asked.push(intr.effect)
-    return reject("no")
+    return approve()
   }
   const jobs = listJobs().length
   remove(JOBS_FIXTURE) with approve
-  return [asked, isFailure(result), jobs]
+  return [asked, JSON.stringify(result), jobs]
 }
 
 // The handler swaps `one.txt` for a link to another file while it answers.

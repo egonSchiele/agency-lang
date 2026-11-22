@@ -99,10 +99,10 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
-      "nodeName": "aJobOfAStepSafeBashRunsItselfAsksBroad",
-      "description": "A job of a `cd` and a `cat` asks std::bash and nothing else. In the foreground safeBash runs that cat itself, and a job launches a shell, so the narrow question would not describe what runs. With the question rejected the job fails and nothing starts.",
+      "nodeName": "aLineThatStartsNoShellIsNotAJob",
+      "description": "A `cd` and a `cat` start no shell, so startJob runs the line in the foreground, as it does a lone `cat`: it asks std::read and nothing else, returns the file's text, and holds no job.",
       "input": "",
-      "expectedOutput": "[[\"std::bash\"],true,0]",
+      "expectedOutput": "[[\"std::read\"],\"{\\\"__type\\\":\\\"resultType\\\",\\\"success\\\":true,\\\"value\\\":\\\"This command ran in the foreground: only a plain shell command can run as a background job.\\\\na\\\\n\\\"}\",0]",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {

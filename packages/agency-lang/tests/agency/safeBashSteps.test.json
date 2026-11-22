@@ -15,7 +15,7 @@
       "nodeName": "steppedLinesPrintWhatOneBashPrinted",
       "description": "A narrow line runs a step at a time and prints what one bash -c of the whole line printed: `;` runs the next step whatever the last one did, `&&` and `||` skip by the last status, `$?` reads the status of the step before, a cd moves the steps after it, a group's cd ends at its parenthesis, and the line fails with the last step's status. These values were recorded while the whole line still ran under one shell.",
       "input": "",
-      "expectedOutput": "[[\"ls sub && printf 'a\\\\n' && printf 'b\\\\n'\",\"steps\",true,\"a.txt\\na\\nb\\n\"],[\"ls sub; false; printf 'after\\\\n'\",\"steps\",true,\"a.txt\\nafter\\n\"],[\"ls sub; false && printf 'skipped\\\\n'; printf 'ran\\\\n'\",\"steps\",true,\"a.txt\\nran\\n\"],[\"ls sub; false || printf 'rescued\\\\n'\",\"steps\",true,\"a.txt\\nrescued\\n\"],[\"ls sub; true || printf 'skipped\\\\n'\",\"steps\",true,\"a.txt\\n\"],[\"ls sub; false; printf 'exit=%s\\\\n' \\\"$?\\\"\",\"steps\",true,\"a.txt\\nexit=1\\n\"],[\"cd sub && ls\",\"steps\",true,\"a.txt\\n\"],[\"(cd sub && ls); ls\",\"steps\",true,\"a.txt\\none.txt\\nsub\\n\"],[\"ls | head -1 && printf 'done\\\\n'\",\"steps\",true,\"one.txt\\ndone\\n\"],[\"ls sub; printf 'x\\\\n' >&2; false\",\"steps\",false,\"a.txt\\nx\\nCommand exited with code 1\"]]",
+      "expectedOutput": "[[\"ls sub && printf 'a\\\\n' && printf 'b\\\\n'\",\"steps\",true,\"a.txt\\na\\nb\\n\"],[\"ls sub; false; printf 'after\\\\n'\",\"steps\",true,\"a.txt\\nafter\\n\"],[\"ls sub; false && printf 'skipped\\\\n'; printf 'ran\\\\n'\",\"steps\",true,\"a.txt\\nran\\n\"],[\"ls sub; false || printf 'rescued\\\\n'\",\"steps\",true,\"a.txt\\nrescued\\n\"],[\"ls sub; true || printf 'skipped\\\\n'\",\"steps\",true,\"a.txt\\n\"],[\"ls sub; false; printf 'exit=%s\\\\n' \\\"$?\\\"\",\"steps\",true,\"a.txt\\nexit=1\\n\"],[\"cd sub && ls\",\"steps\",true,\"a.txt\\n\"],[\"(cd sub && ls); ls\",\"steps\",true,\"a.txt\\none.txt\\nsub\\n\"],[\"cd sub && ls; ls\",\"steps\",true,\"a.txt\\na.txt\\n\"],[\"(false && cd sub && ls); ls\",\"steps\",true,\"one.txt\\nsub\\n\"],[\"ls | head -1 && printf 'done\\\\n'\",\"steps\",true,\"one.txt\\ndone\\n\"],[\"ls sub; printf 'x\\\\n' >&2; false\",\"steps\",false,\"a.txt\\nx\\nCommand exited with code 1\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -27,6 +27,28 @@
       "description": "A cd inside a group whose folder is gone when it runs is not the folder that was approved, so the line stops there, and neither the group's ls nor the ls sub after the group runs.",
       "input": "",
       "expectedOutput": "[\"steps\",false,true,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aSkippedCdStopsTheLine",
+      "description": "After `false && cd sub;`, the `cd` is skipped and the line is still in the fixture. The next command was planned in `sub`, so the line stops before it, and the stop says the `cd` did not run. This holds for a read safeBash runs itself, a pipeline bash runs, a relative cd, and an echo that ignores its folder.",
+      "input": "",
+      "expectedOutput": "[[\"false && cd sub; cat a.txt\",false,\"planChanged\",\"Stopped before `cat a.txt`: it was planned to run in <fixture>/sub, and the line is still in <fixture>, because the `cd` before it did not run. `false` already ran. Run the rest as a new command if you still want it.\\n[stopped: the plan changed]\"],[\"false && cd sub; ls | wc -l\",false,\"planChanged\",\"Stopped before `ls | wc -l`: it was planned to run in <fixture>/sub, and the line is still in <fixture>, because the `cd` before it did not run. `false` already ran. Run the rest as a new command if you still want it.\\n[stopped: the plan changed]\"],[\"false && cd sub; cd other && ls\",false,\"planChanged\",\"Stopped before `cd other`: it was planned to run in <fixture>/sub, and the line is still in <fixture>, because the `cd` before it did not run. `false` already ran. Run the rest as a new command if you still want it.\\n[stopped: the plan changed]\"],[\"false && cd sub && ls; echo finished\",false,\"planChanged\",\"Stopped before `echo finished`: it was planned to run in <fixture>/sub, and the line is still in <fixture>, because the `cd` before it did not run. `false` already ran. Run the rest as a new command if you still want it.\\n[stopped: the plan changed]\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "theSkippedCdPipelineRunsInBash",
+      "description": "The `ls | wc -l` step of the skipped-cd test runs in bash, so that row covers a step bash runs.",
+      "input": "",
+      "expectedOutput": "[\"false && cd sub; ls | wc -l\",[false,\"cd\",false],[\"std::ls\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -101,9 +123,9 @@
     },
     {
       "nodeName": "anUnchangedFolderSpelledAnotherWayRuns",
-      "description": "The folder check compares real folders, so a line planned in \".\", in a folder spelled through a link, or in a relative folder does not stop when nothing changed.",
+      "description": "The folder check compares real folders, and the skipped-cd check compares the folder strings the planner wrote, so a line planned in \".\", in a folder spelled through a link, or in a relative folder does not stop when nothing changed. A line with `cd sub && ls; cat a.txt` runs to the end from each of them.",
       "input": "",
-      "expectedOutput": "[[\".\",false],[\"link\",false],[\"relative\",false]]",
+      "expectedOutput": "[[\".\",false],[\"link\",false],[\"relative\",false],[\"cd from .\",\"a.txt\\na\\n\"],[\"cd from link\",\"a.txt\\na\\n\"],[\"cd from relative\",\"a.txt\\na\\n\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"

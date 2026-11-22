@@ -850,9 +850,10 @@ export type RunStep = {
   inProcess: StepExec | null
 }
 
-/** A `cd`. `dir` is the real folder the plan resolved. `guarded` is true
-  for a `cd` that is a whole command of the top-level list, which runs
-  as `cd '/abs' || exit 1` in one shell: when it fails, the line ends. */
+/** A `cd`. `cwd` is the folder it was planned in, and `dir` is the real
+  folder the plan resolved. `guarded` is true for a `cd` that is a whole
+  command of the top-level list: after it, a step whose shell cannot
+  start in `dir` ends the line (`StepsState.missingFolderStops`). */
 export type CdStep = {
   kind: "cd";
   join: Join;

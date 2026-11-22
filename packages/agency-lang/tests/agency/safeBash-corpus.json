@@ -126,5 +126,7 @@
   { "command": "rg planFor lib", "outcome": "narrow", "effects": ["std::exec"] },
   { "command": "git status && echo $GITHUB_TOKEN", "outcome": "narrow", "effects": ["std::git::status", "std::env"] },
   { "command": "cd lib && ls", "outcome": "narrow", "effects": ["std::ls"] },
-  { "command": "cd lib; grep -rn planFor . | head", "outcome": "shellFree", "effects": ["std::grep"] }
+  { "command": "cd lib; grep -rn planFor . | head", "outcome": "shellFree", "effects": ["std::grep"] },
+  { "command": "cd lib && pnpm test > /tmp/out.txt 2>&1; tail -5 /tmp/out.txt", "outcome": "narrow", "effects": ["std::exec", "std::write", "std::read"] },
+  { "command": "cd lib && pnpm test 2>&1 | tail -20; echo ---", "outcome": "narrow", "effects": ["std::exec"] }
 ]

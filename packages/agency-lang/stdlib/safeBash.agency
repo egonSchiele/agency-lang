@@ -5111,7 +5111,7 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
   let steps: LineStep[] = []
   // The line the next command is classified in.
   let line = freshLine(cwd)
-  for (command, index in commands) {
+  for (command in commands) {
     const cd = asCd(command)
     if (cd != null) {
       const moved = cdTarget(cd, line)?
@@ -5120,12 +5120,10 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
       line = { ...line, cwd: moved }
       continue
     }
+    // In `a && cd x; b`, `b` is classified in `x`. When `a` fails, the
+    // `cd` is skipped, and the runner stops the line before `b`
+    // (`skippedCd`).
     const classified = classify(command, line, origin, false)?
-    // `cd x && a; b`: `b` runs in `x` only when the `cd` worked, so no
-    // payload for `b` would be true in both cases.
-    if (classified.line.cwd != line.cwd && index < commands.length - 1) {
-      return failure("a command after `;` follows a `cd`, and its directory depends on whether the `cd` worked")
-    }
     effects = [...effects, ...classified.effects]
     rewritten.push(classified.command)
     steps = [...steps, ...classified.steps]
@@ -5581,9 +5579,8 @@ def classifyGroup(inner: Command, line: LineState, origin: GhRepo | null, readsS
 def classifyAnd(left: Command, right: Command, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   // Either side may be a `cd`. On the right, as in `mkdir -p build && cd
   // build && cmake ..`, which is `(mkdir -p build && cd build) && cmake
-  // ..`, whatever follows with `&&` runs only when the `cd` worked. `;`
-  // and `||` after it are refused by `classifyAll` and `classifyOr`, which
-  // see the directory changed.
+  // ..`, whatever follows with `&&` runs only when the `cd` worked. `||`
+  // after it is refused by `classifyOr`, which sees the directory changed.
   const first = andSide(left, line, origin, readsStdin)?
   const second = andSide(right, first.line, origin, readsStdin)?
   return success({
@@ -7073,9 +7070,9 @@ type StepsState = {
   /** The line as the model wrote it, which every failure names. */
   label: string;
   cwd: string;
-  /** Whether a step that cannot start in `cwd` ends the line. It is false
-    after a `cd` joined by `&&` or inside a group, where bash carries on
-    with status 1 when the `cd` fails. */
+  /** Whether a step that cannot start in `cwd` ends the line. It is true
+    after a `cd` that is a whole command of the top-level list. After any
+    other `cd`, the step fails with status 1 and the line carries on. */
   missingFolderStops: boolean;
   status: number;
   stdout: string;
@@ -7196,6 +7193,10 @@ def runGroup(step: GroupStep, state: StepsState, origin: GhRepo | null): StepsSt
 
 @capabilities(fileRead, fileWrite, subprocess)
 def runOneStep(step: RunStep, state: StepsState, origin: GhRepo | null): StepsState {
+  const elsewhere = skippedCd(step.cwd, state.cwd)
+  if (elsewhere != "") {
+    return stopBefore(stepText(step.source), state, elsewhere)
+  }
   // An in-process step is not planned again: the stdlib tool checks its
   // path when it opens it, which is the check bash has no way to make.
   const exec = step.inProcess
@@ -7324,6 +7325,10 @@ def stopMessage(step: string, found: string, ran: string[]): string {
 @capabilities(fileRead)
 def runCd(step: CdStep, state: StepsState): StepsState {
   const name = stepText(step.source)
+  const elsewhere = skippedCd(step.cwd, state.cwd)
+  if (elsewhere != "") {
+    return stopBefore(name, state, elsewhere)
+  }
   const target = cdTarget(step.source, freshLine(state.cwd))
   if (target is failure(why)) {
     return stopBefore(name, state, "it was approved to enter ${step.dir}, and it no longer has a rule: ${why}")
@@ -7332,6 +7337,22 @@ def runCd(step: CdStep, state: StepsState): StepsState {
     return stopBefore(name, state, "it was approved to enter ${step.dir}, and that folder now leads to ${target.value}")
   }
   return { ...state, cwd: step.dir, status: 0, missingFolderStops: step.guarded }
+}
+
+// A step runs only in the folder it was planned in. The line is anywhere
+// else only after a `cd` that was skipped:
+//
+//   pnpm build && cd dist && ls; cat out.txt
+//
+// When the build fails, bash skips the `cd` and `ls` and runs the `cat` in
+// the starting folder. Its question named `dist/out.txt`, so the line stops
+// before it. Both folders are the strings the planner wrote, so they are
+// compared as text.
+def skippedCd(planned: string, cwd: string): string {
+  if (planned == cwd) {
+    return ""
+  }
+  return "it was planned to run in ${planned}, and the line is still in ${cwd}, because the `cd` before it did not run"
 }
 
 // The folder a step runs in, with every link followed, against the one the

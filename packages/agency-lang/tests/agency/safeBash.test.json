@@ -206,9 +206,9 @@
     },
     {
       "nodeName": "removeAfterCd",
-      "description": "An rm is checked from the folder a cd earlier in the line moved to, whether the cd is on the left of && or on a line of its own. `cd .. && rm -rf <launch folder>` gets no std::remove and asks std::bash, and the reason says the target is refused. A folder inside the launch folder, reached through a cd, still asks std::remove. Every row only plans.",
+      "description": "An rm is checked from the folder a cd earlier in the line moved to, whether the cd is on the left of && or on a line of its own. `cd .. && rm -rf <launch folder>` gets no std::remove and asks std::bash, and the reason says the target is refused. A folder inside the launch folder, reached through a cd, still asks std::remove. An rm after `;` that follows `cd .. && ls` is checked from the parent folder too, and asks std::bash. Every row only plans.",
       "input": "",
-      "expectedOutput": "[\"broad\",[\"std::bash\"],true,\"narrow\",[\"std::remove\"],\"broad\",[\"std::bash\"],true,\"narrow\",[\"std::remove\"]]",
+      "expectedOutput": "[\"broad\",[\"std::bash\"],true,\"narrow\",[\"std::remove\"],\"broad\",[\"std::bash\"],true,\"narrow\",[\"std::remove\"],\"broad\",[\"std::bash\"],true]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -735,9 +735,9 @@
     },
     {
       "nodeName": "cdOnTheRightOfAnd",
-      "description": "In `a && cd dir && b`, `b` runs only when the cd worked, so its payload names `dir`, and the cd that runs names the resolved folder. Inside parentheses the cd ends with them. A command after `;` or `||`, a cd in a pipe, a cd to a missing folder or a variable, and a cd with an assignment have no rule. The refuse wall still refuses `git checkout .` after the cd.",
+      "description": "In `a && cd dir && b`, `b` runs only when the cd worked, so its payload names `dir`, and the cd that runs names the resolved folder. Inside parentheses the cd ends with them. A command after `;` is classified in `dir` too, because the runner stops the line before it when the cd was skipped. A command after `||`, a cd in a pipe, a cd to a missing folder or a variable, and a cd with an assignment have no rule. The refuse wall still refuses `git checkout .` after the cd.",
       "input": "",
-      "expectedOutput": "[[\"pnpm build && cd sub && ls\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>/sub\"]]],\"pnpm build && cd '<fix>/sub' && ls\",[\"pnpm build && cd sub && cd .. && ls\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>\"]]],[\"(pnpm build && cd sub) && ls\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>\"]]],[\"pnpm build && cd sub; ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd sub && ls; ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd sub || ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd sub | ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd nope && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd $HOME && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && X=1 cd sub && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd sub && git checkout .\",\"refuse\",[]]]",
+      "expectedOutput": "[[\"pnpm build && cd sub && ls\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>/sub\"]]],\"pnpm build && cd '<fix>/sub' && ls\",[\"pnpm build && cd sub && cd .. && ls\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>\"]]],[\"(pnpm build && cd sub) && ls\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>\"]]],[\"pnpm build && cd sub; ls\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>/sub\"]]],[\"pnpm build && cd sub && ls; ls\",\"narrow\",[[\"std::exec\",\"<fix>\"],[\"std::ls\",\"<fix>/sub\"],[\"std::ls\",\"<fix>/sub\"]]],[\"pnpm build && cd sub || ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd sub | ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd nope && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd $HOME && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && X=1 cd sub && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm build && cd sub && git checkout .\",\"refuse\",[]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1468,9 +1468,20 @@
     },
     {
       "nodeName": "cdOnItsOwnLineStaysStrict",
-      "description": "These lines still ask std::bash: a cd on its own line to a missing folder, with -, or with a variable, a later command that moves again and is not last, cd x && a; b, and an ls followed by a trailing cd to a missing folder. A cd followed only by an echo starts no shell, so it asks nothing.",
+      "description": "These lines still ask std::bash: a cd on its own line to a missing folder, with -, or with a variable, and an ls followed by a trailing cd to a missing folder. A cd followed only by an echo starts no shell, so it asks nothing.",
       "input": "",
-      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"shellFree\",[]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
+      "expectedOutput": "[[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"shellFree\",[]],[\"broad\",[[\"std::bash\",\"\"]]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cdThenMoreCommandsIsNarrow",
+      "description": "A command after `;` that follows a `cd x &&` chain is classified in `x` and asks the question it asks anywhere else: a listing, a program with a redirect and a read of the file it wrote, a program piped to tail, a cd that comes after a program, a second cd chain, a read, and a later command after a cd on its own line that moves again.",
+      "input": "",
+      "expectedOutput": "[[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::exec\",\"grep-fixtures\"],[\"std::write\",\"tmp\"],[\"std::read\",\"tmp\"]]],[\"narrow\",[[\"std::exec\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::exec\",\"stdlib\"],[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::ls\",\"stdlib\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::read\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"read-fixtures\"],[\"std::ls\",\"read-fixtures\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1501,9 +1512,9 @@
     },
     {
       "nodeName": "cdDoesNotLeakOutOfItsChain",
-      "description": "A cd inside parentheses ends with them, so the next command is classified in the original folder, and a group of a cd and one command in a pipeline is narrow. A command after ; or || that follows a chain with a cd is broad, because its folder depends on whether the cd worked. A cd chain that comes last after ; is narrow.",
+      "description": "A cd inside parentheses ends with them, so the next command is classified in the original folder, and a group of a cd and one command in a pipeline is narrow. A command after ; that follows a chain with a cd is classified in the cd's folder. A command after || that follows one is broad, because its folder depends on whether the cd worked. A cd chain that comes last after ; is narrow. A group with a ; in a pipeline is broad, today because the bash parser rejects it.",
       "input": "",
-      "expectedOutput": "[[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::ls\",\"stdlib\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"narrow\",[[\"std::ls\",\"stdlib\"],[\"std::ls\",\"grep-fixtures\"]]]]",
+      "expectedOutput": "[[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::ls\",\"stdlib\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"]]],[\"narrow\",[[\"std::ls\",\"grep-fixtures\"],[\"std::ls\",\"grep-fixtures\"]]],[\"broad\",[[\"std::bash\",\"\"]]],[\"narrow\",[[\"std::ls\",\"stdlib\"],[\"std::ls\",\"grep-fixtures\"]]],[\"broad\",[[\"std::bash\",\"\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"

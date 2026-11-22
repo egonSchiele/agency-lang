@@ -1,4 +1,4 @@
-import type { Policy, PolicyRule } from "./policy.js";
+import type { MatchPattern, Policy, PolicyRule } from "./policy.js";
 
 // A saved policy file is a copy of a built-in policy from the day it was
 // created, plus the user's own "always" answers. Rules added to the
@@ -9,7 +9,17 @@ function sameMatch(a: PolicyRule["match"], b: PolicyRule["match"]): boolean {
   const left = a ?? {};
   const right = b ?? {};
   const keys = Object.keys(left);
-  return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every((key) => samePattern(left[key], right[key]))
+  );
+}
+
+function samePattern(a: MatchPattern, b: MatchPattern | undefined): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((item, index) => item === b[index]);
+  }
+  return a === b;
 }
 
 function sameRule(a: PolicyRule, b: PolicyRule): boolean {

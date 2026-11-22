@@ -141,6 +141,21 @@ describe("insertApproveRule", () => {
     expect(insertApproveRule(once, ["e"], { ...rule })).toEqual({ e: [reject, rule] });
   });
 
+  it("saves one copy when the same list-pattern rule is added twice", () => {
+    const list = { match: { args: ["run", "**"] }, action: "approve" as const };
+    const once = insertApproveRule({}, ["e"], list);
+    expect(
+      insertApproveRule(once, ["e"], { match: { args: ["run", "**"] }, action: "approve" }),
+    ).toEqual({ e: [list] });
+  });
+
+  it("keeps two rules that differ only in one list item", () => {
+    const build = { match: { args: ["run", "build"] }, action: "approve" as const };
+    const test = { match: { args: ["run", "test"] }, action: "approve" as const };
+    const next = insertApproveRule(insertApproveRule({}, ["e"], build), ["e"], test);
+    expect(next.e).toHaveLength(2);
+  });
+
   it("returns an equal policy for an empty effect list", () => {
     const saved: Policy = { e: [reject] };
     expect(insertApproveRule(saved, [], rule)).toEqual(saved);

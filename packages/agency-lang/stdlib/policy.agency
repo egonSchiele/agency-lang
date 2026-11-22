@@ -91,8 +91,11 @@ export type InterruptDataKey = string
  picomatch globs. They support `*`, `**`, and brace-expansion like
  `{a,b}` for unions. A literal string with no glob metacharacters
  matches only that exact value.
+
+ A list of globs matches a list value item by item. A last item of `**`
+ stands for any items after it, or none.
  */
-export type InterruptDataVal = string
+export type InterruptDataVal = string | string[]
 
 /**
  Identifier for an interrupt's effect (e.g. `"std::read"`,
@@ -105,6 +108,12 @@ export type InterruptEffect = string
  present in the interrupt's `data` and its value matches the glob
  pattern. Omit `match` (or set it to `{}`) for a catch-all that
  applies to every interrupt of the parent effect.
+
+ When the value is a list, a string pattern matches when the list is not
+ empty and every item matches, and a list pattern matches item by item.
+ For example, `{ "cwd": "/me/proj", "paths": "src/**", "all": "false" }`
+ under `std::git::add` approves a `git add` whose paths are all under
+ `src`, and asks about one that stages everything.
 
  A reject rule may carry a `rejectMessage`: the message the rejection
  hands back to whoever raised the interrupt. For a rejected tool call

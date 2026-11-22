@@ -1,6 +1,11 @@
 import { escapeGlob } from "./index.js";
 import { describe, it, expect, vi } from "vitest";
-import { checkPolicy as checkPolicyWith, validatePolicy, type Policy } from "./policy.js";
+import {
+  checkPolicy as checkPolicyWith,
+  MAX_PATTERN_LENGTH,
+  validatePolicy,
+  type Policy,
+} from "./policy.js";
 import {
   resolveDotDirPattern,
   expandAgencyInstallDir,
@@ -1005,5 +1010,87 @@ describe("matchDotFolders", () => {
   it("is accepted by validatePolicy as a boolean and refused as a string", () => {
     expect(validatePolicy(rule({ matchDotFolders: true })).success).toBe(true);
     expect(validatePolicy(rule({ matchDotFolders: "yes" })).success).toBe(false);
+  });
+});
+
+describe("list fields", () => {
+  const exec = (args: unknown) => ({
+    effect: "std::exec",
+    message: "",
+    origin: "",
+    data: { command: "pnpm", args },
+  });
+  const rule = (args: string | string[]): Policy => ({
+    "std::exec": [{ match: { command: "pnpm", args }, action: "approve" }],
+  });
+  const decide = (args: string | string[], value: unknown) =>
+    checkPolicy(rule(args), exec(value)).type;
+
+  it("matches a list pattern by position", () => {
+    expect(decide(["run", "build"], ["run", "build"])).toBe("approve");
+    expect(decide(["run", "build"], ["run", "build", "-w"])).toBe("propagate");
+    expect(decide(["run", "build"], ["run"])).toBe("propagate");
+  });
+
+  it("reads a last `**` as any items after it, or none", () => {
+    expect(decide(["run", "**"], ["run"])).toBe("approve");
+    expect(decide(["run", "**"], ["run", "a", "b/c"])).toBe("approve");
+    expect(decide(["run", "**"], ["test"])).toBe("propagate");
+  });
+
+  it("reads `**` away from the last place as an ordinary glob for one item", () => {
+    expect(decide(["**", "build"], ["run", "build"])).toBe("approve");
+    expect(decide(["**", "build"], ["a", "b", "build"])).toBe("propagate");
+  });
+
+  it("matches an escaped star, and an escaped `**`, only as themselves", () => {
+    expect(decide([escapeGlob("*")], ["anything"])).toBe("propagate");
+    expect(decide([escapeGlob("*")], ["*"])).toBe("approve");
+    expect(decide([escapeGlob("**")], ["a", "b"])).toBe("propagate");
+  });
+
+  it("reads a string pattern against a list as every item matching", () => {
+    expect(decide("src/**", ["src/a.ts", "src/b/c.ts"])).toBe("approve");
+    expect(decide("src/**", ["src/a.ts", "lib/b.ts"])).toBe("propagate");
+  });
+
+  it("does not match an empty list with a string pattern", () => {
+    // `git add --all` raises with an empty `paths`; a rule for `src/**`
+    // must not approve it.
+    expect(decide("src/**", [])).toBe("propagate");
+  });
+
+  it("never matches the shapes that do not fit", () => {
+    expect(decide(["run"], "run")).toBe("propagate");
+    expect(decide(["run"], undefined)).toBe("propagate");
+    expect(decide("*", [{ a: 1 }])).toBe("propagate");
+    expect(decide("*", { a: 1 })).toBe("propagate");
+  });
+
+  it("compares items as written, a leading ./ included, in both directions", () => {
+    expect(decide(["x"], ["./x"])).toBe("propagate");
+    expect(decide([escapeGlob("./x")], ["x"])).toBe("propagate");
+    expect(decide([escapeGlob("./x")], ["./x"])).toBe("approve");
+  });
+
+  it("no longer compares a list as its comma-joined text", () => {
+    expect(decide("a,b", ["a", "b"])).toBe("propagate");
+  });
+
+  it("is accepted by validatePolicy as a list of strings, and refused with a number", () => {
+    expect(validatePolicy(rule(["run", "**"])).success).toBe(true);
+    expect(
+      validatePolicy({ e: [{ match: { args: ["run", 1] }, action: "approve" }] }).success,
+    ).toBe(false);
+  });
+
+  it("refuses a pattern longer than the limit picomatch accepts", () => {
+    const long = "a".repeat(MAX_PATTERN_LENGTH + 1);
+    const asString = validatePolicy(rule(long));
+    const asItem = validatePolicy(rule(["run", long]));
+    expect(asString.success).toBe(false);
+    expect(asItem.success).toBe(false);
+    expect(asString.error).toContain(String(MAX_PATTERN_LENGTH));
+    expect(validatePolicy(rule("a".repeat(MAX_PATTERN_LENGTH))).success).toBe(true);
   });
 });

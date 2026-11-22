@@ -1,11 +1,10 @@
 import { currentRunOrNone } from "../runtime/asyncContext.js";
-import type { MessageJSON } from "smoltalk";
 import type { Host, Root } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { processSlot } from "../runtime/processSlot.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { stripSlug } from "../runtime/runner.js";
-import { _contentToString } from "./threads.js";
+import { transcriptIn, transcriptOfMessages, type TranscriptMessage } from "./agentTranscript.js";
 import type { Interrupt } from "../runtime/interrupts.js";
 import { getModuleFingerprint } from "../runtime/moduleFingerprintRegistry.js";
 import { isPlainObject } from "../utils/isPlainObject.js";
@@ -244,36 +243,29 @@ export function _isCheckpoint(runFile: unknown): boolean {
   return Checkpoint.fromJSON(runFile) !== null;
 }
 
-export type TranscriptMessage = { role: "user" | "assistant"; content: string };
+export type { TranscriptMessage };
 
 type ThreadJSON = {
   messages: { role?: string; content?: unknown }[];
 };
 
 /**
- * The user and assistant messages of a saved session's conversation
- * thread, named by its slug id. Tool calls and results are left out.
+ * What a saved session shows a person: its transcript list when the
+ * checkpoint has one, and otherwise the user and assistant messages of
+ * its conversation thread, named by its slug id. A session saved before
+ * the list existed has none.
  */
 export function _readTranscript(checkpointJson: unknown, threadId: string): TranscriptMessage[] {
   const cp = Checkpoint.fromJSON(checkpointJson);
-  if (!cp || threadId === "") {
+  if (!cp) {
     return [];
   }
-  const thread = savedThread(cp, threadId);
-  if (!thread) {
-    return [];
+  const list = transcriptIn(cp);
+  if (list !== null) {
+    return list;
   }
-  const out: TranscriptMessage[] = [];
-  for (const m of thread.messages) {
-    if (m.role !== "user" && m.role !== "assistant") {
-      continue;
-    }
-    const text = _contentToString(m.content as MessageJSON["content"]);
-    if (text !== "") {
-      out.push({ role: m.role, content: text });
-    }
-  }
-  return out;
+  const thread = threadId === "" ? null : savedThread(cp, threadId);
+  return thread === null ? [] : transcriptOfMessages(thread.messages);
 }
 
 // Every frame on the saved stack carries the thread store; the outermost

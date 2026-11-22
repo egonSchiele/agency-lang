@@ -118,7 +118,12 @@ export type MessageAnswer = { kind: "message"; text: string; notes: string[]; ta
  *  - `local`: run on a local model, as `/local`. Refused where the process
  *    cannot host one.
  *  - `capabilities`: save one capability override and apply it, as
- *    `/settings`. */
+ *    `/settings`.
+ *  - `folder`: move the session to another folder between turns. `cwd`
+ *    must be an absolute path to a folder. The driver reports `moved`.
+ *    The core does not move the run's host folder: resume the run on a
+ *    host for the new folder, or policy rules that use `.` still mean the
+ *    old one. */
 export type SettingsAnswer =
   | { kind: "model"; spec: string }
   | { kind: "options"; options: unknown }
@@ -131,7 +136,8 @@ export type SettingsAnswer =
   | { kind: "search"; backend: string }
   | { kind: "savePreset"; name: string }
   | { kind: "local"; model: string }
-  | { kind: "capabilities"; settings: CapabilityChange };
+  | { kind: "capabilities"; settings: CapabilityChange }
+  | { kind: "folder"; cwd: string };
 
 export type Answer = MessageAnswer | SettingsAnswer;
 

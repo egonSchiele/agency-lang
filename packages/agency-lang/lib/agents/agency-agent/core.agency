@@ -14,6 +14,8 @@
   `session.budgetStop`, `session.editDiff`.
 */
 import { editDiff } from "agency-lang/stdlib-lib/editDiff.js"
+import { isAbsolute, resolve } from "std::path"
+import { stat } from "std::shell"
 import { emit } from "std::statelog"
 
 import { setReplyStyle, setTurnBudget } from "./lib/answer.agency"
@@ -36,6 +38,7 @@ import {
   currentRecord,
   forkSession,
   markTurnDone,
+  moveRecord,
   recordTurn,
   renameSession,
   setCurrentRecord,
@@ -71,7 +74,8 @@ export type TurnBudget = {
 export type PauseData = {
   // The id of the thread the conversation runs on, "" before the first turn.
   thread: string;
-  // The agent's working folder now. A coder can move it.
+  // The agent's working folder now. A coder or a `folder` answer can move
+  // it. A front-end follows `record.cwd`, which only a `folder` answer moves.
   cwd: string;
   // Null for a session that is not saved.
   record: SessionRecord | null;
@@ -227,8 +231,17 @@ export type CapabilitiesChange = {
   settings: CapabilityChange
 }
 
+/** Move the session to another folder between turns: an absolute path to
+  a folder. Its tools work there, its commands, skills and saved files are
+  found there, and the record's `cwd` says so. The run's host folder does
+  not move: the front-end resumes the run on a host for the new folder. */
+export type FolderChange = {
+  kind: "folder";
+  cwd: string
+}
+
 /** Everything the pause accepts. */
-export type Answer = Message | ModelChange | OptionsChange | BudgetChange | EffortChange | PresetChange | Compact | Rename | Fork | SearchChange | SavePreset | LocalModel | CapabilitiesChange
+export type Answer = Message | ModelChange | OptionsChange | BudgetChange | EffortChange | PresetChange | Compact | Rename | Fork | SearchChange | SavePreset | LocalModel | CapabilitiesChange | FolderChange
 
 def pauseData(budget: TurnBudget): PauseData {
   const threadId = conversationThread()
@@ -279,6 +292,31 @@ def renameNotice(title: string) {
     const why = if reason == "empty title" then "a title can't be empty" else "this session is not saved"
     notice("Could not rename the session: ${why}.", "error")
   }
+}
+
+// The path is resolved, so `/p`, `/p/` and `/p/x/..` are one folder and
+// one saved-sessions folder. `stat` raises no effect: the move asks no one.
+// It throws where it can't look (a dangling link, no permission), which
+// is refused with its reason.
+def folderNotice(cwd: string) {
+  if (!isAbsolute(cwd)) {
+    notice("Could not move the session to ${cwd}: the path is not absolute.", "error")
+    return
+  }
+  const folder = resolve(cwd)
+  const info = try stat(folder)
+  if (info is failure(reason)) {
+    notice("Could not move the session to ${folder}: ${reason}", "error")
+    return
+  }
+  if (info.value.type != "dir") {
+    notice("Could not move the session to ${folder}: it is not a folder.", "error")
+    return
+  }
+  setAgentCwd(folder)
+  setSessionFolder(folder)
+  moveRecord(folder)
+  notice("Moved the session to ${folder}.")
 }
 
 def forkNotice() {
@@ -490,6 +528,9 @@ export node session(start: SessionStart) {
         }
         { kind: "capabilities", settings } => {
           capabilitiesNotice(settings)
+        }
+        { kind: "folder", cwd } => {
+          folderNotice(cwd)
         }
       }
     }

@@ -1,7 +1,15 @@
 // Drives the agent's session program (lib/agents/agency-agent/program.agency)
 // the way a front-end does: start it, answer its pause, read its events.
 // No model is called: a test client answers every llm() call.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ToolCall } from "smoltalk";
@@ -41,6 +49,8 @@ const longTextSent = {};
 const summaryPrompts = [];
 // The names of the tools model calls were offered, keyed the same way.
 const toolsSent = {};
+// Every call's last user message, in order, project blocks included.
+const userTextsSent = [];
 
 function messageText(message) {
   const content = message.content;
@@ -82,6 +92,7 @@ function roundsReply(config) {
 __setLLMClient({
   async text(config) {
     const said = lastUserText(config);
+    userTextsSent.push(said);
     toolsSent[said] = [
       ...(toolsSent[said] ?? []),
       ...(config.tools ?? []).map((tool) => tool.name),
@@ -652,6 +663,71 @@ const unsaved = await startSession({ session: { ...startData().session, record: 
 await unsaved.answer({ kind: "rename", title: "a title" });
 result.rename.notSaved = { notice: lastNotice(unsaved), record: pauseData(unsaved).record };
 
+// `folder`. Temp paths change every run, so a check that holds one is a
+// boolean.
+const moveTarget = mkdtempSync(path.join(os.tmpdir(), "session-core-move-"));
+const notAFolder = path.join(moveTarget, "a-file.txt");
+writeFileSync(notAFolder, "not a folder");
+const mover = await startSession();
+const lastActiveBefore = pauseData(mover).record.lastActive;
+await mover.answer({ kind: "folder", cwd: moveTarget });
+const movedTo = (session) => ({
+  cwd: pauseData(session).cwd === moveTarget,
+  recordCwd: pauseData(session).record?.cwd === moveTarget,
+});
+result.folder = {
+  moved: {
+    level: lastNotice(mover).level,
+    text: lastNotice(mover).text === `Moved the session to ${moveTarget}.`,
+    ...movedTo(mover),
+    lastActiveMoved: pauseData(mover).record.lastActive > lastActiveBefore,
+  },
+};
+await mover.answer({ kind: "folder", cwd: `${moveTarget}/` });
+result.folder.trailingSlash = movedTo(mover);
+await mover.answer({ kind: "folder", cwd: `${moveTarget}/x/..` });
+result.folder.dotDot = movedTo(mover);
+// The folder it is in already: the record stays as it was, so a front-end
+// sorting by `lastActive` doesn't move the chat.
+const lastActiveInFolder = pauseData(mover).record.lastActive;
+await mover.answer({ kind: "folder", cwd: moveTarget });
+result.folder.sameFolder = {
+  level: lastNotice(mover).level,
+  ...movedTo(mover),
+  lastActiveKept: pauseData(mover).record.lastActive === lastActiveInFolder,
+};
+await mover.answer({ kind: "folder", cwd: "relative/dir" });
+result.folder.relative = { notice: lastNotice(mover), ...movedTo(mover) };
+await mover.answer({ kind: "folder", cwd: path.join(moveTarget, "missing") });
+result.folder.missing = {
+  level: lastNotice(mover).level,
+  text: lastNotice(mover).text?.endsWith(": it is not a folder."),
+  ...movedTo(mover),
+};
+await mover.answer({ kind: "folder", cwd: notAFolder });
+result.folder.aFile = {
+  level: lastNotice(mover).level,
+  text: lastNotice(mover).text?.endsWith(": it is not a folder."),
+  ...movedTo(mover),
+};
+// A folder picked through a link whose target was deleted since. `stat`
+// can't look, and the refusal says why rather than "not a folder".
+const danglingLink = path.join(moveTarget, "gone-link");
+symlinkSync(path.join(moveTarget, "deleted-target"), danglingLink);
+await mover.answer({ kind: "folder", cwd: danglingLink });
+result.folder.danglingLink = {
+  level: lastNotice(mover).level,
+  saysWhy: !lastNotice(mover).text?.endsWith(": it is not a folder."),
+  ...movedTo(mover),
+};
+const unsavedMover = await startSession({ session: { ...startData().session, record: null } });
+await unsavedMover.answer({ kind: "folder", cwd: moveTarget });
+result.folder.notSaved = {
+  level: lastNotice(unsavedMover).level,
+  cwd: pauseData(unsavedMover).cwd === moveTarget,
+  record: pauseData(unsavedMover).record,
+};
+
 // `fork`. It needs a turn to copy.
 await renamer.answer({ kind: "fork" });
 result.fork = { noTurns: { notice: lastNotice(renamer), idKept: pauseData(renamer).record.id } };
@@ -690,6 +766,32 @@ result.compact.nextMessage = {
   reply: eventsOf(compacter, "session.reply").pop()?.text,
   longMessageSent: longTextSent["after the compaction"],
   pausedOn: compacter.pause[0].effect,
+  // A session that never moved gets no project block after a compaction:
+  // the head still names its folder.
+  carriesNoBlock: !userTextsSent
+    .findLast((text) => text.includes("after the compaction"))
+    .includes("The working directory changed."),
+};
+
+// A move, then a compaction. The block that told the model about the move
+// is summarized, and the head still names the folder the session started
+// in, so the next message must carry the block again.
+const movedCompactTarget = mkdtempSync(path.join(os.tmpdir(), "session-core-moved-compact-"));
+const movedCompacter = await startSession();
+await movedCompacter.answer({ kind: "folder", cwd: movedCompactTarget });
+await movedCompacter.answer(message(`${LONG_MARK} moved ${"word ".repeat(30000)}`));
+await movedCompacter.answer(message("a second turn after the move"));
+await movedCompacter.answer({ kind: "compact", keep: "" });
+const movedCompactNotice = lastNotice(movedCompacter);
+await movedCompacter.answer(message("after the moved compaction"));
+const afterMovedCompaction = userTextsSent.findLast((text) =>
+  text.includes("after the moved compaction"),
+);
+result.compact.afterAMove = {
+  compacted: movedCompactNotice.level === "info",
+  namesTheNewFolder: afterMovedCompaction.includes(
+    `Current working directory: ${movedCompactTarget}`,
+  ),
 };
 
 // `search`. No client search key, so a cloud session starts on hosted search.

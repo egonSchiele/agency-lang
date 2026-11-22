@@ -109,6 +109,7 @@ Its data is what a front-end shows and saves between turns: `thread`,
 | `savePreset` | `name`                    | Saves the session to a preset, "" for the active one, as `/preset save` |
 | `local`      | `model`                   | Runs the session on a local model, as `/local`                       |
 | `capabilities` | `settings`              | Saves one capability override and applies it, as `/settings`         |
+| `folder`     | `cwd`                     | Moves the session to another folder. No terminal command sends it    |
 
 An answer the core cannot apply changes nothing and sends a
 `session.notice` at level `error` with the reason. What one that worked
@@ -168,6 +169,19 @@ did is a notice at level `info`, except a `model`, `options`, `budget`,
   memory turned off. A value the field can't take is refused. Every pause
   reports the profile as `capabilities` (`capabilityReport`), which the
   `/settings` screen draws. Only the terminal sends it.
+- **`folder`** takes an absolute path to a folder, resolved first, so
+  `/p/` and `/p/x/..` are `/p`. A relative path, a missing one or a file
+  is refused, and so is one `stat` can't look at (a dangling link, say),
+  with its reason. Naming the folder the record already names leaves the
+  record as it is, but still sets the agent's working folder back to it,
+  undoing a coder's move into a subfolder. It sets the agent's working
+  folder and the session's folder
+  (`setAgentCwd`, `setSessionFolder`), and the record's `cwd` and
+  `lastActive` (`moveRecord` in `lib/record.agency`), so the moved copy
+  of a saved session is always the newer one. The driver reports `moved`.
+  The front-end moves the saved files, and resumes the run on a host for
+  the new folder: the core does not move the host's folder, so until then
+  `.` in a policy rule still means the old one. The move asks no one.
 
 - **A model's provider.** `openai/gpt-4o` names a known provider, so with
   no provider fixed it switches to OpenAI.
@@ -278,11 +292,15 @@ A line for the person is a notice (`lib/notice.agency`), which
 
 ## The session's folder
 
-The user's own files are read from the folder the session started in
+The user's own files are read from the session's folder
 (`lib/sessionFolder.agency`): `.claude/commands`, the Claude skills, and
 the folder its saved sessions are kept under. The core sets it from
 `start.cwd`. The agent's working folder (`getAgentCwd`) starts there too,
 but a coder moves it, and these reads do not follow it.
+
+A `folder` answer moves both the session's folder and the agent's working
+folder, and sets the record's `cwd`. A front-end follows the driver's
+`moved`, not the pause's `cwd`, which a coder also moves.
 
 The terminal's shell run scans once for its slash palette, before it
 installs its policy handler, and keeps the result for the process

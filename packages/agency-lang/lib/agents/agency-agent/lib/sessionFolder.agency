@@ -1,7 +1,8 @@
 /** @module
-  @summary The folder a session started in. The user's own files are read
-  from it: `.claude/commands`, the Claude skills, and the folder its saved
-  sessions are kept under.
+  @summary The session's folder: where it started, or where a `folder`
+  answer moved it. The user's own files are read from it:
+  `.claude/commands`, the Claude skills, and the folder its saved sessions
+  are kept under.
 
   The agent's working folder (`getAgentCwd`) starts here too, but a coder
   moves it during a session, and these reads do not follow it. In a

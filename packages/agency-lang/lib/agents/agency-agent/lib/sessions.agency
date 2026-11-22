@@ -43,8 +43,8 @@ export def cwdSlug(dir: string): string {
   return dir.replace(re/[^a-zA-Z0-9]/g, "-")
 }
 
-/** Where this session's files are kept: the folder for the directory the
-  session started in. */
+/** Where this session's files are kept: the folder for the session's
+  folder, where it started or where a `folder` answer moved it. */
 export def projectDir(): string {
   return path.join(SESSIONS_DIR, cwdSlug(sessionFolder()))
 }

@@ -92,6 +92,15 @@ async function startIn(project, id) {
   };
   countApprovals();
   return {
+    // A non-message answer, such as `{ kind: "folder", cwd }`.
+    async answer(value) {
+      const next = await respondToInterrupts(pause, [approve(value)], {
+        metadata: { callbacks },
+        invocation: { policy },
+      });
+      pause = next.data;
+      countApprovals();
+    },
     async say(text) {
       const next = await respondToInterrupts(
         pause,
@@ -117,6 +126,12 @@ const firstAgain = await one.say("/hello");
 // An app's engine can stay up for days.
 writeFileSync(path.join(first, ".claude", "commands", "later.md"), "added later to the first folder");
 const addedLater = await one.say("/later");
+// A session moved to the second folder gets the second folder's commands,
+// and its next message tells the model the folder changed. The move asks
+// no one, so `approvalsAsked` stays 0.
+const mover = await startIn(first, "s3");
+await mover.answer({ kind: "folder", cwd: second });
+const afterMove = await mover.say("/hello");
 
 writeFileSync(
   "__result.json",
@@ -126,6 +141,9 @@ writeFileSync(
       secondSessionSawItsOwnCommand: secondReply.includes("hello from the second folder"),
       firstSessionStillSeesItsOwn: firstAgain.includes("hello from the first folder"),
       commandAddedLaterIsSeen: addedLater.includes("added later to the first folder"),
+      movedSessionSeesTheNewFoldersCommand: afterMove.includes("hello from the second folder"),
+      movedSessionIsToldTheFolderChanged: afterMove.includes("The working directory changed."),
+      movedSessionIsToldTheNewFolder: afterMove.includes(`Current working directory: ${second}`),
       approvalsAsked,
     },
     null,

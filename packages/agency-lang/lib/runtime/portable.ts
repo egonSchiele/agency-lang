@@ -157,10 +157,13 @@ export { checkPolicy, checkPolicyExplicit, validatePolicy, escapeGlob } from "./
 // interrupt; `approve`, `reject` and `respondToInterrupts` do.
 export { promptOptions, resolvePromptOption } from "./interruptPromptOptions.js";
 export type {
+  KnownPicks,
   PromptContext,
   PromptOption,
   PromptScope,
+  PromptStep,
   ResolvedPromptOption,
+  RulePicks,
 } from "./interruptPromptOptions.js";
 export { promptContext } from "./interruptPromptContext.js";
 export type { PromptDecision } from "./interruptPromptTable.js";

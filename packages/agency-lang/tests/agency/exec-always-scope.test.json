@@ -1,0 +1,39 @@
+{
+  "tests": [
+    {
+      "nodeName": "anExactScriptAsksAgain",
+      "input": "",
+      "expectedOutput": "[\"approve\",\"propagate\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A rule saved with the exact choice for `python3 -c 'print(1)'` approves that script and asks about another one."
+    },
+    {
+      "nodeName": "aWiderChoiceCoversSiblings",
+      "input": "",
+      "expectedOutput": "[\"approve\",\"approve\",\"propagate\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A `pnpm run …` rule for a folder approves `pnpm run test` there and below, and asks about it anywhere else."
+    },
+    {
+      "nodeName": "aRuleReachesDotFolders",
+      "input": "",
+      "expectedOutput": "\"approve\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A rule saved for a folder covers a command run in a dot folder inside it, such as .worktrees/x."
+    },
+    {
+      "nodeName": "gitAddOfEverythingAsks",
+      "input": "",
+      "expectedOutput": "[\"approve\",\"propagate\",\"propagate\",\"propagate\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A git add rule for `src/**` approves paths all under src, and asks about a path outside it and about a git add with no paths."
+    },
+    {
+      "nodeName": "anArgumentWithAStar",
+      "input": "",
+      "expectedOutput": "[\"approve\",\"propagate\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A rule saved with the exact choice for `ls *.md` matches the literal star only."
+    }
+  ]
+}

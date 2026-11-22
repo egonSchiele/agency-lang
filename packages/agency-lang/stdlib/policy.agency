@@ -32,7 +32,8 @@ import {
   _recordRule,
   _stripControlChars,
   _folderField,
-  _folderWithoutAsking,
+  _picksWithoutAsking,
+  _itemChoices,
   _sharedSetFor,
   _unrejectedEffects,
   _promptMenuItems,
@@ -81,6 +82,11 @@ folder in the interrupt or one of its parents, up to the launch directory
 and never the home directory. A rule saved this way sets
 `matchDotFolders`, so it also covers folders like `.cache` below the one
 chosen.
+
+For a command (`std::exec`), "always approve when" asks up to two
+questions. The first is how much of the command the rule covers, from
+this exact command down to the program and its first argument followed
+by anything: `pnpm run …`. The second is the folder, as for a read.
 */
 
 /** Key of an interrupt's `data` object (e.g. `"dir"`, `"command"`). */
@@ -91,8 +97,11 @@ export type InterruptDataKey = string
  picomatch globs. They support `*`, `**`, and brace-expansion like
  `{a,b}` for unions. A literal string with no glob metacharacters
  matches only that exact value.
+
+ A list of globs matches a list value item by item. A last item of `**`
+ stands for any items after it, or none.
  */
-export type InterruptDataVal = string
+export type InterruptDataVal = string | string[]
 
 /**
  Identifier for an interrupt's effect (e.g. `"std::read"`,
@@ -106,6 +115,12 @@ export type InterruptEffect = string
  pattern. Omit `match` (or set it to `{}`) for a catch-all that
  applies to every interrupt of the parent effect.
 
+ When the value is a list, a string pattern matches when the list is not
+ empty and every item matches, and a list pattern matches item by item.
+ For example, `{ "cwd": "/me/proj", "paths": "src/**", "all": "false" }`
+ under `std::git::add` approves a `git add` whose paths are all under
+ `src`, and asks about one that stages everything.
+
  A reject rule may carry a `rejectMessage`: the message the rejection
  hands back to whoever raised the interrupt. For a rejected tool call
  this is what the model reads, so it can steer the next attempt — for
@@ -114,7 +129,8 @@ export type InterruptEffect = string
 
  A rule's globs skip path segments that start with a period: `/x/**` does
  not match `/x/.cache/y`. Set `matchDotFolders: true` to let them match.
- The approval prompt sets it on the read rules it saves.
+ The approval prompt sets it on a rule whose folder came from its folder
+ step.
  */
 export type PolicyRule = {
   match?: Record<InterruptDataKey, InterruptDataVal>;
@@ -188,10 +204,14 @@ export type Decision =
    Pass `true` for directory-like fields (so approving `/tmp/x`
    also approves `/tmp/x/sub/file.txt`). Pass `false` for opaque
    identifiers (commands, IDs, env names) that shouldn't fan out.
+ - `matchPrefix` — when `true`, the field is a list, and the rule pins its
+   leading items. The approval prompt asks how many. Leave it out, or
+   pass `false`, for every other field.
  */
 export type ScopedField = {
   field: string;
-  matchSubpaths: boolean
+  matchSubpaths: boolean;
+  matchPrefix?: boolean
 }
 
 /**
@@ -209,8 +229,8 @@ export type ScopedField = {
  const FIELDS: ScopedRuleFields = {
    "std::read":  [{ field: "dir", matchSubpaths: true }],
    "std::exec":  [
-     { field: "command",    matchSubpaths: false },
-     { field: "subcommand", matchSubpaths: false },
+     { field: "command", matchSubpaths: false },
+     { field: "args",    matchSubpaths: false, matchPrefix: true },
    ],
  }
  ```
@@ -252,10 +272,23 @@ let _saveAnswersOnly: boolean = false
 // The "always" answers not yet saved, in the order they were given.
 let _pendingAnswers: PendingAnswer[] = []
 
+// How wide an "always approve when" rule is: the id of the command
+// choice, and the folder. "" for a part that does not apply. These are
+// `RulePicks` in lib/runtime/interruptPromptOptions.ts.
+type RulePicks = {
+  items: string;
+  folder: string
+}
+
+static const NO_PICKS: RulePicks = { items: "", folder: "" }
+
+// A pending answer keeps its picks, because a save under `useRunPolicy`
+// replays each answer against the file as it is now. Without them the
+// file would get the narrowest rule, not the one the user picked.
 type PendingAnswer = {
   intr: any;
   action: Decision;
-  folder: string
+  picks: RulePicks
 }
 
 /**
@@ -327,7 +360,7 @@ of the effect. `recordScopedRule` performs that check for you.
 export def buildScopedMatch(
   intr: Record<string, any>,
   fields: ScopedRuleFields = {},
-): Record<string, string> {
+): Record<InterruptDataKey, InterruptDataVal> {
   """
   Build glob patterns that pin an interrupt's scoped field values.
   Return {} if there is no scope or a scoped value is missing.
@@ -362,7 +395,8 @@ export def recordRule(
 Use this for an "always approve when" choice. It prepends an approval,
 so a matching scoped rule takes precedence over existing catch-all rules.
 The input policy remains unchanged. If no scope can be built, it returns
-the input policy without adding a rule.
+the input policy without adding a rule. A field tagged `@alwaysPrefix` is
+pinned whole, which is the narrowest rule the terminal prompt offers.
 */
 export def recordScopedRule(
   policy: Policy,
@@ -610,7 +644,7 @@ def policyToSave(answers: PendingAnswer[]): Result<Policy | null> {
       saved,
       answer.intr,
       answer.action,
-      answer.folder,
+      answer.picks,
       globalCliPolicyOpts.fields,
     )
     if (after.changed) {
@@ -689,8 +723,9 @@ type AskUserResult = {
   /** Set when a rule decided this interrupt while it waited for the
     terminal, so no one was asked. Holds that rule's decision. */
   rule?: any;
-  /** The folder chosen at the folder step. Empty when the step did not run. */
-  folder?: string
+  /** How wide the saved rule is, from the follow-up steps. Absent when no
+    step ran. */
+  picks?: RulePicks
 }
 
 // Text a model wrote, on its way to a terminal the user is reading in
@@ -1074,18 +1109,35 @@ def askFolder(value: string, subject: string, risk: string): string | null {
   return choices[index].path
 }
 
-// The folder step for an answer, when it applies. Returns the folder
-// picked, "" when the step does not apply to this answer, or null when the
-// user went back to the first prompt. Whether there is anything to ask is
-// `folderWithoutAsking` in lib/runtime/interruptPromptOptions.ts, so this
-// menu and a TypeScript host save the same rule for the same answer.
-def askFolderFor(intr: any, answer: AskUserResult): string | null {
-  const known = _folderWithoutAsking(intr, answer.action, globalCliPolicyOpts.fields)
-  if (known != null) {
-    return known
+// The command step: how much of the command the rule should cover, from
+// this exact command down to the program and its first argument followed
+// by anything. Returns the id of the choice picked, or null when the user
+// went back.
+def askItems(intr: any, risk: string): string | null {
+  const choices = _itemChoices(intr, globalCliPolicyOpts.fields)
+  let items: ChoiceItem[] = []
+  for (choice in choices) {
+    items.push({ key: "${items.length + 1}", label: choice.label, detail: choice.note })
   }
+  items.push({ key: BACK_KEY, label: "back" })
+  const body = "${_riskColored(risk, stripControlChars(intr.effect))} will always be approved for the commands you pick."
+  const picked = interruptChoice(
+    color.bold("Which commands should this cover?"),
+    body,
+    items,
+    allowFreeText: false,
+    allowCancel: true,
+  )
+  if (picked == BACK_KEY) {
+    return null
+  }
+  const index = map(items, \item -> item.key).indexOf(picked)
+  return choices[index].id
+}
+
+// The folder step for an answer whose rule may cover a wider folder.
+def askFolderOf(intr: any, answer: AskUserResult, risk: string): string | null {
   const value = "${intr.data[folderField(intr)]}"
-  const risk = _effectRisk(intr.effect)
   if (answer.action == "approve-always-here") {
     return askFolder(value, intr.effect, risk)
   }
@@ -1094,10 +1146,36 @@ def askFolderFor(intr: any, answer: AskUserResult): string | null {
   return askFolder(value, "Reads (${members.join(", ")})", risk)
 }
 
+// The follow-up steps for an answer: the command step, then the folder
+// step, each only when it has more than one choice. Returns the picks, or
+// null when the user went back to the first prompt from either step.
+// Which steps apply is `picksWithoutAsking` in
+// lib/runtime/interruptPromptOptions.ts, so this menu and a TypeScript
+// host save the same rule for the same answer.
+def askPicksFor(intr: any, answer: AskUserResult): RulePicks | null {
+  const known = _picksWithoutAsking(intr, answer.action, globalCliPolicyOpts.fields)
+  const risk = _effectRisk(intr.effect)
+  let items = known.items
+  if (items == null) {
+    items = askItems(intr, risk)
+  }
+  if (items == null) {
+    return null
+  }
+  let folder = known.folder
+  if (folder == null) {
+    folder = askFolderOf(intr, answer, risk)
+  }
+  if (folder == null) {
+    return null
+  }
+  return { items: items, folder: folder }
+}
+
 // Present the approval menu for one interrupt and return the user's
 // choice as an `AskUserResult`. The answers come from `askUserChoices`. An (ap) or
-// (as) answer on a file-reading effect goes on to the folder step, whose
-// "back" shows the menu again.
+// (as) answer goes on to the follow-up steps that apply, whose "back"
+// shows the menu again.
 // Renders as a modal over the active repl(); falls back to plain print
 // + input when no REPL is running (e.g. headless agent runs).
 //
@@ -1158,9 +1236,9 @@ def askUser(intr: any): AskUserResult {
         expectsValue: intr.expectsValue == true,
       )
       result = choiceResult(choice, items)
-      const folder = askFolderFor(intr, result)
-      if (folder != null) {
-        result = { ...result, folder: folder }
+      const picks = askPicksFor(intr, result)
+      if (picks != null) {
+        result = { ...result, picks: picks }
         asking = false
       }
     }
@@ -1194,7 +1272,7 @@ def recordAnswer(intr: any, answer: AskUserResult) {
     rules,
     intr,
     answer.action,
-    answer.folder ?? "",
+    answer.picks ?? NO_PICKS,
     globalCliPolicyOpts.fields,
   )
   if (after.changed) {
@@ -1202,7 +1280,7 @@ def recordAnswer(intr: any, answer: AskUserResult) {
     _pendingAnswers = [..._pendingAnswers, {
       intr: intr,
       action: answer.action,
-      folder: answer.folder ?? ""
+      picks: answer.picks ?? NO_PICKS
     }]
     _pendingSave = true
   }

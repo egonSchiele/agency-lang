@@ -1205,8 +1205,8 @@ take this path. The step sits at the end of `otherVerbEffects`, where
 the line used to fail with "no rule for", and `execEffects` builds it.
 
 The payload has the exec tool's fields: `command` is the program,
-`args` its arguments, `subcommand` the first argument (or `""`), `cwd`
-safeBash's resolved folder, `timeout` the line's time limit in
+`args` its arguments, `cwd` safeBash's resolved folder, `timeout` the
+line's time limit in
 milliseconds (see "The time limit"), and `stdin` empty. The full
 line goes in an extra field, `line`, because `std::exec` already uses
 `command` for the program and `@always` pins it. The line then runs
@@ -1244,8 +1244,9 @@ These stay broad, each for a reason:
 - **Programs that run other programs** (`NO_EXEC_PROGRAMS`). The
   wrappers (`sh`, `xargs`, `env`, `sudo`, ...) would put the wrapper in
   the payload while what runs is in its arguments. The package runners
-  (`npx`, `bunx`, `uvx`, `pipx`) take a flag first, so `npx -y foo`
-  would save `{ npx, -y }`, which covers every package. `agency` is
+  (`npx`, `bunx`, `uvx`, `pipx`) take a flag first, so the widest
+  "always approve when" choice for `npx -y foo`, `npx -y …`, would cover
+  every package. `agency` is
   here because a lone `agency` line runs in process, and `recommended`
   approves `std::exec` for agency's safe subcommands, which were chosen
   for the exec tool. `which` and `whereis` are here because a lone
@@ -1253,8 +1254,9 @@ These stay broad, each for a reason:
   the same lookup into a question a saved rule answers; the quiet table
   takes a `which` before this list is read (see "Commands that only
   print"). `cp`, `mv`, `ln`, and `sed` do one narrow thing to files, and
-  `std::exec` pins only the first argument: "always approve" for `mv -f a
-  b` would cover every forced move, one for `sed -n` covered `sed -n '1e
+  the widest `std::exec` rule pins only the first argument: "always
+  approve when" for `mv -f a b` could cover every forced move, one for
+  `sed -n` covered `sed -n '1e
   cmd'` and `sed -n 'w file'`, and one for `ln -sf` would let a later
   command read a file swapped for a link (see "Resolving the path when the
   plan is made"). A new program that can replace a file joins this list
@@ -1269,14 +1271,16 @@ These stay broad, each for a reason:
   "Assignments in front of a command"), and a command word that isn't
   literal (`./gradlew`).
 
-What a saved rule covers: `@always(command, subcommand)` saves the
-program with its first argument, so a rule for `pnpm test` covers `pnpm
-test` in any folder and with any later arguments, the same as for the
-exec tool. `node -e '...'` is as broad as `sh -c`, so a rule for an
-interpreter should be keyed on `subcommand`. The same goes for every
-program that takes its program as text: `python3`, `perl`, `ruby`,
-`awk`, and `jq`. A rule keyed on `awk` and `'{print}'` still
-covers every file named after them. `rg --pre=<program>` runs
+What a saved rule covers: "always approve when" pins the program, as much
+of its arguments as the person picks, and the folder, the same as for the
+exec tool (see "The command step" in
+`docs/dev/agents/approval-policies.md`). The widest choice for `pnpm test`
+covers `pnpm test` with any later arguments, in the folder picked.
+`node -e '...'` is as broad as `sh -c`, so for an interpreter the person
+should pick "this exact command", which pins the program text. The same
+goes for every program that takes its program as text: `python3`, `perl`,
+`ruby`, `awk`, and `jq`. A rule for `awk '{print}'` followed by anything
+still covers every file named after the program text. `rg --pre=<program>` runs
 another program for each file, so a saved rule for `rg` covers that
 too.
 

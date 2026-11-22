@@ -1,0 +1,20 @@
+{
+  "picks": {
+    "outcomes": ["build ok", "test ok"],
+    "remainingAnswers": 0,
+    "error": null,
+    "widerRule": true
+  },
+  "replayed": {
+    "outcomes": ["build ok", "test ok"],
+    "remainingAnswers": 0,
+    "error": null,
+    "widerRule": true
+  },
+  "back": {
+    "outcomes": ["build ok"],
+    "remainingAnswers": 0,
+    "error": null,
+    "saved": null
+  }
+}

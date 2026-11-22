@@ -9,14 +9,21 @@
  * Never checkpointed: a resume re-imports the modules and re-registers.
  */
 
-export type ScopedField = { field: string; matchSubpaths: boolean };
+/** One payload field a rule pins. `matchSubpaths` pins a folder and
+ *  everything below it (`@alwaysUnder`). `matchPrefix` pins the leading
+ *  items of a list, and the prompt asks how many (`@alwaysPrefix`). At
+ *  most one of the two is true. */
+export type ScopedField = { field: string; matchSubpaths: boolean; matchPrefix?: boolean };
 
 // Null prototype: effect names are user-controlled strings.
 const scopes: Record<string, ScopedField[]> = Object.create(null);
 
 function includesField(fields: ScopedField[], wanted: ScopedField): boolean {
   return fields.some(
-    (field) => field.field === wanted.field && field.matchSubpaths === wanted.matchSubpaths,
+    (field) =>
+      field.field === wanted.field &&
+      field.matchSubpaths === wanted.matchSubpaths &&
+      (field.matchPrefix === true) === (wanted.matchPrefix === true),
   );
 }
 
@@ -35,12 +42,18 @@ function copyOf(fields: ScopedField[]): ScopedField[] {
 }
 
 function isScopedField(value: unknown): value is ScopedField {
-  const candidate = value as { field?: unknown; matchSubpaths?: unknown } | null;
+  const candidate = value as {
+    field?: unknown;
+    matchSubpaths?: unknown;
+    matchPrefix?: unknown;
+  } | null;
   return (
     typeof candidate === "object" &&
     candidate !== null &&
     typeof candidate.field === "string" &&
-    typeof candidate.matchSubpaths === "boolean"
+    typeof candidate.matchSubpaths === "boolean" &&
+    (candidate.matchPrefix === undefined || typeof candidate.matchPrefix === "boolean") &&
+    !(candidate.matchSubpaths && candidate.matchPrefix === true)
   );
 }
 

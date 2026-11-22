@@ -156,6 +156,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "cwd",
     "setTitle",
     "applyAgentCwd",
+    "resolveCwd",
     "exit",
   ],
   "run state and conversation threads, which live in memory": [

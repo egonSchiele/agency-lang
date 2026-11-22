@@ -35,6 +35,18 @@
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "recommendedApprovesParseWithAFile",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "recommendedDoesNotApproveRun",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

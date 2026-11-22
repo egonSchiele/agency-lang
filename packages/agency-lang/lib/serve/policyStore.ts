@@ -44,15 +44,8 @@ export class PolicyStore {
     if (rule?.action !== "approve" && rule?.action !== "reject") {
       throw new Error(`Invalid action: '${rule?.action}'. Must be 'approve' or 'reject'.`);
     }
-    if (rule.match !== undefined) {
-      if (typeof rule.match !== "object" || rule.match === null) {
-        throw new Error("match must be an object");
-      }
-      for (const v of Object.values(rule.match)) {
-        if (typeof v !== "string") {
-          throw new Error("match values must be strings (glob patterns)");
-        }
-      }
+    if (rule.match !== undefined && (typeof rule.match !== "object" || rule.match === null)) {
+      throw new Error("match must be an object");
     }
     // Same contract as set()/load(): one rule shape, including the
     // rejectMessage-only-on-reject invariant.

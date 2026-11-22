@@ -20,11 +20,13 @@ import {
   isAlwaysTag,
   ALWAYS_TAG,
   ALWAYS_UNDER_TAG,
+  ALWAYS_PREFIX_TAG,
 } from "./alwaysTag.js";
 import type { AlwaysProblemKind, AlwaysTagProblem } from "./alwaysTag.js";
 import { sameScopedFields, type ScopedField } from "../runtime/alwaysScope.js";
 import { synthType } from "./synthesizer.js";
-import { isAssignable } from "./assignability.js";
+import { isAssignable, safeResolveType } from "./assignability.js";
+import type { TypeAliasEntry } from "../types/typeHints.js";
 
 /**
  * Check every interrupt raise site's payload against its declared type. The
@@ -72,7 +74,7 @@ export function buildEffectRegistry(ctx: TypeCheckerContext): Record<string, Obj
   for (const [effect, entries] of Object.entries(grouped)) {
     reportSameFileDuplicates(effect, entries, ctx);
     const merged = mergePayload(effect, entries, ctx);
-    ctx.errors.push(...alwaysScopeDiagnostics(effect, entries, merged));
+    ctx.errors.push(...alwaysScopeDiagnostics(effect, entries, merged, ctx.getTypeAliases()));
     if (merged) registry[effect] = merged;
   }
   ctx.errors.push(...strayAlwaysTagDiagnostics(ctx));
@@ -249,21 +251,43 @@ function problemDiagnostic(
   return PROBLEM_DIAGNOSTIC[problem.kind](params, problem.loc ?? tagged.decl.loc ?? null);
 }
 
+function tagOf(field: ScopedField): string {
+  if (field.matchPrefix === true) return ALWAYS_PREFIX_TAG;
+  return field.matchSubpaths ? ALWAYS_UNDER_TAG : ALWAYS_TAG;
+}
+
 function unknownFieldDiagnostic(
   effect: string,
   tagged: TaggedDecl,
   field: ScopedField,
 ): TypeCheckError {
-  const tag = field.matchSubpaths ? ALWAYS_UNDER_TAG : ALWAYS_TAG;
   return diagnostic(
     "alwaysUnknownField",
-    { tag, field: field.field, effect },
+    { tag: tagOf(field), field: field.field, effect },
     tagged.decl.loc ?? null,
   );
 }
 
 function isInPayload(payload: ObjectType, field: ScopedField): boolean {
   return payload.properties.some((property) => property.key === field.field);
+}
+
+/** Whether a prefix field's declared type is a list that is always there.
+ *  A type that does not resolve already has its own diagnostic, so it is
+ *  not reported again here. */
+function isListField(
+  payload: ObjectType,
+  field: ScopedField,
+  aliases: Record<string, TypeAliasEntry>,
+): boolean {
+  const property = payload.properties.find((one) => one.key === field.field);
+  if (property === undefined) return true;
+  const resolved = safeResolveType(property.value, aliases);
+  return resolved.type === "arrayType" || isAnyType(resolved);
+}
+
+function notListDiagnostic(effect: string, tagged: TaggedDecl, field: ScopedField): TypeCheckError {
+  return diagnostic("alwaysPrefixNotList", { field: field.field, effect }, tagged.decl.loc ?? null);
 }
 
 /**
@@ -278,6 +302,7 @@ function alwaysScopeDiagnostics(
   effect: string,
   entries: DeclEntry[],
   payload: ObjectType | null,
+  aliases: Record<string, TypeAliasEntry>,
 ): TypeCheckError[] {
   const tagged: TaggedDecl[] = entries
     .filter((entry) => hasAlwaysScope(entry.decl.tags))
@@ -294,6 +319,14 @@ function alwaysScopeDiagnostics(
             .filter((field) => !isInPayload(payload, field))
             .map((field) => unknownFieldDiagnostic(effect, one, field)),
         );
+  const notLists =
+    payload === null
+      ? []
+      : tagged.flatMap((one) =>
+          one.scope.fields
+            .filter((field) => field.matchPrefix === true && !isListField(payload, field, aliases))
+            .map((field) => notListDiagnostic(effect, one, field)),
+        );
   const [first, ...rest] = tagged;
   const conflicts =
     first === undefined
@@ -302,7 +335,7 @@ function alwaysScopeDiagnostics(
           .filter((one) => !sameScopedFields(first.scope.fields, one.scope.fields))
           .map((one) => diagnostic("alwaysScopeConflict", { effect }, one.decl.loc ?? null));
 
-  return [...problems, ...unknownFields, ...conflicts];
+  return [...problems, ...unknownFields, ...notLists, ...conflicts];
 }
 
 /**

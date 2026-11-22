@@ -6,7 +6,7 @@ node main() {
     "std::read": [{ field: "dir", matchSubpaths: true }],
     "std::exec": [
       { field: "command", matchSubpaths: false },
-      { field: "subcommand", matchSubpaths: false },
+      { field: "args", matchSubpaths: false, matchPrefix: true },
     ],
   }
   const readIntr = {
@@ -21,11 +21,14 @@ node main() {
 
   const execIntr = {
     effect: "std::exec",
-    data: { command: "git", subcommand: "log", args: ["log"] }
+    data: { command: "git", args: ["log", "a*"] }
   }
+  // A prefix field is pinned whole, each argument escaped.
   const m2 = buildScopedMatch(execIntr, fields)
   if (m2.command != "git") { return "FAIL: command not pinned" }
-  if (m2.subcommand != "log") { return "FAIL: subcommand not pinned" }
+  if (m2.args.length != 2 || m2.args[0] != "log" || m2.args[1] != "a\\*") {
+    return "FAIL: args not pinned whole, got ${m2.args}"
+  }
 
   // Kind not in the fields map → empty match
   const otherIntr = { effect: "myapp::deploy", data: { env: "prod" } }

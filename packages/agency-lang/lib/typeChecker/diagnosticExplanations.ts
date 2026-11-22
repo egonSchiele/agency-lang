@@ -302,6 +302,15 @@ effect app::env { name: string }
 
 **How to fix:** name a field from the payload type, or add the field to the payload.`,
 
+  alwaysPrefixNotList: `\`@alwaysPrefix\` pins the leading items of a list, and the approval prompt asks how many. The field it names must be a list that every interrupt of the effect carries, so a list that may be \`null\` does not qualify.
+
+\`\`\`
+@alwaysPrefix(command)
+effect app::run { command: string, args: string[] }
+\`\`\`
+
+**How to fix:** name a list field, such as \`@alwaysPrefix(args)\`, or use \`@always\` for a field that is not a list.`,
+
   alwaysBadArgument: `Each argument to \`@always\` or \`@alwaysUnder\` must be a bare field name, and no field may be named twice across the two tags. Strings, calls, and other expressions are not field names.
 
 \`\`\`

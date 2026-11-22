@@ -142,11 +142,19 @@ describe("PolicyStore", () => {
     expect(() => store.addRule("constructor", { action: "approve" })).toThrow("Invalid kind");
   });
 
-  it("addRule rejects non-string match values", () => {
+  it("addRule rejects a match value that is not a pattern", () => {
     const store = new PolicyStore("test-server", tmpDir);
-    expect(() => store.addRule("x::y", { action: "approve", match: { foo: 123 as any } })).toThrow(
-      "match values must be strings",
-    );
+    expect(() =>
+      store.addRule("x::y", { action: "approve", match: { foo: 123 as any } }),
+    ).toThrow();
+  });
+
+  it("addRule accepts a match value that is a list of patterns", () => {
+    const store = new PolicyStore("test-server", tmpDir);
+    store.addRule("std::exec", { action: "approve", match: { args: ["run", "**"] } });
+    expect(store.get()).toEqual({
+      "std::exec": [{ action: "approve", match: { args: ["run", "**"] } }],
+    });
   });
 
   it("addRule enforces the rejectMessage-only-on-reject invariant", () => {

@@ -1,9 +1,24 @@
 import picomatch from "picomatch";
 import { z } from "zod";
 
+/** The longest pattern picomatch accepts. It throws on a longer one, and a
+ *  rule that throws would break every interrupt that reaches it. */
+export const MAX_PATTERN_LENGTH = 65536;
+
+/** As the last item of a list pattern, "any items after this, or none". */
+export const REST_OF_LIST = "**";
+
+/** A glob for one value, or a list of globs matched against a list by
+ *  position. See "Rule matching" in docs/dev/agents/approval-policies.md. */
+export type MatchPattern = string | string[];
+
+const PatternSchema = z
+  .string()
+  .max(MAX_PATTERN_LENGTH, `a pattern must be at most ${MAX_PATTERN_LENGTH} characters`);
+
 export const PolicyRuleSchema = z
   .object({
-    match: z.record(z.string(), z.string()).optional(),
+    match: z.record(z.string(), z.union([PatternSchema, z.array(PatternSchema)])).optional(),
     action: z.enum(["approve", "reject", "propagate"]),
     /** Message the rejection carries back to whoever raised the interrupt —
      *  for a rejected tool call, what the model reads (e.g. "Use safeBash
@@ -205,48 +220,92 @@ function matchesGlob(value: string, pattern: string, dot: boolean): boolean {
   return pattern === "" ? value === "" : picomatch.isMatch(value, pattern, { dot });
 }
 
-function matchesRule(
-  rule: PolicyRule,
-  interrupt: { effect: string; message: string; data: any; origin: string },
-  dirs: PolicyDirs,
-): boolean {
+type PolicyInterrupt = { effect: string; message: string; data: any; origin: string };
+
+function matchesRule(rule: PolicyRule, interrupt: PolicyInterrupt, dirs: PolicyDirs): boolean {
   if (!rule.match) return true; // catch-all
   const dot = rule.matchDotFolders === true;
+  return Object.entries(rule.match).every(([key, pattern]) =>
+    matchesField(key, pattern, fieldValue(key, interrupt), dot, dirs),
+  );
+}
 
-  for (const [key, pattern] of Object.entries(rule.match)) {
-    let value: string | undefined;
-    if (key === "origin") {
-      value = interrupt.origin;
-    } else if (key === "message") {
-      value = interrupt.message;
-    } else {
-      value = interrupt.data?.[key];
-    }
+function fieldValue(key: string, interrupt: PolicyInterrupt): unknown {
+  if (key === "origin") return interrupt.origin;
+  if (key === "message") return interrupt.message;
+  return interrupt.data?.[key];
+}
 
-    // A null field is one the call did not fill in, such as `file` on a
-    // directory search, so a rule that names it does not match.
-    if (value === undefined || value === null) return false;
-    if (typeof value !== "string") value = String(value);
+/** Whether one field of an interrupt matches one pattern of a rule. Which
+ *  comparison applies depends on the shapes of the two, and on nothing else:
+ *  the table is in "Rule matching" in docs/dev/agents/approval-policies.md. */
+function matchesField(
+  key: string,
+  pattern: MatchPattern,
+  value: unknown,
+  dot: boolean,
+  dirs: PolicyDirs,
+): boolean {
+  // A null field is one the call did not fill in, such as `file` on a
+  // directory search, so a rule that names it does not match.
+  if (value === undefined || value === null) return false;
+  if (Array.isArray(value)) return matchesList(pattern, value, dot);
+  if (typeof pattern !== "string" || !isScalar(value)) return false;
+  return matchesScalar(key, pattern, String(value), dot, dirs);
+}
 
-    // The raw pattern first (relative values match relative patterns as
-    // before), then the cwd-resolved form for dir patterns, so `.` gains its
-    // meaning without taking any match away.
-    const raw = matchesGlob(stripDotSlash(value), stripDotSlash(pattern), dot);
-    const viaDot =
-      !raw &&
-      key === "dir" &&
-      matchesGlob(stripDotSlash(value), stripDotSlash(substituteDot(pattern, dirs.cwd)), dot);
-    const viaPlaceholders =
-      !raw &&
-      !viaDot &&
-      PLACEHOLDER_FIELDS.includes(key) &&
-      matchesGlob(stripDotSlash(value), substitutePlaceholders(pattern, dirs), dot);
-    if (!raw && !viaDot && !viaPlaceholders) {
-      return false;
-    }
+function isScalar(value: unknown): value is string | number | boolean {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
+function matchesScalar(
+  key: string,
+  pattern: string,
+  value: string,
+  dot: boolean,
+  dirs: PolicyDirs,
+): boolean {
+  // The raw pattern first (relative values match relative patterns as
+  // before), then the cwd-resolved form for dir patterns, so `.` gains its
+  // meaning without taking any match away.
+  const raw = matchesGlob(stripDotSlash(value), stripDotSlash(pattern), dot);
+  const viaDot =
+    !raw &&
+    key === "dir" &&
+    matchesGlob(stripDotSlash(value), stripDotSlash(substituteDot(pattern, dirs.cwd)), dot);
+  const viaPlaceholders =
+    !raw &&
+    !viaDot &&
+    PLACEHOLDER_FIELDS.includes(key) &&
+    matchesGlob(stripDotSlash(value), substitutePlaceholders(pattern, dirs), dot);
+  return raw || viaDot || viaPlaceholders;
+}
+
+/** A string pattern matches a list when the list is not empty and every
+ *  item matches. An empty list must not pass: `git add --all` raises with
+ *  no paths, and a rule for `src/**` must not approve it. A list pattern
+ *  matches item by item, and a last `**` stands for any items after it. */
+function matchesList(pattern: MatchPattern, items: unknown[], dot: boolean): boolean {
+  if (!items.every(isScalar)) return false;
+  const texts = items.map(String);
+  if (typeof pattern === "string") {
+    return texts.length > 0 && texts.every((item) => matchesItem(item, pattern, dot));
   }
+  const hasRest = pattern[pattern.length - 1] === REST_OF_LIST;
+  const fixed = hasRest ? pattern.slice(0, -1) : pattern;
+  const fits = hasRest ? texts.length >= fixed.length : texts.length === fixed.length;
+  return fits && fixed.every((one, index) => matchesItem(texts[index], one, dot));
+}
 
-  return true;
+/** One list item against one glob, compared as written. picomatch drops a
+ *  leading `./` from a pattern, which would make the argument `x` match a
+ *  rule saved for `./x`, so the prefix is compared here, before the glob. */
+function matchesItem(item: string, pattern: string, dot: boolean): boolean {
+  const patternHasPrefix = pattern.startsWith("./");
+  if (patternHasPrefix !== item.startsWith("./")) return false;
+  return patternHasPrefix
+    ? matchesGlob(item.slice(2), pattern.slice(2), dot)
+    : matchesGlob(item, pattern, dot);
 }
 
 export function validatePolicy(policy: any): { success: boolean; error?: string } {

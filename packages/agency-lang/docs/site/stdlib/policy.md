@@ -41,6 +41,11 @@ and never the home directory. A rule saved this way sets
 `matchDotFolders`, so it also covers folders like `.cache` below the one
 chosen.
 
+For a command (`std::exec`), "always approve when" asks up to two
+questions. The first is how much of the command the rule covers, from
+this exact command down to the program and its first argument followed
+by anything: `pnpm run …`. The second is the folder, as for a read.
+
 ## Types
 
 ### InterruptDataKey
@@ -52,7 +57,7 @@ Key of an interrupt's `data` object (e.g. `"dir"`, `"command"`).
 export type InterruptDataKey = string
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L93))
 
 ### InterruptDataVal
 
@@ -61,17 +66,23 @@ Glob pattern used to match an interrupt-data value. Patterns are
  `{a,b}` for unions. A literal string with no glob metacharacters
  matches only that exact value.
 
+ A list of globs matches a list value item by item. A last item of `**`
+ stands for any items after it, or none.
+
 ```ts
 /**
  Glob pattern used to match an interrupt-data value. Patterns are
  picomatch globs. They support `*`, `**`, and brace-expansion like
  `{a,b}` for unions. A literal string with no glob metacharacters
  matches only that exact value.
+
+ A list of globs matches a list value item by item. A last item of `**`
+ stands for any items after it, or none.
  */
-export type InterruptDataVal = string
+export type InterruptDataVal = string | string[]
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L104))
 
 ### InterruptEffect
 
@@ -86,7 +97,7 @@ Identifier for an interrupt's effect (e.g. `"std::read"`,
 export type InterruptEffect = string
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L110))
 
 ### PolicyRule
 
@@ -95,6 +106,12 @@ One row of a `Policy`. A rule passes if every key in `match` is
  pattern. Omit `match` (or set it to `{}`) for a catch-all that
  applies to every interrupt of the parent effect.
 
+ When the value is a list, a string pattern matches when the list is not
+ empty and every item matches, and a list pattern matches item by item.
+ For example, `{ "cwd": "/me/proj", "paths": "src/**", "all": "false" }`
+ under `std::git::add` approves a `git add` whose paths are all under
+ `src`, and asks about one that stages everything.
+
  A reject rule may carry a `rejectMessage`: the message the rejection
  hands back to whoever raised the interrupt. For a rejected tool call
  this is what the model reads, so it can steer the next attempt — for
@@ -103,7 +120,8 @@ One row of a `Policy`. A rule passes if every key in `match` is
 
  A rule's globs skip path segments that start with a period: `/x/**` does
  not match `/x/.cache/y`. Set `matchDotFolders: true` to let them match.
- The approval prompt sets it on the read rules it saves.
+ The approval prompt sets it on a rule whose folder came from its folder
+ step.
 
 ```ts
 /**
@@ -112,6 +130,12 @@ One row of a `Policy`. A rule passes if every key in `match` is
  pattern. Omit `match` (or set it to `{}`) for a catch-all that
  applies to every interrupt of the parent effect.
 
+ When the value is a list, a string pattern matches when the list is not
+ empty and every item matches, and a list pattern matches item by item.
+ For example, `{ "cwd": "/me/proj", "paths": "src/**", "all": "false" }`
+ under `std::git::add` approves a `git add` whose paths are all under
+ `src`, and asks about one that stages everything.
+
  A reject rule may carry a `rejectMessage`: the message the rejection
  hands back to whoever raised the interrupt. For a rejected tool call
  this is what the model reads, so it can steer the next attempt — for
@@ -120,7 +144,8 @@ One row of a `Policy`. A rule passes if every key in `match` is
 
  A rule's globs skip path segments that start with a period: `/x/**` does
  not match `/x/.cache/y`. Set `matchDotFolders: true` to let them match.
- The approval prompt sets it on the read rules it saves.
+ The approval prompt sets it on a rule whose folder came from its folder
+ step.
  */
 export type PolicyRule = {
   match?: Record<InterruptDataKey, InterruptDataVal>;
@@ -130,7 +155,7 @@ export type PolicyRule = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L119))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L135))
 
 ### Policy
 
@@ -149,7 +174,7 @@ handler rejects the interrupt.
 export type Policy = Record<InterruptEffect, PolicyRule[]>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L148))
 
 ### Decision
 
@@ -176,7 +201,7 @@ export type Decision =
   | "reject-always"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L173))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L189))
 
 ### ScopedField
 
@@ -189,6 +214,9 @@ One column in a `ScopedRuleFields` entry — names an interrupt-data
    Pass `true` for directory-like fields (so approving `/tmp/x`
    also approves `/tmp/x/sub/file.txt`). Pass `false` for opaque
    identifiers (commands, IDs, env names) that shouldn't fan out.
+ - `matchPrefix` — when `true`, the field is a list, and the rule pins its
+   leading items. The approval prompt asks how many. Leave it out, or
+   pass `false`, for every other field.
 
 ```ts
 /**
@@ -201,14 +229,18 @@ One column in a `ScopedRuleFields` entry — names an interrupt-data
    Pass `true` for directory-like fields (so approving `/tmp/x`
    also approves `/tmp/x/sub/file.txt`). Pass `false` for opaque
    identifiers (commands, IDs, env names) that shouldn't fan out.
+ - `matchPrefix` — when `true`, the field is a list, and the rule pins its
+   leading items. The approval prompt asks how many. Leave it out, or
+   pass `false`, for every other field.
  */
 export type ScopedField = {
   field: string;
-  matchSubpaths: boolean
+  matchSubpaths: boolean;
+  matchPrefix?: boolean
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L192))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L211))
 
 ### ScopedRuleFields
 
@@ -226,8 +258,8 @@ Per-effect override consumed by `buildScopedMatch` and the
  const FIELDS: ScopedRuleFields = {
    "std::read":  [{ field: "dir", matchSubpaths: true }],
    "std::exec":  [
-     { field: "command",    matchSubpaths: false },
-     { field: "subcommand", matchSubpaths: false },
+     { field: "command", matchSubpaths: false },
+     { field: "args",    matchSubpaths: false, matchPrefix: true },
    ],
  }
  ```
@@ -248,8 +280,8 @@ Per-effect override consumed by `buildScopedMatch` and the
  const FIELDS: ScopedRuleFields = {
    "std::read":  [{ field: "dir", matchSubpaths: true }],
    "std::exec":  [
-     { field: "command",    matchSubpaths: false },
-     { field: "subcommand", matchSubpaths: false },
+     { field: "command", matchSubpaths: false },
+     { field: "args",    matchSubpaths: false, matchPrefix: true },
    ],
  }
  ```
@@ -257,7 +289,7 @@ Per-effect override consumed by `buildScopedMatch` and the
 export type ScopedRuleFields = Record<InterruptEffect, ScopedField[]>
 ````
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L218))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L238))
 
 ### ParsePolicyFailureStatus
 
@@ -269,7 +301,7 @@ export type ParsePolicyFailureStatus =
   | "policy-not-valid"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L393))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L427))
 
 ### ParsePolicyFailure
 
@@ -279,7 +311,7 @@ export type ParsePolicyFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L399))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L433))
 
 ## Constants
 
@@ -292,7 +324,7 @@ The minimal built-in policy used by `agency run --policy minimal`.
 export static const minimalAutoApprovePolicy = _minimalAutoApprovePolicy
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L135))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L151))
 
 ### recommendedAutoApprovePolicy
 
@@ -303,7 +335,7 @@ The recommended policy, with scoped file reads and service reads.
 export static const recommendedAutoApprovePolicy = _recommendedAutoApprovePolicy
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L137))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L153))
 
 ### approveAllPolicy
 
@@ -314,7 +346,7 @@ Approve every effect; value-seeking interrupts still need an answer in the CLI h
 export static const approveAllPolicy = _approveAllPolicy
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L155))
 
 ### BUILTIN_POLICIES
 
@@ -325,7 +357,7 @@ Built-in policy names and their descriptions, shared with the CLI.
 export static const BUILTIN_POLICIES = _BUILTIN_POLICIES
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L141))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L157))
 
 ## Functions
 
@@ -343,7 +375,7 @@ Return the recommended policy with file and Git writes scoped to a directory.
 |---|---|---|
 | baseDir | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L143))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L159))
 
 ### builtinPolicy
 
@@ -362,7 +394,7 @@ Resolve a built-in policy name, or return null for an unknown name.
 
 **Returns:** `Policy | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L166))
 
 ### builtinPolicyNames
 
@@ -374,7 +406,7 @@ List the policy names accepted by builtinPolicy and the CLI.
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L159))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L175))
 
 ### checkPolicy
 
@@ -405,7 +437,7 @@ Use `cliPolicyHandler` when you also want terminal prompts and saved rules.
 | policy | `Record<string, any>` |  |
 | interrupt | `Record<string, any>` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L275))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L308))
 
 ### validatePolicy
 
@@ -426,7 +458,7 @@ Check user-supplied or hand-edited policy data before using it.
 
 **Returns:** `Result<void>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L290))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L323))
 
 ### alwaysScopeFor
 
@@ -445,7 +477,7 @@ List the fields declared by an effect's @always and @alwaysUnder tags.
 
 **Returns:** `ScopedField[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L297))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L330))
 
 ### defaultScopedFields
 
@@ -457,7 +489,7 @@ Return the declared approval scopes for all effects, keyed by effect name.
 
 **Returns:** [ScopedRuleFields](#scopedrulefields)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L305))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L338))
 
 ### buildScopedMatch
 
@@ -465,7 +497,7 @@ Return the declared approval scopes for all effects, keyed by effect name.
 buildScopedMatch(
   intr: Record<string, any>,
   fields: ScopedRuleFields = {},
-): Record<string, string>
+): Record<InterruptDataKey, InterruptDataVal>
 ```
 
 Build glob patterns that pin an interrupt's scoped field values.
@@ -492,9 +524,9 @@ of the effect. `recordScopedRule` performs that check for you.
 | intr | `Record<string, any>` |  |  |
 | fields | [ScopedRuleFields](#scopedrulefields) | {} | Per-effect scope overrides, with unlisted effects using their declared scopes. |
 
-**Returns:** `Record<string, string>`
+**Returns:** `Record<InterruptDataKey, InterruptDataVal>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L327))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L360))
 
 ### recordRule
 
@@ -527,7 +559,7 @@ a previous decision. The input policy remains unchanged.
 
 **Returns:** [Policy](#policy)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L350))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L383))
 
 ### recordScopedRule
 
@@ -545,7 +577,8 @@ Prepend an approval rule scoped to an interrupt's field values.
 Use this for an "always approve when" choice. It prepends an approval,
 so a matching scoped rule takes precedence over existing catch-all rules.
 The input policy remains unchanged. If no scope can be built, it returns
-the input policy without adding a rule.
+the input policy without adding a rule. A field tagged `@alwaysPrefix` is
+pinned whole, which is the narrowest rule the terminal prompt offers.
 
 **Parameters:**
 
@@ -557,7 +590,7 @@ the input policy without adding a rule.
 
 **Returns:** [Policy](#policy)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L367))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L401))
 
 ### parsePolicyFile
 
@@ -583,7 +616,7 @@ Its inner read uses `with approve`; an outer handler can still reject it.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L408))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L442))
 
 ### setPolicy
 
@@ -612,7 +645,7 @@ Later saves of "always" answers still go to the file passed to
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L448))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L482))
 
 ### missingPolicyRules
 
@@ -638,7 +671,7 @@ Pass accepted additions to `addPolicyRules`.
 
 **Needs:** `fileRead`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L633))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L667))
 
 ### addPolicyRules
 
@@ -661,7 +694,7 @@ fails, the active policy stays unchanged.
 
 **Needs:** `fileRead`, `fileWrite`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L648))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L682))
 
 ### flushPolicy
 
@@ -680,7 +713,7 @@ If a handler refuses the save, the answers stay pending and a warning prints.
 
 **Needs:** `fileRead`, `fileWrite`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L673))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L707))
 
 ### cliPolicyHandler
 
@@ -734,4 +767,4 @@ overrides them. An empty override disables that choice for the effect.
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1533))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1611))

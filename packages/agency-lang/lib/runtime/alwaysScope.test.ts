@@ -4,6 +4,7 @@ import {
   adoptAlwaysScope,
   alwaysScopeFor,
   allAlwaysScopes,
+  sameScopedFields,
 } from "./alwaysScope.js";
 
 describe("always-scope registry", () => {
@@ -55,6 +56,38 @@ describe("always-scope registry", () => {
     expect(alwaysScopeFor("test::h")).toEqual([{ field: "name", matchSubpaths: false }]);
     adoptAlwaysScope("test::h", [{ field: "other", matchSubpaths: true }]);
     expect(alwaysScopeFor("test::h")).toEqual([{ field: "name", matchSubpaths: false }]);
+  });
+
+  it("treats fields that differ only in matchPrefix as different", () => {
+    expect(
+      sameScopedFields(
+        [{ field: "args", matchSubpaths: false, matchPrefix: true }],
+        [{ field: "args", matchSubpaths: false }],
+      ),
+    ).toBe(false);
+    expect(
+      sameScopedFields(
+        [{ field: "args", matchSubpaths: false, matchPrefix: false }],
+        [{ field: "args", matchSubpaths: false }],
+      ),
+    ).toBe(true);
+  });
+
+  it("adopts a child's prefix field, and ignores a malformed one", () => {
+    adoptAlwaysScope("test::prefix", [{ field: "args", matchSubpaths: false, matchPrefix: true }]);
+    expect(alwaysScopeFor("test::prefix")).toEqual([
+      { field: "args", matchSubpaths: false, matchPrefix: true },
+    ]);
+    adoptAlwaysScope("test::prefixString", [
+      { field: "args", matchSubpaths: false, matchPrefix: "yes" },
+    ]);
+    expect(alwaysScopeFor("test::prefixString")).toEqual([]);
+    // The typechecker cannot produce both flags, but a child process can
+    // send them.
+    adoptAlwaysScope("test::prefixBoth", [
+      { field: "args", matchSubpaths: true, matchPrefix: true },
+    ]);
+    expect(alwaysScopeFor("test::prefixBoth")).toEqual([]);
   });
 
   it("ignores a malformed child scope instead of throwing", () => {

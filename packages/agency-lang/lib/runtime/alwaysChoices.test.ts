@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  EXACT_PREFIX,
   MAX_FOLDER_CHOICES,
+  MAX_PREFIX_CHOICES,
+  prefixChoices,
+  prefixPattern,
   describeScope,
   folderChoices,
+  getsFolderStep,
   inSharedApprovalSet,
   sharedApprovalSet,
 } from "./alwaysChoices.js";
@@ -22,6 +27,43 @@ describe("describeScope", () => {
     expect(describeScope([exact("method"), exact("baseUrl")], data)).toBe(
       "method = GET, baseUrl = https://a.b",
     );
+  });
+  it("prints a list field as its items joined with spaces", () => {
+    const prefix = { field: "args", matchSubpaths: false, matchPrefix: true };
+    const data = { command: "pnpm", args: ["run", "build"], cwd: "/x" };
+    expect(describeScope([exact("command"), prefix, under("cwd")], data)).toBe(
+      "command = pnpm, args = run build, cwd = /x and below",
+    );
+  });
+});
+
+describe("prefixChoices", () => {
+  it("offers the exact list, then each prefix down to one item, narrowest first", () => {
+    expect(prefixChoices(0)).toEqual([{ id: EXACT_PREFIX, keep: 0, rest: false }]);
+    expect(prefixChoices(1)).toHaveLength(2);
+    expect(prefixChoices(5)).toHaveLength(6);
+    expect(prefixChoices(2).map((choice) => choice.id)).toEqual(["exact", "2", "1"]);
+  });
+  it("never offers a prefix of no items, which would cover any arguments", () => {
+    expect(prefixChoices(3).some((choice) => choice.keep === 0 && choice.rest)).toBe(false);
+  });
+  it("keeps the exact choice and the widest ones when there are too many", () => {
+    // For a command the wide choices are the likely picks: `pnpm run
+    // agency …` must stay on offer for a long `pnpm run agency test` line.
+    const many = prefixChoices(20);
+    expect(many.map((choice) => choice.id)).toEqual(["exact", "7", "6", "5", "4", "3", "2", "1"]);
+    expect(many).toHaveLength(MAX_PREFIX_CHOICES);
+  });
+});
+
+describe("prefixPattern", () => {
+  const exactChoice = { id: EXACT_PREFIX, keep: 2, rest: false };
+  it("keeps the leading items and adds the rest marker", () => {
+    expect(prefixPattern(["run", "a*b"], { id: "1", keep: 1, rest: true })).toEqual(["run", "**"]);
+  });
+  it("escapes every kept item", () => {
+    expect(prefixPattern(["run", "a*b"], exactChoice)).toEqual(["run", "a\\*b"]);
+    expect(prefixPattern(["**"], { id: EXACT_PREFIX, keep: 1, rest: false })).toEqual(["\\*\\*"]);
   });
 });
 
@@ -123,6 +165,11 @@ describe("sharedApprovalSet", () => {
   });
   it("returns null for an effect with no scope", () => {
     expect(sharedApprovalSet("std::ls", {}, {}, sets)).toBeNull();
+  });
+  it("gives the folder step to a listed set's members and to the effects named for it", () => {
+    expect(getsFolderStep("std::read", sets)).toBe(true);
+    expect(getsFolderStep("std::exec", sets)).toBe(true);
+    expect(getsFolderStep("std::remove", sets)).toBe(false);
   });
   it("says whether an effect is in a listed set", () => {
     expect(inSharedApprovalSet("std::vision", sets)).toBe(true);

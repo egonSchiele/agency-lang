@@ -296,6 +296,50 @@ describe("@always scope checking", () => {
     ).toBeDefined();
   });
 
+  it("errors on @alwaysPrefix on a field that is not a list", () => {
+    const msgs = messagesOf("@alwaysPrefix(command)\neffect app::x { command: string }");
+    expect(
+      msgs.find((m) =>
+        /`@alwaysPrefix\(command\)` on effect `app::x` needs a list field, and `command` is not one/.test(
+          m,
+        ),
+      ),
+    ).toBeDefined();
+  });
+
+  it("accepts @alwaysPrefix on a list field, also through a type alias", () => {
+    expect(
+      messagesOf("@alwaysPrefix(args)\neffect app::x { args: string[] }").filter((m) =>
+        /@alwaysPrefix/.test(m),
+      ),
+    ).toEqual([]);
+    expect(
+      messagesOf(
+        "type Words = string[]\n@alwaysPrefix(args)\neffect app::x { args: Words }",
+      ).filter((m) => /@alwaysPrefix/.test(m)),
+    ).toEqual([]);
+  });
+
+  it("errors on @alwaysPrefix on a list that may be null", () => {
+    // A rule can pin only a list that is always there.
+    const msgs = messagesOf("@alwaysPrefix(args)\neffect app::x { args: string[] | null }");
+    expect(msgs.find((m) => /needs a list field/.test(m))).toBeDefined();
+  });
+
+  it("errors on an @alwaysPrefix tag that attached to a function", () => {
+    const msgs = messagesOf("@alwaysPrefix(x)\ndef f(x: string[]): string[] { return x }");
+    expect(
+      msgs.find((m) => /@alwaysPrefix is only valid on an effect declaration/.test(m)),
+    ).toBeDefined();
+  });
+
+  it("names @alwaysPrefix when its field is not in the payload", () => {
+    const msgs = messagesOf("@alwaysPrefix(nope)\neffect app::x { args: string[] }");
+    expect(
+      msgs.find((m) => /@alwaysPrefix names 'nope', which effect 'app::x' does not carry/.test(m)),
+    ).toBeDefined();
+  });
+
   it("errors on a non-identifier argument", () => {
     const msgs = messagesOf('@always("name")\neffect app::x { name: string }');
     expect(msgs.find((m) => /@always arguments must be bare field names/.test(m))).toBeDefined();

@@ -82,6 +82,40 @@ describe("readAlwaysScope", () => {
     expect(hasAlwaysScope(tags)).toBe(true);
   });
 
+  it("reads prefix fields from @alwaysPrefix, beside the other two tags", () => {
+    const scope = readAlwaysScope(
+      declOf(
+        "@always(command)\n@alwaysPrefix(args)\n@alwaysUnder(cwd)\n" +
+          "effect app::x { command: string, args: string[], cwd: string }",
+      ).tags,
+    );
+    expect(scope.fields).toEqual([
+      { field: "command", matchSubpaths: false },
+      { field: "args", matchSubpaths: false, matchPrefix: true },
+      { field: "cwd", matchSubpaths: true },
+    ]);
+    expect(scope.problems).toEqual([]);
+  });
+
+  it("reports a repeated @alwaysPrefix, a field it shares, and a non-identifier argument", () => {
+    const kinds = (src: string) =>
+      readAlwaysScope(declOf(src).tags).problems.map((problem) => problem.kind);
+    expect(
+      kinds("@alwaysPrefix(a)\n@alwaysPrefix(b)\neffect app::x { a: string[], b: string[] }"),
+    ).toEqual(["repeatedTag"]);
+    expect(kinds("@always(a)\n@alwaysPrefix(a)\neffect app::x { a: string[] }")).toEqual([
+      "namedTwice",
+      "namedTwice",
+    ]);
+    expect(kinds('@alwaysPrefix("a")\neffect app::x { a: string[] }')).toEqual(["badArgument"]);
+  });
+
+  it("counts @alwaysPrefix alone as a tagged declaration", () => {
+    expect(hasAlwaysScope(declOf("@alwaysPrefix(a)\neffect app::x { a: string[] }").tags)).toBe(
+      true,
+    );
+  });
+
   it("ignores unrelated tags", () => {
     const tags = declOf("@hidden\n@always(a)\neffect app::x { a: string }").tags;
     expect(readAlwaysScope(tags).fields).toEqual([{ field: "a", matchSubpaths: false }]);

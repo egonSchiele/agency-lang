@@ -110,7 +110,7 @@ import { GITHUB_MAX_PER_PAGE } from "agency-lang/stdlib-lib/github/args.js"
 import { _addLine, _write, _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget, _missingTarget } from "agency-lang/stdlib-lib/fs.js"
-import { _searchTargetIn, _bash, _grep, _skipDirNames } from "agency-lang/stdlib-lib/shell.js"
+import { _searchTargetIn, _bash, _grep, _skipDirNames, _absoluteCwd } from "agency-lang/stdlib-lib/shell.js"
 import { _launchJob, _jobStartRefusal } from "agency-lang/stdlib-lib/jobs.js"
 import { basename as lastSegment, dirname as parentOf, join as joinPath } from "std::path"
 import { now } from "std::date"
@@ -776,9 +776,10 @@ static const NO_EXEC_PROGRAMS: string[] = [
   // `unwrapTimeout`); any other spelling of them lands here.
   "sh", "bash", "zsh", "dash", "fish", "xargs", "env", "sudo", "doas",
   "nohup", "time", "timeout", "gtimeout", "watch", "nice", "script",
-  // Package runners. `npx -y foo` has subcommand `-y`, so a saved
-  // `{ npx, -y }` would cover every package. (`pnpm dlx` and `npm exec`
-  // are keyed on a subcommand that names the behaviour, so they stay.)
+  // Package runners. The first argument of `npx -y foo` is a flag, so the
+  // widest "always approve when" choice, `npx -y …`, would cover every
+  // package. (`pnpm dlx` and `npm exec` start with a word that names the
+  // behaviour, so they stay.)
   "npx", "bunx", "uvx", "pipx",
   // A lone `agency` line runs in process through std::agency, and
   // recommended approves std::exec for agency's safe subcommands, which
@@ -788,10 +789,11 @@ static const NO_EXEC_PROGRAMS: string[] = [
   // does not go looking for the binary. A chain must not turn the same
   // lookup into a question a saved rule answers.
   "which", "whereis",
-  // Programs that do one narrow thing to files. std::exec pins only the
-  // first argument, so "always approve" for `mv -f a b` would cover every
-  // forced move, and one for `ln -sf` would let a later command in a line
-  // read a file swapped for a link under an approval that names neither.
+  // Programs that do one narrow thing to files. The widest std::exec rule
+  // pins only the first argument, so "always approve when" for `mv -f a b`
+  // could cover every forced move, and one for `ln -sf` would let a later
+  // command in a line read a file swapped for a link under an approval
+  // that names neither.
   // A new program that can replace a file goes here before it gets any
   // rule. `sed -n 'w f'` writes a file and GNU `sed -n '1e cmd'` runs one,
   // so a sed that is not a plain range read (see `sedEffects`) has no rule.
@@ -826,21 +828,11 @@ def execEffects(verb: string, command: SimpleCommand, cwd: string, readsStdin: b
   const payload: ExecPayload = {
     command: verb,
     args: args.value,
-    subcommand: subcommandOf(args.value),
     cwd: cwd,
     timeout: 0,
     stdin: ""
   }
   return success([execEffect(payload), ...redirects])
-}
-
-/* The first argument, which the exec tool and its `@always` call the
- subcommand, or "" for a bare program. */
-def subcommandOf(args: string[]): string {
-  if (args.length == 0) {
-    return ""
-  }
-  return args[0]
 }
 
 def execArgs(verb: string, words: Word[]): Result<string[]> {
@@ -5968,21 +5960,19 @@ def renderFlag(flag: FlagWord): string {
 
 // Resolved once, at the top, and then carried on every action. An action
 // that did not carry it would run wherever the process happened to be,
-// which is the same command doing two different things.
+// which is the same command doing two different things. It is absolute,
+// so the folder a std::exec question names, and a rule saved from it, is
+// a real folder and not a name that means something in every project.
 export def resolveCwd(cwd: string): string {
   """
-  Use the requested directory, then the agent directory, then the process directory.
+  Use the requested directory, then the agent directory, then the process directory, as an absolute path.
   """
   if (cwd != "") {
-    return cwd
+    return _absoluteCwd(cwd)
   }
-  const agent = getAgentCwd()
-  if (agent != "") {
-    return agent
-  }
-  // `write` rejects an empty dir, and `getAgentCwd()` is empty whenever
-  // nothing set one, which is the case the tests run in.
-  return "."
+  // `getAgentCwd()` is empty whenever nothing set one, which is the case
+  // the tests run in. An empty folder is the run's folder.
+  return _absoluteCwd(getAgentCwd())
 }
 
 /** Added to a failed repository lookup, whose own message names the typed
@@ -6544,7 +6534,6 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string, timeoutMs: number
       raise std::exec("Are you sure you want to run this command${where}?", {
         command: effect.payload.command,
         args: effect.payload.args,
-        subcommand: effect.payload.subcommand,
         cwd: effect.payload.cwd,
         timeout: timeoutMs,
         stdin: effect.payload.stdin,

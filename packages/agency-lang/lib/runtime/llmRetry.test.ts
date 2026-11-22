@@ -293,9 +293,11 @@ describe("decideCutOff", () => {
   it("retries a cut-off reply with no text", () => {
     expect(decideCutOff({ stopReason: "length", content: "  \n", attempt: 0 })).toEqual({
       kind: "retry",
+      reason: "cutOff",
     });
     expect(decideCutOff({ stopReason: "length", content: null, attempt: 1 })).toEqual({
       kind: "retry",
+      reason: "cutOff",
     });
   });
   it("fails after CUT_OFF_RETRIES retries", () => {
@@ -310,5 +312,25 @@ describe("decideCutOff", () => {
   it("warns about a cut-off reply with text", () => {
     const decision = decideCutOff({ stopReason: "length", content: "Partial ans", attempt: 0 });
     expect(decision.kind).toBe("warn");
+  });
+  it("retries a reply that stopped to call a tool, with or without text", () => {
+    expect(decideCutOff({ stopReason: "tool_use", content: null, attempt: 0 })).toEqual({
+      kind: "retry",
+      reason: "droppedToolCall",
+    });
+    expect(
+      decideCutOff({ stopReason: "tool_use", content: "Let me look at the file.", attempt: 1 }),
+    ).toEqual({ kind: "retry", reason: "droppedToolCall" });
+  });
+  it("fails after CUT_OFF_RETRIES retries of a lost tool call", () => {
+    const decision = decideCutOff({
+      stopReason: "tool_use",
+      content: null,
+      attempt: CUT_OFF_RETRIES,
+    });
+    expect(decision).toEqual(
+      expect.objectContaining({ kind: "surfaceFailure", reason: "droppedToolCall" }),
+    );
+    expect((decision as any).message).toContain("3 times in a row");
   });
 });

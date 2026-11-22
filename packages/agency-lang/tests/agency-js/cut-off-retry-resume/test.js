@@ -15,6 +15,8 @@ const USAGE = { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalToke
 const COST = { inputCost: 0.000001, outputCost: 0.000001, totalCost: 0.000002, currency: "USD" };
 // COUPLING: must match CUT_OFF_NOTE in lib/runtime/llmRetry.ts.
 const NOTE = "Your last reply reached the output limit before it contained any text or tool call.";
+// COUPLING: must match DROPPED_TOOL_CALL_NOTE in lib/runtime/llmRetry.ts.
+const DROPPED_NOTE = "Your last reply asked to call a tool, but the call could not be read";
 
 // Each entry scripts one reply: { output, stopReason, toolCalls, delayMs }.
 // A delayed reply waits on the request's abort signal like a real provider.
@@ -59,8 +61,8 @@ function makeClient(script) {
   return { client, requests };
 }
 
-const notesIn = (request) =>
-  request.filter((m) => typeof m.content === "string" && m.content.startsWith(NOTE)).length;
+const notesIn = (request, note = NOTE) =>
+  request.filter((m) => typeof m.content === "string" && m.content.startsWith(note)).length;
 const holdsEmptyReply = (request) =>
   request.some(
     (m) =>
@@ -115,6 +117,27 @@ const out = {};
   out.tripResult = final.data;
   out.tripRequests = requests.length;
   out.tripEveryAttemptCarriesNoteOnce = notesIn(requests[1]) === 1 && notesIn(requests[2]) === 1;
+}
+
+// Test 10: a reply whose tool call was lost, paused at the retry's gate.
+// The resumed retry must send the lost-call note, not the cut-off note:
+// the reason lives on the frame, so the checkpoint carries it.
+{
+  const { client, requests } = makeClient([
+    { output: "", stopReason: "tool_use" },
+    { output: "done" },
+    { output: "after" },
+  ]);
+  __setLLMClient(client);
+  const paused = await gatePause();
+  out.droppedPausePaused = hasInterrupts(paused.data);
+  const final = await respondToInterrupts(paused.data, [approve({ maxCost: 0.0001 })]);
+  out.droppedPauseResult = final.data;
+  out.droppedPauseRequests = requests.length;
+  out.droppedPauseRetryCarriesDroppedNote =
+    notesIn(requests[1], DROPPED_NOTE) === 1 && notesIn(requests[1]) === 0;
+  out.droppedPauseThreadClean =
+    notesIn(requests[2], DROPPED_NOTE) === 0 && !holdsEmptyReply(requests[2]);
 }
 
 writeFileSync("__result.json", JSON.stringify(out, null, 2));

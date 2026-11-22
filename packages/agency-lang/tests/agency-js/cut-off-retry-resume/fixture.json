@@ -15,5 +15,13 @@
   "gatePauseThreadClean": true,
   "tripResult": "done",
   "tripRequests": 3,
-  "tripEveryAttemptCarriesNoteOnce": true
+  "tripEveryAttemptCarriesNoteOnce": true,
+  "droppedPausePaused": true,
+  "droppedPauseResult": {
+    "inner": "done",
+    "after": "after"
+  },
+  "droppedPauseRequests": 3,
+  "droppedPauseRetryCarriesDroppedNote": true,
+  "droppedPauseThreadClean": true
 }

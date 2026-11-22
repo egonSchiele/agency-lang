@@ -15,7 +15,7 @@ import {
 import { AgencyCancelledError, describeAbortCause, isAbortError, readCause } from "./errors.js";
 import { type ProviderUsageKind } from "./invocationUsage.js";
 import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
-import type { RetryConfig } from "./llmRetry.js";
+import type { FinalReplyRetryReason, RetryConfig } from "./llmRetry.js";
 import {
   advanceCutOffAttempt,
   cutOffDecision,
@@ -643,9 +643,10 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     }
   };
 
-  /** Remove the empty cut-off reply and send the request again, with a
-   *  note that lasts for that one request. */
-  const retryCutOffReply = async (): Promise<void> => {
+  /** Remove the reply that cannot be the answer (cut off empty, or with
+   *  its tool call lost) and send the request again, with a note that
+   *  lasts for that one request. */
+  const retryCutOffReply = async (reason: FinalReplyRetryReason): Promise<void> => {
     const attempt: number = self.cutOffPending ?? self.cutOffAttempt;
     const which = { cutOffRetry: attempt };
     const expiryKey = requestExpiryKey(which);
@@ -653,13 +654,13 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
     const replacesFirstRequest = self.toolCallRound === 0;
     await resendRequest(
       which,
-      () => removeCutOffReply(run, messages, cutOffFrame, attempt),
+      () => removeCutOffReply(run, messages, cutOffFrame, attempt, reason),
       () => advanceCutOffAttempt(cutOffFrame, attempt),
       async () => {
         if (replacesFirstRequest) {
           await pushRecalledFacts(expiryKey);
         }
-        pushCutOffNote(messages, expiryKey);
+        pushCutOffNote(messages, expiryKey, reason);
       },
     );
   };
@@ -1650,16 +1651,18 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
         });
       }
-      // Tool calls are drained. An empty reply the output limit cut off is
-      // retried before anything reads it, so validation never sees one.
+      // Tool calls are drained. An empty reply the output limit cut off, or
+      // a reply whose tool call was lost, is retried before anything reads
+      // it, so validation never sees one.
       const cutOff = cutOffDecision(cutOffFrame, messages);
       if (cutOff.kind === "retry") {
-        await retryCutOffReply();
+        await retryCutOffReply(cutOff.reason);
         continue;
       }
       if (cutOff.kind === "surfaceFailure") {
         await pr.step("guardGate.final", guardGate);
-        run.log.error({ errorType: "replyCutOff", message: cutOff.message });
+        const errorType = cutOff.reason === "cutOff" ? "replyCutOff" : "droppedToolCall";
+        run.log.error({ errorType, message: cutOff.message });
         return failure(cutOff.message);
       }
       if (cutOff.kind === "warn") {

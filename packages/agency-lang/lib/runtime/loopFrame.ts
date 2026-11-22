@@ -31,5 +31,6 @@ export function initLoopFrame(self: Record<string, any>, args: Record<string, an
   // from before these fields gets them (docs/dev/agents/tool-loop-guards.md).
   self.cutOffAttempt ??= 0;
   self.cutOffPending ??= null;
+  self.cutOffReason ??= null;
   self.lastStopReason ??= null;
 }

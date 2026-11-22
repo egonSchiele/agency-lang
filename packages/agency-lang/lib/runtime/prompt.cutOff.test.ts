@@ -3,7 +3,7 @@ import { z } from "zod";
 import type * as smoltalk from "smoltalk";
 import { runInTestContext } from "./asyncContext.js";
 import type { LLMMock } from "./deterministicClient.js";
-import { CUT_OFF_NOTE } from "./llmRetry.js";
+import { CUT_OFF_NOTE, DROPPED_TOOL_CALL_NOTE } from "./llmRetry.js";
 import { runPrompt } from "./prompt.js";
 import { makeCtx, pingTool, RecordingClient } from "./promptTestHelpers.js";
 import { isFailure } from "./result.js";
@@ -141,5 +141,81 @@ describe("a reply cut off by the output limit", () => {
     const result = await call(s, new MessageThread(), z.object({ a: z.number() }));
     expect(result).toEqual({ a: 1 });
     expect(s.client.requests).toHaveLength(2);
+  });
+});
+
+/** A reply that stopped to call a tool but carried no tool call. A local
+ *  model server drops a call it cannot parse and still reports the stop
+ *  reason, so the model believes it called a tool and nothing ran. See "A
+ *  reply whose tool call was lost" in docs/dev/agents/tool-loop-guards.md. */
+const DROPPED_CALL: LLMMock = { return: "", stopReason: "tool_use" };
+
+const holdsDroppedNote = (messages: smoltalk.Message[]): number =>
+  messages.filter((message) => textOf(message) === DROPPED_TOOL_CALL_NOTE).length;
+
+describe("a reply whose tool call was lost", () => {
+  it("is retried with a note asking for the call again, and the next reply is the answer", async () => {
+    const s = setup([DROPPED_CALL, { return: "done" }]);
+    const thread = new MessageThread();
+    expect(await call(s, thread)).toBe("done");
+    expect(s.client.requests).toHaveLength(2);
+    const second = s.client.requests[1];
+    expect(textOf(second.at(-1)!)).toBe(DROPPED_TOOL_CALL_NOTE);
+    expect(holdsNote(second)).toBe(0);
+    expect(holdsEmptyReply(second)).toBe(false);
+    expect(holdsDroppedNote(thread.getMessages())).toBe(0);
+  });
+
+  it("is retried even when the reply has text before the lost call", async () => {
+    const s = setup([
+      { return: "Let me search for the HTML writer first.", stopReason: "tool_use" },
+      { return: "done" },
+    ]);
+    const thread = new MessageThread();
+    expect(await call(s, thread)).toBe("done");
+    expect(s.client.requests).toHaveLength(2);
+    const texts = thread.getMessages().map(textOf);
+    expect(texts).not.toContain("Let me search for the HTML writer first.");
+  });
+
+  it("after tool rounds, is retried and the loop keeps running tools", async () => {
+    const s = setup([
+      { toolCall: { name: "ping" } },
+      DROPPED_CALL,
+      { toolCall: { name: "ping" } },
+      { return: "ok" },
+    ]);
+    expect(await call(s, new MessageThread())).toBe("ok");
+    expect(s.runs()).toBe(2);
+    expect(s.client.requests).toHaveLength(4);
+  });
+
+  it("three lost calls in a row are a failure that says the calls could not be read", async () => {
+    const s = setup([DROPPED_CALL, DROPPED_CALL, DROPPED_CALL]);
+    const result = await call(s, new MessageThread());
+    expect(isFailure(result)).toBe(true);
+    expect(result.error).toContain("could not read");
+    expect(s.client.requests).toHaveLength(3);
+  });
+
+  it("shares the retry limit with cut-off replies in the same llm() call", async () => {
+    const s = setup([EMPTY_CUT_OFF, DROPPED_CALL, DROPPED_CALL]);
+    const result = await call(s, new MessageThread());
+    expect(isFailure(result)).toBe(true);
+    expect(s.client.requests).toHaveLength(3);
+    expect(holdsNote(s.client.requests[1])).toBe(1);
+    expect(holdsDroppedNote(s.client.requests[2])).toBe(1);
+  });
+
+  it("reports the retry to the onLLMRetry hook with the droppedToolCall reason", async () => {
+    const s = setup([DROPPED_CALL, { return: "done" }]);
+    const retries: any[] = [];
+    s.ctx.callbacks.onLLMRetry = (data: any) => {
+      retries.push(data);
+    };
+    await call(s, new MessageThread());
+    expect(retries).toEqual([
+      expect.objectContaining({ reason: "droppedToolCall", attempt: 1, maxRetries: 2 }),
+    ]);
   });
 });

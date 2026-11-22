@@ -18,6 +18,7 @@ export type StatelogErrorType =
   | "limitExceeded"
   | "structuredOutput"
   | "replyCutOff"
+  | "droppedToolCall"
   | "finalizeError";
 
 /** The kinds of `warn` event `StatelogClient.warn` writes. */

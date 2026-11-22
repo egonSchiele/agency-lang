@@ -1561,7 +1561,7 @@ static const SHELL_FREE_GREP_CAP = 1000
 // character of the pattern means the same thing to grep and to the tool.
 // A failure means "not this path", and the general rules then decide.
 @capabilities(fileRead)
-def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
+def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<InProcess> {
   """
   Plan an in-process grep when its pattern and flags translate to the grep tool.
   """
@@ -1578,7 +1578,7 @@ def tryShellFreeGrep(command: SimpleCommand, cwd: string): Result<Plan> {
   }
 }
 
-def shellFreeGrepRead(found: GrepRead, command: SimpleCommand): Result<Plan> {
+def shellFreeGrepRead(found: GrepRead, command: SimpleCommand): Result<InProcess> {
   return match(found) {
     { kind: "stdin" } => failure("a lone grep with no path reads stdin")
     { kind: "search", calls } => shellFreeGrepOf(calls, command)
@@ -1586,7 +1586,7 @@ def shellFreeGrepRead(found: GrepRead, command: SimpleCommand): Result<Plan> {
 }
 
 /* The grep tool searches one path. */
-def shellFreeGrepOf(calls: GrepCall[], command: SimpleCommand): Result<Plan> {
+def shellFreeGrepOf(calls: GrepCall[], command: SimpleCommand): Result<InProcess> {
   if (calls.length != 1) {
     return failure("the grep tool searches one path")
   }
@@ -1594,7 +1594,7 @@ def shellFreeGrepOf(calls: GrepCall[], command: SimpleCommand): Result<Plan> {
 }
 
 @capabilities(fileRead)
-def shellFreeGrepPlan(call: GrepCall, command: SimpleCommand): Result<Plan> {
+def shellFreeGrepPlan(call: GrepCall, command: SimpleCommand): Result<InProcess> {
   """
   Build an in-process search plan from a validated grep call.
   """
@@ -1624,13 +1624,7 @@ def shellFreeGrepPlan(call: GrepCall, command: SimpleCommand): Result<Plan> {
     argument: target.argument,
     oneFile: target.file != null
   }
-  return success({
-    effects: [grepEffect(payload)],
-    execution: grepExecution(payload, render, call.saved),
-    broadReason: null,
-    verbs: verbNames([command]),
-    savedPaths: []
-  })
+  return success({ effects: [grepEffect(payload)], exec: grepExecution(payload, render, call.saved) })
 }
 
 /* Which pattern syntax the letters choose. GNU grep refuses -E with -F. */
@@ -2015,17 +2009,19 @@ def resolveTarget(text: string, word: Word, cwd: string): Result<PathTarget> {
  `std::mkdir` for, by real path. `strict` is false for a lookup that may
  name a path that does not exist yet. What an earlier command did to the
  disk is not predicted: each step is planned again just before it runs
- (see `runBashStep`). */
+ (see `runBashStep`). `piped` is true inside a pipeline, which bash runs
+ whole, so no command in it is one safeBash runs itself. */
 type LineState = {
   cwd: string;
   written: WritePayload[];
   made: string[];
-  strict: boolean
+  strict: boolean;
+  piped: boolean
 }
 
 /* The state of a line before its first command. */
 def freshLine(cwd: string): LineState {
-  return { cwd: cwd, written: [], made: [], strict: false }
+  return { cwd: cwd, written: [], made: [], strict: false, piped: false }
 }
 
 /* The same line, for a lookup where a missing path has no rule: `find`,
@@ -4297,7 +4293,7 @@ static const SHELL_FREE_READ_VERBS: string[] = ["cat", "head", "tail"]
 // only to the flags `_renderReadView` prints exactly. A failure means
 // "not this path", and the general rules then decide.
 @capabilities(fileRead)
-def tryShellFreeRead(command: SimpleCommand, cwd: string): Result<Plan> {
+def tryShellFreeRead(command: SimpleCommand, cwd: string): Result<InProcess> {
   """
   Plan an in-process cat, head, or tail when its output can be reproduced.
   """
@@ -4321,8 +4317,18 @@ def tryShellFreeRead(command: SimpleCommand, cwd: string): Result<Plan> {
   }
 }
 
+/** What safeBash runs itself for one command, and the questions it asks. */
+type InProcess = {
+  effects: Effect[];
+  exec: StepExec
+}
+
+// The table of commands safeBash runs itself: an echo, a grep, and a
+// read. `classifySimple` asks it about every command, wherever the
+// command sits in the line. A failure means "not this path", and the
+// bash rule then decides.
 @capabilities(fileRead)
-def tryShellFreeStep(command: SimpleCommand, cwd: string): Result<Plan> {
+def tryShellFreeStep(command: SimpleCommand, cwd: string): Result<InProcess> {
   """
   Plan one supported echo, grep, or file read for in-process execution.
   """
@@ -4337,126 +4343,14 @@ def tryShellFreeStep(command: SimpleCommand, cwd: string): Result<Plan> {
   return tryShellFreeRead(command, cwd)
 }
 
-/** One command of a chain and how it follows the one before. */
-type ChainLink = {
-  join: Join;
-  command: SimpleCommand
-}
-
-@capabilities(fileRead)
-def tryShellFreeChain(commands: Command[], cwd: string): Result<Plan> {
-  """
-  Plan a chain only when every command can run in process.
-  """
-  const links = chainLinks(commands)
-  if (isFailure(links)) {
-    return links
-  }
-  if (links.value.length < 2) {
-    return failure("not a chain")
-  }
-  const real = try _realFolder(cwd)
-  if (real is failure(why)) {
-    return failure("the folder `${cwd}` cannot be resolved: ${why}")
-  }
-  let steps: LineStep[] = []
-  let effects: Effect[] = []
-  for (link in links.value) {
-    const plan = tryShellFreeStep(link.command, cwd)
-    if (isFailure(plan)) {
-      return plan
-    }
-    const execution = stepExecOf(plan.value.execution)
-    if (isFailure(execution)) {
-      return execution
-    }
-    steps.push({
-      kind: "run",
-      join: link.join,
-      source: link.command,
-      cwd: cwd,
-      realCwd: real.value,
-      text: stepText(link.command),
-      effects: plan.value.effects,
-      readsStatus: false,
-      inProcess: execution.value
-    })
-    effects = [...effects, ...plan.value.effects]
-  }
-  const whole = rebuild(commands)?
-  return success(stepsPlan(whole, steps, effects, verbNames([link.command for link in links.value]), null))
-}
-
-// Keep this match exhaustive so every new execution kind gets a chain decision.
-def stepExecOf(exec: Execution): Result<StepExec> {
-  """
-  Return an in-process execution suitable for a chain step.
-  """
-  return match(exec) {
-    { kind: "echo" } => success(exec)
-    { kind: "write" } => success(exec)
-    { kind: "grep" } => success(exec)
-    { kind: "read" } => success(exec)
-    { kind: "bash" } => failure("a shell is not a chain step")
-    { kind: "agency" } => failure("an agency command is not a chain step")
-    { kind: "refuse" } => failure("a refused command is not a chain step")
-    { kind: "steps" } => failure("a stepped line is not a step")
-  }
-}
-
-def chainLinks(commands: Command[]): Result<ChainLink[]> {
-  """
-  Flatten a command line into simple commands and their preceding joins.
-  """
-  let out: ChainLink[] = []
-  for (command in commands) {
-    const links = linksOf(command, "seq")
-    if (isFailure(links)) {
-      return links
-    }
-    out = [...out, ...links.value]
-  }
-  return success(out)
-}
-
-def linksOf(command: Command, join: Join): Result<ChainLink[]> {
-  // A second walk over the tree beside `flattenOne`, on purpose.
-  // `flattenOne` feeds the refuse wall, so it must see through
-  // parentheses and pipelines. A chain must stop at them: bash skips
-  // `(b || c)` in `a && (b || c)` as a whole, which a flat list cannot
-  // say. One walk answering both would give the wall a reason to skip a
-  // node. The parser is left-associative (`a && b || c` is
-  // `Or(And(a, b), c)`), so the flat list with a join per link runs in
-  // bash's order.
-  return match(command) {
-    { tag: "simpleCommand" } => success([{ join: join, command: command }])
-    { tag: "and", left, right } => joinedLinks(left, join, right, "and")
-    { tag: "or", left, right } => joinedLinks(left, join, right, "or")
-    { tag: "parens" } => failure("a parenthesized group is not run in process")
-    { tag: "pipeline" } => failure("a pipeline is not run in process")
-  }
-}
-
-def joinedLinks(left: Command, leftJoin: Join, right: Command, rightJoin: Join): Result<ChainLink[]> {
-  const first = linksOf(left, leftJoin)
-  if (isFailure(first)) {
-    return first
-  }
-  const second = linksOf(right, rightJoin)
-  if (isFailure(second)) {
-    return second
-  }
-  return success([...first.value, ...second.value])
-}
-
-def shellFreeReadOf(verb: string, found: FileRead, command: SimpleCommand): Result<Plan> {
+def shellFreeReadOf(verb: string, found: FileRead, command: SimpleCommand): Result<InProcess> {
   return match(found) {
     { kind: "stdin" } => failure("a lone read with no path reads stdin")
     { kind: "files", paths, split } => shellFreeReadPlan(verb, paths, split, command)
   }
 }
 
-def shellFreeReadPlan(verb: string, paths: ReadPath[], split: SplitArgs, command: SimpleCommand): Result<Plan> {
+def shellFreeReadPlan(verb: string, paths: ReadPath[], split: SplitArgs, command: SimpleCommand): Result<InProcess> {
   // How many paths each verb takes is READ_VERBS' rule, already applied
   // by readFileVerb: head and tail take at most one.
   const view = readViewFor(verb, split, paths.length)
@@ -4464,13 +4358,7 @@ def shellFreeReadPlan(verb: string, paths: ReadPath[], split: SplitArgs, command
     return view
   }
   const sources: ReadSource[] = [path.source for path in paths]
-  return success({
-    effects: readEffects(paths),
-    execution: readExecution(sources, view.value),
-    broadReason: null,
-    verbs: verbNames([command]),
-    savedPaths: []
-  })
+  return success({ effects: readEffects(paths), exec: readExecution(sources, view.value) })
 }
 
 // Only render forms with matching GNU and BSD output. They disagree on
@@ -4631,10 +4519,6 @@ export def outcomeOf(plan: Plan): string {
   """
   return match(plan.execution.kind) {
     "refuse" => "refuse"
-    "echo" => "shellFree"
-    "write" => "shellFree"
-    "grep" => "shellFree"
-    "read" => "shellFree"
     "agency" => "agency"
     "bash" => bashOutcome(plan)
     "steps" => stepsOutcome(plan)
@@ -4721,7 +4605,7 @@ def rebuild(commands: Command[]): Result<string> {
   return success(parts.join("; "))
 }
 
-def trySeeIfShellFree(command: SimpleCommand, cwd: string): Result<Plan> {
+def trySeeIfShellFree(command: SimpleCommand, cwd: string): Result<InProcess> {
   """
   Plan a literal echo command for in-process execution.
   """
@@ -4869,7 +4753,7 @@ def echoText(command: SimpleCommand): Result<string> {
 
 // This path builds a string and does nothing else. It cannot write a file
 // or reach the network, however wrong the classifier is.
-def echoPlan(command: SimpleCommand): Result<Plan> {
+def echoPlan(command: SimpleCommand): Result<InProcess> {
   """
   Plan a literal echo without redirects, returning its output without a shell.
   """
@@ -4880,21 +4764,10 @@ def echoPlan(command: SimpleCommand): Result<Plan> {
   if (isFailure(text)) {
     return text
   }
-  return success(
-    {
-    effects: [],
-    execution: {
-      kind: "echo",
-      content: text.value
-    },
-    broadReason: null,
-    verbs: verbNames([command]),
-    savedPaths: []
-  },
-  )
+  return success({ effects: [], exec: { kind: "echo", content: text.value } })
 }
 
-def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
+def writePlan(command: SimpleCommand, cwd: string): Result<InProcess> {
   """
   Plan a redirected literal echo, including the exact bytes in its write approval.
   """
@@ -4910,18 +4783,10 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   if (isFailure(prepared)) {
     return prepared
   }
-  return success(
-    {
-    effects: [writeEffect(prepared.value)],
-    execution: writeExecution(prepared.value),
-    broadReason: null,
-    verbs: verbNames([command]),
-    savedPaths: []
-  },
-  )
+  return success({ effects: [writeEffect(prepared.value)], exec: writeExecution(prepared.value) })
 }
 
-def shellFreePlan(command: SimpleCommand, cwd: string): Result<Plan> {
+def shellFreePlan(command: SimpleCommand, cwd: string): Result<InProcess> {
   """
   Try an in-process echo, with or without an output redirect.
   """
@@ -5111,15 +4976,7 @@ def planLine(source: string, parsed: Result<BashAST>, cwd: string, origin: GhRep
       if (agency is success(plan)) {
         return plan
       }
-      const inProcess = tryShellFreeStep(only, cwd)
-      if (inProcess is success(plan)) {
-        return plan
-      }
     }
-  }
-  const chain = tryShellFreeChain(commands, cwd)
-  if (chain is success(plan)) {
-    return plan
   }
 
   // Flatten first. A chain hides its halves inside `and`/`or`/`parens`
@@ -5151,7 +5008,9 @@ def planLine(source: string, parsed: Result<BashAST>, cwd: string, origin: GhRep
     return broadPlan(source, verbs, { kind: "unrecognized", detail: firstMiss })
   }
   const narrow: Effect[] = askedOnce(classified.value.effects)
-  if (narrow.length == 0) {
+  // `echo a; echo b` asks nothing and starts no shell, so it has no
+  // question to ask.
+  if (narrow.length == 0 && !allInProcess(classified.value.steps)) {
     // Everything recognized but nothing contributed an effect: a string
     // of nothing but quiet commands, a filter fed by one, or a `cd` with
     // nothing after it that asks a question. Every shell start raises an
@@ -5250,8 +5109,8 @@ def classifyAll(commands: Command[], cwd: string, origin: GhRepo | null): Result
 }
 
 // The steps of a line run with bash's rule for each join. The parser is
-// left-associative, so a flat list with one join per step runs in bash's
-// order; the comment in `linksOf` says why. A right side is a simple
+// left-associative (`a && b || c` is `Or(And(a, b), c)`), so a flat list
+// with one join per step runs in bash's order. A right side is a simple
 // command, a pipeline, or a group, never another `&&` or `||`.
 def joined(steps: LineStep[], join: Join): LineStep[] {
   if (steps.length == 0) {
@@ -5260,11 +5119,12 @@ def joined(steps: LineStep[], join: Join): LineStep[] {
   return [{ ...steps[0], join: join }, ...steps.slice(1)]
 }
 
-// One command or one pipeline that runs through bash. `source` is the
-// command as the model wrote it, which a later check plans again, and
-// `ran` is the command as the plan rewrote it, which this step runs.
+// One command or one pipeline. `source` is the command as the model wrote
+// it, which a later check plans again, and `ran` is the command as the
+// plan rewrote it, which a bash step runs. `inProcess` is null for a bash
+// step, and otherwise what safeBash runs itself.
 @capabilities(fileRead)
-def runStepOf(source: Command, ran: Command, line: LineState, effects: Effect[]): Result<LineStep[]> {
+def runStepOf(source: Command, ran: Command, line: LineState, effects: Effect[], inProcess: StepExec | null): Result<LineStep[]> {
   const real = try _realFolder(line.cwd)
   if (real is failure(why)) {
     return failure("the folder `${line.cwd}` cannot be resolved: ${why}")
@@ -5278,7 +5138,7 @@ def runStepOf(source: Command, ran: Command, line: LineState, effects: Effect[])
     text: stepText(ran),
     effects: effects,
     readsStatus: readsAny(source, EXIT_STATUS),
-    inProcess: null
+    inProcess: inProcess
   }])
 }
 
@@ -5402,18 +5262,36 @@ def classify(command: Command, line: LineState, origin: GhRepo | null, readsStdi
 def classifySimple(command: SimpleCommand, line: LineState, origin: GhRepo | null, readsStdin: boolean): Result<Classified> {
   const timed = unwrapTimeout(command)
   if (timed == null) {
+    const own = inProcessStep(command, line, readsStdin)
+    if (own is success(classified)) {
+      return own
+    }
     const rule = simpleCommandRule(command, line, origin, readsStdin)?
     // The std::env questions go on the command's own step, so the plan
     // made just before the step asks them again and matches.
     const effects = [...rule.effects, ...envEffects(command)]
-    const steps = runStepOf(command, rule.command, line, effects)?
+    const steps = runStepOf(command, rule.command, line, effects, null)?
     return success({ effects: effects, line: afterCommand(line, effects), command: rule.command, steps: steps })
   }
   const rule = simpleCommandRule(timed.inner, line, origin, readsStdin)?
   const wrapped = withTimeout(timed, rule.command)?
   const effects = [...rule.effects, ...envEffects(command)]
-  const steps = runStepOf(command, wrapped, line, effects)?
+  const steps = runStepOf(command, wrapped, line, effects, null)?
   return success({ effects: effects, line: afterCommand(line, effects), command: wrapped, steps: steps })
+}
+
+// A command safeBash runs itself is run by safeBash wherever it sits in
+// the line. A failure means "not this command", and the bash rule then
+// decides. A command inside a pipeline is not taken here: bash runs a
+// pipeline's stages at the same time, which a step cannot.
+@capabilities(fileRead)
+def inProcessStep(command: SimpleCommand, line: LineState, readsStdin: boolean): Result<Classified> {
+  if (readsStdin || line.piped) {
+    return failure("the command is part of a pipeline")
+  }
+  const plan = tryShellFreeStep(command, line.cwd)?
+  const steps = runStepOf(command, command, line, plan.effects, plan.exec)?
+  return success({ effects: plan.effects, line: afterCommand(line, plan.effects), command: command, steps: steps })
 }
 
 /** A `timeout <duration> <command>` line: the wrapper's words, and the
@@ -5519,8 +5397,9 @@ def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | 
   let rewritten: any[] = []
   let asking = 0
   let severalInAGroup = false
+  const inPipe: LineState = { ...line, piped: true }
   for (stage, index in stages) {
-    const classified = classify(stage, line, origin, readsStdin || index > 0)?
+    const classified = classify(stage, inPipe, origin, readsStdin || index > 0)?
     if (asksBeyondExec(classified.effects)) {
       asking = asking + 1
     }
@@ -5546,7 +5425,7 @@ def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | 
   }
   const ran: Command = { tag: "pipeline", stages: rewritten }
   // The stages run at the same time, so a pipeline is one step.
-  const steps = runStepOf({ tag: "pipeline", stages: stages }, ran, line, effects)?
+  const steps = runStepOf({ tag: "pipeline", stages: stages }, ran, line, effects, null)?
   return success({ effects: effects, line: afterCommand(line, effects), command: ran, steps: steps })
 }
 
@@ -6130,11 +6009,7 @@ def runPlanned(plan: Plan, dir: string, command: string, timeout: number): Resul
   // Use the planned text: rebuilt for narrow approval, original for broad
   // approval. Every executor applies the same long-output handling.
   return match(exec) {
-    { kind: "write" } => runWrite(exec)
-    { kind: "echo", content } => success(keepOutput(content, 0, command))
     { kind: "agency", args } => runAgency(args, dir, command)
-    { kind: "grep" } => runGrep(exec, command)
-    { kind: "read" } => runRead(exec, command)
     { kind: "steps" } => runSteps(exec, dir, command, timeout, plan)
     { kind: "bash", command as text } => runBash(text, dir, command, timeout, plan.verbs, plan.savedPaths)
     // Unreachable — approvedPlan already returned a refusal. The arm
@@ -6167,7 +6042,10 @@ def jobShape(steps: LineStep[]): JobShape | null {
   if (steps.length == 1 && steps[0] is { kind: "run" }) {
     return { cdStep: null, step: steps[0] }
   }
-  if (steps.length == 2 && steps[0] is { kind: "cd" } && steps[1] is { kind: "run" }) {
+  // A job launches a shell, so the step after a `cd` must be one bash
+  // runs. One safeBash runs itself has a payload that describes the
+  // stdlib tool, which a shell would not run.
+  if (steps.length == 2 && steps[0] is { kind: "cd" } && steps[1] is { kind: "run", inProcess: null }) {
     return { cdStep: steps[0], step: steps[1] }
   }
   return null
@@ -6951,23 +6829,6 @@ def timeoutFailure(command: string, seconds: number, stdout: string, stderr: str
 }
 
 @capabilities(fileRead)
-def runGrep(exec: GrepExec, command: string): Result<string> {
-  """
-  Execute an approved in-process grep plan and return its rendered output.
-  No matches return an exit-code-1 failure.
-  """
-  const found = grepResults(exec)
-  if (isFailure(found)) {
-    return found
-  }
-  const results: any[] = found.value
-  if (results.length == 0) {
-    return exitFailure(1, "", grepNotes(exec.payload, 0), command)
-  }
-  return success(keepOutput(grepText(exec, results), 0, command))
-}
-
-@capabilities(fileRead)
 def printGrep(exec: GrepExec): Result<string> {
   """
   Execute an approved grep plan and return its full output.
@@ -7014,17 +6875,6 @@ def grepText(exec: GrepExec, results: any[]): string {
     return printed
   }
   return printed + notes + "\n"
-}
-
-@capabilities(fileRead)
-def runRead(exec: ReadExec, command: string): Result<string> {
-  """
-  Execute approved file reads and return cat, head, or tail output.
-  """
-  return match(printRead(exec)) {
-    success(text) => success(keepOutput(text, 0, command))
-    failure(why) => failure(why)
-  }
 }
 
 /**
@@ -7133,10 +6983,13 @@ type StepsState = {
 @capabilities(fileRead, fileWrite, subprocess)
 def runSteps(exec: StepsExec, dir: string, source: string, timeout: number, plan: Plan): Result<string> {
   // The copies first, right before the first shell starts, for the reason
-  // runBash gives.
-  const copied = try _prepareSpillFiles(plan.savedPaths)
-  if (copied is failure(why)) {
-    return failure("`${source}` was not run: ${why}")
+  // runBash gives. A line that starts no shell reads the store by name and
+  // needs no copy.
+  if (!allInProcess(exec.steps)) {
+    const copied = try _prepareSpillFiles(plan.savedPaths)
+    if (copied is failure(why)) {
+      return failure("`${source}` was not run: ${why}")
+    }
   }
   const start: StepsState = {
     label: source,
@@ -7233,15 +7086,15 @@ def runOneStep(step: RunStep, state: StepsState, origin: GhRepo | null): StepsSt
   return runBashStep(step, state, origin)
 }
 
-// A line runs in process only when every step does, so `stderr` here
-// holds only the last failure's message, as one in-process command's
-// failure would.
+// A failure's message goes after what the steps before it wrote to
+// stderr, where the program's own complaint would be.
 @capabilities(fileRead, fileWrite)
 def runInProcess(exec: StepExec, state: StepsState): StepsState {
   const wrote = state.wrote || exec.kind == "write"
   const printed = printStep(exec)
   if (printed is failure(why)) {
-    return { ...state, status: 1, stderr: "${why}", wrote: wrote }
+    const before = if (state.stderr == "" || state.stderr.endsWith("\n")) then state.stderr else "${state.stderr}\n"
+    return { ...state, status: 1, stderr: "${before}${why}", wrote: wrote }
   }
   return { ...state, stdout: state.stdout + printed.value, status: 0, wrote: wrote }
 }
@@ -7441,7 +7294,7 @@ def skipsStep(join: Join, ok: boolean): boolean {
 @capabilities(fileRead, fileWrite)
 def printStep(exec: StepExec): Result<string> {
   """
-  Execute an approved chain step before saving long output.
+  Execute an approved in-process step before saving long output.
   """
   return match(exec) {
     { kind: "echo", content } => success(content)

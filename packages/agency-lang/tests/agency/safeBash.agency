@@ -149,9 +149,46 @@ def stderrWriteMode(source: string): any {
   return [write.payload.filename, write.payload.mode]
 }
 
+/* What a line of one command runs when safeBash runs it itself: the one
+ step's in-process execution. Null for any other plan. */
+def loneExec(plan: Plan): any {
+  const exec: any = plan.execution
+  if (exec.kind != "steps" || exec.steps.length != 1) {
+    return null
+  }
+  const step: any = exec.steps[0]
+  if (step.kind != "run") {
+    return null
+  }
+  return step.inProcess
+}
+
+/* A plan's execution kind. A line of one command safeBash runs itself is
+ a plan of one step, and this names what that step runs: echo, write,
+ grep, or read. */
+def kindOf(plan: Plan): string {
+  const own = loneExec(plan)
+  if (own != null) {
+    return own.kind
+  }
+  return plan.execution.kind
+}
+
+/* The text a plan hands to bash, or NOT-BASH when it starts no shell. */
+def bashTextOf(plan: Plan): string {
+  if (outcomeOf(plan) == "shellFree") {
+    return "NOT-BASH"
+  }
+  return match(plan.execution) {
+    { kind: "bash", command } => command
+    { kind: "steps", command } => command
+    _ => "NOT-BASH"
+  }
+}
+
 def planSummary(source: string): any {
   const plan = planFor(source, "/repo")
-  return [plan.execution.kind, [e.name for e in plan.effects]]
+  return [kindOf(plan), [e.name for e in plan.effects]]
 }
 
 node wholeStringPlans() {
@@ -172,11 +209,7 @@ node wholeStringPlans() {
 }
 
 def executionCommand(source: string): any {
-  return match(planFor(source, "/repo").execution) {
-    { kind: "bash", command } => command
-    { kind: "steps", command } => command
-    _ => "NOT-BASH"
-  }
+  return bashTextOf(planFor(source, "/repo"))
 }
 
 node rebuiltVersusOriginal() {
@@ -189,11 +222,11 @@ node rebuiltVersusOriginal() {
 
 def planDetail(source: string): any {
   const plan = planFor(source, "/repo")
-  const content = match(plan.execution) {
+  const content = match(loneExec(plan)) {
     { kind: "echo", content as text } => text
     _ => ""
   }
-  return [plan.execution.kind, content, [e.name for e in plan.effects]]
+  return [kindOf(plan), content, [e.name for e in plan.effects]]
 }
 
 node shellFreeEcho() {
@@ -221,9 +254,9 @@ def writePlanDetail(source: string): any {
   // `mode` is in the tuple deliberately. Without it, a `writeMode` that
   // always returned "overwrite" survives the whole suite, and
   // `echo hi >> notes.txt` silently TRUNCATES the file.
-  return match(plan.execution) {
+  return match(loneExec(plan)) {
     { kind: "write", content, filename, dir, mode } => return ["write", content, filename, dir, mode, names]
-    { kind } => [kind, names]
+    _ => [kindOf(plan), names]
   }
 }
 
@@ -494,12 +527,13 @@ node spillToolsTakeNamesOnly() {
 // --- resolved redirect targets (contained-filenames spec) ---
 
 def writeExecOf(source: string, cwd: string): any {
-  return match(planFor(source, cwd).execution) {
+  const plan = planFor(source, cwd)
+  return match(loneExec(plan)) {
     { kind: "write", content, filename, dir, mode } => {
       return { dir: dir, filename: filename, content: content, mode: mode }
     }
-    { kind } => {
-      return { kind: kind }
+    _ => {
+      return { kind: kindOf(plan) }
     }
   }
 }
@@ -553,7 +587,7 @@ node tildeRedirectQuoting(): boolean {
 }
 
 def planKind(source: string): string {
-  return planFor(source, "/repo").execution.kind
+  return kindOf(planFor(source, "/repo"))
 }
 
 node agencyCommandLines() {
@@ -912,11 +946,7 @@ node quietAssignmentsAndNull() {
 /* A plan's effect names and the text it runs. */
 def quietLine(source: string, dir: string): any {
   const plan = planFor(source, dir)
-  const ran = match(plan.execution) {
-    { kind: "bash", command } => command
-    { kind: "steps", command } => command
-    _ => "NOT-BASH"
-  }
+  const ran = bashTextOf(plan)
   return [source, outcomeOf(plan), [effect.name for effect in plan.effects], ran.split(resolve(dir)).join("<dir>")]
 }
 
@@ -1470,7 +1500,7 @@ node grepBashPayload() {
 }
 
 def executionKind(source: string): string {
-  return planFor(source, FIXTURES).execution.kind
+  return kindOf(planFor(source, FIXTURES))
 }
 
 node loneGrepIsShellFree() {
@@ -1513,7 +1543,7 @@ def sortedLines(text: string): string {
 def parityOf(source: string): any {
   // Without this check, a row whose command fell back to the bash path
   // would compare real grep with itself and pass for no reason.
-  if (planFor(source, FIXTURES).execution.kind != "grep") {
+  if (kindOf(planFor(source, FIXTURES)) != "grep") {
     return "NOT SHELL-FREE: ${source}"
   }
   let ours = ""
@@ -1623,14 +1653,14 @@ node grepOfIgnoredFolder() {
   // whatever the .gitignore files above it say.
   const plan = planFor("grep -rn parseAgency node_modules", PACKAGE_DIR)
   const names = [effect.name for effect in plan.effects]
-  return [plan.execution.kind, names, plan.broadReason]
+  return [kindOf(plan), names, plan.broadReason]
 }
 
 node grepOfPartlyIgnoredFolder() {
   // The repository's .gitignore ignores some entries of stdlib (`.*`,
   // `**/*.js`) but not all of them, so the tool's search still finds the
   // rest and the grep runs shell-free.
-  return planFor("grep -rn hello stdlib", PACKAGE_DIR).execution.kind
+  return kindOf(planFor("grep -rn hello stdlib", PACKAGE_DIR))
 }
 
 def stdinFlags(source: string): any {
@@ -2017,10 +2047,10 @@ static const READ_FIXTURES = __dirname + "/stdlib/read-fixtures"
 /* A plan's execution kind, with "chain" for a stepped plan whose every
  step runs in process. */
 def inProcessKind(plan: Plan): string {
-  if (plan.execution.kind == "steps" && outcomeOf(plan) == "shellFree") {
+  if (loneExec(plan) == null && plan.execution.kind == "steps" && outcomeOf(plan) == "shellFree") {
     return "chain"
   }
-  return plan.execution.kind
+  return kindOf(plan)
 }
 
 def exactParityOf(source: string, kind: string, cwd: string): any {
@@ -2082,7 +2112,7 @@ node catOfTwoFilesAsksTwoQuestions() {
   // Two std::read approvals, one per file, and no shell. The plan's kind
   // comes first, because the bash path asks the same two questions and
   // prints the same text; only the kind tells the two apart.
-  const kind = planFor("cat one.txt two.txt", FIXTURES).execution.kind
+  const kind = kindOf(planFor("cat one.txt two.txt", FIXTURES))
   const result = safeBash("cat one.txt two.txt", cwd: FIXTURES)
   if (result is failure(why)) {
     return "FAILED: ${why}"

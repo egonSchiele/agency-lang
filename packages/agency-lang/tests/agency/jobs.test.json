@@ -99,6 +99,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "aJobOfAStepSafeBashRunsItselfAsksBroad",
+      "description": "A job of a `cd` and a `cat` asks std::bash and nothing else. In the foreground safeBash runs that cat itself, and a job launches a shell, so the narrow question would not describe what runs. With the question rejected the job fails and nothing starts.",
+      "input": "",
+      "expectedOutput": "[[\"std::bash\"],true,0]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "aJobWhoseFileChangedDoesNotStart",
       "description": "When a file the job's one command reads is swapped for a link after the questions were answered, the command plans to the link's target, which was not approved, so the job fails at launch and nothing starts.",
       "input": "",

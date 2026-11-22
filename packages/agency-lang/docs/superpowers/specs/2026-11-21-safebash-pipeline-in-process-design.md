@@ -154,6 +154,12 @@ anything runs. The runner raises nothing. Three payloads change:
    folder with that name would find nothing, while the tool does search
    a folder it is given (`grepSearchRule`).
 
+4. **A group of commands safeBash runs itself asks nothing.**
+   `echo a && (echo b || echo c)` asks `std::bash::readonly` today,
+   because the chain planner refuses parentheses and the line goes to
+   bash. Under the rule no shell starts, so there is nothing to ask.
+   (Found while building the first pull request.)
+
 No effect is added to or removed from any other line.
 
 ## Where the output can differ from bash

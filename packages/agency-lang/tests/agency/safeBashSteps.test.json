@@ -37,7 +37,7 @@
       "nodeName": "aChangedPlanStopsTheLine",
       "description": "Each row: the line, whether it succeeded, whether it stopped, and whether anything from the outside folder was printed. A file or folder swapped for a link to the outside folder after approval makes the step that names it plan to something else just before it runs, so the line stops before that step and prints nothing from outside. With nothing swapped the line runs, and the timeout field alone in a std::exec payload stops nothing.",
       "input": "",
-      "expectedOutput": "[[\"pnpm --version; cat one.txt\",false,true,false],[\"pnpm --version; ls sub\",false,true,false],[\"pnpm --version; cat one.txt\",true,false,false]]",
+      "expectedOutput": "[[\"pnpm --version; wc -l one.txt\",false,true,false],[\"pnpm --version; ls sub\",false,true,false],[\"pnpm --version; wc -l one.txt\",true,false,false]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -92,7 +92,7 @@
       "nodeName": "aCheckoutThatSwapsAPathStops",
       "description": "Each row: the line, whether it succeeded, the step it stopped before, and whether anything from outside was printed. A git checkout that puts a link where a file or folder was is narrow, and the step that names the swapped path stops the line before it runs. Narrow questions are approved and the broad one rejected, so a checkout and a read in one group of a pipeline, which run as one step, ask std::bash and run nothing.",
       "input": "",
-      "expectedOutput": "[[\"git checkout evil; cat one.txt\",false,\"cat one.txt\",false],[\"git checkout evil && ls sub\",false,\"ls sub\",false],[\"git checkout evil && cd sub && git status\",false,\"cd sub\",false],[\"(git checkout evil && cat one.txt) | cat\",false,\"\",false]]",
+      "expectedOutput": "[[\"git checkout evil; wc -l one.txt\",false,\"wc -l one.txt\",false],[\"git checkout evil && ls sub\",false,\"ls sub\",false],[\"git checkout evil && cd sub && git status\",false,\"cd sub\",false],[\"(git checkout evil && cat one.txt) | cat\",false,\"\",false]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -159,6 +159,61 @@
       "description": "Every question is asked before anything runs, so when std::env is rejected the line fails and the write before the echo never happens: ran.txt does not exist. The row is the questions asked, whether the line succeeded, and whether ran.txt exists.",
       "input": "",
       "expectedOutput": "[[[\"std::exec\",\"\"],[\"std::write\",\"\"],[\"std::env\",\"HOME\"]],false,false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "eachStepDecidesForItself",
+      "description": "Each row: the line, whether safeBash runs each step itself (with \"cd\" for a cd and a list for a group), and the questions asked. A cat, a grep, or an echo is run by safeBash wherever it sits in the line, and bash runs the steps beside it. A pipeline, a command behind timeout, and a read of a file that does not exist when the line is planned stay with bash.",
+      "input": "",
+      "expectedOutput": "[[\"pnpm --version; cat one.txt\",[false,true],[\"std::exec\",\"std::read\"]],[\"cat one.txt && pnpm --version\",[true,false],[\"std::read\",\"std::exec\"]],[\"cd sub && cat a.txt\",[\"cd\",true],[\"std::read\"]],[\"(pnpm --version && cat one.txt)\",[[false,true]],[\"std::exec\",\"std::read\"]],[\"pnpm --version > made.txt; cat made.txt\",[false,false],[\"std::exec\",\"std::write\",\"std::read\"]],[\"timeout 5 cat one.txt\",[false],[\"std::read\"]],[\"cat one.txt | head -1\",[false],[\"std::read\"]],[\"pnpm --version; grep -n one one.txt\",[false,true],[\"std::exec\",\"std::grep\"]],[\"pnpm --version; echo hi > out.txt\",[false,true],[\"std::exec\",\"std::write\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aMixedLineAsksAboutWhatRuns",
+      "description": "The payload describes what runs. A search safeBash runs itself after a program asks std::grep with the limit of 1000 matches and the flag the stdlib search uses. An echo into a file after a program asks std::write with the text. A cat after a cd names the folder the cd moved to.",
+      "input": "",
+      "expectedOutput": "[1000,\"u\",\"hi\\n\",true,\"a.txt\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aMixedLineRuns",
+      "description": "Each row: the line, whether it succeeded, and its text. A line that mixes steps bash runs with steps safeBash runs itself prints each step's output in order, and a later step sees the status the step before it left: `echo $?` after a cat prints 0, after a grep that matched nothing prints 1, and `||` after that grep runs its right side.",
+      "input": "",
+      "expectedOutput": "[[\"pnpm --version > /dev/null; cat one.txt\",true,\"one\\ntwo\\n\"],[\"cat one.txt; echo $?\",true,\"one\\ntwo\\n0\\n\"],[\"grep nomatch one.txt || echo none\",true,\"none\\n\"],[\"grep nomatch one.txt; echo $?\",true,\"1\\n\"],[\"cd sub && cat a.txt && pwd > /dev/null\",true,\"a\\n\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "anInProcessReadRefusesASwappedPath",
+      "description": "Each row: the line, whether it succeeded, whether it stopped, and whether anything from the outside folder was printed. A file or a folder swapped for a link to the outside folder after approval fails a cat that safeBash runs itself, because the read tool refuses a link in the path it opens. The line fails with no stop and prints nothing from outside.",
+      "input": "",
+      "expectedOutput": "[[\"pnpm --version; cat one.txt\",false,false,false],[\"pnpm --version; cat sub/a.txt\",false,false,false]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aRejectedReadRunsNothingInAMixedLine",
+      "description": "Every question is asked before anything runs, so when the std::read of a cat is rejected the program before it never runs: ran.txt does not exist. The row is the questions asked, whether the line succeeded, and whether ran.txt exists.",
+      "input": "",
+      "expectedOutput": "[[[\"std::exec\",\"\"],[\"std::write\",\"\"],[\"std::read\",\"\"]],false,false]",
       "evaluationCriteria": [
         {
           "type": "exact"

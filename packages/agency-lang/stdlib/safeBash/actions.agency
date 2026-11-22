@@ -687,7 +687,7 @@ export def pendingLookups(effects: Effect[]): string[] {
 // exhaustively, so adding a variant is a type error at the dispatch rather
 // than a silent fall-through.
 /** What happens if every effect in the plan is approved. */
-export type Execution = BashExec | EchoExec | WriteExec | AgencyExec | RefuseExec | GrepExec | ReadExec | StepsExec
+export type Execution = BashExec | AgencyExec | RefuseExec | StepsExec
 
 export type BashExec = {
   kind: "bash";
@@ -803,12 +803,12 @@ export type ReadExec = {
   view: ReadView
 }
 
-/** How a chain step follows the one before it: `;` always runs it, `&&`
+/** How a step follows the one before it: `;` always runs it, `&&`
  only after a success, `||` only after a failure. */
 export type Join = "seq" | "and" | "or"
 
-/** The executions a chain may hold: every in-process kind, and nothing
- that spawns a shell. */
+/** What a step safeBash runs itself can be. None of these starts a
+ shell. */
 export type StepExec = EchoExec | WriteExec | GrepExec | ReadExec
 
 /** One step of a line that runs a step at a time. */

@@ -1287,9 +1287,9 @@
     },
     {
       "nodeName": "chainsOfInProcessCommands",
-      "description": "A line of in-process commands joined by ;, &&, or || plans as one chain that asks only the steps' own questions. A command no lone planner takes, a parenthesized group, a pipeline, a missing file, or a refused command sends the line down the general path, where a missing file asks std::read for it, and so does a file the line wrote.",
+      "description": "A line of commands safeBash runs itself, joined by ;, &&, or ||, starts no shell and asks only the steps' own questions, and so does one with a parenthesized group of them. A step bash runs beside them makes the line narrow. A line of an echo and a quiet command asks the quiet question, a missing file asks std::read for it through bash, and so does a file the line wrote.",
       "input": "",
-      "expectedOutput": "[[\"shellFree\",\"steps\",[]],[\"shellFree\",\"steps\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"steps\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"steps\",[\"std::grep\"]],[\"shellFree\",\"steps\",[]],[\"narrow\",\"steps\",[\"std::git::status\"]],[\"narrow\",\"bash\",[\"std::bash::readonly\"]],[\"narrow\",\"bash\",[\"std::bash::readonly\"]],[\"narrow\",\"steps\",[\"std::read\"]],[\"narrow\",\"steps\",[\"std::read\"]],[\"narrow\",\"steps\",[\"std::write\",\"std::read\"]],[\"refuse\",\"refuse\",[]],[\"broad\",\"bash\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"shellFree\",\"steps\",[]],[\"shellFree\",\"steps\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"steps\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"steps\",[\"std::grep\"]],[\"shellFree\",\"steps\",[]],[\"narrow\",\"steps\",[\"std::git::status\"]],[\"narrow\",\"bash\",[\"std::bash::readonly\"]],[\"shellFree\",\"steps\",[]],[\"narrow\",\"steps\",[\"std::read\"]],[\"narrow\",\"steps\",[\"std::read\"]],[\"narrow\",\"steps\",[\"std::write\",\"std::read\"]],[\"refuse\",\"refuse\",[]],[\"broad\",\"bash\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"

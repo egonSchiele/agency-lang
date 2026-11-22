@@ -287,6 +287,26 @@ node aJobWhoseCdChangedDoesNotStart() {
   return [isFailure(result), isFailure(result) && result.error.includes("now leads to"), jobs]
 }
 
+// A job launches a shell. In the foreground, the `cat` after this `cd` is
+// run by safeBash itself, and its question describes the stdlib read, not
+// a program a shell runs. So as a job the line asks the broad question.
+node aJobOfAStepSafeBashRunsItselfAsksBroad() {
+  remove(JOBS_FIXTURE) with approve
+  mkdir(JOBS_FIXTURE) with approve
+  bash("mkdir sub && printf 'a\\n' > sub/a.txt", cwd: JOBS_FIXTURE) with approve
+  let result: any = null
+  let asked: string[] = []
+  handle {
+    result = startJob("cd sub && cat a.txt", cwd: JOBS_FIXTURE, maxMinutes: 1)
+  } with (intr) {
+    asked.push(intr.effect)
+    return reject("no")
+  }
+  const jobs = listJobs().length
+  remove(JOBS_FIXTURE) with approve
+  return [asked, isFailure(result), jobs]
+}
+
 // The handler swaps `one.txt` for a link to another file while it answers.
 // A job's one step gets the check a foreground step gets, so the read now
 // plans to the link's target, which nobody approved, and no job starts.

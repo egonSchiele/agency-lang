@@ -395,7 +395,7 @@
       "nodeName": "planOutcomes",
       "description": "outcomeOf names the decision: refuse, shellFree, agency, narrow, or broad. A narrow line that runs a step at a time is still narrow, a line that asks nothing is narrow with the quiet question, and a chain of in-process commands is shellFree.",
       "input": "",
-      "expectedOutput": "[\"narrow\",\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"shellFree\"]",
+      "expectedOutput": "[\"narrow\",\"narrow\",\"broad\",\"shellFree\",\"shellFree\",\"refuse\",\"agency\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"shellFree\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -428,7 +428,7 @@
       "nodeName": "aPipelineHasOneStageThatAsks",
       "description": "The stages of a pipeline run at the same time, and the runner checks a pipeline as one step. So at most one stage may ask anything other than std::exec, whose approval already lets a program read any file: a checkout beside a read or a write, and a log beside a write, ask std::bash. A read beside a filter, a write beside programs, and a read of a missing file beside a program stay narrow. A group of several commands is part of one stage, so beside any question other than std::exec it asks std::bash: a checkout and a read in one group, and a checkout, a cd, and a program. A group of programs, and a cd and a program, stay narrow. A cd is not counted as one of the group's commands, so a cd and a listing stay narrow, while a cd and two git reads ask std::bash.",
       "input": "",
-      "expectedOutput": "[[\"git checkout x | cat one.txt\",\"broad\"],[\"git checkout main | tee log.txt\",\"broad\"],[\"cat one.txt | grep version\",\"narrow\"],[\"pnpm test 2>&1 | tee out.log | tail -30\",\"narrow\"],[\"git log --oneline | head > out.txt\",\"broad\"],[\"pnpm test | cat nope.txt\",\"narrow\"],[\"(git checkout x && cat one.txt) | cat\",\"broad\"],[\"(git checkout x && cd sub && pnpm test) | cat\",\"broad\"],[\"(pnpm build && pnpm test) | tail -5\",\"narrow\"],[\"(cd sub && pnpm test) | tail -5\",\"narrow\"],[\"(cd sub && ls) | head\",\"narrow\"],[\"(cd sub && git status && git log) | head\",\"broad\"]]",
+      "expectedOutput": "[[\"git checkout x | cat one.txt\",\"broad\"],[\"git checkout main | tee log.txt\",\"broad\"],[\"cat one.txt | grep version\",\"shellFree\"],[\"pnpm test 2>&1 | tee out.log | tail -30\",\"narrow\"],[\"git log --oneline | head > out.txt\",\"broad\"],[\"pnpm test | cat nope.txt\",\"narrow\"],[\"(git checkout x && cat one.txt) | cat\",\"broad\"],[\"(git checkout x && cd sub && pnpm test) | cat\",\"broad\"],[\"(pnpm build && pnpm test) | tail -5\",\"narrow\"],[\"(cd sub && pnpm test) | tail -5\",\"narrow\"],[\"(cd sub && ls) | head\",\"narrow\"],[\"(cd sub && git status && git log) | head\",\"broad\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -625,9 +625,9 @@
     },
     {
       "nodeName": "quietLinesAskTheQuietQuestion",
-      "description": "A line whose commands raise no question asks std::bash::readonly when every word is known now, and runs the rebuilt text. An environment variable makes it ask std::env. A lone literal echo and a lone cd start no shell, so they ask nothing. A filter fed by an echo and a quiet assignment ask the quiet question too.",
+      "description": "A line whose commands raise no question asks std::bash::readonly when every word is known now, and runs the rebuilt text. An environment variable makes it ask std::env. A lone literal echo, a lone cd, and an echo piped into grep start no shell, so they ask nothing. A quiet assignment asks the quiet question too.",
       "input": "",
-      "expectedOutput": "[[\"pwd\",\"narrow\",[\"std::bash::readonly\"],\"pwd\"],[\"echo \\\"---\\\"\",\"narrow\",[\"std::bash::readonly\"],\"echo \\\"---\\\"\"],[\"which node; date\",\"narrow\",[\"std::bash::readonly\"],\"which node; date\"],[\"echo $HOME\",\"narrow\",[\"std::env\"],\"echo $HOME\"],[\"echo ~\",\"shellFree\",[],\"NOT-BASH\"],[\"cd lib\",\"shellFree\",[],\"NOT-BASH\"],[\"echo hi | grep h\",\"narrow\",[\"std::bash::readonly\"],\"echo hi | grep h\"],[\"TERM=dumb pwd\",\"narrow\",[\"std::bash::readonly\"],\"TERM=dumb pwd\"]]",
+      "expectedOutput": "[[\"pwd\",\"narrow\",[\"std::bash::readonly\"],\"pwd\"],[\"echo \\\"---\\\"\",\"narrow\",[\"std::bash::readonly\"],\"echo \\\"---\\\"\"],[\"which node; date\",\"narrow\",[\"std::bash::readonly\"],\"which node; date\"],[\"echo $HOME\",\"narrow\",[\"std::env\"],\"echo $HOME\"],[\"echo ~\",\"shellFree\",[],\"NOT-BASH\"],[\"cd lib\",\"shellFree\",[],\"NOT-BASH\"],[\"echo hi | grep h\",\"shellFree\",[],\"NOT-BASH\"],[\"TERM=dumb pwd\",\"narrow\",[\"std::bash::readonly\"],\"TERM=dumb pwd\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -726,7 +726,7 @@
       "nodeName": "dotDotAfterALinkHasNoRule",
       "description": "With `link` a symlink to a folder elsewhere, bash opens `link/../creds` in the folder that holds the link's target, while removing the `..` from the text gives the project's own `creds`. So a path in which a `..` follows a symlink asks std::bash: a read, a listing, a search, a redirect, a tee, a cd, a mkdir, and `git -C`. An rm of such a path is refused, and so is an rm with a `..` after a glob, which may expand to a link. A `..` after a real folder resolves as before, and so does a link with no `..` after it, whose payload names the real folder.",
       "input": "",
-      "expectedOutput": "[[\"cat link/../creds | head\",\"broad\",[[\"std::bash\",\"\"]]],[\"ls link/..\",\"broad\",[[\"std::bash\",\"\"]]],[\"grep -rn x link/..\",\"broad\",[[\"std::bash\",\"\"]]],[\"echo x > link/../creds\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm test | tee link/../log.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"cd link/.. && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"rm link/../creds\",\"refuse\",[]],[\"rm -rf */../creds\",\"refuse\",[]],[\"mkdir link/../made\",\"broad\",[[\"std::bash\",\"\"]]],[\"git -C link/.. status\",\"broad\",[[\"std::bash\",\"\"]]],[\"cat sub/../creds | head\",\"narrow\",[[\"std::read\",\"<fix>/creds\"]]],[\"ls link | head\",\"narrow\",[[\"std::ls\",\"<fix>/outside/inner\"]]]]",
+      "expectedOutput": "[[\"cat link/../creds | head\",\"broad\",[[\"std::bash\",\"\"]]],[\"ls link/..\",\"broad\",[[\"std::bash\",\"\"]]],[\"grep -rn x link/..\",\"broad\",[[\"std::bash\",\"\"]]],[\"echo x > link/../creds\",\"broad\",[[\"std::bash\",\"\"]]],[\"pnpm test | tee link/../log.txt\",\"broad\",[[\"std::bash\",\"\"]]],[\"cd link/.. && ls\",\"broad\",[[\"std::bash\",\"\"]]],[\"rm link/../creds\",\"refuse\",[]],[\"rm -rf */../creds\",\"refuse\",[]],[\"mkdir link/../made\",\"broad\",[[\"std::bash\",\"\"]]],[\"git -C link/.. status\",\"broad\",[[\"std::bash\",\"\"]]],[\"cat sub/../creds | head\",\"shellFree\",[[\"std::read\",\"<fix>/creds\"]]],[\"ls link | head\",\"narrow\",[[\"std::ls\",\"<fix>/outside/inner\"]]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -834,9 +834,9 @@
     },
     {
       "nodeName": "loneGrepIsShellFree",
-      "description": "A lone grep whose flags and pattern translate exactly runs through the grep tool's search, with no shell. A flag the tool lacks, a pattern that does not translate, a directory without -r, a pipe, or -w with a non-word edge sends it to the bash path. A flag after the file is fine here, where no real grep reads the arguments.",
+      "description": "A lone grep whose flags and pattern translate exactly runs through the grep tool's search, with no shell. A flag the tool lacks, a pattern that does not translate, a directory without -r, or -w with a non-word edge sends it to the bash path. A grep piped into head is a pipeline safeBash runs itself (`pipe`). A flag after the file is fine here, where no real grep reads the arguments.",
       "input": "",
-      "expectedOutput": "[\"grep\",\"grep\",\"grep\",\"grep\",\"grep\",\"grep\",\"steps\",\"steps\",\"bash\",\"steps\",\"shellFree\",\"steps\",\"grep\"]",
+      "expectedOutput": "[\"grep\",\"grep\",\"grep\",\"grep\",\"grep\",\"grep\",\"steps\",\"steps\",\"bash\",\"pipe\",\"shellFree\",\"steps\",\"grep\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1001,9 +1001,9 @@
     },
     {
       "nodeName": "grepThroughBashAsksStdGrep",
-      "description": "A grep through bash asks std::grep for each path, through a pipe, with two paths, with a file filter, and with a flag after the path. A folder the grep tool skips by name stays broad, whether named as written, with a trailing slash, or as `.` inside such a folder; the same folder's contents do not. A folder without -r is broad. A lone grep -r runs shell-free. A grep that reads a pipe runs as written, so a flag after its pattern is refused.",
+      "description": "A grep through bash asks std::grep for each path, through a pipe, with two paths, with a file filter, and with a flag after the path. A folder the grep tool skips by name stays broad, whether named as written, with a trailing slash, or as `.` inside such a folder; the same folder's contents do not. A folder without -r is broad. A lone grep -r runs shell-free. A grep that reads a pipe runs as written, so a flag after its pattern is refused. The pipelines here end in `wc -l`, which keeps them with bash. The last row is a search of a skipped folder into `head`: safeBash runs that pipeline itself, and the tool searches the folder it is given.",
       "input": "",
-      "expectedOutput": "[[\"grep -rn hello . | head -20\",\"narrow\",[\"std::grep\"]],[\"grep -rn \\\"a\\\\|b\\\" src\",\"narrow\",[\"std::grep\"]],[\"grep -rn hello src lib\",\"narrow\",[\"std::grep\",\"std::grep\"]],[\"grep -rn hello src --include=\\\"*.ts\\\"\",\"narrow\",[\"std::grep\"]],[\"grep -n hello one.txt -A 5\",\"narrow\",[\"std::grep\"]],[\"grep -rn hello node_modules | head\",\"broad\",[\"std::bash\"]],[\"grep -rn hello node_modules/p | head\",\"narrow\",[\"std::grep\"]],[\"grep -n hello src\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src\",\"shellFree\",[\"std::grep\"]],[\"grep -rn hello src/dist | head\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src/dist/ | head\",\"broad\",[\"std::bash\"]],[\"grep -rn hello . | head\",\"broad\",[\"std::bash\"]],[\"grep -rn hello | head\",\"narrow\",[\"std::grep\"]],[\"pnpm test | grep FAIL -v\",\"broad\",[\"std::bash\"]],[\"git status | grep -v deleted -c\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src -e x | head\",\"broad\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"grep -rn hello . | wc -l\",\"narrow\",[\"std::grep\"]],[\"grep -rn \\\"a\\\\|b\\\" src\",\"narrow\",[\"std::grep\"]],[\"grep -rn hello src lib\",\"narrow\",[\"std::grep\",\"std::grep\"]],[\"grep -rn hello src --include=\\\"*.ts\\\"\",\"narrow\",[\"std::grep\"]],[\"grep -n hello one.txt -A 5\",\"narrow\",[\"std::grep\"]],[\"grep -rn hello node_modules | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello node_modules/p | wc -l\",\"narrow\",[\"std::grep\"]],[\"grep -n hello src\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src\",\"shellFree\",[\"std::grep\"]],[\"grep -rn hello src/dist | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src/dist/ | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello . | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello | wc -l\",\"narrow\",[\"std::grep\"]],[\"pnpm test | grep FAIL -v\",\"broad\",[\"std::bash\"]],[\"git status | grep -v deleted -c\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src -e x | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello node_modules | head\",\"shellFree\",[\"std::grep\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1014,7 +1014,7 @@
       "nodeName": "grepRunsWhatItAsked",
       "description": "The exact text a grep through bash runs: the checked flags first, then `--exclude-dir` and `--exclude` for each name the grep tool skips (only when a folder is searched), then `-e` and the pattern, then `--` and the paths, or `.` for a grep -r that named none. The six names are the grep tool's skip list, so a name added to it fails this row until the text here agrees.",
       "input": "",
-      "expectedOutput": "[\"grep -r -n --exclude-dir=node_modules --exclude=node_modules --exclude-dir=.git --exclude=.git --exclude-dir=dist --exclude=dist --exclude-dir=build --exclude=build --exclude-dir=.next --exclude=.next --exclude-dir=.cache --exclude=.cache -e 'hello' -- . | head -20\",\"grep -r -n '--include=*.ts' --exclude-dir=node_modules --exclude=node_modules --exclude-dir=.git --exclude=.git --exclude-dir=dist --exclude=dist --exclude-dir=build --exclude=build --exclude-dir=.next --exclude=.next --exclude-dir=.cache --exclude=.cache -e 'hello' -- src\",\"grep -n -A '5' -e 'hello' -- one.txt\",\"grep -n -e 'hello' -- one.txt lib/l.ts | head\",\"grep -r -n --exclude-dir=node_modules --exclude=node_modules --exclude-dir=.git --exclude=.git --exclude-dir=dist --exclude=dist --exclude-dir=build --exclude=build --exclude-dir=.next --exclude=.next --exclude-dir=.cache --exclude=.cache -e 'hello' -- . | head\"]",
+      "expectedOutput": "[\"grep -r -n --exclude-dir=node_modules --exclude=node_modules --exclude-dir=.git --exclude=.git --exclude-dir=dist --exclude=dist --exclude-dir=build --exclude=build --exclude-dir=.next --exclude=.next --exclude-dir=.cache --exclude=.cache -e 'hello' -- . | wc -l\",\"grep -r -n '--include=*.ts' --exclude-dir=node_modules --exclude=node_modules --exclude-dir=.git --exclude=.git --exclude-dir=dist --exclude=dist --exclude-dir=build --exclude=build --exclude-dir=.next --exclude=.next --exclude-dir=.cache --exclude=.cache -e 'hello' -- src\",\"grep -n -A '5' -e 'hello' -- one.txt\",\"grep -n -e 'hello' -- one.txt lib/l.ts | head\",\"grep -r -n --exclude-dir=node_modules --exclude=node_modules --exclude-dir=.git --exclude=.git --exclude-dir=dist --exclude=dist --exclude-dir=build --exclude=build --exclude-dir=.next --exclude=.next --exclude-dir=.cache --exclude=.cache -e 'hello' -- . | wc -l\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1036,7 +1036,7 @@
       "nodeName": "grepFilterStages",
       "description": "A grep with no path in a later stage of a pipe searches the previous stage's output and reads no file, so it contributes nothing beyond its redirects. -r and a named path win over the pipe and ask std::grep, so beside git status, which asks too, the line asks std::bash (at most one stage of a pipeline may ask anything other than std::exec), as does a write beside it; a grep outside the pipe still reads stdin, the flag table still applies, a flag after the pattern is refused because a grep that reads a pipe runs as written, and a line of recognized commands with no effect asks the quiet question, std::bash::readonly.",
       "input": "",
-      "expectedOutput": "[[[\"std::git::status\"],null],[[\"std::git::status\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"two stages of a pipeline each ask a question, and they run at the same time\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"two stages of a pipeline each ask a question, and they run at the same time\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"two stages of a pipeline each ask a question, and they run at the same time\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[\"std::bash::readonly\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::git::status\"],null]]",
+      "expectedOutput": "[[[\"std::git::status\"],null],[[\"std::git::status\"],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"two stages of a pipeline each ask a question, and they run at the same time\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"two stages of a pipeline each ask a question, and they run at the same time\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"two stages of a pipeline each ask a question, and they run at the same time\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep with no path reads stdin\"}],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"grep does not take `-R`\"}],[[],null],[[\"std::bash\"],{\"kind\":\"unrecognized\",\"detail\":\"an option after the first argument is a file name to some versions of grep\"}],[[\"std::git::status\"],null]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1171,9 +1171,53 @@
     },
     {
       "nodeName": "loneReadIsShellFree",
-      "description": "A lone cat of any number of files, or a lone cat -n, head -n N, or tail -n N of one file, runs shell-free. Another flag, a count of 0, cat -n or head of two files, a redirect, a pipe, or another verb goes through bash, and so does a missing file, which asks std::read for it so the model reads cat's own error. A count given twice is refused on every path, because splitFlags takes a valued flag once.",
+      "description": "A lone cat of any number of files, or a lone cat -n, head -n N, or tail -n N of one file, runs shell-free. A cat piped into head starts no shell either. Another flag, a count of 0, cat -n or head of two files, a redirect, or another verb goes through bash, and so does a missing file, which asks std::read for it so the model reads cat's own error. A count given twice is refused on every path, because splitFlags takes a valued flag once.",
       "input": "",
-      "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"narrow\",\"broad\",\"broad\",\"broad\",\"broad\",\"narrow\"]",
+      "expectedOutput": "[\"shellFree\",\"shellFree\",\"shellFree\",\"shellFree\",\"narrow\",\"narrow\",\"narrow\",\"shellFree\",\"narrow\",\"shellFree\",\"narrow\",\"narrow\",\"broad\",\"broad\",\"broad\",\"broad\",\"narrow\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "pipelinesMatchRealTools",
+      "description": "Each row runs a pipeline safeBash runs itself and the same pipeline under real bash, and compares the text and whether it succeeded. The later stages are cat, head, tail, and grep with -n, -v, -i, -w, -E, -F, and -e. The status is the last stage's: a first stage that matches nothing is not a failure, and a last grep that keeps no line is. The files include one with no final newline, an empty one, and one with Windows line endings. Each row first checks that its pipeline really runs in process.",
+      "input": "",
+      "expectedOutput": "[true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "pipelinesThatStayWithBash",
+      "description": "Each row: the line, its outcome, whether each step is one safeBash runs itself, and the questions asked. A pipeline runs in process only when every stage can, so bash runs the whole pipeline when a stage is a program, a filter with no in-process form (sort, wc, tee), a grep with -c, -o, -A, or -l, a later stage that names a file or has a redirect, a group, a first stage that writes a file or reads a missing one, or a head of zero lines. The last row is a mixed line: bash runs pnpm, and safeBash runs the pipeline after it.",
+      "input": "",
+      "expectedOutput": "[[\"git log --oneline | head -5\",\"narrow\",[false],[\"std::git::log\"]],[\"pnpm test 2>&1 | tail -30\",\"narrow\",[false],[\"std::exec\"]],[\"cat one.txt | sort\",\"narrow\",[false],[\"std::read\"]],[\"cat one.txt | wc -l\",\"narrow\",[false],[\"std::read\"]],[\"cat one.txt | grep -c hello\",\"narrow\",[false],[\"std::read\"]],[\"cat one.txt | grep -o hello\",\"narrow\",[false],[\"std::read\"]],[\"cat one.txt | grep -A 1 hello\",\"narrow\",[false],[\"std::read\"]],[\"cat one.txt | grep -l hello\",\"narrow\",[false],[\"std::read\"]],[\"cat one.txt | grep hello two.txt\",\"broad\",[],[\"std::bash\"]],[\"cat one.txt | head -2 two.txt\",\"broad\",[],[\"std::bash\"]],[\"cat one.txt | head -2 > out.txt\",\"broad\",[],[\"std::bash\"]],[\"cat one.txt | tee out.txt\",\"broad\",[],[\"std::bash\"]],[\"(cat one.txt) | head -2\",\"narrow\",[false],[\"std::read\"]],[\"cat one.txt | (head -2)\",\"narrow\",[false],[\"std::read\"]],[\"echo hi > out.txt | head\",\"narrow\",[false],[\"std::write\"]],[\"cat nope.txt | head\",\"narrow\",[false],[\"std::read\"]],[\"cat one.txt | head -n 0\",\"narrow\",[false],[\"std::read\"]],[\"pnpm --version; cat one.txt | head -1\",\"narrow\",[false,true],[\"std::exec\",\"std::read\"]]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aSearchNoteFollowsTheLastStage",
+      "description": "A folder search safeBash runs itself adds a note about the folders it skips. In a pipeline the note is printed after the last stage, so `grep -rn hello . | head -1` prints one match and then the note.",
+      "input": "",
+      "expectedOutput": "[\"pipe\",2,true,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "aPipelineAsksItsFirstStagesQuestion",
+      "description": "A pipeline safeBash runs itself asks only its first stage's question, std::read here, and nothing for the stages after it. With that question rejected the line fails. With it approved the line prints the first line that matches.",
+      "input": "",
+      "expectedOutput": "[[\"std::read\"],false,{\"__type\":\"resultType\",\"success\":true,\"value\":\"hello world\\n\"}]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1289,7 +1333,7 @@
       "nodeName": "chainsOfInProcessCommands",
       "description": "A line of commands safeBash runs itself, joined by ;, &&, or ||, starts no shell and asks only the steps' own questions, and so does one with a parenthesized group of them. A step bash runs beside them makes the line narrow. A line of an echo and a quiet command asks the quiet question, a missing file asks std::read for it through bash, and so does a file the line wrote.",
       "input": "",
-      "expectedOutput": "[[\"shellFree\",\"steps\",[]],[\"shellFree\",\"steps\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"steps\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"steps\",[\"std::grep\"]],[\"shellFree\",\"steps\",[]],[\"narrow\",\"steps\",[\"std::git::status\"]],[\"narrow\",\"bash\",[\"std::bash::readonly\"]],[\"shellFree\",\"steps\",[]],[\"narrow\",\"steps\",[\"std::read\"]],[\"narrow\",\"steps\",[\"std::read\"]],[\"narrow\",\"steps\",[\"std::write\",\"std::read\"]],[\"refuse\",\"refuse\",[]],[\"broad\",\"bash\",[\"std::bash\"]]]",
+      "expectedOutput": "[[\"shellFree\",\"steps\",[]],[\"shellFree\",\"steps\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"steps\",[\"std::read\",\"std::read\"]],[\"shellFree\",\"steps\",[\"std::grep\"]],[\"shellFree\",\"steps\",[]],[\"narrow\",\"steps\",[\"std::git::status\"]],[\"narrow\",\"bash\",[\"std::bash::readonly\"]],[\"shellFree\",\"steps\",[]],[\"shellFree\",\"steps\",[\"std::read\"]],[\"narrow\",\"steps\",[\"std::read\"]],[\"narrow\",\"steps\",[\"std::write\",\"std::read\"]],[\"refuse\",\"refuse\",[]],[\"broad\",\"bash\",[\"std::bash\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"

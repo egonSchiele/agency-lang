@@ -135,6 +135,12 @@ export function _grepSaved(name: string, query: GrepQuery, maxResults: number): 
   return searchText(saved(name), name, query, maxResults);
 }
 
+/** safeBash's grep of the text a pipeline stage hands to the next one:
+ *  the same search, of a text that has no name, with no limit. */
+export function _grepPipedText(text: string, query: GrepQuery): GrepResults {
+  return searchText(text, "", query, Number.MAX_SAFE_INTEGER);
+}
+
 /** `spillPathParts`, `inSpillFolder` and `savedPathsInText` from the store,
  *  for safeBash's Agency code, which imports only from stdlib-lib. */
 export function _spillPathParts(path: string): SavedPath | null {

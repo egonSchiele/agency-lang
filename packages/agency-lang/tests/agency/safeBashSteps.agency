@@ -212,6 +212,9 @@ node eachStepDecidesForItself() {
     decidesRow("pnpm --version > made.txt; cat made.txt"),
     decidesRow("timeout 5 cat one.txt"),
     decidesRow("cat one.txt | head -1"),
+    decidesRow("cat one.txt | sort"),
+    decidesRow("pnpm --version | head -1"),
+    decidesRow("pnpm --version; cat one.txt | grep -n o | tail -1"),
     decidesRow("pnpm --version; grep -n one one.txt"),
     decidesRow("pnpm --version; echo hi > out.txt"),
   ]

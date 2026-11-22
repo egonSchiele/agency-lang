@@ -955,6 +955,44 @@ export type Join = "seq" | "and" | "or"
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L808))
 
+### TextFilter
+
+What a later stage of a pipeline does to the text of the stage before
+ it. `view` is a `cat`, `head`, or `tail` that names no file. `match` is
+ a `grep` that names no file: the fields are the grep tool's query, and
+ `lineNumbers` is `-n`.
+
+```ts
+/** What a later stage of a pipeline does to the text of the stage before
+ it. `view` is a `cat`, `head`, or `tail` that names no file. `match` is
+ a `grep` that names no file: the fields are the grep tool's query, and
+ `lineNumbers` is `-n`. */
+export type TextFilter =
+  | { kind: "view"; view: ReadView }
+  | { kind: "match"; pattern: string; flags: string; ignoreCase: boolean; wholeWord: boolean; invert: boolean; lineNumbers: boolean }
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L814))
+
+### PipeExec
+
+A pipeline whose every stage safeBash runs itself. `first` produces
+ the text and asks the pipeline's only questions; each filter takes the
+ text of the stage before it.
+
+```ts
+/** A pipeline whose every stage safeBash runs itself. `first` produces
+ the text and asks the pipeline's only questions; each filter takes the
+ text of the stage before it. */
+export type PipeExec = {
+  kind: "pipe";
+  first: EchoExec | GrepExec | ReadExec;
+  filters: TextFilter[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L821))
+
 ### StepExec
 
 What a step safeBash runs itself can be. None of these starts a
@@ -963,10 +1001,15 @@ What a step safeBash runs itself can be. None of these starts a
 ```ts
 /** What a step safeBash runs itself can be. None of these starts a
  shell. */
-export type StepExec = EchoExec | WriteExec | GrepExec | ReadExec
+export type StepExec =
+  | EchoExec
+  | WriteExec
+  | GrepExec
+  | ReadExec
+  | PipeExec
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L812))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L829))
 
 ### LineStep
 
@@ -977,7 +1020,7 @@ One step of a line that runs a step at a time.
 export type LineStep = RunStep | CdStep | GroupStep
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L815))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L832))
 
 ### RunStep
 
@@ -1004,7 +1047,7 @@ export type RunStep = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L818))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L835))
 
 ### CdStep
 
@@ -1026,7 +1069,7 @@ export type CdStep = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L839))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L856))
 
 ### GroupStep
 
@@ -1041,7 +1084,7 @@ export type GroupStep = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L849))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L866))
 
 ### StepsExec
 
@@ -1063,7 +1106,7 @@ export type StepsExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L858))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L875))
 
 ### RefuseExec
 
@@ -1074,7 +1117,7 @@ export type RefuseExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L879))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L896))
 
 ### BroadReason
 
@@ -1098,7 +1141,7 @@ export type BroadReason = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L888))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L905))
 
 ### Plan
 
@@ -1120,7 +1163,7 @@ export type Plan = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L894))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L911))
 
 ### FileAccess
 
@@ -1144,7 +1187,7 @@ export type FileAccess = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L910))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L927))
 
 ## Functions
 
@@ -1719,7 +1762,7 @@ Build file reads from the sources whose payloads `readEffect` asks about.
 
 **Returns:** [ReadExec](#readexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L870))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L887))
 
 ### accessesOf
 
@@ -1741,4 +1784,4 @@ accesses: `git checkout -- a.txt` overwrites a file, but its effect is
 
 **Returns:** `FileAccess[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L953))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L970))

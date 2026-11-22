@@ -1,6 +1,6 @@
 [
   { "command": "grep -rn \"planFor\" lib", "outcome": "shellFree", "effects": ["std::grep"] },
-  { "command": "grep -rn \"planFor\" lib | head -20", "outcome": "narrow", "effects": ["std::grep"] },
+  { "command": "grep -rn \"planFor\" lib | head -20", "outcome": "shellFree", "effects": ["std::grep"] },
   { "command": "grep -rn planFor stdlib --include=\"*.agency\"", "outcome": "narrow", "effects": ["std::grep"] },
   { "command": "grep -rn planFor stdlib --include=\"*.agency\" | head -40", "outcome": "narrow", "effects": ["std::grep"] },
   { "command": "grep -n \"def planFor\" stdlib/safeBash.agency", "outcome": "shellFree", "effects": ["std::grep"] },
@@ -10,10 +10,10 @@
   { "command": "grep -c import package.json", "outcome": "narrow", "effects": ["std::grep"] },
   { "command": "grep -rn planFor lib stdlib | head", "outcome": "narrow", "effects": ["std::grep", "std::grep"] },
   { "command": "grep -n version package.json 2>/dev/null", "outcome": "narrow", "effects": ["std::grep"] },
-  { "command": "grep -rni safebash docs/dev | head -5", "outcome": "narrow", "effects": ["std::grep"] },
-  { "command": "grep -rn planFor . | head", "outcome": "narrow", "effects": ["std::grep"] },
-  { "command": "cat package.json | grep version", "outcome": "narrow", "effects": ["std::read"] },
-  { "command": "grep -rn foo node_modules | head", "outcome": "broad", "effects": ["std::bash"] },
+  { "command": "grep -rni safebash docs/dev | head -5", "outcome": "shellFree", "effects": ["std::grep"] },
+  { "command": "grep -rn planFor . | head", "outcome": "shellFree", "effects": ["std::grep"] },
+  { "command": "cat package.json | grep version", "outcome": "shellFree", "effects": ["std::read"] },
+  { "command": "grep -rn foo node_modules | head", "outcome": "shellFree", "effects": ["std::grep"] },
   { "command": "grep -rnw planFor lib --include=\"*.ts\" --include=\"*.agency\"", "outcome": "narrow", "effects": ["std::grep"] },
   { "command": "git status | grep modified", "outcome": "narrow", "effects": ["std::git::status"] },
   { "command": "git status | grep -v deleted -c", "outcome": "broad", "effects": ["std::bash"] },
@@ -41,9 +41,9 @@
   { "command": "sed -n 10,20p package.json", "outcome": "narrow", "effects": ["std::read"] },
   { "command": "sed -n '1,40p' stdlib/safeBash.agency", "outcome": "narrow", "effects": ["std::read"] },
   { "command": "sed -i s/a/b/ package.json", "outcome": "broad", "effects": ["std::bash"] },
-  { "command": "head -20 package.json | tail -5", "outcome": "narrow", "effects": ["std::read"] },
+  { "command": "head -20 package.json | tail -5", "outcome": "shellFree", "effects": ["std::read"] },
   { "command": "diff package.json tsconfig.json", "outcome": "narrow", "effects": ["std::read", "std::read"] },
-  { "command": "cat package.json | head -20", "outcome": "narrow", "effects": ["std::read"] },
+  { "command": "cat package.json | head -20", "outcome": "shellFree", "effects": ["std::read"] },
   { "command": "sort package.json | uniq -c | head", "outcome": "narrow", "effects": ["std::read"] },
   { "command": "file package.json", "outcome": "narrow", "effects": ["std::read"] },
   { "command": "stat package.json", "outcome": "narrow", "effects": ["std::ls"] },
@@ -126,5 +126,5 @@
   { "command": "rg planFor lib", "outcome": "narrow", "effects": ["std::exec"] },
   { "command": "git status && echo $GITHUB_TOKEN", "outcome": "narrow", "effects": ["std::git::status", "std::env"] },
   { "command": "cd lib && ls", "outcome": "narrow", "effects": ["std::ls"] },
-  { "command": "cd lib; grep -rn planFor . | head", "outcome": "narrow", "effects": ["std::grep"] }
+  { "command": "cd lib; grep -rn planFor . | head", "outcome": "shellFree", "effects": ["std::grep"] }
 ]

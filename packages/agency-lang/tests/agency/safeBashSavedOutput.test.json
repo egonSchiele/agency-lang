@@ -16,7 +16,7 @@
     },
     {
       "nodeName": "programsWithNoRuleAskTheirOwnQuestion",
-      "description": "awk has no rule, so a read of saved output with it asks std::exec and nothing more, and prints the right lines. A line that only names a saved output still asks a question, std::bash::readonly, because no read of saved output was dropped.",
+      "description": "awk has no rule, so a read of saved output with it asks std::exec and nothing more, and prints the right lines. A line that only names a saved output and starts a shell (an echo piped into tr) still asks a question, std::bash::readonly, because no read of saved output was dropped.",
       "input": "",
       "expectedOutput": "[\"line2\\nline3\\n\",true,[\"std::exec\",\"std::bash::readonly\"]]",
       "evaluationCriteria": [{ "type": "exact" }]

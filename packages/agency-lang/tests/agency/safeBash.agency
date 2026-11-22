@@ -1724,22 +1724,26 @@ def treeRow(source: string, dir: string): any {
 node grepThroughBashAsksStdGrep() {
   makeGrepTree()
   const rows = [
-    treeRow("grep -rn hello . | head -20", GREP_TREE_ROOT),
+    // `wc -l` keeps a pipeline with bash, which is the path these rows
+    // test. The last row is the same search into `head`, which safeBash
+    // runs itself, where the tool searches the folder it is given.
+    treeRow("grep -rn hello . | wc -l", GREP_TREE_ROOT),
     treeRow("grep -rn \"a\\|b\" src", GREP_TREE_ROOT),
     treeRow("grep -rn hello src lib", GREP_TREE_ROOT),
     treeRow("grep -rn hello src --include=\"*.ts\"", GREP_TREE_ROOT),
     treeRow("grep -n hello one.txt -A 5", GREP_TREE_ROOT),
-    treeRow("grep -rn hello node_modules | head", GREP_TREE_ROOT),
-    treeRow("grep -rn hello node_modules/p | head", GREP_TREE_ROOT),
+    treeRow("grep -rn hello node_modules | wc -l", GREP_TREE_ROOT),
+    treeRow("grep -rn hello node_modules/p | wc -l", GREP_TREE_ROOT),
     treeRow("grep -n hello src", GREP_TREE_ROOT),
     treeRow("grep -rn hello src", GREP_TREE_ROOT),
-    treeRow("grep -rn hello src/dist | head", GREP_TREE_ROOT),
-    treeRow("grep -rn hello src/dist/ | head", GREP_TREE_ROOT),
-    treeRow("grep -rn hello . | head", GREP_TREE_ROOT + "/src/sub/build"),
-    treeRow("grep -rn hello | head", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src/dist | wc -l", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src/dist/ | wc -l", GREP_TREE_ROOT),
+    treeRow("grep -rn hello . | wc -l", GREP_TREE_ROOT + "/src/sub/build"),
+    treeRow("grep -rn hello | wc -l", GREP_TREE_ROOT),
     treeRow("pnpm test | grep FAIL -v", GREP_TREE_ROOT),
     treeRow("git status | grep -v deleted -c", GREP_TREE_ROOT),
-    treeRow("grep -rn hello src -e x | head", GREP_TREE_ROOT),
+    treeRow("grep -rn hello src -e x | wc -l", GREP_TREE_ROOT),
+    treeRow("grep -rn hello node_modules | head", GREP_TREE_ROOT),
   ]
   remove(GREP_TREE) with approve
   return rows
@@ -1751,11 +1755,13 @@ node grepThroughBashAsksStdGrep() {
 node grepRunsWhatItAsked() {
   makeGrepTree()
   const rows = [
-    executionCommandIn("grep -rn hello . | head -20", GREP_TREE_ROOT),
+    // `wc -l` keeps these two pipelines with bash; a `| head` would be run
+    // by safeBash itself, and no grep command would be written.
+    executionCommandIn("grep -rn hello . | wc -l", GREP_TREE_ROOT),
     executionCommandIn("grep -rn hello src --include=\"*.ts\"", GREP_TREE_ROOT),
     executionCommandIn("grep -n hello one.txt -A 5", GREP_TREE_ROOT),
     executionCommandIn("grep -n hello one.txt lib/l.ts | head", GREP_TREE_ROOT),
-    executionCommandIn("grep -rn hello | head", GREP_TREE_ROOT),
+    executionCommandIn("grep -rn hello | wc -l", GREP_TREE_ROOT),
   ]
   remove(GREP_TREE) with approve
   return rows
@@ -2083,6 +2089,144 @@ def exactParityOf(source: string, kind: string, cwd: string): any {
     return true
   }
   return [source, ours, theirs]
+}
+
+/* One pipeline run by safeBash itself and by real bash: true when the
+ text and whether it succeeded both agree, else what each gave. */
+def pipeParityOf(source: string, cwd: string): any {
+  // Without this check, a row that fell back to the bash path would
+  // compare bash with itself and pass for no reason.
+  if (kindOf(planFor(source, cwd)) != "pipe") {
+    return "NOT IN PROCESS: ${source}"
+  }
+  let ours = ""
+  let ourOk = true
+  let theirs = ""
+  let theirOk = true
+  handle {
+    const own = safeBash(source, cwd: cwd)
+    if (own is success(out)) {
+      ours = out
+    } else {
+      ourOk = false
+    }
+    // bash returns an ExecResult, not a Result.
+    const real = bash(source, cwd: cwd)
+    theirs = real.stdout
+    theirOk = real.exitCode == 0
+  } with approve
+  // A failed pipeline's text is the tool's failure message, so only its
+  // status is compared. Every failing row here prints nothing in bash.
+  if (!ourOk && !theirOk && theirs == "") {
+    return true
+  }
+  if (ours == theirs && ourOk == theirOk) {
+    return true
+  }
+  return [source, ours, ourOk, theirs, theirOk]
+}
+
+// Each row is a pipeline safeBash runs itself, compared with real bash:
+// the same text and the same success or failure. The status is the last
+// stage's, so a first stage that matches nothing is not a failure and a
+// last `grep` that keeps no line is.
+node pipelinesMatchRealTools() {
+  return [
+    pipeParityOf("cat one.txt | head -3", FIXTURES),
+    pipeParityOf("cat one.txt | head", FIXTURES),
+    pipeParityOf("head -4 one.txt | tail -2", FIXTURES),
+    pipeParityOf("cat one.txt | tail -n 2", FIXTURES),
+    pipeParityOf("cat one.txt | cat -n", FIXTURES),
+    pipeParityOf("cat one.txt | grep hello", FIXTURES),
+    pipeParityOf("cat one.txt | grep -n hello", FIXTURES),
+    pipeParityOf("cat one.txt | grep -v hello | head -2", FIXTURES),
+    pipeParityOf("cat one.txt | grep -i hello", FIXTURES),
+    pipeParityOf("cat one.txt | grep -w hello", FIXTURES),
+    pipeParityOf("cat one.txt | grep -E \"hello|goodbye\"", FIXTURES),
+    pipeParityOf("cat one.txt | grep -F \"o w\"", FIXTURES),
+    pipeParityOf("cat one.txt | grep -e hello", FIXTURES),
+    pipeParityOf("cat one.txt | grep nomatch", FIXTURES),
+    pipeParityOf("cat one.txt | grep nomatch | head", FIXTURES),
+    pipeParityOf("grep -n hello one.txt | tail -1", FIXTURES),
+    pipeParityOf("grep hello one.txt | grep -v again | cat", FIXTURES),
+    pipeParityOf("grep nomatch one.txt | head", FIXTURES),
+    pipeParityOf("grep nomatch one.txt | grep hello", FIXTURES),
+    pipeParityOf("cat one.txt two.txt | grep -n hello | tail -2", FIXTURES),
+    pipeParityOf("echo hi | head", FIXTURES),
+    pipeParityOf("echo hi | grep h", FIXTURES),
+    pipeParityOf("echo hi | grep x", FIXTURES),
+    pipeParityOf("cat noeol.txt | grep -n .", READ_FIXTURES),
+    pipeParityOf("cat noeol.txt | tail -1", READ_FIXTURES),
+    pipeParityOf("cat noeol.txt | grep -v zzz", READ_FIXTURES),
+    pipeParityOf("cat empty.txt | head", READ_FIXTURES),
+    pipeParityOf("cat empty.txt | grep x", READ_FIXTURES),
+    pipeParityOf("cat crlf.txt | head -1", READ_FIXTURES),
+  ]
+}
+
+/* A line's outcome, and whether each top-level step is one safeBash runs
+ itself. */
+def pipeRow(source: string): any {
+  const plan = planFor(source, FIXTURES)
+  const exec: any = plan.execution
+  const own = if (exec.kind == "steps") then [step.kind == "run" && step.inProcess != null for step in exec.steps] else []
+  return [source, outcomeOf(plan), own, [effect.name for effect in plan.effects]]
+}
+
+// A pipeline runs in process only when every stage can. A program, a
+// filter with no in-process form, a later stage that names a file or has
+// a redirect, a grep flag that changes the output's shape, a group, and a
+// first stage that writes a file each send the whole pipeline to bash.
+node pipelinesThatStayWithBash() {
+  return [
+    pipeRow("git log --oneline | head -5"),
+    pipeRow("pnpm test 2>&1 | tail -30"),
+    pipeRow("cat one.txt | sort"),
+    pipeRow("cat one.txt | wc -l"),
+    pipeRow("cat one.txt | grep -c hello"),
+    pipeRow("cat one.txt | grep -o hello"),
+    pipeRow("cat one.txt | grep -A 1 hello"),
+    pipeRow("cat one.txt | grep -l hello"),
+    pipeRow("cat one.txt | grep hello two.txt"),
+    pipeRow("cat one.txt | head -2 two.txt"),
+    pipeRow("cat one.txt | head -2 > out.txt"),
+    pipeRow("cat one.txt | tee out.txt"),
+    pipeRow("(cat one.txt) | head -2"),
+    pipeRow("cat one.txt | (head -2)"),
+    pipeRow("echo hi > out.txt | head"),
+    pipeRow("cat nope.txt | head"),
+    pipeRow("cat one.txt | head -n 0"),
+    pipeRow("pnpm --version; cat one.txt | head -1"),
+  ]
+}
+
+// The note a folder search adds is printed after the last stage, so
+// `| head -1` keeps one match and the note.
+node aSearchNoteFollowsTheLastStage() {
+  const out = safeBash("grep -rn hello . | head -1", cwd: FIXTURES) with approve
+  if (out is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  const lines = out.value.trim().split("\n")
+  return [kindOf(planFor("grep -rn hello . | head -1", FIXTURES)), lines.length, lines[0].includes(":hello"), lines[1].includes("skip")]
+}
+
+// A rejected question runs nothing, and no shell starts for a pipeline
+// safeBash runs itself: the only question is the first stage's.
+node aPipelineAsksItsFirstStagesQuestion() {
+  let asked: string[] = []
+  let out: Result<string> = success("")
+  handle {
+    out = safeBash("cat one.txt | grep hello | head -1", cwd: FIXTURES)
+  } with (intr) {
+    asked.push(intr.effect)
+    return reject("no")
+  }
+  let ran: Result<string> = success("")
+  handle {
+    ran = safeBash("cat one.txt | grep hello | head -1", cwd: FIXTURES)
+  } with approve
+  return [asked, isSuccess(out), ran]
 }
 
 node shellFreeReadMatchesRealTools() {

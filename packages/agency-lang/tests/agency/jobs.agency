@@ -318,7 +318,8 @@ node aJobWhoseFileChangedDoesNotStart() {
   let result: any = null
   let swapped: boolean[] = []
   handle {
-    result = startJob("cat one.txt | head -1", cwd: JOBS_FIXTURE, maxMinutes: 1)
+    // `wc` keeps this a pipeline bash runs, which is what a job launches.
+    result = startJob("cat one.txt | wc -l", cwd: JOBS_FIXTURE, maxMinutes: 1)
   } with (intr) {
     if (swapped.length == 0) {
       bash("rm one.txt && ln -s sub/secret.txt one.txt", cwd: JOBS_FIXTURE) with approve

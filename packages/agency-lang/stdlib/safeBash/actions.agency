@@ -807,9 +807,26 @@ export type ReadExec = {
  only after a success, `||` only after a failure. */
 export type Join = "seq" | "and" | "or"
 
+/** What a later stage of a pipeline does to the text of the stage before
+ it. `view` is a `cat`, `head`, or `tail` that names no file. `match` is
+ a `grep` that names no file: the fields are the grep tool's query, and
+ `lineNumbers` is `-n`. */
+export type TextFilter =
+  | { kind: "view"; view: ReadView }
+  | { kind: "match"; pattern: string; flags: string; ignoreCase: boolean; wholeWord: boolean; invert: boolean; lineNumbers: boolean }
+
+/** A pipeline whose every stage safeBash runs itself. `first` produces
+ the text and asks the pipeline's only questions; each filter takes the
+ text of the stage before it. */
+export type PipeExec = {
+  kind: "pipe";
+  first: EchoExec | GrepExec | ReadExec;
+  filters: TextFilter[]
+}
+
 /** What a step safeBash runs itself can be. None of these starts a
  shell. */
-export type StepExec = EchoExec | WriteExec | GrepExec | ReadExec
+export type StepExec = EchoExec | WriteExec | GrepExec | ReadExec | PipeExec
 
 /** One step of a line that runs a step at a time. */
 export type LineStep = RunStep | CdStep | GroupStep

@@ -115,8 +115,8 @@ program safeBash has no rule for (`std::exec`), a redirect contributing
 The shell-free grep and the shell-free read follow one rule. A command
 whose flags and arguments translate exactly runs the matching stdlib
 tool in process, under that tool's effect, wherever it sits in the line.
-The one exception is a command inside a pipeline, which bash runs. Any
-other command runs through bash, with a narrow effect only when the
+A pipeline runs in process when every stage can, and otherwise bash runs
+the whole pipeline. Any other command runs through bash, with a narrow effect only when the
 payload describes what bash will do, and `std::bash` otherwise.
 
 | Command | Runs | Raises |
@@ -2181,13 +2181,65 @@ not in the table.
 
 Three commands are never taken, whatever the table says:
 
-- **A command inside a pipeline.** Bash runs a pipeline's stages at the
-  same time, which a step cannot. `classifyPipeline` marks the line
-  (`LineState.byBash`) for every stage, a group inside a stage included.
+- **A command inside a pipeline bash runs.** A pipeline is all or
+  nothing (see "A pipeline in process" below). When bash runs it,
+  `classifyPipeline` marks the line (`LineState.byBash`) for every
+  stage, a group inside a stage included.
 - **A command behind `timeout`.** The limit is the program's.
 - **A read of a file that does not exist when the line is planned.** The
   read tool needs a real file, so in `pnpm build > out.txt; cat out.txt`
   with no `out.txt`, bash runs the `cat`.
+
+### A pipeline in process
+
+A pipeline runs in process when every stage can (`inProcessPipeline`):
+
+```
+cat notes.txt | grep TODO | head -3     # no shell starts
+git log --oneline | head -5             # bash runs the whole pipeline
+```
+
+It is all or nothing because bash runs the stages at the same time. In
+`git log | head -5`, bash stops `git` once `head` has five lines.
+Handing over finished text cannot do that, so `yes | head` would never
+end.
+
+- **The first stage** is a command the table takes, as it would alone:
+  an echo, a grep, or a cat, head, or tail of files. It asks the
+  pipeline's only questions.
+- **Each later stage** is a `cat`, `head`, `tail`, or `grep` that names
+  no file (`stdinFilter`). It takes the text of the stage before it and
+  asks nothing. `head` and `tail` take the counts their lone forms take.
+  `grep` takes `-n`, `-v`, `-i`, `-w`, `-E`, `-F`, and `-e`. A flag that
+  changes the shape of the output (`-c`, `-o`, `-l`, a context flag) has
+  no in-process form, so bash runs that pipeline.
+- **A stage that names a file, has a redirect or an assignment, or is a
+  group** sends the pipeline to bash, where the pipeline rules above
+  decide what it asks.
+
+The step holds a `PipeExec`: the first stage's execution and a
+`TextFilter` per later stage. `printPipe` runs the first stage, then
+each filter in order, each to its end. A `grep` stage is the search the
+grep tool runs on one file, given the text (`_grepPipedText` in
+`lib/stdlib/spill.ts`, beside the search of a saved output), with no
+limit on matches.
+
+Three things differ from a lone command or from bash:
+
+- **The status is the last stage's**, as in bash without `pipefail`. A
+  first-stage grep that matches nothing is not a failure, where a lone
+  one is. A last-stage grep that keeps no line is.
+- **A folder search's note is printed after the last stage**, so `|
+  head` cannot cut it off.
+- **A first stage that fails to read** fails the step with the read
+  tool's message. In bash the later stages would still run on empty
+  input. A file that is missing when the line is planned is not taken by
+  the table, so bash runs that pipeline and nothing changes for it.
+
+A search of a folder the grep tool skips by name is refused by the bash
+rule, because the grep it writes excludes that name. In process the tool
+searches the folder it is given, so `grep -rn x node_modules | head`
+asks `std::grep`, as the lone search does.
 
 A step safeBash runs itself is not planned again before it runs
 (`runOneStep`). Its stdlib tool opens the approved folder with

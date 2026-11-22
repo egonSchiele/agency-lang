@@ -307,6 +307,10 @@ Opened after pull request 2 merges.
 bullet below and dropping `>` and `>>`:** no logged or corpus line
 redirects a table command to a file. This waits for the owner's yes.
 
+**What was built (2026-11-22):** only `2>/dev/null`, as pull request
+#1540. The owner had not answered, so `>` and `>>` on a command other
+than `echo` are not built, and Task 7's other bullets are still open.
+
 ### Task 7: a redirect on any in-process step
 
 **Files:** `stdlib/safeBash.agency`, `stdlib/safeBash/actions.agency`.

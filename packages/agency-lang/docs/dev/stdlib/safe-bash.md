@@ -2179,6 +2179,15 @@ effects are the ones the stdlib tool raises. When it refuses, the bash
 rule decides, and the step's `inProcess` is null. An `agency` line is
 not in the table.
 
+`2>/dev/null` on a command is dropped before the table reads it
+(`withoutQuietStderr`), in any position, a later stage of a pipeline
+included. A command safeBash runs itself writes nothing to standard
+error when it succeeds, so `grep -rn x lib 2>/dev/null` is the search
+`grep -rn x lib` is. When such a step fails, its message is still
+reported, where bash would have hidden the program's complaint. Every
+other redirect keeps the command with bash, apart from the one `>` or
+`>>` an `echo` takes.
+
 Three commands are never taken, whatever the table says:
 
 - **A command inside a pipeline bash runs.** A pipeline is all or

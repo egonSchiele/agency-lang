@@ -9,7 +9,7 @@
   { "command": "grep -rln TODO lib | wc -l", "outcome": "narrow", "effects": ["std::grep"] },
   { "command": "grep -c import package.json", "outcome": "narrow", "effects": ["std::grep"] },
   { "command": "grep -rn planFor lib stdlib | head", "outcome": "narrow", "effects": ["std::grep", "std::grep"] },
-  { "command": "grep -n version package.json 2>/dev/null", "outcome": "narrow", "effects": ["std::grep"] },
+  { "command": "grep -n version package.json 2>/dev/null", "outcome": "shellFree", "effects": ["std::grep"] },
   { "command": "grep -rni safebash docs/dev | head -5", "outcome": "shellFree", "effects": ["std::grep"] },
   { "command": "grep -rn planFor . | head", "outcome": "shellFree", "effects": ["std::grep"] },
   { "command": "cat package.json | grep version", "outcome": "shellFree", "effects": ["std::read"] },

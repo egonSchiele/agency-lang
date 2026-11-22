@@ -1,3 +1,32 @@
+## Nov 22 2026 — v0.44.2
+
+"Always approve when" for a `std::exec` question now asks how much of the command to cover and which folder.
+
+### Breaking
+
+- **`subcommand` is gone from the `std::exec` question.**
+- **A string pattern against a list field now means "every item matches".** It used to compare the comma-joined text.
+
+### Policies
+
+- **A policy rule's `match` value may be a list.** `{ "command": "pnpm", "args": ["run", "agency", "**"] }` approves `pnpm run agency` followed by anything. A last `**` stands for "0 or more items".
+- **"Always approve when" on a `std::exec` question asks which commands and which folder to cover,** from the exact command down to the program and its first argument. Before, it saved a rule for the program and first argument in every folder, so "always approving" `python3 -c '…'` approved any Python code anywhere in perpetuity.
+- **New effect tag `@alwaysPrefix(field)`,** which pins the leading items of a list and has the prompt ask how many. `std::exec` uses it for `args`.
+- A pattern longer than 65,536 characters is refused by `validatePolicy`.
+
+### safeBash
+
+- **A command after `cd x && a;` asks the narrow questions it would ask anywhere else,** instead of `std::bash`. If bash would skip the `cd` because an earlier command failed, safeBash stops the line before the next step instead of running it in the wrong folder.
+- **The `exec` tool runs in, and reports, an absolute folder.** An empty `cwd` now becomes the run's folder before running, so `allowedPaths` is checked against it.
+
+### Agent
+
+- **A reply that says it stopped to call a tool but has no tool call is retried,** up to two times, with a note asking for the call again. Some local model servers, such as mlx_lm, drop a tool call they cannot parse, which used to end the task with an empty answer.
+
+### Other
+
+- `agency local download` prints a short message when a download fails, instead of a stack trace and a long signed URL. For a 401 or 403, it explains that rerunning resumes the download and mentions `HF_TOKEN`.
+
 ## Nov 22 2026 — v0.44.1
 
 safeBash runs more commands itself, with no shell.

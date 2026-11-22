@@ -1,0 +1,53 @@
+import { cliPolicyHandler, flushPolicy, ScopedRuleFields } from "std::policy"
+import { exec } from "std::shell"
+
+// The scope std::exec is moving to: the program, how much of the
+// arguments, and the folder.
+const FIELDS: ScopedRuleFields = {
+  "std::exec": [
+    { field: "command", matchSubpaths: false },
+    { field: "args", matchSubpaths: false, matchPrefix: true },
+    { field: "cwd", matchSubpaths: true }
+  ]
+}
+
+def outcome(name: string, failed: boolean): string {
+  if (failed) {
+    return "${name} rejected"
+  }
+  return "${name} ok"
+}
+
+// `echo run build`, then `echo run test`, in `dir`. The first is answered
+// at the prompts the test scripts. The second must not prompt when the
+// rule saved for the first covers it. `echo` stands in for a program like
+// pnpm so that nothing is built.
+node twoCommands(args: { policyFile: string, dir: string, answersOnly: boolean }): string[] {
+  const handler = cliPolicyHandler(
+    file: args.policyFile,
+    fields: FIELDS,
+    policy: {},
+    answersOnly: args.answersOnly,
+  )
+  let outcomes: string[] = []
+  handle {
+    const first = exec("echo", ["run", "build"], cwd: args.dir)
+    outcomes.push(outcome("build", isFailure(first)))
+    const second = exec("echo", ["run", "test"], cwd: args.dir)
+    outcomes.push(outcome("test", isFailure(second)))
+  } with handler
+  flushPolicy() with approve
+  return outcomes
+}
+
+// One command, answered at the prompts the test scripts.
+node oneCommand(args: { policyFile: string, dir: string }): string[] {
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS, policy: {})
+  let outcomes: string[] = []
+  handle {
+    const first = exec("echo", ["run", "build"], cwd: args.dir)
+    outcomes.push(outcome("build", isFailure(first)))
+  } with handler
+  flushPolicy() with approve
+  return outcomes
+}

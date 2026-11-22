@@ -32,7 +32,8 @@ import {
   _recordRule,
   _stripControlChars,
   _folderField,
-  _folderWithoutAsking,
+  _picksWithoutAsking,
+  _itemChoices,
   _sharedSetFor,
   _unrejectedEffects,
   _promptMenuItems,
@@ -81,6 +82,11 @@ folder in the interrupt or one of its parents, up to the launch directory
 and never the home directory. A rule saved this way sets
 `matchDotFolders`, so it also covers folders like `.cache` below the one
 chosen.
+
+For a command (`std::exec`), "always approve when" asks up to two
+questions. The first is how much of the command the rule covers, from
+this exact command down to the program and its first argument followed
+by anything: `pnpm run …`. The second is the folder, as for a read.
 */
 
 /** Key of an interrupt's `data` object (e.g. `"dir"`, `"command"`). */
@@ -265,10 +271,23 @@ let _saveAnswersOnly: boolean = false
 // The "always" answers not yet saved, in the order they were given.
 let _pendingAnswers: PendingAnswer[] = []
 
+// How wide an "always approve when" rule is: the id of the command
+// choice, and the folder. "" for a part that does not apply. These are
+// `RulePicks` in lib/runtime/interruptPromptOptions.ts.
+type RulePicks = {
+  items: string;
+  folder: string
+}
+
+static const NO_PICKS: RulePicks = { items: "", folder: "" }
+
+// A pending answer keeps its picks, because a save under `useRunPolicy`
+// replays each answer against the file as it is now. Without them the
+// file would get the narrowest rule, not the one the user picked.
 type PendingAnswer = {
   intr: any;
   action: Decision;
-  folder: string
+  picks: RulePicks
 }
 
 /**
@@ -624,7 +643,7 @@ def policyToSave(answers: PendingAnswer[]): Result<Policy | null> {
       saved,
       answer.intr,
       answer.action,
-      answer.folder,
+      answer.picks,
       globalCliPolicyOpts.fields,
     )
     if (after.changed) {
@@ -703,8 +722,9 @@ type AskUserResult = {
   /** Set when a rule decided this interrupt while it waited for the
     terminal, so no one was asked. Holds that rule's decision. */
   rule?: any;
-  /** The folder chosen at the folder step. Empty when the step did not run. */
-  folder?: string
+  /** How wide the saved rule is, from the follow-up steps. Absent when no
+    step ran. */
+  picks?: RulePicks
 }
 
 // Text a model wrote, on its way to a terminal the user is reading in
@@ -1088,18 +1108,35 @@ def askFolder(value: string, subject: string, risk: string): string | null {
   return choices[index].path
 }
 
-// The folder step for an answer, when it applies. Returns the folder
-// picked, "" when the step does not apply to this answer, or null when the
-// user went back to the first prompt. Whether there is anything to ask is
-// `folderWithoutAsking` in lib/runtime/interruptPromptOptions.ts, so this
-// menu and a TypeScript host save the same rule for the same answer.
-def askFolderFor(intr: any, answer: AskUserResult): string | null {
-  const known = _folderWithoutAsking(intr, answer.action, globalCliPolicyOpts.fields)
-  if (known != null) {
-    return known
+// The command step: how much of the command the rule should cover, from
+// this exact command down to the program and its first argument followed
+// by anything. Returns the id of the choice picked, or null when the user
+// went back.
+def askItems(intr: any, risk: string): string | null {
+  const choices = _itemChoices(intr, globalCliPolicyOpts.fields)
+  let items: ChoiceItem[] = []
+  for (choice in choices) {
+    items.push({ key: "${items.length + 1}", label: choice.label, detail: choice.note })
   }
+  items.push({ key: BACK_KEY, label: "back" })
+  const body = "${_riskColored(risk, stripControlChars(intr.effect))} will always be approved for the commands you pick."
+  const picked = interruptChoice(
+    color.bold("Which commands should this cover?"),
+    body,
+    items,
+    allowFreeText: false,
+    allowCancel: true,
+  )
+  if (picked == BACK_KEY) {
+    return null
+  }
+  const index = map(items, \item -> item.key).indexOf(picked)
+  return choices[index].id
+}
+
+// The folder step for an answer whose rule may cover a wider folder.
+def askFolderOf(intr: any, answer: AskUserResult, risk: string): string | null {
   const value = "${intr.data[folderField(intr)]}"
-  const risk = _effectRisk(intr.effect)
   if (answer.action == "approve-always-here") {
     return askFolder(value, intr.effect, risk)
   }
@@ -1108,10 +1145,36 @@ def askFolderFor(intr: any, answer: AskUserResult): string | null {
   return askFolder(value, "Reads (${members.join(", ")})", risk)
 }
 
+// The follow-up steps for an answer: the command step, then the folder
+// step, each only when it has more than one choice. Returns the picks, or
+// null when the user went back to the first prompt from either step.
+// Which steps apply is `picksWithoutAsking` in
+// lib/runtime/interruptPromptOptions.ts, so this menu and a TypeScript
+// host save the same rule for the same answer.
+def askPicksFor(intr: any, answer: AskUserResult): RulePicks | null {
+  const known = _picksWithoutAsking(intr, answer.action, globalCliPolicyOpts.fields)
+  const risk = _effectRisk(intr.effect)
+  let items = known.items
+  if (items == null) {
+    items = askItems(intr, risk)
+  }
+  if (items == null) {
+    return null
+  }
+  let folder = known.folder
+  if (folder == null) {
+    folder = askFolderOf(intr, answer, risk)
+  }
+  if (folder == null) {
+    return null
+  }
+  return { items: items, folder: folder }
+}
+
 // Present the approval menu for one interrupt and return the user's
 // choice as an `AskUserResult`. The answers come from `askUserChoices`. An (ap) or
-// (as) answer on a file-reading effect goes on to the folder step, whose
-// "back" shows the menu again.
+// (as) answer goes on to the follow-up steps that apply, whose "back"
+// shows the menu again.
 // Renders as a modal over the active repl(); falls back to plain print
 // + input when no REPL is running (e.g. headless agent runs).
 //
@@ -1172,9 +1235,9 @@ def askUser(intr: any): AskUserResult {
         expectsValue: intr.expectsValue == true,
       )
       result = choiceResult(choice, items)
-      const folder = askFolderFor(intr, result)
-      if (folder != null) {
-        result = { ...result, folder: folder }
+      const picks = askPicksFor(intr, result)
+      if (picks != null) {
+        result = { ...result, picks: picks }
         asking = false
       }
     }
@@ -1208,7 +1271,7 @@ def recordAnswer(intr: any, answer: AskUserResult) {
     rules,
     intr,
     answer.action,
-    answer.folder ?? "",
+    answer.picks ?? NO_PICKS,
     globalCliPolicyOpts.fields,
   )
   if (after.changed) {
@@ -1216,7 +1279,7 @@ def recordAnswer(intr: any, answer: AskUserResult) {
     _pendingAnswers = [..._pendingAnswers, {
       intr: intr,
       action: answer.action,
-      folder: answer.folder ?? ""
+      picks: answer.picks ?? NO_PICKS
     }]
     _pendingSave = true
   }

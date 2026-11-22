@@ -12,7 +12,7 @@
 //                        run, and the policy with any rule the option saves
 //
 // See docs/dev/agents/approval-policies.md.
-import { describeScope, folderChoices, inSharedApprovalSet } from "./alwaysChoices.js";
+import { describeScope, folderChoices, getsFolderStep } from "./alwaysChoices.js";
 import { EXACT_PREFIX, prefixChoices, prefixPattern } from "./alwaysChoices.js";
 import { SHARED_APPROVAL_SETS, sharedApprovalSet } from "./alwaysChoices.js";
 import type { FolderChoice } from "./alwaysChoices.js";
@@ -29,14 +29,24 @@ import { insertApproveRule, insertRejectRule } from "./policyUpdate.js";
 import { failure, success } from "./result.js";
 import type { ResultFailure } from "./result.js";
 
-/** How wide a saved rule can be. For a file read, a folder. */
+/** One choice in a follow-up question: a folder, or how much of a command. */
 export type PromptScope = {
-  /** What a front-end sends back to pick this scope. */
+  /** What a front-end sends back to pick this choice. */
   id: string;
   /** What the person reads. */
   label: string;
   /** A remark shown beside it: "the launch directory". */
   note?: string;
+};
+
+/** One follow-up question an option asks before its rule is saved. */
+export type PromptStep = {
+  /** Which part of the rule this step widens. */
+  id: "items" | "folder";
+  /** "Which commands should this cover?" */
+  question: string;
+  /** The choices, narrowest first. Always two or more. */
+  choices: PromptScope[];
 };
 
 /** One option a prompt for an interrupt shows. */
@@ -49,11 +59,30 @@ export type PromptOption = {
   response: "approve" | "reject";
   /** What a rule saved by this option covers, in words. */
   detail?: string;
-  /** The widths the saved rule can have, narrowest first. Empty for an
-   *  option that saves no rule, or whose rule has one width. With two or
-   *  more, the front-end asks which before it resolves the option. */
-  scopes: PromptScope[];
+  /** The questions to ask, in order, before the option is resolved. Empty
+   *  for an option that saves no rule, or whose rule has one width. */
+  steps: PromptStep[];
 };
+
+/** The widths of the rule an option saves, one per step id. "" for a part
+ *  that does not apply to this interrupt. */
+export type RulePicks = { items: string; folder: string };
+
+/** The picks that need no question. A part is null when the person must
+ *  choose it. */
+export type KnownPicks = { items: string | null; folder: string | null };
+
+type StepId = PromptStep["id"];
+
+// The tag is general, but std::exec is its only user, so the words are a
+// command's. A second effect with `@alwaysPrefix` needs general wording.
+const ITEMS_QUESTION = "Which commands should this cover?";
+const EXACT_ITEMS_NOTE = "this exact command";
+const FOLDER_QUESTION = "Which folder should this cover?";
+
+/** How much of one argument a choice's label shows. The body above the
+ *  menu shows the whole command. */
+const MAX_LABEL_ITEM = 60;
 
 /** What the options depend on besides the interrupt. */
 export type PromptContext = {
@@ -172,10 +201,11 @@ function describeScopedMatch(intr: Intr, context: PromptContext): string {
 }
 
 /** The one field whose rule can cover a wider folder, or "" when no rule
- *  for this interrupt can: the effect is in no shared set, or its scope
- *  does not have exactly one subpath field. */
+ *  for this interrupt can: the effect does not get the folder step
+ *  (`getsFolderStep`), or its scope does not have exactly one subpath
+ *  field. */
 export function folderField(intr: Intr, context: PromptContext): string {
-  if (!inSharedApprovalSet(intr.effect, context.sets)) {
+  if (!getsFolderStep(intr.effect, context.sets)) {
     return "";
   }
   const subpaths = scopedFieldsFor(intr.effect, context).filter((spec) => spec.matchSubpaths);
@@ -231,17 +261,63 @@ function isOffered(row: PromptOptionRow, intr: Intr, offer: Offer): boolean {
   return offer.scope !== "" && offer.set.members.length > 0;
 }
 
-/** The widths to ask about. One folder is no choice, so it is not listed:
- *  `folderWithoutAsking` returns it. */
-function scopesOf(folders: FolderChoice[]): PromptScope[] {
-  if (folders.length < 2) {
-    return [];
-  }
+function folderScopes(folders: FolderChoice[]): PromptScope[] {
   return folders.map((folder) => ({
     id: folder.path,
     label: stripControlChars(folder.path),
     ...(folder.note === "" ? {} : { note: folder.note }),
   }));
+}
+
+/** The list a rule for this interrupt pins the start of, or null when the
+ *  scope has no `@alwaysPrefix` field or its value is not a list of
+ *  strings. */
+function prefixList(intr: Intr, context: PromptContext): string[] | null {
+  const spec = scopedFieldsFor(intr.effect, context).find((one) => one.matchPrefix === true);
+  const value: unknown = spec === undefined ? null : intr.data?.[spec.field];
+  const isList = Array.isArray(value) && value.every((item) => typeof item === "string");
+  return isList ? (value as string[]) : null;
+}
+
+function shortened(item: string): string {
+  return item.length > MAX_LABEL_ITEM ? `${item.slice(0, MAX_LABEL_ITEM)}…` : item;
+}
+
+/** How much of a list the rule may cover, narrowest first. A label is the
+ *  values of the exact fields, then the kept items, then "…" for "and any
+ *  items after these": `pnpm run …`. Empty when the scope has no
+ *  `@alwaysPrefix` field. */
+export function itemChoices(intr: Intr, context: PromptContext): PromptScope[] {
+  const items = prefixList(intr, context);
+  if (items === null) {
+    return [];
+  }
+  const lead = scopedFieldsFor(intr.effect, context)
+    .filter((spec) => !spec.matchSubpaths && spec.matchPrefix !== true)
+    .map((spec) => String(intr.data?.[spec.field]));
+  return prefixChoices(items.length).map((choice) => {
+    const kept = items.slice(0, choice.keep).map(shortened);
+    const words = choice.rest ? [...lead, ...kept, "…"] : [...lead, ...kept];
+    const label = stripControlChars(words.join(" "));
+    return choice.rest
+      ? { id: choice.id, label }
+      : { id: choice.id, label, note: EXACT_ITEMS_NOTE };
+  });
+}
+
+/** Every choice for one part of the rule, a single one included. */
+function choicesFor(part: StepId, intr: Intr, context: PromptContext): PromptScope[] {
+  return part === "items" ? itemChoices(intr, context) : folderScopes(folderOptions(intr, context));
+}
+
+/** The questions to ask. A part with one choice is no question, so it is
+ *  not listed: `picksWithoutAsking` returns its choice. */
+function stepsFor(intr: Intr, context: PromptContext): PromptStep[] {
+  const steps: PromptStep[] = [
+    { id: "items", question: ITEMS_QUESTION, choices: choicesFor("items", intr, context) },
+    { id: "folder", question: FOLDER_QUESTION, choices: choicesFor("folder", intr, context) },
+  ];
+  return steps.filter((step) => step.choices.length > 1);
 }
 
 function optionFor(
@@ -252,21 +328,21 @@ function optionFor(
 ): PromptOption {
   const { key, label, response } = row;
   if (row.covers === "nothing") {
-    return { key, label, response, scopes: [] };
+    return { key, label, response, steps: [] };
   }
   if (row.covers === "effect") {
-    return { key, label, response, detail: `every ${stripControlChars(intr.effect)}`, scopes: [] };
+    return { key, label, response, detail: `every ${stripControlChars(intr.effect)}`, steps: [] };
   }
-  const scopes = scopesOf(folderOptions(intr, context));
+  const steps = stepsFor(intr, context);
   if (row.covers === "scope") {
-    return { key, label, response, detail: offer.scope, scopes };
+    return { key, label, response, detail: offer.scope, steps };
   }
   // "always approve all reads in   /x and below". The folder alone reads
   // after "in"; the field name would not.
   const field = folderField(intr, context);
   const where =
     field === "" ? offer.scope : stripControlChars(`${intr.data[field] as string} and below`);
-  return { key, label: `${label} ${offer.set.phrase} in`, response, detail: where, scopes };
+  return { key, label: `${label} ${offer.set.phrase} in`, response, detail: where, steps };
 }
 
 /** The options to show for `intr`, in the order a prompt lists them. */
@@ -315,28 +391,30 @@ export function unrejectedEffects(args: {
 
 /** One scoped approve rule under each of `effects`, placed just after each
  *  effect's reject rules, so no reject the user saved is overturned by a
- *  grant for a folder that holds it. `folder` replaces the folder in the
- *  interrupt when a wider one was picked. The rule matches dot folders
- *  only for an effect in a shared set: those effects only read, and a
- *  folder a rule may cover is never the home directory. */
+ *  grant for a folder that holds it. `picks.folder` replaces the folder in
+ *  the interrupt when a wider one was picked, and `picks.items` is how
+ *  much of a list the rule pins. The rule matches dot folders only for an
+ *  effect that gets the folder step (`getsFolderStep`), and a folder a rule
+ *  may cover is never the home directory. */
 function withScopedRule(args: {
   policy: Policy;
   intr: Intr;
   effects: string[];
-  folder: string;
+  picks: RulePicks;
   context: PromptContext;
 }): Policy {
-  const { policy, intr, effects, folder, context } = args;
+  const { policy, intr, effects, picks, context } = args;
+  const { folder, items } = picks;
   const subject: Intr =
     folder === ""
       ? intr
       : { ...intr, data: { ...intr.data, [folderField(intr, context)]: folder } };
-  const match = buildScopedMatch(subject, context);
+  const match = buildScopedMatch(subject, context, items);
   if (Object.keys(match).length === 0) {
     return policy;
   }
   const rule: PolicyRule = { match, action: "approve" };
-  if (folder !== "" && inSharedApprovalSet(intr.effect, context.sets)) {
+  if (folder !== "" && getsFolderStep(intr.effect, context.sets)) {
     rule.matchDotFolders = true;
   }
   return insertApproveRule(policy, effects, rule);
@@ -345,17 +423,18 @@ function withScopedRule(args: {
 /** `policy` with the rule `decision` saves for `intr`. The same policy for
  *  a decision that answers once, and for a raise that expects a value: an
  *  effect-wide rule would answer every later raise of the effect, each of
- *  which wants its own answer. `folder` is "" when no wider folder
- *  applies. A caller that got `folder` from outside the program must check
- *  it first; `resolvePromptOption` does. */
+ *  which wants its own answer. `picks` are the widths of the rule; take
+ *  them from `picksWithoutAsking` and from the person's answers. A caller
+ *  that got them from outside the program must check them first;
+ *  `resolvePromptOption` does. */
 export function policyAfterDecision(args: {
   policy: Policy;
   intr: Intr;
   decision: PromptDecision;
-  folder: string;
+  picks: RulePicks;
   context: PromptContext;
 }): Policy {
-  const { policy, intr, decision, folder, context } = args;
+  const { policy, intr, decision, picks, context } = args;
   if (intr.expectsValue === true) {
     return policy;
   }
@@ -371,7 +450,7 @@ export function policyAfterDecision(args: {
     case "reject-always":
       return insertRejectRule(policy, [intr.effect], { action: "reject" });
     case "approve-always-here":
-      return withScopedRule({ policy, intr, effects: [intr.effect], folder, context });
+      return withScopedRule({ policy, intr, effects: [intr.effect], picks, context });
     case "approve-always-set": {
       const effects = unrejectedEffects({
         policy,
@@ -379,57 +458,92 @@ export function policyAfterDecision(args: {
         effects: sharedSetFor(intr, context).members,
         dirs: context.dirs,
       });
-      return withScopedRule({ policy, intr, effects, folder, context });
+      return withScopedRule({ policy, intr, effects, picks, context });
     }
   }
 }
 
-/** The folder the rule `decision` saves covers, when there is nothing to
- *  ask: "" when no wider folder applies, and the folder when there is
- *  exactly one. null when there are several and the person must pick one.
- *  This is the one place that rule lives. The terminal's folder step and
+/** The pick for a part with nothing to ask: "" when it has no choices, and
+ *  the choice when there is exactly one. null when there are several. */
+function onlyChoice(choices: PromptScope[]): string | null {
+  if (choices.length > 1) {
+    return null;
+  }
+  return choices.length === 1 ? choices[0].id : "";
+}
+
+/** The widths of the rule `decision` saves that need no question. This is
+ *  the one place that rule lives. The terminal's steps and
  *  `resolvePromptOption` both ask it, so they save the same rule for the
- *  same pick. */
-export function folderWithoutAsking(
+ *  same picks. */
+export function picksWithoutAsking(
   intr: Intr,
   decision: PromptDecision,
   context: PromptContext,
-): string | null {
+): KnownPicks {
   const { covers } = rowForDecision(decision);
   if (covers !== "scope" && covers !== "set") {
-    return "";
+    return { items: "", folder: "" };
   }
-  const folders = folderOptions(intr, context);
-  if (folders.length > 1) {
-    return null;
-  }
-  return folders.length === 1 ? folders[0].path : "";
+  return {
+    items: onlyChoice(choicesFor("items", intr, context)),
+    folder: onlyChoice(choicesFor("folder", intr, context)),
+  };
 }
 
-/** The folder a scoped rule covers, given the scope a caller sent. A
- *  caller must send one exactly when the person had to pick, and it must
- *  be one of the folders offered. */
-function folderFor(args: {
+/** The pick for one part, given what a caller sent. A caller must send one
+ *  exactly when the person had to pick, and it must be one of the choices
+ *  offered. */
+function pickFor(args: {
+  part: StepId;
+  known: string | null;
+  sent: string | undefined;
+  offered: PromptScope[];
+  key: string;
+}): string | ResultFailure {
+  const { part, known, sent, offered, key } = args;
+  if (known !== null) {
+    return sent === undefined
+      ? known
+      : failure(`The option "${key}" has no ${part} step, but a ${part} pick was given.`);
+  }
+  if (sent === undefined) {
+    return failure(`The option "${key}" needs a pick for its ${part} step.`);
+  }
+  if (!offered.some((choice) => choice.id === sent)) {
+    return failure(
+      `"${sent}" is not one of the choices for the ${part} step of the option "${key}".`,
+    );
+  }
+  return sent;
+}
+
+/** Every part's pick, checked. */
+function picksFor(args: {
   intr: Intr;
   row: PromptOptionRow;
-  scope: string | undefined;
+  picks: Partial<RulePicks>;
   context: PromptContext;
-}): string | ResultFailure {
-  const { intr, row, scope, context } = args;
-  const known = folderWithoutAsking(intr, row.decision, context);
-  if (known !== null) {
-    return scope === undefined
-      ? known
-      : failure(`The option "${row.key}" has no scope to pick, but one was given.`);
+}): RulePicks | ResultFailure {
+  const { intr, row, picks, context } = args;
+  const known = picksWithoutAsking(intr, row.decision, context);
+  const pickOf = (part: StepId) =>
+    pickFor({
+      part,
+      known: known[part],
+      sent: picks[part],
+      offered: choicesFor(part, intr, context),
+      key: row.key,
+    });
+  const items = pickOf("items");
+  if (typeof items !== "string") {
+    return items;
   }
-  if (scope === undefined) {
-    return failure(`The option "${row.key}" needs one of its scopes.`);
+  const folder = pickOf("folder");
+  if (typeof folder !== "string") {
+    return folder;
   }
-  const offered = folderOptions(intr, context).map((folder) => folder.path);
-  if (!offered.includes(scope)) {
-    return failure(`"${scope}" is not one of the scopes the option "${row.key}" offers.`);
-  }
-  return scope;
+  return { items, folder };
 }
 
 export type ResolvedPromptOption = { response: InterruptResponse; policy: Policy };
@@ -440,8 +554,9 @@ export type ResolvedPromptOptionResult =
 /** What picking an option means: the response to give the run through
  *  `respondToInterrupts`, and `policy` with the rule the option saves (the
  *  same policy for an option that saves none). A failure when `key` is not
- *  an option this interrupt offers, or `scope` is not one of that option's
- *  scopes: both may come from a client, so neither is trusted.
+ *  an option this interrupt offers, or `picks` does not hold exactly one
+ *  offered choice per step the option listed: both may come from a client,
+ *  so neither is trusted.
  *
  *  `intr` IS trusted, and the rule saved is built from `intr.data`. It
  *  must be the host's own copy of the interrupt, looked up by the
@@ -453,24 +568,25 @@ export type ResolvedPromptOptionResult =
 export function resolvePromptOption(args: {
   intr: Intr;
   key: string;
-  /** The `id` of the scope picked. Omit it when the option lists none. */
-  scope?: string;
+  /** The `id` of the choice picked at each step the option listed, keyed
+   *  by step id. Leave out a step the option did not list. */
+  picks?: Partial<RulePicks>;
   policy: Policy;
   context: PromptContext;
 }): ResolvedPromptOptionResult {
-  const { intr, key, scope, policy, context } = args;
+  const { intr, key, policy, context } = args;
   const offeredKeys = promptOptions(intr, context).map((option) => option.key);
   const decision = decisionForOfferedKey(key, offeredKeys);
   if (decision === null) {
     return failure(`"${key}" is not one of the options this interrupt offers.`);
   }
   const row = rowForDecision(decision);
-  const folder = folderFor({ intr, row, scope, context });
-  if (typeof folder !== "string") {
-    return folder;
+  const picks = picksFor({ intr, row, picks: args.picks ?? {}, context });
+  if ("__type" in picks) {
+    return picks;
   }
   return success({
     response: row.response === "approve" ? approve() : reject(),
-    policy: policyAfterDecision({ policy, intr, decision, folder, context }),
+    policy: policyAfterDecision({ policy, intr, decision, picks, context }),
   }) as ResolvedPromptOptionResult;
 }

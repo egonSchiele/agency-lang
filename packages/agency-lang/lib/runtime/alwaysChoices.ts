@@ -18,6 +18,18 @@ export const SHARED_APPROVAL_SETS: Record<string, string> = { FileRead: "all rea
 
 const SHARED_SET_NAMES = Object.keys(SHARED_APPROVAL_SETS);
 
+/** Effects outside a shared set that still get the folder step and rules
+ *  that reach dot folders. Each entry is a decision: the folder step lets
+ *  one key press widen a rule to a parent folder, so an effect such as
+ *  `std::remove` must not be here. `std::exec` is, because its folder is
+ *  where a program starts, and `.worktrees/x` is no riskier than `src`. */
+export const FOLDER_STEP_EFFECTS: string[] = ["std::exec"];
+
+/** True when a rule for `effect` may be widened to a parent folder. */
+export function getsFolderStep(effect: string, sets: Record<string, EffectSetInfo>): boolean {
+  return FOLDER_STEP_EFFECTS.includes(effect) || inSharedApprovalSet(effect, sets);
+}
+
 /** How many folders the folder step lists at most. */
 export const MAX_FOLDER_CHOICES = 8;
 

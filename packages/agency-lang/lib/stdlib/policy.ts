@@ -34,13 +34,17 @@ import {
   buildScopedMatch,
   decisionForOfferedKey,
   folderField,
-  folderWithoutAsking,
+  itemChoices,
+  picksWithoutAsking,
   policyAfterDecision,
   promptOptions,
   sharedSetFor,
   unrejectedEffects,
+  type KnownPicks,
   type PromptContext,
   type PromptOption,
+  type PromptScope,
+  type RulePicks,
   type SharedSet,
 } from "@/runtime/interruptPromptOptions.js";
 import { PROMPT_OPTION_ROWS, type PromptDecision } from "@/runtime/interruptPromptTable.js";
@@ -96,10 +100,10 @@ type MenuItem = {
 };
 
 // The menu draws `tone` as the key's color and `followUp` as a "›" that
-// says a second question is coming. A row whose rule has a scope always
+// says another question is coming. A row whose rule has a scope always
 // carries `followUp`, true or false.
 function menuItem(option: PromptOption): MenuItem {
-  const { key, label, response, detail, scopes } = option;
+  const { key, label, response, detail, steps } = option;
   const row = PROMPT_OPTION_ROWS.find((one) => one.key === key);
   const hasScope = row?.covers === "scope" || row?.covers === "set";
   return {
@@ -107,7 +111,7 @@ function menuItem(option: PromptOption): MenuItem {
     label,
     tone: response,
     ...(detail === undefined ? {} : { detail }),
-    ...(hasScope ? { followUp: scopes.length > 1 } : {}),
+    ...(hasScope ? { followUp: steps.length > 0 } : {}),
   };
 }
 
@@ -122,14 +126,26 @@ export function _offeredDecision(key: string, offeredKeys: string[]): PromptDeci
   return decisionForOfferedKey(key, offeredKeys) ?? "";
 }
 
-/** The folder to use with no question asked, or null when the person must
- *  pick one. */
-export function _folderWithoutAsking(
+/** The widths to use with no question asked. A part is null when the
+ *  person must pick it. */
+export function _picksWithoutAsking(
   intr: Intr,
   decision: PromptDecision,
   fields: Record<string, ScopedField[]>,
-): string | null {
-  return folderWithoutAsking(intr, decision, runPromptContext(fields));
+): KnownPicks {
+  return picksWithoutAsking(intr, decision, runPromptContext(fields));
+}
+
+/** How much of a list a rule may pin, as the choices of the terminal's
+ *  command step. `note` is "" when a choice has none. */
+export function _itemChoices(
+  intr: Intr,
+  fields: Record<string, ScopedField[]>,
+): Required<PromptScope>[] {
+  return itemChoices(intr, runPromptContext(fields)).map((choice) => ({
+    ...choice,
+    note: choice.note ?? "",
+  }));
 }
 
 /** The policy after `decision`, and whether it differs from `policy`, so
@@ -138,14 +154,14 @@ export function _policyAfterDecision(
   policy: Policy,
   intr: Intr,
   decision: PromptDecision,
-  folder: string,
+  picks: RulePicks,
   fields: Record<string, ScopedField[]>,
 ): { policy: Policy; changed: boolean } {
   const next = policyAfterDecision({
     policy,
     intr,
     decision,
-    folder,
+    picks,
     context: runPromptContext(fields),
   });
   return { policy: next, changed: JSON.stringify(next) !== JSON.stringify(policy) };

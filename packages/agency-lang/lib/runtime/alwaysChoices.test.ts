@@ -7,6 +7,7 @@ import {
   prefixPattern,
   describeScope,
   folderChoices,
+  getsFolderStep,
   inSharedApprovalSet,
   sharedApprovalSet,
 } from "./alwaysChoices.js";
@@ -163,6 +164,11 @@ describe("sharedApprovalSet", () => {
   });
   it("returns null for an effect with no scope", () => {
     expect(sharedApprovalSet("std::ls", {}, {}, sets)).toBeNull();
+  });
+  it("gives the folder step to a listed set's members and to the effects named for it", () => {
+    expect(getsFolderStep("std::read", sets)).toBe(true);
+    expect(getsFolderStep("std::exec", sets)).toBe(true);
+    expect(getsFolderStep("std::remove", sets)).toBe(false);
   });
   it("says whether an effect is in a listed set", () => {
     expect(inSharedApprovalSet("std::vision", sets)).toBe(true);

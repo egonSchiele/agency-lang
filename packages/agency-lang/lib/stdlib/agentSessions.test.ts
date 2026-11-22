@@ -161,6 +161,21 @@ describe("reading a saved conversation", () => {
     ]);
   });
 
+  it("keeps only the well-formed entries of a saved transcript", () => {
+    const edited = {
+      ...saved,
+      globals: {
+        store: {
+          __agentTranscript: {
+            messages: [{ role: "user", content: "typed" }, { role: "user" }],
+          },
+        },
+        initializedModules: [],
+      },
+    };
+    expect(_readTranscript(edited, "t3")).toEqual([{ role: "user", content: "typed" }]);
+  });
+
   // The check the terminal makes before it restores a file.
   it("tells a checkpoint from another front-end's saved run", () => {
     expect(_isCheckpoint(saved)).toBe(true);

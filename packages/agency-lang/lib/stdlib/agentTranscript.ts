@@ -1,6 +1,7 @@
 import type { MessageJSON } from "smoltalk";
 import { currentRun } from "../runtime/asyncContext.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
+import { isPlainObject } from "../utils/isPlainObject.js";
 import { _contentToString } from "./threads.js";
 
 /**
@@ -51,8 +52,18 @@ export function withEntry(
   return entry.content === "" ? before : [...before, entry];
 }
 
+function isEntry(value: unknown): value is TranscriptMessage {
+  return (
+    isPlainObject(value) &&
+    (value.role === "user" || value.role === "assistant") &&
+    typeof value.content === "string"
+  );
+}
+
+// A session file is JSON on disk that a person or another front-end can
+// edit, and search reads 50 of them at once, so a bad entry is dropped.
 function asTranscript(value: unknown): TranscriptMessage[] | null {
-  return Array.isArray(value) ? (value as TranscriptMessage[]) : null;
+  return Array.isArray(value) ? value.filter(isEntry) : null;
 }
 
 /** The list saved in a checkpoint, or null when it has none. */

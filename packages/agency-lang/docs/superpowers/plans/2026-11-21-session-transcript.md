@@ -110,6 +110,7 @@ The module name is spelled in one TypeScript file, which both writes and reads t
 1. **A turn paused on an approval, then resumed.** The user's entry is in the list exactly once, before and after the approval. Pinned in Task 3.
 2. **A message sent with notes.** The list has the typed text only, and the model's request still has the notes above the text. Pinned in Task 3.
 3. **A session saved before this change, then continued.** Its earlier messages are still shown, followed by the new turn. Pinned in Task 3 by a session whose saved list is deleted before its next turn. Task 1 pins the pure function and the reader's fallback.
+   - *Dropped:* such a session cannot be continued (see Decision 3). Task 1 still pins the reader's fallback.
 4. **A cancel followed by a message.** The cancel note is in `notes`, `text` is what the user typed, and two cancels give one note naming both. Pinned in Task 2.
 5. **A turn that fails.** The list ends with the user's entry and has no reply for it. Pinned in Task 3.
 
@@ -128,7 +129,7 @@ The worktree is at `223e64439`. `main` has three commits on top. One of them, #1
 - Create: `lib/stdlib/agentTranscript.ts`
 - Create: `lib/stdlib/agentTranscript.test.ts`
 - Modify: `lib/stdlib/agentSessions.ts` (`_readTranscript`, and `TranscriptMessage` moves out)
-- Modify: `lib/stdlib/agentCompaction.ts` (export `threadById`)
+- Modify: `lib/stdlib/agentCompaction.ts` (export `threadById`). *Dropped with the seeding.*
 - Test: `lib/stdlib/agentSessions.test.ts`
 
 **Interfaces:**
@@ -142,11 +143,12 @@ The worktree is at `223e64439`. `main` has three commits on top. One of them, #1
     ```ts
     const threadMessages = thread === null ? [] : thread.getMessages().map((m) => m.toJSON());
     ```
+  - *As built, after the seeding was dropped:* `withEntry(existing: TranscriptMessage[] | null, entry: TranscriptMessage)` starts from `[]` when `existing` is null, and `_addToTranscript(role, content)` takes no thread id and reads no thread. `transcriptIn` also drops any entry whose `role` is not user or assistant or whose `content` is not a string.
 - `_readTranscript(checkpointJson, threadId)` returns `transcriptIn(cp)` when it is not null. Otherwise it returns `transcriptOfMessages` of the saved thread, as today. It still returns `[]` for a checkpoint it cannot read.
 
 - [ ] **Step 1: Write the failing tests.**
 
-  In `agentTranscript.test.ts`:
+  In `agentTranscript.test.ts` (*as built, the tests use the two-argument `withEntry`, and the "starts a missing list from the thread's messages" case became "starts a list when the run has none"*):
 
   ```ts
   const user = (content: string) => ({ role: "user" as const, content });
@@ -251,7 +253,7 @@ The worktree is at `223e64439`. `main` has three commits on top. One of them, #1
 - Docs: `docs/dev/agents/agent-sessions.md`, `docs/dev/agents/session-core.md`
 
 **Interfaces:**
-- Consumes: `_addToTranscript(role, content, threadId)` from Task 1, imported the way `lib/compaction.agency` imports from `agency-lang/stdlib-lib/agentCompaction.js`. `conversationThread()` from `lib/record.agency`, which the core already imports.
+- Consumes: `_addToTranscript(role, content, threadId)` (*as built: `_addToTranscript(role, content)`*) from Task 1, imported the way `lib/compaction.agency` imports from `agency-lang/stdlib-lib/agentCompaction.js`. `conversationThread()` from `lib/record.agency`, which the core already imports.
 
 The `message` arm changes in two places:
 
@@ -270,6 +272,8 @@ if (reply is success(replyText)) {
   emit({ type: "session.reply", text: replyText })
 }
 ```
+
+*As built:* both calls take no thread id: `_addToTranscript("user", text)` and `_addToTranscript("assistant", replyText)`.
 
 Each call is a statement of its own. Do not put either inside the argument of the `try runTurn(…)` call: the comment above that call explains that such a call runs again on a resume.
 
@@ -292,7 +296,7 @@ The first call comes after the start-target check, so a refused target adds noth
   - The existing `asker` session, whose turn pauses on an edit approval. Do not use `editor`: its policy approves the edit, so it never pauses. After `await asker.answer(message("edit the note"))`:
     `result.transcriptAtApproval = _readTranscript(asker.pause[0].checkpoint, "")`. Expected: `[{ role: "user", content: "edit the note" }]`.
     After `await asker.answer(undefined)`: `result.transcriptAfterApproval = transcriptOf(asker)`. Expected: the same user entry once, then the reply.
-  - A session saved before this change. Start a new session, `old`, and answer it with `message("before the upgrade")`. Then delete its list and send a second message:
+  - *Dropped with the seeding (Decision 3): no session reaches this state.* A session saved before this change. Start a new session, `old`, and answer it with `message("before the upgrade")`. Then delete its list and send a second message:
 
     ```js
     delete old.pause[0].checkpoint.globals.store.__agentTranscript;
@@ -303,14 +307,15 @@ The first call comes after the start-target check, so a refused target adds noth
     Expected: four entries. The first turn's user text and reply come first, read from the thread. `"after the upgrade"` and its reply follow. This test runs `_addToTranscript` inside the core before a turn, where it has to find the live thread. The test's run sets no checkpoint checksum, so the edited checkpoint is accepted.
   - After `await chat.answer(message("fail this turn"))`:
     `result.transcriptAfterFailure = transcriptOf(chat).slice(-1)`. Expected: `[{ role: "user", content: "fail this turn" }]`.
+    *As built:* this turn does not fail. The brain turns the error into a reply that the live view shows, so the test reads `.slice(-2)` and expects the user entry, then `"The agent stopped before finishing: the test client was told to fail"`.
   - A new session answered with `{ kind: "message", text: "hi", notes: [], target: "nope" }`:
     `result.refusedTargetTranscript = transcriptOf(thatSession)`. Expected: `[]`.
 
-- [ ] **Step 2: Run it and see it fail.** `make`, then `HOME=<scratch> pnpm run agency test js tests/agency-js/session-core --check-capabilities > <output file> 2>&1`. Expected: FAIL on the new keys. `transcriptAfterOneTurn` shows what the thread holds today.
+- [ ] **Step 2: Run it and see it fail.** `make`, then `HOME=<scratch> pnpm run agency test js tests/agency-js/session-core > <output file> 2>&1` (`agency test js` takes no `--check-capabilities`). Expected: FAIL on the new keys. `transcriptAfterOneTurn` shows what the thread holds today.
 - [ ] **Step 3: Implement** the two calls shown under Interfaces.
 - [ ] **Step 4: Run the test and see it pass.** Same commands. Expected: PASS, with the keys that existed before this task unchanged.
 - [ ] **Step 5: Update the dev docs.**
-  - `docs/dev/agents/agent-sessions.md`, "The transcript": the saved conversation shown to a person is the session's transcript list. Say where it is kept, who adds to it, that `_readTranscript` reads the thread for a session with no list, and that the first new entry starts the list from the thread. Keep the paragraph on the conversation thread, which the title, compaction and the context percentage still read.
+  - `docs/dev/agents/agent-sessions.md`, "The transcript": the saved conversation shown to a person is the session's transcript list. Say where it is kept, who adds to it, that `_readTranscript` reads the thread for a session with no list, and that the first new entry starts the list from the thread (*as built: that such a session cannot be resumed, so a run with no list starts an empty one*). Keep the paragraph on the conversation thread, which the title, compaction and the context percentage still read.
   - The same file, "Searching saved sessions", "What is read": the search reads the transcript, so it covers what the user typed and the final replies.
   - `docs/dev/agents/session-core.md`, where it describes `notes`: the driver sends the cancel note as the last note.
   - In the transcript section, say that the core adds entries at the top level and that the list is in the root globals, so a call moved into a `fork` or `parallel` branch would write to that branch's copy.

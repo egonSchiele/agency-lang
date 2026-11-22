@@ -131,6 +131,15 @@ is therefore always a new one, and its list starts empty.
 Compaction does not touch the list, so a compacted session reopens with
 its whole conversation.
 
+The list has no size limit, on purpose. It grows with every turn, and
+every checkpoint carries all of it: at about 3 KB a turn, a 500-turn
+session carries about 1.5 MB. That is fine because a session runs only in
+the terminal and under Perry, which save checkpoints to local files. A
+hosted resume has a size limit, which is why the fetch cache and the
+spill store cap themselves (`lib/runtime/fetchCache.ts`, `spill.md`). If
+a session run is ever resumed through a hosted server, this list needs a
+cap too.
+
 The conversation the model reads is the run's active thread: a brain
 opens no `thread` block of its own, so every turn's `llm()` calls land on
 it. Before and after each turn, `runTurn` in `lib/turn.agency` records

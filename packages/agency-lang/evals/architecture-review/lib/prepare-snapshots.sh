@@ -2,7 +2,10 @@
 # Unpack the repository at every commit the suite's tests name, so the
 # reviewer reads the code as it was when each plan was written.
 #
-# usage: ARCH_REVIEW_SNAPSHOTS=/abs/path bash lib/prepare-snapshots.sh
+# usage: ARCH_REVIEW_SNAPSHOTS=/abs/path bash lib/prepare-snapshots.sh [suite-dir]
+#
+# With no argument it reads this suite's tests. Another suite whose tests
+# name a commit the same way, such as evals/plan-design, passes its folder.
 #
 # Each snapshot holds only packages/agency-lang (about 65 MB) and is
 # skipped when it already exists.
@@ -13,7 +16,7 @@ if [ -z "${ARCH_REVIEW_SNAPSHOTS:-}" ]; then
   exit 1
 fi
 
-suite_dir="$(cd "$(dirname "$0")/.." && pwd)"
+suite_dir="$(cd "${1:-$(dirname "$0")/..}" && pwd)"
 repo_root="$(git -C "$suite_dir" rev-parse --show-toplevel)"
 mkdir -p "$ARCH_REVIEW_SNAPSHOTS"
 

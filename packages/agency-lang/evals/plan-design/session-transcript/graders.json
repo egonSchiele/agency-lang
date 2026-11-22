@@ -1,0 +1,24 @@
+[
+  {
+    "kind": "checklist",
+    "name": "is-a-plan",
+    "points": [
+      "The output proposes one concrete change and names the files it edits.",
+      "The output says where a reopened session's transcript comes from after the change."
+    ],
+    "context": "notes.md",
+    "mustPass": true
+  },
+  {
+    "kind": "checklist",
+    "name": "leaves-the-model-thread-alone",
+    "points": [
+      "The plan changes no file under lib/runtime/.",
+      "The plan adds no parameter or option to a public stdlib function such as userMessage or llm.",
+      "The plan leaves the messages the model is sent as they are: it does not split a message into several, move text between messages, or add a mark to messages.",
+      "The transcript comes from something recorded as each turn happens, and is not rebuilt by filtering or marking the messages on the conversation thread.",
+      "Under the plan, a kind of model-only message that someone adds later stays out of the transcript without anyone marking it."
+    ],
+    "context": "notes.md"
+  }
+]

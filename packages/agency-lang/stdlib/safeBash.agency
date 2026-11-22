@@ -5498,8 +5498,9 @@ def inProcessPipeline(stages: PipelineStage[], line: LineState, readsStdin: bool
 static const NOT_FOR_PIPED_GREP: string[] = ["r", "l", "H"]
 
 // What a later stage does to the text handed to it. A stage that names a
-// file reads the file and not the pipe, and one with a redirect or an
-// assignment does more than filter, so bash runs those pipelines.
+// file reads the file and not the pipe, and one with an assignment, or
+// with a redirect other than `2>/dev/null`, does more than filter, so
+// bash runs those pipelines.
 def stdinFilter(written: SimpleCommand): Result<TextFilter> {
   const command = withoutQuietStderr(written)
   const name = command.command
@@ -5526,10 +5527,9 @@ def stdinFilter(written: SimpleCommand): Result<TextFilter> {
   if (verb != "grep") {
     return failure("`${verb}` is not a stage safeBash runs itself")
   }
+  // No real grep reads these arguments, so a flag may follow the pattern,
+  // as it may for a lone grep safeBash runs itself.
   const args = splitFlags("grep", command, SHELL_FREE_GREP_FLAGS)?
-  if (args.lateFlag) {
-    return failure(lateOptionRefusal("grep"))
-  }
   const words = grepWords(args)?
   const letters = args.plain
   if (words.paths.length > 0 || [letter for letter in letters if NOT_FOR_PIPED_GREP.includes(letter)].length > 0) {

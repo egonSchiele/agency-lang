@@ -2219,9 +2219,12 @@ end.
 - **Each later stage** is a `cat`, `head`, `tail`, or `grep` that names
   no file (`stdinFilter`). It takes the text of the stage before it and
   asks nothing. `head` and `tail` take the counts their lone forms take.
-  `grep` takes `-n`, `-v`, `-i`, `-w`, `-E`, `-F`, and `-e`. A flag that
-  changes the shape of the output (`-c`, `-o`, `-l`, a context flag) has
-  no in-process form, so bash runs that pipeline.
+  `grep` takes `-n`, `-v`, `-i`, `-w`, `-E`, `-F`, and `-e`, and three
+  flags that do nothing to piped text: `-h`, `-s`, and `--color=never`.
+  A flag may follow the pattern (`grep hello -v`), as it may for a lone
+  grep safeBash runs itself, because no real grep reads the arguments. A
+  flag that changes the shape of the output (`-c`, `-o`, `-l`, a context
+  flag) has no in-process form, so bash runs that pipeline.
 - **A stage that names a file, has a redirect or an assignment, or is a
   group** sends the pipeline to bash, where the pipeline rules above
   decide what it asks.

@@ -97,7 +97,7 @@ describe("readAlwaysScope", () => {
     expect(scope.problems).toEqual([]);
   });
 
-  it("reports a repeated @alwaysPrefix, a field it shares, and a call argument", () => {
+  it("reports a repeated @alwaysPrefix, a field it shares, and a non-identifier argument", () => {
     const kinds = (src: string) =>
       readAlwaysScope(declOf(src).tags).problems.map((problem) => problem.kind);
     expect(
@@ -107,7 +107,7 @@ describe("readAlwaysScope", () => {
       "namedTwice",
       "namedTwice",
     ]);
-    expect(kinds("@alwaysPrefix(f())\neffect app::x { a: string[] }")).toEqual(["badArgument"]);
+    expect(kinds('@alwaysPrefix("a")\neffect app::x { a: string[] }')).toEqual(["badArgument"]);
   });
 
   it("counts @alwaysPrefix alone as a tagged declaration", () => {

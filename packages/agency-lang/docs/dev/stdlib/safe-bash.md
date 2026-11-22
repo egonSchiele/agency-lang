@@ -1345,11 +1345,8 @@ covered with no further change. `variablesOf` finds a name alone (`$X`),
 inside double quotes (`"t: $X"`), and joined to text (`pre$X`,
 `--token=$X`), in a command's words and in its assignments' values.
 
-- **Computed names ask nothing.** `$?`, `$$`, `$#`, `$0` to `$9`,
-  `$RANDOM`, and `$SECONDS` hold nothing from the environment
-  (`COMPUTED_VARIABLES`).
-- **A command that asks `std::exec` adds no `std::env`.** A program can
-  read any variable itself (`printenv X`), so its approval covers that.
+- **Computed names ask nothing.** `$?`, `$0` to `$9`, `$RANDOM`, and
+  `$SECONDS` hold nothing from the environment (`COMPUTED_VARIABLES`).
 - **The question sits on the command's step.** The plan made just before
   the step asks it again, so the two plans match and the line runs.
   `planLine` drops a repeated name (`askedOnce`), so `echo $A; echo $A`

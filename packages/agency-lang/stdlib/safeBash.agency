@@ -5349,18 +5349,14 @@ def expandedWords(command: SimpleCommand): Word[] {
 }
 
 /** Names bash computes itself, which hold nothing from the environment:
- the last exit status, the shell's process id, the count of arguments and
- the arguments, which a `bash -c` line has none of, and two counters. */
-static const COMPUTED_VARIABLES: string[] = ["?", "$", "#", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "RANDOM", "SECONDS"]
+ the last exit status, the arguments, which a `bash -c` line has none of,
+ and two counters. */
+static const COMPUTED_VARIABLES: string[] = ["?", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "RANDOM", "SECONDS"]
 
 // `git status && echo $GITHUB_TOKEN`: bash expands the variable and the
 // model reads it, so the line asks the question the `env` tool asks, once
-// per name. A command that asks std::exec adds nothing: a program can
-// read any variable itself (`printenv X`), so its approval covers that.
-def envEffects(command: SimpleCommand, own: Effect[]): Effect[] {
-  if ([effect for effect in own if effect.name == "std::exec"].length > 0) {
-    return []
-  }
+// per name.
+def envEffects(command: SimpleCommand): Effect[] {
   let names: string[] = []
   for (word in expandedWords(command)) {
     for (name in variablesOf(word)) {
@@ -5409,13 +5405,13 @@ def classifySimple(command: SimpleCommand, line: LineState, origin: GhRepo | nul
     const rule = simpleCommandRule(command, line, origin, readsStdin)?
     // The std::env questions go on the command's own step, so the plan
     // made just before the step asks them again and matches.
-    const effects = [...rule.effects, ...envEffects(command, rule.effects)]
+    const effects = [...rule.effects, ...envEffects(command)]
     const steps = runStepOf(command, rule.command, line, effects)?
     return success({ effects: effects, line: afterCommand(line, effects), command: rule.command, steps: steps })
   }
   const rule = simpleCommandRule(timed.inner, line, origin, readsStdin)?
   const wrapped = withTimeout(timed, rule.command)?
-  const effects = [...rule.effects, ...envEffects(command, rule.effects)]
+  const effects = [...rule.effects, ...envEffects(command)]
   const steps = runStepOf(command, wrapped, line, effects)?
   return success({ effects: effects, line: afterCommand(line, effects), command: wrapped, steps: steps })
 }
@@ -6579,7 +6575,7 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string, timeoutMs: number
     // The payload is the `env` tool's, which has no field for the command,
     // so the command goes in the message.
     "std::env" => {
-      raise std::env("A shell command reads this environment variable${where}: `${fullCommand}`", {
+      raise std::env("Let a shell command read the environment variable `${effect.payload.name}`${where}? `${fullCommand}`", {
         name: effect.payload.name
       })
       return success(null)

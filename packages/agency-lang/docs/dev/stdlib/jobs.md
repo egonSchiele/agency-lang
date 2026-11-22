@@ -252,7 +252,7 @@ steps asks `std::bash` as a job and runs whole (`asJobPlan`), while the
 same line keeps its narrow questions in the foreground.
 
 An "always approve" rule pins `command` and `cwd` for `std::bash`, and
-`command` and `subcommand` for `std::exec`. Neither pins `timeout`, so a
+`command`, `args`, and `cwd` for `std::exec`. Neither pins `timeout`, so a
 rule saved for a command in the foreground also approves it as a job.
 
 `jobOutput`, `stopJob`, `listJobs`, `status`, `output`, and `stop` raise

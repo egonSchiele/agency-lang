@@ -111,6 +111,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG3028](effects.md#ag3028) | @capabilities goes on a def or a node.&#123;hint&#125; |
 | [AG3029](effects.md#ag3029) | &#123;kind&#125; '&#123;name&#125;' needs the &#123;capability&#125; capability, which the &#123;platform&#125; platform does not have. &#123;path&#125; |
 | [AG3030](effects.md#ag3030) | &#123;kind&#125; '&#123;name&#125;' raises effect '&#123;effect&#125;', which exceeds its declared 'raises &#123;declared&#125;'. It is raised by decorator '&#123;decorator&#125;'. Add '&#123;effect&#125;' to the clause. |
+| [AG3031](effects.md#ag3031) | `@alwaysPrefix(&#123;field&#125;)` on effect `&#123;effect&#125;` needs a list field, and `&#123;field&#125;` is not one. |
 
 ## Names, scope, and reserved words
 

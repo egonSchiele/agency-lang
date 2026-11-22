@@ -220,7 +220,7 @@ Other process docs:
 - `docs/dev/language/closures-and-lambdas.md` — Why Agency has blocks and first-class functions but no lambdas, and what makes adding them hard.
 - `docs/dev/language/decorators.md` — User-defined decorators: how `@name(args)` above a def lowers to a call with the body as a block, and their diagnostics.
 - `docs/dev/language/destructive-regions.md` — `destructive def` and `destructive { }` regions, and the flag that records whether a function's destructive work ran.
-- `docs/dev/language/effect-always-tag.md` — The `@always` and `@alwaysUnder` tags on an effect, which pick the payload fields an always-approve rule pins.
+- `docs/dev/language/effect-always-tag.md` — The `@always`, `@alwaysUnder`, and `@alwaysPrefix` tags on an effect, which pick the fields an always-approve rule pins.
 - `docs/dev/language/effect-patterns.md` — Naming an interrupt effect in a `match` arm and destructuring its payload, how it lowers, and its limits.
 - `docs/dev/language/handoff-functions.md` — `handoff def`, a function that continues its caller's conversation when called as a tool, plus `endTurn` and `handBack`.
 - `docs/dev/language/lambda-sketch.md` — A design sketch for lambdas. Nothing here is implemented.

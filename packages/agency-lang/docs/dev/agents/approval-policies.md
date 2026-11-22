@@ -419,7 +419,7 @@ so none of them can be relied on for this. Tabs and newlines stay.
 
 The prompt's "always approve when" answer (`ap`) saves a rule scoped to
 some of the interrupt's data fields. Which fields is declared on the effect
-with `@always` / `@alwaysUnder` (see
+with `@always`, `@alwaysUnder`, and `@alwaysPrefix` (see
 [effect-always-tag.md](../language/effect-always-tag.md)); the agent
 passes no table of its own. `cliPolicyHandler`'s `fields:` argument is an
 override: an entry replaces the declared scope for that effect, and an
@@ -437,7 +437,9 @@ functions in `stdlib/policy.agency` call into it with the handler's
 Each answer is on its own line, with a dim third column that says what it
 covers. `describeScope` (`lib/runtime/alwaysChoices.ts`) writes that column
 from the scope: `@always(x)` prints as `x = value`, and `@alwaysUnder(x)`
-as `x = value and below`. The raw glob is never shown. The values come
+as `x = value and below`. A list prints as its items joined with spaces,
+`args = run build`, which is the narrowest rule the command step offers.
+The raw glob is never shown. The values come
 from interrupt data, which a model can influence, so they go through
 `stripControlChars`.
 
@@ -460,10 +462,19 @@ effect in a listed set gets three things the others do not:
 The list is explicit, and a new entry has to be checked against all
 three. The GitHub review effects all share `@always(owner, repo)`, so a
 rule that offered `as` for any set with a uniform scope would let one
-answer to a review comment also approve `std::github::prApprove`. A folder
-step on `std::remove` would let one keystroke approve removals across a
-much larger folder than the interrupt named. `ap` on every other effect
-saves the exact scope in the interrupt, with no further question.
+answer to a review comment also approve `std::github::prApprove`.
+
+A second list, `FOLDER_STEP_EFFECTS` in the same file, names effects
+outside a listed set that get the folder step and dot folders but not the
+set-wide answer. Today it holds `std::exec`. `getsFolderStep` is true for
+a member of a listed set and for an effect in this list, and the folder
+step and `withScopedRule` read it. Each entry is a decision. A folder step
+on `std::remove` would let one keystroke approve removals across a much
+larger folder than the interrupt named, so it is not there. `std::exec`
+is, because its folder is where a program starts, and a program started
+in `.worktrees/x` is no riskier than one started in `src`. `ap` on every
+other effect saves the exact scope in the interrupt, with no further
+question.
 
 `as` is offered only when every member of the set has the same scope as
 the effect being asked about. Each member's scope is resolved the way
@@ -511,6 +522,46 @@ Three cases refine "just after the last reject":
 reject". A rule there would sit behind the reject and never decide
 anything. The folder step names the members a rule will be saved under.
 
+### The command step
+
+An effect with an `@alwaysPrefix` field gets a step that asks how much of
+that list the rule covers. `std::exec` is the one that does. For
+`pnpm run build` the step reads:
+
+```
+Which commands should this cover?
+  1. pnpm run build      this exact command
+  2. pnpm run build …
+  3. pnpm run …
+```
+
+`…` means "and any arguments after these". `prefixChoices`
+(`lib/runtime/alwaysChoices.ts`) lists the choices, narrowest first: the
+whole list, then the first n items followed by anything, down to the
+first item followed by anything. There is no choice that keeps no items:
+it would approve the program with any arguments. The widest choice is the
+program and its first argument, which is what the rule pinned before the
+step existed. At most eight choices are listed, the narrowest ones and
+the widest. A command with no arguments has one choice, so the step is
+skipped.
+
+A label is the values of the effect's exact fields, then the kept items,
+each cut to 60 characters with `…`. The body above the menu shows the
+whole command. The rule is built from the full arguments, each passed
+through `escapeGlob`, so an argument that holds `*` or is the two
+characters `**` matches only itself (`prefixPattern`).
+
+The command step comes before the folder step. `back` at either goes to
+the first prompt. `recordScopedRule`, for programs with their own approval
+screen, saves the whole list, which is the narrowest rule.
+
+A rule saved with "this exact command" for a long inline script, such as
+`python3 -c '<forty lines>'`, holds the whole script. A pattern longer than
+`MAX_PATTERN_LENGTH` (65,536 characters, the most picomatch accepts) is
+never saved: `buildScopedMatch` returns `{}`, so "always approve when" is
+not offered for that interrupt, and `validatePolicy` refuses such a rule
+in a policy file.
+
 ### The folder step
 
 The step asks "Which folder should this cover?", and the line under it
@@ -540,12 +591,23 @@ folder step existed. At most eight folders are listed. `b` goes back to
 the first prompt.
 
 A rule saved for a folder from that list, picked or the only one, sets
-`matchDotFolders` only for an effect in a listed set. `withScopedRule`
+`matchDotFolders` only for an effect that gets the folder step
+(`getsFolderStep`). `withScopedRule`
 (`lib/runtime/interruptPromptOptions.ts`) checks both conditions, the
-folder and the set, so the flag stays tied to effects that only read.
+folder and the effect, so the flag stays tied to the effects the two lists
+name.
 
-The folder step is a second `interruptChoice` call, so the log shows two
+A command run in the home directory itself is the case where the list is
+empty. Its rule pins `cwd` to the home directory and everything below it,
+without dot folders. That is no broader than the `std::exec` rule before
+the folder step, which pinned no folder at all.
+
+Each step is its own `interruptChoice` call, so the log shows up to three
 prompt waits (`_logPromptWait`) for one interrupt.
+
+Under `useRunPolicy`, the agent's path, a save replays each pending answer
+against the policy file as it is now (`policyToSave`). A pending answer
+keeps both picks, so the file gets the rule the person picked.
 
 ## Showing an interrupt from TypeScript
 
@@ -559,8 +621,14 @@ const context = promptContext({ cwd });
 // What to show.
 const options = promptOptions(interrupt, context);
 
-// What a pick means.
-const resolved = resolvePromptOption({ intr: interrupt, key: "ap", scope: "/p", policy, context });
+// What a pick means: one pick per step the option listed.
+const resolved = resolvePromptOption({
+  intr: interrupt,
+  key: "ap",
+  picks: { items: "1", folder: "/p" },
+  policy,
+  context,
+});
 if (resolved.success) {
   await respondToInterrupts([interrupt], [resolved.value.response], {
     invocation: { policy: resolved.value.policy },
@@ -580,23 +648,25 @@ give and the policy to carry on with.
   in an interrupt a client sent. A client that could supply `data` could
   send `{ effect: "std::read", data: { dir: "/somewhere/else" } }` with
   `key: "ap"` and have an approve rule saved for that folder.
-- **An option carries its `scopes`**: the widths its rule can have,
-  narrowest first. For a file read they are the folders of the folder step.
-  A front-end asks a second question when an option has two or more, and
-  sends the picked scope's `id` back. One folder is no choice, so it is not
-  listed and is used without asking. `folderWithoutAsking` holds that
-  rule, and the terminal's folder step asks it too.
-- **A key or a scope that was not offered is a failure.** Both can come
+- **An option carries its `steps`**: the follow-up questions to ask, in
+  order. A step has an `id` (`items` for the command step, `folder` for
+  the folder step), its `question`, and its `choices`, narrowest first. A
+  front-end asks each question and sends the picked choice's `id` back in
+  `picks`, keyed by step id. A part with one choice is no question, so it
+  is not listed and is used without asking. `picksWithoutAsking` holds
+  that rule, and the terminal's steps ask it too.
+- **A key or a pick that was not offered is a failure.** Both can come
   from a client. A key is checked against the options for that interrupt,
-  so `aa` is refused for a raise that expects a value. A scope is checked
-  against that option's list, so a pick can never widen a rule to a folder
-  the list leaves out, such as the home directory. A read whose own folder
+  so `aa` is refused for a raise that expects a value. `picks` must hold
+  one offered choice for each listed step and nothing for any other. So a
+  pick can never widen a rule to a folder the list leaves out, such as the
+  home directory, or to a prefix of no arguments. A read whose own folder
   is the home directory can still be granted with `ap`, for that folder
   and without dot folders.
 - **The terminal menu is one caller.** `askUserChoices` turns each option
-  into a `ChoiceItem`: `response` becomes `tone`, and "two or more scopes"
-  becomes `followUp`. `recordAnswer` calls `policyAfterDecision`, which is
-  what `resolvePromptOption` calls after its checks.
+  into a `ChoiceItem`: `response` becomes `tone`, and "has a step" becomes
+  `followUp`. `recordAnswer` calls `policyAfterDecision`, which is what
+  `resolvePromptOption` calls after its checks.
 - **Every "always" rule goes where it decides, and is saved once.**
   `policyAfterDecision` places an approve rule with `insertApproveRule` and
   an effect-wide reject with `insertRejectRule` (both in
@@ -725,17 +795,13 @@ See `docs/dev/stdlib/safe-bash.md`, "grep".
 A `std::exec` rule for a program also covers that program's bash
 spelling through safeBash, because safeBash raises `std::exec` for a
 program it has no other rule for. From safeBash, `args` may carry an
-unexpanded glob or `~`. A rule for an interpreter (`node`, `python3`,
-`perl`, `ruby`, `awk`, `sed`, `jq`) should be keyed on `subcommand`,
-because `node -e '...'` runs anything, and even then the files named
-after the program text are not pinned.
-"Always approve when" pins only `command` and `subcommand`, so approving
-`pnpm test` in one folder alone needs a hand-written rule with a `cwd`
-glob. From safeBash, `cwd` is always the resolved absolute folder, while
-from the exec tool it's whatever the model passed, often `""`. So a
-`cwd` rule written for safeBash matches the exec tool only when the
-model passes an absolute cwd. See `docs/dev/stdlib/safe-bash.md`,
-"Programs with no rule".
+unexpanded glob or `~`. A hand-written rule for an interpreter (`node`,
+`python3`, `perl`, `ruby`, `awk`, `sed`, `jq`) should pin `args`, such as
+`"args": ["-c", "print(1)"]`, because `node -e '...'` runs anything.
+"Always approve when" pins `command`, as much of `args` as the person
+picks in the command step, and `cwd`. Both safeBash and the exec tool put
+the absolute folder the command runs in into `cwd`, so one rule covers
+both. See `docs/dev/stdlib/safe-bash.md`, "Programs with no rule".
 
 `std::read` has one more rule than the others: `settings.json` in the
 agent home, by name (`settingsReadRule`). The tree-searching effects
@@ -899,11 +965,49 @@ under eval used that to list the home directory and read the repo's
 
 ## Rule matching
 
-A rule is `{ match?: Record<string, string>, action, rejectMessage?,
-matchDotFolders? }`. Each match value is a picomatch glob tested against
-the interrupt's data field of the same name (`origin` and `message` come
-from the interrupt itself). All entries must match; a rule with no `match`
-is a catch-all.
+A rule is `{ match?: Record<string, string | string[]>, action,
+rejectMessage?, matchDotFolders? }`. Each match value is a pattern tested
+against the interrupt's data field of the same name (`origin` and
+`message` come from the interrupt itself). All entries must match; a rule
+with no `match` is a catch-all.
+
+Which comparison applies depends on the shape of the value and the shape
+of the pattern, and on nothing else (`matchesField` in
+`lib/runtime/policy.ts`):
+
+| The value | The pattern | It matches when |
+| --- | --- | --- |
+| a string, a number, or true/false | a string | the picomatch glob matches |
+| a list | a string | the list is not empty, and the glob matches every item |
+| a list | a list | the items match one by one, in order; a last item of `**` stands for any items after it, or none |
+| anything else | anything else | never |
+
+```json
+"std::exec":     { "command": "pnpm", "args": ["run", "agency", "**"] }
+"std::git::add": { "cwd": "/Users/me/proj", "paths": "src/**", "all": "false" }
+```
+
+The first approves `pnpm run agency` followed by anything. The second
+approves a `git add` whose paths are all under `src`. An empty list does
+not match a string pattern: `git add --all` raises with an empty `paths`,
+and a rule for `src/**` must not approve it. That rule also pins `all`,
+because `git add` with `all` set stages everything whatever `paths` holds.
+
+`**` is special only as the last item of a list pattern. Anywhere else in
+a list it is an ordinary glob that matches one item. List items are
+compared as written. The matcher strips a leading `./` from a scalar
+value and gives `.` a meaning in a `dir` pattern, but neither applies to
+list items: `./x` and `x` are different arguments. picomatch itself drops
+a leading `./` from a pattern, so `matchesItem` compares that prefix
+before the glob. An item that is not a string, a number, or true/false
+never matches, so no rule matches inside `std::edit`'s list of edits. A
+list pattern is by position, which suits arguments; a rule cannot say
+"some item matches".
+
+A pattern may be at most `MAX_PATTERN_LENGTH` (65,536) characters, the
+most picomatch accepts. picomatch throws on a longer one, and a rule that
+threw would break every interrupt that reaches it, so `validatePolicy`
+refuses it.
 
 `matchDotFolders: true` passes picomatch's `dot` option for that rule, so
 its `**` matches path segments that start with a period (rule 3 below).

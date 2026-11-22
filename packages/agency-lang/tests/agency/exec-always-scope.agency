@@ -1,0 +1,83 @@
+// What a saved std::exec rule approves afterwards. A rule for the exact
+// choice is saved with recordScopedRule, which reads std::exec's declared
+// scope. A rule for a wider choice is written out in the shape the prompt
+// saves for it (lib/runtime/interruptPromptOptions.test.ts pins that
+// shape). No program runs and no model is called.
+import { checkPolicy, recordScopedRule, Policy } from "std::policy"
+// Imported so std::shell's effect declarations, and their scopes, load.
+import { exec } from "std::shell"
+
+def run(command: string, args: string[], cwd: string): any {
+  return {
+    effect: "std::exec",
+    message: "Are you sure you want to run this command?",
+    origin: "std::shell",
+    data: { command: command, args: args, cwd: cwd, timeout: 0, stdin: "" }
+  }
+}
+
+def decide(policy: Policy, intr: any): string {
+  return checkPolicy(policy, intr).type
+}
+
+// The rule the prompt saves for `pnpm run build` with the `pnpm run …`
+// choice and the folder /proj.
+const PNPM_RUN_IN_PROJ: Policy = {
+  "std::exec": [{
+    match: { command: "pnpm", args: ["run", "**"], cwd: "{/proj,/proj/**}" },
+    action: "approve",
+    matchDotFolders: true
+  }]
+}
+
+node anExactScriptAsksAgain(): string[] {
+  const policy = recordScopedRule({}, run("python3", ["-c", "print(1)"], "/proj"))
+  return [
+    decide(policy, run("python3", ["-c", "print(1)"], "/proj")),
+    decide(policy, run("python3", ["-c", "print(2)"], "/proj"))
+  ]
+}
+
+node aWiderChoiceCoversSiblings(): string[] {
+  return [
+    decide(PNPM_RUN_IN_PROJ, run("pnpm", ["run", "test"], "/proj")),
+    decide(PNPM_RUN_IN_PROJ, run("pnpm", ["run", "test"], "/proj/sub")),
+    decide(PNPM_RUN_IN_PROJ, run("pnpm", ["run", "test"], "/elsewhere"))
+  ]
+}
+
+node aRuleReachesDotFolders(): string {
+  return decide(PNPM_RUN_IN_PROJ, run("pnpm", ["run", "test"], "/proj/.worktrees/x"))
+}
+
+def add(paths: string[], all: boolean): any {
+  return {
+    effect: "std::git::add",
+    message: "",
+    origin: "",
+    data: { cwd: "/proj", paths: paths, all: all }
+  }
+}
+
+node gitAddOfEverythingAsks(): string[] {
+  const policy: Policy = {
+    "std::git::add": [{
+      match: { cwd: "/proj", paths: "src/**", all: "false" },
+      action: "approve"
+    }]
+  }
+  return [
+    decide(policy, add(["src/a.ts", "src/b/c.ts"], false)),
+    decide(policy, add(["src/a.ts", "lib/b.ts"], false)),
+    decide(policy, add([], false)),
+    decide(policy, add([], true))
+  ]
+}
+
+node anArgumentWithAStar(): string[] {
+  const policy = recordScopedRule({}, run("ls", ["*.md"], "/proj"))
+  return [
+    decide(policy, run("ls", ["*.md"], "/proj")),
+    decide(policy, run("ls", ["a.md"], "/proj"))
+  ]
+}

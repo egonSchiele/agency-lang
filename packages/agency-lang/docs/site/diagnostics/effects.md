@@ -325,3 +325,18 @@ A decorator raises an effect that the decorated function's `raises` clause does 
 A decorated function's effects are its decorators' effects plus its body's, because the decorator's code runs every time the function is called. A `@budgeted` decorator written over `guard` raises `std::guard`, so a function it decorates raises `std::guard` too.
 
 **How to fix:** add the effect to the clause.
+
+<a id="ag3031"></a>
+
+## AG3031 — `@alwaysPrefix(&#123;field&#125;)` on effect `&#123;effect&#125;` needs a list field, and `&#123;field&#125;` is not one.
+
+*Default severity: error.*
+
+`@alwaysPrefix` pins the leading items of a list, and the approval prompt asks how many. The field it names must be a list that every interrupt of the effect carries, so a list that may be `null` does not qualify.
+
+```
+@alwaysPrefix(command)
+effect app::run { command: string, args: string[] }
+```
+
+**How to fix:** name a list field, such as `@alwaysPrefix(args)`, or use `@always` for a field that is not a list.

@@ -125,6 +125,14 @@ export function stripControlChars(text: string): string {
     .replace(/[\u{61c}\u{200b}-\u{200f}\u{202a}-\u{202e}\u{2066}-\u{2069}\u{feff}]/gu, "");
 }
 
+/** Model-written text for a menu row: `stripControlChars`, then each
+ *  newline shown as ⏎ and each tab as →. A row is one line, and an argument
+ *  holding a newline could otherwise draw a fake choice under the real
+ *  ones. The body above the menu keeps the text as written. */
+function oneLine(text: string): string {
+  return stripControlChars(text).replace(/\n/g, "⏎").replace(/\t/g, "→");
+}
+
 /** The fields a rule for `effect` pins. The one resolution rule: an
  *  explicit override wins (an empty list turns the option off), and
  *  otherwise it is the scope the effect declares. Own keys only: `effect`
@@ -171,6 +179,10 @@ function fieldPattern(spec: ScopedField, value: unknown, prefix: string): MatchP
   if (spec.matchPrefix === true || Array.isArray(value)) {
     return listPattern(value, spec.matchPrefix === true ? prefix : EXACT_PREFIX);
   }
+  // An empty folder would save `{,/**}`, which matches every folder.
+  if (spec.matchSubpaths && value === "") {
+    return null;
+  }
   const literal = escapeGlob(`${value as string}`);
   const pattern = spec.matchSubpaths ? `{${literal},${literal}/**}` : literal;
   return fitsInRule(pattern) ? pattern : null;
@@ -197,7 +209,7 @@ function describeScopedMatch(intr: Intr, context: PromptContext): string {
   if (Object.keys(buildScopedMatch(intr, context)).length === 0) {
     return "";
   }
-  return stripControlChars(describeScope(scopedFieldsFor(intr.effect, context), intr.data));
+  return oneLine(describeScope(scopedFieldsFor(intr.effect, context), intr.data));
 }
 
 /** The one field whose rule can cover a wider folder, or "" when no rule
@@ -298,7 +310,7 @@ export function itemChoices(intr: Intr, context: PromptContext): PromptScope[] {
   return prefixChoices(items.length).map((choice) => {
     const kept = items.slice(0, choice.keep).map(shortened);
     const words = choice.rest ? [...lead, ...kept, "…"] : [...lead, ...kept];
-    const label = stripControlChars(words.join(" "));
+    const label = oneLine(words.join(" "));
     return choice.rest
       ? { id: choice.id, label }
       : { id: choice.id, label, note: EXACT_ITEMS_NOTE };

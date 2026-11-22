@@ -283,9 +283,9 @@
     },
     {
       "nodeName": "defaultCwdIsNeverEmpty",
-      "description": "resolveCwd maps an empty caller cwd and an empty agent cwd to \".\", because write rejects an empty dir.",
+      "description": "resolveCwd maps an empty caller cwd and an empty agent cwd to the run's folder, because write rejects an empty dir, and makes a relative folder absolute, so a saved std::exec rule pins a real folder.",
       "input": "",
-      "expectedOutput": "[\".\",\"/somewhere\"]",
+      "expectedOutput": "[true,true,\"/somewhere\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

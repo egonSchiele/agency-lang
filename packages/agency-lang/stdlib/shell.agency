@@ -9,7 +9,7 @@ import {
   _exists,
   _which,
   _exec,
-  _execCwd,
+  _absoluteCwd,
   _bash,
   _searchTarget,
  } from "agency-lang/stdlib-lib/shell.js"
@@ -127,7 +127,7 @@ export def exec(
   }
   // The question names the folder the command runs in, and `_exec` below
   // is given this same value, so the two cannot disagree.
-  cwd = _execCwd(cwd)
+  cwd = _absoluteCwd(cwd)
   return interrupt std::exec("Are you sure you want to run this command?", {
     command: command,
     args: args,

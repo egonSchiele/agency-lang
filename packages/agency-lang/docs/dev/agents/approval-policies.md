@@ -546,8 +546,10 @@ the widest. A command with no arguments has one choice, so the step is
 skipped.
 
 A label is the values of the effect's exact fields, then the kept items,
-each cut to 60 characters with `…`. The body above the menu shows the
-whole command. The rule is built from the full arguments, each passed
+each cut to 60 characters with `…`. A newline in a label or in the detail
+beside "always approve when" shows as ⏎ and a tab as →, so an argument
+cannot draw a fake choice row (`oneLine`). The body above the menu shows
+the whole command as written. The rule is built from the full arguments, each passed
 through `escapeGlob`, so an argument that holds `*` or is the two
 characters `**` matches only itself (`prefixPattern`).
 
@@ -596,6 +598,11 @@ A rule saved for a folder from that list, picked or the only one, sets
 (`lib/runtime/interruptPromptOptions.ts`) checks both conditions, the
 folder and the effect, so the flag stays tied to the effects the two lists
 name.
+
+An empty folder saves no rule at all, because `{,/**}` would match every
+folder: `buildScopedMatch` returns `{}`, and "always approve when" is not
+offered. The exec tool and safeBash (`resolveCwd`) both name an absolute
+folder, so this only happens for an interrupt raised some other way.
 
 A command run in the home directory itself is the case where the list is
 empty. Its rule pins `cwd` to the home directory and everything below it,

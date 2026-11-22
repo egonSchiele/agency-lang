@@ -110,7 +110,7 @@ import { GITHUB_MAX_PER_PAGE } from "agency-lang/stdlib-lib/github/args.js"
 import { _addLine, _write, _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 import { _resolveRedirectTarget, _missingTarget } from "agency-lang/stdlib-lib/fs.js"
-import { _searchTargetIn, _bash, _grep, _skipDirNames } from "agency-lang/stdlib-lib/shell.js"
+import { _searchTargetIn, _bash, _grep, _skipDirNames, _absoluteCwd } from "agency-lang/stdlib-lib/shell.js"
 import { _launchJob, _jobStartRefusal } from "agency-lang/stdlib-lib/jobs.js"
 import { basename as lastSegment, dirname as parentOf, join as joinPath } from "std::path"
 import { now } from "std::date"
@@ -5960,21 +5960,19 @@ def renderFlag(flag: FlagWord): string {
 
 // Resolved once, at the top, and then carried on every action. An action
 // that did not carry it would run wherever the process happened to be,
-// which is the same command doing two different things.
+// which is the same command doing two different things. It is absolute,
+// so the folder a std::exec question names, and a rule saved from it, is
+// a real folder and not a name that means something in every project.
 export def resolveCwd(cwd: string): string {
   """
-  Use the requested directory, then the agent directory, then the process directory.
+  Use the requested directory, then the agent directory, then the process directory, as an absolute path.
   """
   if (cwd != "") {
-    return cwd
+    return _absoluteCwd(cwd)
   }
-  const agent = getAgentCwd()
-  if (agent != "") {
-    return agent
-  }
-  // `write` rejects an empty dir, and `getAgentCwd()` is empty whenever
-  // nothing set one, which is the case the tests run in.
-  return "."
+  // `getAgentCwd()` is empty whenever nothing set one, which is the case
+  // the tests run in. An empty folder is the run's folder.
+  return _absoluteCwd(getAgentCwd())
 }
 
 /** Added to a failed repository lookup, whose own message names the typed

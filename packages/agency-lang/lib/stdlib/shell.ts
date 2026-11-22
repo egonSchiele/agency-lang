@@ -166,11 +166,12 @@ export async function __internal_exec(
   return execImpl(ctx, stack, command, args, cwd, timeout, stdin, options);
 }
 
-/** The folder `exec` runs a command in, as an absolute path: an empty
- *  `cwd` is the run's folder, and a relative one is resolved against it,
- *  the same way `resolveSpawnCwd` resolves it for the spawn. It reads no
- *  file, because the `std::exec` question that shows it comes first. */
-export function _execCwd(cwd: string): string {
+/** The folder a command runs in, as an absolute path: an empty `cwd` is
+ *  the run's folder, and a relative one is resolved against it, the same
+ *  way `resolveSpawnCwd` resolves it for the spawn. `exec` and safeBash use
+ *  it for the folder their `std::exec` question names. It reads no file,
+ *  because the question comes before the command. */
+export function _absoluteCwd(cwd: string): string {
   return resolveCwdPath(currentHost(), cwd);
 }
 

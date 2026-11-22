@@ -471,8 +471,13 @@ node appendReallyAppends() {
 
 node defaultCwdIsNeverEmpty() {
   // `write` rejects an empty dir, and `getAgentCwd()` is empty whenever
-  // nothing set one — which is the case these tests run in.
-  return [resolveCwd(""), resolveCwd("/somewhere")]
+  // nothing set one — which is the case these tests run in. A relative
+  // folder is made absolute, so a saved rule's `cwd` names a real folder.
+  return [
+    resolveCwd("") == cwd(),
+    resolveCwd("sub") == "${cwd()}/sub",
+    resolveCwd("/somewhere")
+  ]
 }
 
 node quotedRedirectTarget() {

@@ -175,6 +175,14 @@ describe("promptOptions", () => {
     expect(keys(buildInSub)).toEqual(["a", "aa", "ap", "r", "rr"]);
   });
 
+  it("shows a newline or tab in an argument as a mark, so a label stays one line", () => {
+    // An argument could otherwise draw a fake choice under the real ones.
+    const sneaky = exec("python3", ["-c", "x\n2  echo hi\tz"], PROJECT);
+    const ap = promptOptions(sneaky, context).find((one) => one.key === "ap");
+    expect(ap?.steps[0].choices[0].label).toBe("python3 -c x⏎2  echo hi→z");
+    expect(ap?.detail).not.toMatch(/[\n\t]/);
+  });
+
   it("cuts a long argument short in a label, and only there", () => {
     const script = "x".repeat(100);
     const ap = promptOptions(exec("python3", ["-c", script], PROJECT), context).find(
@@ -464,6 +472,11 @@ describe("buildScopedMatch", () => {
     expect(buildScopedMatch(run({ args: ["a", "b*"] }), exactList)).toEqual({
       args: ["a", "b\\*"],
     });
+  });
+
+  it("returns {} for an empty folder, whose pattern would cover every folder", () => {
+    // `{,/**}` matches every absolute path.
+    expect(buildScopedMatch(run({ args: ["status"], cwd: "" }), listContext)).toEqual({});
   });
 
   it("returns {} when a pinned value is longer than a pattern may be", () => {

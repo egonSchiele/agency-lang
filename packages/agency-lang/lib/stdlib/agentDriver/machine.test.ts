@@ -276,6 +276,47 @@ describe("a settings answer", () => {
     expect(none.happened.map((event) => event.type)).toEqual(["answered"]);
   });
 
+  it("reports a move when the record's folder changes", () => {
+    const record = (id: string, cwd: string): SessionRecord => ({
+      id,
+      cwd,
+      brain: "simple",
+      created: 1,
+      lastActive: 1,
+      turns: 0,
+      title: "",
+    });
+    const withRecord = (id: string, cwd: string, pauseId: string): Interrupt[] => [
+      {
+        ...interrupt("agent::sessionInput", pauseId),
+        data: { ...reported("sonnet"), record: record(id, cwd) },
+      },
+    ];
+    const MOVE: SettingsAnswer = { kind: "folder", cwd: "/b" };
+    const from: DriverPhase = {
+      kind: "waitingForUser",
+      pause: withRecord("s1", "/a", "pause-1"),
+      cancelledTexts: [],
+    };
+    const asked = run([{ type: "answered", answer: MOVE }], from).phase;
+    const after = (id: string, cwd: string) =>
+      run([step({ kind: "waitingForUser", interrupts: withRecord(id, cwd, "p2") })], asked);
+
+    expect(after("s1", "/b").happened).toEqual([
+      expect.objectContaining({ type: "answered" }),
+      { type: "moved", from: "/a", to: "/b" },
+    ]);
+    // The same folder, or a pause with no record, is no move.
+    expect(after("s1", "/a").happened.map((event) => event.type)).toEqual(["answered"]);
+    const none = run(
+      [step({ kind: "waitingForUser", interrupts: pauseWith("sonnet", "p2") })],
+      asked,
+    );
+    expect(none.happened.map((event) => event.type)).toEqual(["answered"]);
+    // A fork keeps the folder, so it is a fork only.
+    expect(after("s2", "/a").happened.map((event) => event.type)).toEqual(["answered", "forked"]);
+  });
+
   it("that fails goes back to the same pause with the error", () => {
     const { phase, happened } = run([finished(failure("boom"))], answering());
     expect(phase).toEqual({ kind: "waitingForUser", pause: PAUSE, cancelledTexts: [] });

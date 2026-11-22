@@ -85,6 +85,9 @@ export type Happened =
   // A settings answer (a `fork`) gave the session a new `record.id`. The
   // front-end carries the session's own policy to it (`copyCarriedPolicy`).
   | { type: "forked"; from: string; to: string }
+  // The session moved to another folder (`record.cwd` changed across an
+  // answer). Move its saved files, and resume it on a host for `to`.
+  | { type: "moved"; from: string; to: string }
   // A loaded session runs under a policy of its own (`restoredPhase`).
   // The front-end shows what it approves before the first leg.
   | { type: "carriedPolicy"; policy: Policy };
@@ -201,6 +204,17 @@ function forkedHappened(before: PauseData | null, after: PauseData | null): Happ
   return [{ type: "forked", from, to }];
 }
 
+/** `moved` when the session's record folder changed across an answer (a
+ *  `folder` answer). The pause's `cwd` is not it: a coder moves that. */
+function movedHappened(before: PauseData | null, after: PauseData | null): Happened[] {
+  const from = before?.record?.cwd ?? null;
+  const to = after?.record?.cwd ?? null;
+  if (from === null || to === null || from === to) {
+    return [];
+  }
+  return [{ type: "moved", from, to }];
+}
+
 /** The run came back from a settings change. When it paused again, the
  *  front-end is told what it reported before and after, and shows what
  *  changed. When the core refused the change it reports the same, and it
@@ -213,7 +227,11 @@ function answerFinished(phase: AnsweringPhase, result: Result<AgentStep>): Drive
     const after = pauseData(pause);
     return {
       phase: { kind: "waitingForUser", pause, ...dropped },
-      happened: [{ type: "answered", before, after }, ...forkedHappened(before, after)],
+      happened: [
+        { type: "answered", before, after },
+        ...forkedHappened(before, after),
+        ...movedHappened(before, after),
+      ],
     };
   }
   const waiting: WaitingPhase = { kind: "waitingForUser", pause: phase.pause, ...dropped };

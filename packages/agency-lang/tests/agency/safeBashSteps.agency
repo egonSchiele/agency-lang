@@ -326,6 +326,9 @@ node harmlessLinesDoNotStop() {
     ranWithoutStop("mkdir -p out && ls out"),
     ranWithoutStop("mkdir -p build && cd build && pnpm --version"),
     ranWithoutStop("pnpm --version > v.txt && cat v.txt"),
+    // The file exists by the time the grep is checked. The check plans it
+    // by the bash rules, as the approved plan did.
+    ranWithoutStop("pnpm --version > g.txt; grep -n . g.txt"),
     ranWithoutStop("pnpm --version > v.txt; pnpm --version >> v.txt"),
     // A folder a program makes, which is how `pnpm build && ls dist` runs
     // the first time, and a listing of a file the line wrote.

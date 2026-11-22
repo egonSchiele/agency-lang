@@ -252,10 +252,12 @@ Opened after pull request 1 merges.
   `head` and `tail` through `readViewFor`, and `grep` through
   `_grepPatternToRegex` with the flags `-v`, `-i`, `-E`, `-F`, `-w`. Any
   other grep flag fails, so the pipeline runs through bash.
-- `export function _filterLines(text: string, regex: string, flags: string, invert: boolean): { text: string; matched: boolean }`
-  in `lib/stdlib/grepDialect.ts`. It keeps the lines the expression
-  matches, or the others when `invert` is true, and keeps a final line
-  with no newline as real grep does.
+- No second text search. `lib/stdlib/spill.ts` already searches a text
+  with a grep query (`searchText`, on `compileGrepQuery` and
+  `firstMatchingLines`), and `_grepSaved` is built on it. Export one
+  function beside `_grepSaved` that takes a text and a `GrepQuery`, and
+  make the `match` filter hold a `GrepQuery` and a `GrepRender`, as a
+  `GrepExec` does. (Changed by the architecture review.)
 - `classifyPipeline` tries the in-process path first: the first stage
   through `inProcessStep`, each later stage through `stdinFilter`. When
   every stage is accepted, the pipeline is one `RunStep` whose
@@ -299,6 +301,10 @@ counts.
 ## Pull request 3: output to a file
 
 Opened after pull request 2 merges.
+
+**The architecture review recommends building only the `2>/dev/null`
+bullet below and dropping `>` and `>>`:** no logged or corpus line
+redirects a table command to a file. This waits for the owner's yes.
 
 ### Task 7: a redirect on any in-process step
 

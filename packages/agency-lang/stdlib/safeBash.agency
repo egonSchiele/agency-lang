@@ -2009,19 +2009,26 @@ def resolveTarget(text: string, word: Word, cwd: string): Result<PathTarget> {
  `std::mkdir` for, by real path. `strict` is false for a lookup that may
  name a path that does not exist yet. What an earlier command did to the
  disk is not predicted: each step is planned again just before it runs
- (see `runBashStep`). `piped` is true inside a pipeline, which bash runs
- whole, so no command in it is one safeBash runs itself. */
+ (see `runBashStep`). `byBash` is true where bash is known to run the
+ command, so the bash rules decide and the table of commands safeBash
+ runs itself is not asked: inside a pipeline, which bash runs whole, and
+ when a step bash runs is planned again. */
 type LineState = {
   cwd: string;
   written: WritePayload[];
   made: string[];
   strict: boolean;
-  piped: boolean
+  byBash: boolean
 }
 
 /* The state of a line before its first command. */
 def freshLine(cwd: string): LineState {
-  return { cwd: cwd, written: [], made: [], strict: false, piped: false }
+  return { cwd: cwd, written: [], made: [], strict: false, byBash: false }
+}
+
+/* The same line, for a command bash is known to run. */
+def bashLine(line: LineState): LineState {
+  return { ...line, byBash: true }
 }
 
 /* The same line, for a lookup where a missing path has no rule: `find`,
@@ -5286,7 +5293,7 @@ def classifySimple(command: SimpleCommand, line: LineState, origin: GhRepo | nul
 // pipeline's stages at the same time, which a step cannot.
 @capabilities(fileRead)
 def inProcessStep(command: SimpleCommand, line: LineState, readsStdin: boolean): Result<Classified> {
-  if (readsStdin || line.piped) {
+  if (readsStdin || line.byBash) {
     return failure("the command is part of a pipeline")
   }
   const plan = tryShellFreeStep(command, line.cwd)?
@@ -5397,7 +5404,7 @@ def classifyPipeline(stages: PipelineStage[], line: LineState, origin: GhRepo | 
   let rewritten: any[] = []
   let asking = 0
   let severalInAGroup = false
-  const inPipe: LineState = { ...line, piped: true }
+  const inPipe = bashLine(line)
   for (stage, index in stages) {
     const classified = classify(stage, inPipe, origin, readsStdin || index > 0)?
     if (asksBeyondExec(classified.effects)) {
@@ -7123,7 +7130,10 @@ def checkedStep(step: RunStep, cwd: string, origin: GhRepo | null): Result<strin
   if (moved != "") {
     return failure(moved)
   }
-  const fresh = classify(step.source, freshLine(cwd), origin, false)
+  // Bash runs this step, so it is planned by the bash rules again. A file
+  // an earlier step wrote exists now, and the table would take a `grep` of
+  // it and ask with the stdlib search's payload, which nobody approved.
+  const fresh = classify(step.source, bashLine(freshLine(cwd)), origin, false)
   if (fresh is failure(why)) {
     return failure("it no longer has a rule: ${why}")
   }

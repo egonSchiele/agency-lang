@@ -2182,7 +2182,7 @@ Three commands are never taken, whatever the table says:
 
 - **A command inside a pipeline.** Bash runs a pipeline's stages at the
   same time, which a step cannot. `classifyPipeline` marks the line
-  (`LineState.piped`) for every stage, a group inside a stage included.
+  (`LineState.byBash`) for every stage, a group inside a stage included.
 - **A command behind `timeout`.** The limit is the program's.
 - **A read of a file that does not exist when the line is planned.** The
   read tool needs a real file, so in `pnpm build > out.txt; cat out.txt`
@@ -2194,7 +2194,11 @@ A step safeBash runs itself is not planned again before it runs
 `docs/dev/stdlib/contained-files.md`). So after `git checkout evil; cat
 README.md` swaps the file for a link, the `cat` fails with the read
 tool's message and reads nothing. A step bash runs is planned again, and
-a changed plan stops the line (see the next section).
+a changed plan stops the line (see the next section). That second plan
+uses the bash rules only (`checkedStep` marks its line `byBash`). In
+`pnpm build > out.txt; grep -n x out.txt` the file exists by the time
+the `grep` is checked, and the table would otherwise take it and ask
+with the stdlib search's payload, which differs from the approved one.
 
 The payload describes what runs. A grep safeBash runs itself asks with
 `maxResults: 1000`, the stdlib search's limit, where the same grep

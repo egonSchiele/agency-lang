@@ -1,3 +1,24 @@
+## Nov 21 2026 — v0.44.0
+
+Lots of safeBash updates!
+
+### Policies
+
+- THe `recommended` policy now approves `std::env` for ten common env vars that don't hold sensitive info, such as HOME.
+
+### Agent
+
+- **After a compaction, we tell the model the current folder again**, if the session has moved since it started. Before, the summary dropped it.
+
+### TypeScript API
+
+- **A front-end can move a running session to another folder** by answering the session core's pause with `{ kind: "folder", cwd }`. The driver reports the move as `{ type: "moved", from, to }`.
+
+### Other
+
+- `frontmatter()` in `std::markdown` reads only the header, so starting an agent session no longer parses every bundled doc. That step drops from about 640 ms to 8 ms, which will make the agency agent start faster.
+- Two new MLX models in the local model catalog: `inkling-2-mini-mlx` and `glm-5.3-flash-mlx`.
+
 ## Nov 20 2026 — v0.43.3
 
 ### Breaking

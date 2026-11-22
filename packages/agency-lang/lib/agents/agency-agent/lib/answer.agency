@@ -16,6 +16,8 @@ import { grounding } from "./grounding.agency"
 import { addJobsNote } from "./jobsNote.agency"
 import { messageWasRewritten } from "./rewrittenMessage.agency"
 import {
+  getJudgeModel,
+  getJudgeProvider,
   getResolvedSlots,
   getRouterModel,
   getRouterProvider,
@@ -76,6 +78,8 @@ export def cliSettings(): AgentSettings {
     reasoningProvider: getSlowProvider(),
     routerModel: routerModelFor(),
     routerProvider: getRouterProvider(),
+    judgeModel: getJudgeModel(),
+    judgeProvider: getJudgeProvider(),
     coderTools: sessionJobTools()
   }
 }
@@ -147,6 +151,8 @@ export def answerTurn(
     reasoningProvider: settings.reasoningProvider,
     routerModel: settings.routerModel,
     routerProvider: settings.routerProvider,
+    judgeModel: settings.judgeModel,
+    judgeProvider: settings.judgeProvider,
     extraTools: {
       main: mainTools,
       coder: settings.coderTools

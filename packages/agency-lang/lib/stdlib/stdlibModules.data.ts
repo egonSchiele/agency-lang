@@ -138,6 +138,8 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   "std::agents/brains/settings": [
     "modelOptions",
     "reasoningChoice",
+    "commandJudgeFor",
+    "commandJudgeOf",
     "reasoningOptions"
   ],
   "std::agents/brains/simple": [

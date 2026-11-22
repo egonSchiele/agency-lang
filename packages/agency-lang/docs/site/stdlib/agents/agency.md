@@ -121,6 +121,8 @@ agencyAgent(
   reasoningProvider: string = "",
   routerModel: string = "",
   routerProvider: string = "",
+  judgeModel: string = "",
+  judgeProvider: string = "",
   extraTools: AgentExtraTools = {},
   attachments: Attachment[] = [],
 ): Result<string>
@@ -151,6 +153,8 @@ A negative `maxCost` or `maxTime` means no limit. A model that is given
 | reasoningProvider | `string` | "" | The reasoning model's provider |
 | routerModel | `string` | "" | A small model that sends a plain message straight to the coder or the researcher, or "" for no routing |
 | routerProvider | `string` | "" | The router model's provider |
+| judgeModel | `string` | "" | A decision model that may refuse a shell command too complex to review, or "" for none |
+| judgeProvider | `string` | "" | The judge model's provider |
 | extraTools | [AgentExtraTools](#agentextratools) | {} | Extra tools: `main` for the model that answers, `coder` for the coders |
 | attachments | `Attachment[]` | [] | Images or files sent with the task |
 

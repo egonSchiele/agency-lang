@@ -43,6 +43,10 @@ def headerModelLines(slots: Record<string, Resolved>): string[] {
   if (routerLabel != "") {
     lines.push("Router     ${routerLabel}")
   }
+  const judgeLabel = slotModelLabel(slots["judge"])
+  if (judgeLabel != "") {
+    lines.push("Judge      ${judgeLabel}")
+  }
   return lines
 }
 

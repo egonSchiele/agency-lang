@@ -24,6 +24,8 @@ def emptySettings(): AgentSettings {
     reasoningProvider: "",
     routerModel: "",
     routerProvider: "",
+    judgeModel: "",
+    judgeProvider: "",
     coderTools: []
   }
 }

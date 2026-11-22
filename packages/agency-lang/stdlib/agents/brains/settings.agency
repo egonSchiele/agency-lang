@@ -22,6 +22,10 @@ export type AgentSettings = {
   // the researcher. "" means no routing.
   routerModel: string;
   routerProvider: string;
+  // The decision model that may refuse a broad shell line too complex to
+  // review (commandJudge in std::safeBash). "" means no judge.
+  judgeModel: string;
+  judgeProvider: string;
   // Tools added to the coder's and the Agency coder's own.
   coderTools: any[]
 }
@@ -72,6 +76,32 @@ export def reasoningChoice(settings: AgentSettings): ModelChoice {
     model: settings.reasoningModel,
     provider: settings.reasoningProvider
   }
+}
+
+export def commandJudgeFor(model: string, provider: string): ModelChoice | null {
+  """
+  Return the judge for broad shell lines, or null when no judge model is
+  set, which keeps every broad line asking as before.
+
+  @param model - The judge model, or "" for none
+  @param provider - The judge model's provider
+  """
+  if (model == "") {
+    return null
+  }
+  return {
+    model: model,
+    provider: provider
+  }
+}
+
+export def commandJudgeOf(settings: AgentSettings): ModelChoice | null {
+  """
+  Return the call's judge for broad shell lines, or null when it has none.
+
+  @param settings - The call's settings
+  """
+  return commandJudgeFor(settings.judgeModel, settings.judgeProvider)
 }
 
 export def reasoningOptions(settings: AgentSettings): any {

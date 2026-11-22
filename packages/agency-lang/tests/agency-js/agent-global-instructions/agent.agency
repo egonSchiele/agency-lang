@@ -54,6 +54,8 @@ def turn(grounding: string, message: string) {
     reasoningProvider: "",
     routerModel: "",
     routerProvider: "",
+    judgeModel: "",
+    judgeProvider: "",
     coderTools: []
   }
   simpleBrain(message, settings, [])

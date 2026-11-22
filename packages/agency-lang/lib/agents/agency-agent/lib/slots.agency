@@ -3,7 +3,7 @@
   a CLOSED enum so consumers switch on the kind, not the raw name; adding a slot
   whose semantics match an existing kind is a one-line data edit. Pure. */
 
-export static const SLOTS = ["main", "reasoning", "embedding", "router"]
+export static const SLOTS = ["main", "reasoning", "embedding", "router", "judge"]
 export static const SLOT_ALIASES: Record<string, string> = {
   fast: "main",
   slow: "reasoning"
@@ -15,13 +15,16 @@ export static const SLOT_KIND: Record<string, SlotKind> = {
   main: "fast",
   reasoning: "slow",
   embedding: "derived",
-  router: "derived"
+  router: "derived",
+  judge: "derived"
 }
 
 /** The model a slot gets when no layer sets it, for the slots that have
   one. It applies only in a hosted session whose environment has the
   provider's key: startup checks the key once (`defaultSlots` in
-  shared.agency) and keeps the rows that pass. */
+  shared.agency) and keeps the rows that pass. The judge has no default on
+  purpose: it sends shell command lines to its provider, so the user picks
+  the provider. */
 export static const SLOT_DEFAULTS: Record<string, string> = {
   router: "openrouter/jev-1.14"
 }
@@ -34,15 +37,16 @@ export def slotCanBeOff(name: string): boolean {
   return SLOT_DEFAULTS[canonicalSlot(name)] != null
 }
 
-/** The providers smoltalk's decide() answers through. The router slot
-  takes only these. */
+/** The providers smoltalk's decide() answers through. The router and
+  judge slots take only these. */
 export static const DECISION_PROVIDERS: string[] = ["typesafe", "laya", "openai", "openrouter", "llama-cpp"]
 
 /** Slots whose value may name only these providers. Every other slot
   takes the chat providers (`knownProviders()` in models.agency). Kept
   apart so `typesafe` and `laya` never reach a chat slot. */
 static const SLOT_PROVIDERS: Record<string, string[]> = {
-  router: DECISION_PROVIDERS
+  router: DECISION_PROVIDERS,
+  judge: DECISION_PROVIDERS
 }
 
 /** A derived slot points away from the chat model, so its value must name
@@ -54,6 +58,10 @@ static const PROVIDER_FORM: Record<string, { title: string; example: string }> =
   },
   router: {
     title: "Router",
+    example: "openrouter/jev-1.14"
+  },
+  judge: {
+    title: "Judge",
     example: "openrouter/jev-1.14"
   }
 }

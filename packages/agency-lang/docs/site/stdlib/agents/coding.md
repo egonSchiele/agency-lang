@@ -32,14 +32,20 @@ callback that does.
 ### buildTools
 
 ```ts
-buildTools(): any[]
+buildTools(commandJudge: CommandJudge | null = null): any[]
 ```
 
 Return the coding agent's built-in tools for inspection or extension.
 
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| commandJudge | `CommandJudge \| null` | null | A decision model that may refuse a bash command too complex to review, or null for none |
+
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L52))
 
 ### codingAgent
 
@@ -53,6 +59,7 @@ codingAgent(
   model: string = "",
   provider: string = "",
   extraTools: any[] = [],
+  commandJudge: CommandJudge | null = null,
 ): Result<string>
 ```
 
@@ -76,9 +83,10 @@ Called from code, this runs on the caller's thread like any function:
 | model | `string` | "" | Model override, or "" for the ambient model |
 | provider | `string` | "" | Provider for the model override, ignored when model is empty. |
 | extraTools | `any[]` | [] | Extra tools to offer the LLM, appended to the built-in set |
+| commandJudge | `CommandJudge \| null` | null | A decision model that may refuse a bash command too complex to review, or null for none |
 
 **Returns:** `Result<string>`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L96))

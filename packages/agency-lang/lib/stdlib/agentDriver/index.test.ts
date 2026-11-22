@@ -17,7 +17,7 @@ describe("the driver's entry point", () => {
       "startRun",
       "resumeRun",
       "toStep",
-      "withCancelNote",
+      "cancelNote",
       "RUN_ENDED_ERROR",
       "PAUSE_WITH_OTHER_INTERRUPTS_ERROR",
       "startQueue",

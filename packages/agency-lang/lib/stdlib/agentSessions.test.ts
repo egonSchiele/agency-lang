@@ -137,6 +137,45 @@ describe("reading a saved conversation", () => {
     ]);
   });
 
+  it("reads the session's own transcript when the checkpoint has one", () => {
+    const withList = {
+      ...saved,
+      globals: {
+        store: { __agentTranscript: { messages: [{ role: "user", content: "typed" }] } },
+        initializedModules: [],
+      },
+    };
+    expect(_readTranscript(withList, "t3")).toEqual([{ role: "user", content: "typed" }]);
+    // The list does not depend on the thread id.
+    expect(_readTranscript(withList, "")).toEqual([{ role: "user", content: "typed" }]);
+  });
+
+  it("reads the thread when the transcript is not a list", () => {
+    const broken = {
+      ...saved,
+      globals: { store: { __agentTranscript: { messages: "nope" } }, initializedModules: [] },
+    };
+    expect(_readTranscript(broken, "t3")).toEqual([
+      { role: "user", content: "hello" },
+      { role: "assistant", content: "hi there" },
+    ]);
+  });
+
+  it("keeps only the well-formed entries of a saved transcript", () => {
+    const edited = {
+      ...saved,
+      globals: {
+        store: {
+          __agentTranscript: {
+            messages: [{ role: "user", content: "typed" }, { role: "user" }],
+          },
+        },
+        initializedModules: [],
+      },
+    };
+    expect(_readTranscript(edited, "t3")).toEqual([{ role: "user", content: "typed" }]);
+  });
+
   // The check the terminal makes before it restores a file.
   it("tells a checkpoint from another front-end's saved run", () => {
     expect(_isCheckpoint(saved)).toBe(true);

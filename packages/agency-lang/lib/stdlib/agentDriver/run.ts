@@ -163,15 +163,15 @@ function requests(texts: string[]): string {
   return `${texts.length === 1 ? "request" : "requests"}, ${quoted(texts)},`;
 }
 
-/** Prefixes a message with one note about the requests the user cancelled
- *  and the ones that failed, since the agent no longer remembers them but
- *  their side effects remain. */
-export function withCancelNote(args: {
-  message: string;
+/** One note about the requests the user cancelled and the ones that
+ *  failed, since the agent no longer remembers them but their side effects
+ *  remain. Null when there are none. The driver sends it as the message's
+ *  last note, so the session core puts it just above the message. */
+export function cancelNote(args: {
   cancelledTexts: string[];
   failedTexts?: string[];
-}): string {
-  const { message, cancelledTexts } = args;
+}): string | null {
+  const { cancelledTexts } = args;
   const failedTexts = args.failedTexts ?? [];
   const sentences: string[] = [];
   if (cancelledTexts.length > 0) {
@@ -184,9 +184,8 @@ export function withCancelNote(args: {
     sentences.push(`${whose} previous ${requests(failedTexts)} failed partway through.`);
   }
   if (sentences.length === 0) {
-    return message;
+    return null;
   }
   const its = cancelledTexts.length + failedTexts.length === 1 ? "its" : "their";
-  const note = `(${sentences.join(" ")} Some of ${its} changes may already have been made.)`;
-  return `${note}\n\n${message}`;
+  return `(${sentences.join(" ")} Some of ${its} changes may already have been made.)`;
 }

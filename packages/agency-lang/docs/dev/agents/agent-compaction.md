@@ -87,6 +87,12 @@ summaries.
 A message that expires (`docs/dev/runtime/expiring-messages.md`) stays in
 the thread and out of the summary, as in memory compaction.
 
+The head names the folder the session started in, with its AGENTS.md.
+When the agent's folder moved (a `folder` answer, or a coder's move), the
+message that told the model is in the summarized part. So after a
+compaction, a session whose folder moved gets the project block again on
+its next message (`projectBlockSummarized` in `lib/projectContext.agency`).
+
 ## The summary
 
 `compactConversation` in `lib/compaction.agency` asks for the summary in a

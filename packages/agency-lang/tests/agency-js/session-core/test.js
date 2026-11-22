@@ -41,6 +41,8 @@ const longTextSent = {};
 const summaryPrompts = [];
 // The names of the tools model calls were offered, keyed the same way.
 const toolsSent = {};
+// Every call's last user message, in order, project blocks included.
+const userTextsSent = [];
 
 function messageText(message) {
   const content = message.content;
@@ -82,6 +84,7 @@ function roundsReply(config) {
 __setLLMClient({
   async text(config) {
     const said = lastUserText(config);
+    userTextsSent.push(said);
     toolsSent[said] = [
       ...(toolsSent[said] ?? []),
       ...(config.tools ?? []).map((tool) => tool.name),
@@ -738,6 +741,27 @@ result.compact.nextMessage = {
   reply: eventsOf(compacter, "session.reply").pop()?.text,
   longMessageSent: longTextSent["after the compaction"],
   pausedOn: compacter.pause[0].effect,
+};
+
+// A move, then a compaction. The block that told the model about the move
+// is summarized, and the head still names the folder the session started
+// in, so the next message must carry the block again.
+const movedCompactTarget = mkdtempSync(path.join(os.tmpdir(), "session-core-moved-compact-"));
+const movedCompacter = await startSession();
+await movedCompacter.answer({ kind: "folder", cwd: movedCompactTarget });
+await movedCompacter.answer(message(`${LONG_MARK} moved ${"word ".repeat(30000)}`));
+await movedCompacter.answer(message("a second turn after the move"));
+await movedCompacter.answer({ kind: "compact", keep: "" });
+const movedCompactNotice = lastNotice(movedCompacter);
+await movedCompacter.answer(message("after the moved compaction"));
+const afterMovedCompaction = userTextsSent.findLast((text) =>
+  text.includes("after the moved compaction"),
+);
+result.compact.afterAMove = {
+  compacted: movedCompactNotice.level === "info",
+  namesTheNewFolder: afterMovedCompaction.includes(
+    `Current working directory: ${movedCompactTarget}`,
+  ),
 };
 
 // `search`. No client search key, so a cloud session starts on hosted search.

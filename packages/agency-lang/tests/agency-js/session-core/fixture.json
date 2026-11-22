@@ -257,7 +257,8 @@
       "reply": "stub reply",
       "longMessageSent": false,
       "pausedOn": "agent::sessionInput"
-    }
+    },
+    "afterAMove": { "compacted": true, "namesTheNewFolder": true }
   },
   "search": {
     "atStart": "hosted",

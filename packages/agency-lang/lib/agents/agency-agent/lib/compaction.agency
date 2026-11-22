@@ -8,6 +8,7 @@ import { hostedModelInfo } from "std::llm"
 import { getResolvedSlots } from "../shared.agency"
 import { COMPACT_AT_SHARE } from "./contextBudget.agency"
 import { notice } from "./notice.agency"
+import { projectBlockSummarized } from "./projectContext.agency"
 import {
   _applyCompaction,
   _compactionInput,
@@ -188,7 +189,9 @@ export def compactConversation(
     return failure("The model returned an empty summary.")
   }
   _failedAtTokens = 0
-  return success(_applyCompaction(threadId, keepTokens, summary.value.trim()))
+  const replaced = _applyCompaction(threadId, keepTokens, summary.value.trim())
+  projectBlockSummarized()
+  return success(replaced)
 }
 
 /** True when the conversation on `threadId` should be compacted now: it is

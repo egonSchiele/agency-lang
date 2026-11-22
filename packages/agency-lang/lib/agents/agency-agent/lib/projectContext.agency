@@ -68,6 +68,19 @@ export def instructionsText(files: InstructionFile[]): string {
 // block is built.
 let _blockDir = ""
 
+// The folder the first block was built for: the grounding's, which stays
+// at the head of the thread through every compaction.
+let _groundingDir = ""
+
+/** A compaction summarized the conversation, and any project block a
+  message carried with it. What the model still sees is the head, built
+  for `_groundingDir`, so the next message carries the block again when
+  the agent's folder is not that one (after a `folder` answer or a coder's
+  move). */
+export def projectBlockSummarized() {
+  _blockDir = _groundingDir
+}
+
 /** The agent's working directory: the folder its file tools resolve paths
   against, which a coder can change with `setAgentCwd`. Before the agent
   has set one, it is the directory the run started in. */
@@ -89,6 +102,9 @@ export def projectContextText(): string {
   """
   const dir = projectDir()
   _blockDir = dir
+  if (_groundingDir == "") {
+    _groundingDir = dir
+  }
   const files = loadProjectInstructions(instructionFolders(dir)) with approve
   const projectContext = instructionsText(files)
   return """

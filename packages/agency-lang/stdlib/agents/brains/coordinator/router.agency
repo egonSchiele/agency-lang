@@ -3,8 +3,8 @@
   coordinator should handle it. One decision call on a thread of its own;
   every doubt goes to the coordinator. See docs/dev/agents/agent-router.md.
 */
-import { modelOptions } from "std::agents/brains/settings"
-import { lastReply, userMessage } from "std::thread"
+import { modelOptions } from "std::llm"
+import { lastChoiceConfidence, userMessage } from "std::thread"
 
 export type Route = "research" | "code" | "coordinator"
 
@@ -79,14 +79,11 @@ def askRouter(
         timeout: ROUTER_TIMEOUT
       },
     )
-    const reply = lastReply()
-    if (reply != null && reply.answers != null) {
-      const answer = reply.answers["answer"]
-      if (answer.type == "choice" && answer.confidence != null) {
-        pick = {
-          route: route,
-          confidence: answer.confidence
-        }
+    const confidence = lastChoiceConfidence()
+    if (confidence != null) {
+      pick = {
+        route: route,
+        confidence: confidence
       }
     }
   }

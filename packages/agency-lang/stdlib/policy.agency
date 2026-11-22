@@ -10,6 +10,7 @@ import { table } from "std::ui/table"
 
 import {
   _checkPolicy,
+  _runPolicy,
   _validatePolicy,
   _preparePolicyWrite,
   _writePreparedPolicy,
@@ -1547,6 +1548,23 @@ export def currentPolicy(): Policy {
     maybeFlush()
   }
   return _policy ?? {}
+}
+
+/**
+The policy the run's root handler answers with: the one `agency run
+--policy` (or `--approve` and `--reject`) gave the run, or the `policy`
+option a host passed, as the agent's session driver does. An empty policy
+when the run has none. This is not the policy `cliPolicyHandler` holds;
+`currentPolicy()` returns that one. A question either policy decides is
+answered without asking anyone. The result is a copy, so changing it
+changes nothing the handler does.
+*/
+@hidden
+export def runPolicy(): Policy {
+  """
+  Return the run's root policy, or an empty one when the run has none.
+  """
+  return _runPolicy()
 }
 
 // What the model reads when the user rejects a call at the prompt. It has

@@ -1,14 +1,20 @@
 import { describe, it, expect, vi } from "vitest";
 import { nodeHost } from "@/host/node/nodeHost.js";
 import { resolvePolicyDirs } from "@/runtime/policyDirs.js";
+import type { Policy, PolicyDirs } from "@/runtime/policy.js";
 
 const DIRS = resolvePolicyDirs(nodeHost());
 
-/** The host and the resolved policy directories a real execution context
- *  carries, built from the process the way the default host builds them. */
-function hostAndDirs() {
+/** The host, the resolved policy directories, and the run policy slot a
+ *  real execution context carries, built from the process the way the
+ *  default host builds them. */
+function hostAndDirs(): {
+  host: ReturnType<typeof nodeHost>;
+  policyDirs: PolicyDirs;
+  runPolicy: Policy | null;
+} {
   const host = nodeHost();
-  return { host, policyDirs: resolvePolicyDirs(host) };
+  return { host, policyDirs: resolvePolicyDirs(host), runPolicy: null };
 }
 import {
   makeRunPolicyHandler,
@@ -275,6 +281,31 @@ describe("installRunPolicyHandler", () => {
       const pushed: unknown[] = [];
       installRunPolicyHandler({ pushHandler: (h) => pushed.push(h), ...hostAndDirs() });
       expect(pushed).toHaveLength(0);
+    });
+  });
+
+  it("keeps the policy it installed on the run, for runPolicy() to read", async () => {
+    await withEnv({ [AGENCY_RUN_POLICY]: READ_OK, AGENCY_IPC: undefined }, () => {
+      const ctx = { pushHandler: () => {}, ...hostAndDirs() };
+      installRunPolicyHandler(ctx);
+      expect(ctx.runPolicy).toEqual(JSON.parse(READ_OK));
+    });
+  });
+
+  it("keeps an explicit policy over the environment's", async () => {
+    await withEnv({ [AGENCY_RUN_POLICY]: READ_OK, AGENCY_IPC: undefined }, () => {
+      const ctx = { pushHandler: () => {}, ...hostAndDirs() };
+      const explicit: Policy = { "std::bash": [{ action: "reject" }] };
+      installRunPolicyHandler(ctx, explicit);
+      expect(ctx.runPolicy).toEqual(explicit);
+    });
+  });
+
+  it("keeps no policy in an IPC subprocess, which installs none", async () => {
+    await withEnv({ [AGENCY_RUN_POLICY]: READ_OK, AGENCY_IPC: "1" }, () => {
+      const ctx = { pushHandler: () => {}, ...hostAndDirs() };
+      installRunPolicyHandler(ctx);
+      expect(ctx.runPolicy).toBeNull();
     });
   });
 });

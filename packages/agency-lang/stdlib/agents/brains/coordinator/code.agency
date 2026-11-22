@@ -15,7 +15,7 @@
   (`setAgentCwd`/`getAgentCwd`).
 */
 import { cli, cliHandles, CLI_NOT_AVAILABLE } from "std::agency"
-import { AgentSettings } from "std::agents/brains/settings"
+import { AgentSettings, commandJudgeOf } from "std::agents/brains/settings"
 import { timeBudget } from "std::agents/brains/coordinator/budgets"
 import { codingAgent } from "std::agents/coding"
 import { agencyCodeTools, agencyDocToolsBrief } from "std::agents/lib/toolkits"
@@ -109,6 +109,7 @@ def runCoder(
     model: settings.model,
     provider: settings.provider,
     extraTools: [...extras, ...settings.coderTools],
+    commandJudge: commandJudgeOf(settings),
   )
 }
 

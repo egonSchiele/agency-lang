@@ -1,4 +1,4 @@
-import { modelOptions } from "std::agents/brains/settings"
+import { modelOptions } from "std::llm"
 import { withContext, llmOptions } from "std::agents/lib/shared"
 import { renderGuidance, guidanceOrEmpty } from "std::agents/lib/expertGuidance"
 import { failOpenFeedback, feedbackHasErrors } from "std::agents/lib/feedback"

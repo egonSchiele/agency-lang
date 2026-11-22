@@ -21,6 +21,8 @@ def plainSettings(): AgentSettings {
     reasoningProvider: "",
     routerModel: "",
     routerProvider: "",
+    judgeModel: "",
+    judgeProvider: "",
     coderTools: []
   }
 }

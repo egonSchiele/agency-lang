@@ -34,4 +34,4 @@ Answer one message with one tool loop over read, bash, edit, and write,
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/minimal.agency#L12))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/minimal.agency#L13))

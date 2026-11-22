@@ -240,7 +240,7 @@ export type HostedModelInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L240))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L263))
 
 ## Effects
 
@@ -253,7 +253,7 @@ effect std::llm::registerProvider {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L218))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L241))
 
 ### std::read
 
@@ -265,7 +265,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L286))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L309))
 
 ## Functions
 
@@ -302,6 +302,27 @@ Set the default model for subsequent llm() calls.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L152))
 
+### modelOptions
+
+```ts
+modelOptions(model: string, provider: string): any
+```
+
+Return the `llm()` options that pick `model` and `provider`, or no
+  options when `model` is empty, so the ambient model stays in place. An
+  empty `provider` is left out, so the configured provider stays in place.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| model | `string` |  | The model name, or "" for the ambient model |
+| provider | `string` |  | The model's provider, or "" for the configured one |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L159))
+
 ### envVarFor
 
 ```ts
@@ -321,7 +342,7 @@ needs LITELLM_BASE_URL; this helper returns only its API-key variable name.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L163))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L186))
 
 ### pickProvider
 
@@ -348,7 +369,7 @@ Return the first provider in `order` whose API-key environment variable
 
 **Needs:** `env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L208))
 
 ### registerProviderModule
 
@@ -371,7 +392,7 @@ Load a provider module by path at runtime and register its custom provider
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L221))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L244))
 
 ### listHostedModels
 
@@ -384,7 +405,7 @@ Return all known hosted text models (the built-in catalog plus any
 
 **Returns:** `HostedModelInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L251))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L274))
 
 ### hostedModelInfo
 
@@ -403,7 +424,7 @@ Metadata for one hosted model by name, or null if the name is unknown or
 
 **Returns:** `HostedModelInfo | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L259))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L282))
 
 ### modelSupportsInput
 
@@ -425,7 +446,7 @@ answer means the catalog has no information; it does not prove incompatibility.
 
 **Returns:** `boolean | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L273))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L296))
 
 ### loadModelData
 
@@ -452,4 +473,4 @@ for this file, not the accumulated catalog.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L299))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L322))

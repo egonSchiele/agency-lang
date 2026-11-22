@@ -16,7 +16,7 @@ import type { Clock } from "../clock.js";
 import { defaultHost } from "#default-host";
 import { requireCapabilities, withClock, type Host } from "../../host/host.js";
 import { resolvePolicyDirs } from "../policyDirs.js";
-import type { PolicyDirs } from "../policy.js";
+import type { Policy, PolicyDirs } from "../policy.js";
 import { DEFAULT_MAX_CALL_DEPTH } from "../callDepth.js";
 import { InvocationUsageMeter } from "../invocationUsage.js";
 import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
@@ -132,6 +132,13 @@ export class RuntimeContext<T> {
    *  here so the matcher reads no file while an interrupt is answered.
    *  NOT serialized; copied in `createExecutionContext` like `host`. */
   policyDirs: PolicyDirs;
+  /** The policy the run's root handler answers with, set by
+   *  `installRunPolicyHandler` on a fresh run and again on every resume,
+   *  or null when the run has none. Read by `runPolicy()` in std::policy,
+   *  so a stdlib function can ask whether a rule decides a question before
+   *  raising it. NOT serialized; set in `createExecutionContext` like
+   *  `policyDirs`. */
+  runPolicy: Policy | null;
   /** The time source for guards: the host's clock. Real by default; a
    *  FakeClock only when a test opts in. */
   get clock(): Clock {
@@ -385,6 +392,7 @@ export class RuntimeContext<T> {
     const host = args.host ?? defaultHost();
     this.host = args.clock ? withClock(host, args.clock) : host;
     this.policyDirs = resolvePolicyDirs(this.host);
+    this.runPolicy = null;
     const statelogConfig = {
       ...args.statelogConfig,
       // Explicit > env > minted. The env var lets a harness give an entire
@@ -582,6 +590,8 @@ export class RuntimeContext<T> {
     // Resolved again for this run: the agent home may have been created, or
     // the variable that names it changed, since the global context was built.
     execCtx.policyDirs = resolvePolicyDirs(execCtx.host);
+    // Set by installRunPolicyHandler when the run has a policy.
+    execCtx.runPolicy = null;
     execCtx.handlers = [];
     execCtx.callbacks = {};
     execCtx.topLevelCallbacks = [];

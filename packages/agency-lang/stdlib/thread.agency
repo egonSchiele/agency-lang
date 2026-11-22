@@ -454,6 +454,25 @@ export def lastReply(): Reply | null {
   return _lastReply()
 }
 
+/** For a decision call whose annotation is a union of literals, such as
+`const route: Route = llm(...)`: how sure the model was of the label it
+picked. Read it right after the call, before anything else adds a reply. */
+export def lastChoiceConfidence(): number | null {
+  """
+  Return the confidence of the last reply's choice answer, or null when the
+  last reply has no choice answer with a confidence.
+  """
+  const reply = lastReply()
+  if (reply == null || reply.answers == null) {
+    return null
+  }
+  const answer = reply.answers["answer"]
+  if (answer == null || answer.type != "choice" || answer.confidence == null) {
+    return null
+  }
+  return answer.confidence
+}
+
 /** The structured detail on a tripped guard's failure. It is the failure's
   `data`; the failure's message is a sentence naming the guard and its
   budget. */

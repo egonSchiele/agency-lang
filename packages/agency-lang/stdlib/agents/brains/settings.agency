@@ -3,6 +3,7 @@
   share, and the model options built from them. `agencyAgent` in
   `std::agents/agency` builds the record from its parameters.
 */
+import { modelOptions } from "std::llm"
 
 /** What a brain and its subagent wrappers need to know about one call. An
   empty model or provider means the ambient one, which `setModel` or
@@ -22,6 +23,10 @@ export type AgentSettings = {
   // the researcher. "" means no routing.
   routerModel: string;
   routerProvider: string;
+  // The decision model that may refuse a broad shell line too complex to
+  // review (commandJudge in std::safeBash). "" means no judge.
+  judgeModel: string;
+  judgeProvider: string;
   // Tools added to the coder's and the Agency coder's own.
   coderTools: any[]
 }
@@ -32,28 +37,6 @@ export type ModelChoice = {
   provider: string
 }
 
-export def modelOptions(model: string, provider: string): any {
-  """
-  Return the `llm()` options that pick `model` and `provider`, or no
-  options when `model` is empty, so the ambient model stays in place. An
-  empty `provider` is left out, so the configured provider stays in place.
-
-  @param model - The model name, or "" for the ambient model
-  @param provider - The model's provider, or "" for the configured one
-  """
-  if (model == "") {
-    return {}
-  }
-  if (provider == "") {
-    return {
-      model: model
-    }
-  }
-  return {
-    model: model,
-    provider: provider
-  }
-}
 
 export def reasoningChoice(settings: AgentSettings): ModelChoice {
   """
@@ -72,6 +55,32 @@ export def reasoningChoice(settings: AgentSettings): ModelChoice {
     model: settings.reasoningModel,
     provider: settings.reasoningProvider
   }
+}
+
+export def commandJudgeFor(model: string, provider: string): ModelChoice | null {
+  """
+  Return the judge for broad shell lines, or null when no judge model is
+  set, which keeps every broad line asking as before.
+
+  @param model - The judge model, or "" for none
+  @param provider - The judge model's provider
+  """
+  if (model == "") {
+    return null
+  }
+  return {
+    model: model,
+    provider: provider
+  }
+}
+
+export def commandJudgeOf(settings: AgentSettings): ModelChoice | null {
+  """
+  Return the call's judge for broad shell lines, or null when it has none.
+
+  @param settings - The call's settings
+  """
+  return commandJudgeFor(settings.judgeModel, settings.judgeProvider)
 }
 
 export def reasoningOptions(settings: AgentSettings): any {

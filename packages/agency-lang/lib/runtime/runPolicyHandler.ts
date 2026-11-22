@@ -113,12 +113,16 @@ export function installRunPolicyHandler(
     pushHandler: (h: HandlerFn, liveGuardIds: string[], stack: null) => void;
     host: Host;
     policyDirs: PolicyDirs;
+    runPolicy: Policy | null;
   },
   policy?: Policy,
 ): void {
   if (isIpcMode()) return;
   const effective = policy ?? loadEnvPolicy(execCtx.host.settings);
   if (!effective) return;
+  // Kept on the run so a stdlib function can check a question against the
+  // policy that will answer it (`runPolicy()` in std::policy).
+  execCtx.runPolicy = effective;
   // A person can supply a value at the terminal prompt or through `agency
   // attach`, so in both modes an approve rule leaves a value raise alone.
   const someoneCanAnswer = unansweredMode(execCtx.host.settings) !== "reject";

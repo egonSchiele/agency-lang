@@ -293,7 +293,7 @@ export type GuardFailureData = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L460))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L479))
 
 ### ThreadMessage
 
@@ -307,7 +307,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L480))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L499))
 
 ### ThreadInfo
 
@@ -326,7 +326,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L486))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L505))
 
 ## Effects
 
@@ -704,6 +704,23 @@ Messages added by `assistantMessage` also count as replies.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L449))
 
+### lastChoiceConfidence
+
+```ts
+lastChoiceConfidence(): number | null
+```
+
+Return the confidence of the last reply's choice answer, or null when the
+  last reply has no choice answer with a confidence.
+
+For a decision call whose annotation is a union of literals, such as
+`const route: Route = llm(...)`: how sure the model was of the label it
+picked. Read it right after the call, before anything else adds a reply.
+
+**Returns:** `number | null`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L460))
+
 ### listThreads
 
 ```ts
@@ -726,7 +743,7 @@ cached summary, the label, or an empty string without another LLM call.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L551))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L570))
 
 ### sessionThreadId
 
@@ -745,7 +762,7 @@ Slug-form id of the thread that `thread(session: name)` resumes (e.g.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L598))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L617))
 
 ### currentThreadId
 
@@ -760,7 +777,7 @@ later with `thread(continue: id)`.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L608))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L627))
 
 ### getThread
 
@@ -783,4 +800,4 @@ are rendered as text, and attachment payloads become placeholders.
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L617))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L636))

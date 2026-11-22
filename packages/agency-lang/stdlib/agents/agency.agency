@@ -109,6 +109,8 @@ export def agencyAgent(
   reasoningProvider: string = "",
   routerModel: string = "",
   routerProvider: string = "",
+  judgeModel: string = "",
+  judgeProvider: string = "",
   extraTools: AgentExtraTools = {},
   attachments: Attachment[] = [],
 ): Result<string> {
@@ -129,6 +131,8 @@ export def agencyAgent(
   @param reasoningProvider - The reasoning model's provider
   @param routerModel - A small model that sends a plain message straight to the coder or the researcher, or "" for no routing
   @param routerProvider - The router model's provider
+  @param judgeModel - A decision model that may refuse a shell command too complex to review, or "" for none
+  @param judgeProvider - The judge model's provider
   @param extraTools - Extra tools: `main` for the model that answers, `coder` for the coders
   @param attachments - Images or files sent with the task
   """
@@ -140,6 +144,8 @@ export def agencyAgent(
     reasoningProvider: reasoningProvider,
     routerModel: routerModel,
     routerProvider: routerProvider,
+    judgeModel: judgeModel,
+    judgeProvider: judgeProvider,
     coderTools: extraTools.coder ?? []
   }
   const mainTools = extraTools.main ?? []

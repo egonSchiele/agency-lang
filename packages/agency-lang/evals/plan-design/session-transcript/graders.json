@@ -1,0 +1,55 @@
+[
+  {
+    "kind": "checklist",
+    "name": "is-a-plan",
+    "points": [
+      "The output proposes one concrete change and names the files it edits.",
+      "The output says where a reopened session's transcript comes from after the change."
+    ],
+    "context": "notes.md",
+    "mustPass": true
+  },
+  {
+    "kind": "checklist",
+    "name": "no-marks",
+    "points": [
+      "The plan does not tell untyped text apart by its wording: it puts no prefix, tag, or sentinel in a message's text, and the reader matches no pattern in the text.",
+      "The plan adds no key, flag, or label to a message to say whether it is shown.",
+      "No rule in the plan decides whether a message is shown from where or when it was added, such as during a handoff."
+    ],
+    "context": "notes.md"
+  },
+  {
+    "kind": "checklist",
+    "name": "model-input-unchanged",
+    "points": [
+      "The plan changes no file under lib/runtime/.",
+      "The plan adds no parameter or option to a public stdlib function such as userMessage or llm.",
+      "The model is sent the same messages with the same text as before the change: nothing on the conversation thread is split, moved, added, or removed."
+    ],
+    "context": "notes.md"
+  },
+  {
+    "kind": "checklist",
+    "name": "own-record",
+    "points": [
+      "The transcript is a record written as each turn happens, by code that receives the text the user typed. It is not rebuilt from the conversation thread.",
+      "The record is saved with the run's checkpoint, so a cancelled turn's entry goes away with the turn and a forked session gets its own copy.",
+      "The plan makes sure the recorded text is exactly what the user typed: it finds the cancel note the driver joins onto the message and keeps that note out of the record.",
+      "The code that reads the record out of a saved session does not depend on a source file's path or on a variable name in another file."
+    ],
+    "context": "notes.md"
+  },
+  {
+    "kind": "checklist",
+    "name": "covers-the-cases",
+    "points": [
+      "The plan names slash commands as a case, and after the change a reopened session shows the /command the user typed, not its expanded prompt.",
+      "The plan names the compaction summary as a case, and after the change a reopened session does not show the summary as something the user said.",
+      "The plan names a subagent's messages as a case, and after the change a reopened session shows the turn's final reply, not the subagent's messages as replies.",
+      "The plan says what a session saved before the change shows when it is reopened, and that session still shows its earlier turns.",
+      "The plan says what happens to the callers of the transcript reader: either they need no change, or it names each caller it updates."
+    ],
+    "context": "notes.md"
+  }
+]

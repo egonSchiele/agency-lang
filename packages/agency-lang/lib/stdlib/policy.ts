@@ -29,7 +29,7 @@ export {
   allAlwaysScopes as _allAlwaysScopes,
 } from "@/runtime/alwaysScope.js";
 export { describeScope as _describeScope } from "@/runtime/alwaysChoices.js";
-import type { Policy } from "@/runtime/policy.js";
+import type { MatchPattern, Policy } from "@/runtime/policy.js";
 import {
   buildScopedMatch,
   decisionForOfferedKey,
@@ -69,7 +69,7 @@ function runPromptContext(fields: Record<string, ScopedField[]>): PromptContext 
 export function _buildScopedMatch(
   intr: Intr,
   fields: Record<string, ScopedField[]>,
-): Record<string, string> {
+): Record<string, MatchPattern> {
   return buildScopedMatch(intr, runPromptContext(fields));
 }
 

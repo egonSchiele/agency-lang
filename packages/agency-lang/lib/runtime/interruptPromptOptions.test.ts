@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ScopedField } from "./alwaysScope.js";
 import { builtinEffectSets } from "./effectSets.js";
 import {
+  buildScopedMatch,
   decisionForOfferedKey,
   folderWithoutAsking,
   promptOptions,
@@ -11,7 +12,7 @@ import {
   type ResolvedPromptOption,
 } from "./interruptPromptOptions.js";
 import { approvalQuestion, parsePromptAnswer, type Intr } from "./interruptPrompts.js";
-import type { Policy } from "./policy.js";
+import { MAX_PATTERN_LENGTH, type Policy } from "./policy.js";
 
 const under = (field: string): ScopedField => ({ field, matchSubpaths: true });
 const exact = (field: string): ScopedField => ({ field, matchSubpaths: false });
@@ -270,6 +271,66 @@ describe("folderWithoutAsking", () => {
     expect(folderWithoutAsking(inEtc, "approve-always-here", context)).toBe("/etc");
     // No folder to widen to.
     expect(folderWithoutAsking(gitStatus, "approve-always-here", context)).toBe("");
+  });
+});
+
+describe("buildScopedMatch", () => {
+  const prefix = (field: string): ScopedField => ({
+    field,
+    matchSubpaths: false,
+    matchPrefix: true,
+  });
+  const listContext: PromptContext = {
+    ...context,
+    registered: { "test::run": [exact("command"), prefix("args"), under("cwd")] },
+  };
+  const run = (data: Record<string, unknown>) =>
+    interrupt("test::run", { command: "pnpm", cwd: "/x", ...data });
+  const build = run({ args: ["run", "build"] });
+
+  it("pins the whole list when no choice is given", () => {
+    expect(buildScopedMatch(build, listContext)).toEqual({
+      command: "pnpm",
+      args: ["run", "build"],
+      cwd: "{/x,/x/**}",
+    });
+  });
+
+  it("pins the leading items the choice keeps, then the rest marker", () => {
+    expect(buildScopedMatch(build, listContext, "1").args).toEqual(["run", "**"]);
+  });
+
+  it("returns {} for a choice this list does not offer", () => {
+    expect(buildScopedMatch(build, listContext, "0")).toEqual({});
+    expect(buildScopedMatch(build, listContext, "9")).toEqual({});
+  });
+
+  it("returns {} when the list is missing or is not a list", () => {
+    expect(buildScopedMatch(run({}), listContext)).toEqual({});
+    expect(buildScopedMatch(run({ args: "run build" }), listContext)).toEqual({});
+  });
+
+  it("pins an empty list as an empty list", () => {
+    expect(buildScopedMatch(run({ args: [] }), listContext).args).toEqual([]);
+  });
+
+  it("escapes the folder it pins below", () => {
+    expect(buildScopedMatch(run({ args: [], cwd: "/a{b}" }), listContext).cwd).toBe(
+      "{/a\\{b\\},/a\\{b\\}/**}",
+    );
+  });
+
+  it("pins a list under plain @always as a list of escaped items", () => {
+    const exactList: PromptContext = { ...context, registered: { "test::run": [exact("args")] } };
+    expect(buildScopedMatch(run({ args: ["a", "b*"] }), exactList)).toEqual({
+      args: ["a", "b\\*"],
+    });
+  });
+
+  it("returns {} when a pinned value is longer than a pattern may be", () => {
+    const long = "a".repeat(MAX_PATTERN_LENGTH + 1);
+    expect(buildScopedMatch(run({ args: ["-c", long] }), listContext)).toEqual({});
+    expect(buildScopedMatch(run({ args: [], command: long }), listContext)).toEqual({});
   });
 });
 

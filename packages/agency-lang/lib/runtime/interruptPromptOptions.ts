@@ -13,6 +13,7 @@
 //
 // See docs/dev/agents/approval-policies.md.
 import { describeScope, folderChoices, inSharedApprovalSet } from "./alwaysChoices.js";
+import { EXACT_PREFIX, prefixChoices, prefixPattern } from "./alwaysChoices.js";
 import { SHARED_APPROVAL_SETS, sharedApprovalSet } from "./alwaysChoices.js";
 import type { FolderChoice } from "./alwaysChoices.js";
 import type { ScopedField } from "./alwaysScope.js";
@@ -22,8 +23,8 @@ import type { PromptDecision, PromptOptionRow } from "./interruptPromptTable.js"
 import type { Intr } from "./interruptPrompts.js";
 import { approve, reject } from "./interruptResponse.js";
 import type { InterruptResponse } from "./interruptResponse.js";
-import { checkPolicy, escapeGlob } from "./policy.js";
-import type { Policy, PolicyDirs, PolicyRule } from "./policy.js";
+import { checkPolicy, escapeGlob, MAX_PATTERN_LENGTH } from "./policy.js";
+import type { MatchPattern, Policy, PolicyDirs, PolicyRule } from "./policy.js";
 import { insertApproveRule, insertRejectRule } from "./policyUpdate.js";
 import { failure, success } from "./result.js";
 import type { ResultFailure } from "./result.js";
@@ -108,21 +109,58 @@ export function scopedFieldsFor(effect: string, context: PromptContext): ScopedF
 }
 
 /** Glob patterns that pin an interrupt's scoped field values, as a rule's
- *  `match`. `{}` when the effect has no scope or a scoped value is missing:
- *  an empty `match` applies to every interrupt of the effect, so a caller
- *  must never make a rule from one. */
-export function buildScopedMatch(intr: Intr, context: PromptContext): Record<string, string> {
+ *  `match`. `prefix` is the id of the `PrefixChoice` picked for a field
+ *  tagged `@alwaysPrefix`; it defaults to the whole list. `{}` when the
+ *  effect has no scope, a scoped value is missing or has the wrong shape,
+ *  `prefix` is not a choice for the list, or a pattern would be longer
+ *  than a rule may hold: an empty `match` applies to every interrupt of
+ *  the effect, so a caller must never make a rule from one. */
+export function buildScopedMatch(
+  intr: Intr,
+  context: PromptContext,
+  prefix: string = EXACT_PREFIX,
+): Record<string, MatchPattern> {
   const data: Record<string, unknown> = intr.data ?? {};
-  const match: Record<string, string> = {};
+  const match: Record<string, MatchPattern> = {};
   for (const spec of scopedFieldsFor(intr.effect, context)) {
-    const value = data[spec.field];
-    if (value == null) {
+    const pattern = fieldPattern(spec, data[spec.field], prefix);
+    if (pattern === null) {
       return {};
     }
-    const literal = escapeGlob(`${value as string}`);
-    match[spec.field] = spec.matchSubpaths ? `{${literal},${literal}/**}` : literal;
+    match[spec.field] = pattern;
   }
   return match;
+}
+
+/** The pattern that pins one field, or null when no rule can pin it. A
+ *  list takes the list branch: a prefix field with the choice picked, and
+ *  a list under plain `@always` with the whole list. */
+function fieldPattern(spec: ScopedField, value: unknown, prefix: string): MatchPattern | null {
+  if (value == null) {
+    return null;
+  }
+  if (spec.matchPrefix === true || Array.isArray(value)) {
+    return listPattern(value, spec.matchPrefix === true ? prefix : EXACT_PREFIX);
+  }
+  const literal = escapeGlob(`${value as string}`);
+  const pattern = spec.matchSubpaths ? `{${literal},${literal}/**}` : literal;
+  return fitsInRule(pattern) ? pattern : null;
+}
+
+function listPattern(value: unknown, prefix: string): string[] | null {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+    return null;
+  }
+  const choice = prefixChoices(value.length).find((one) => one.id === prefix);
+  if (choice === undefined) {
+    return null;
+  }
+  const pattern = prefixPattern(value, choice);
+  return pattern.every(fitsInRule) ? pattern : null;
+}
+
+function fitsInRule(pattern: string): boolean {
+  return pattern.length <= MAX_PATTERN_LENGTH;
 }
 
 /** The interrupt's scope in words, or "" when it has none. */

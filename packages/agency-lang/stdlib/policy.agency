@@ -340,7 +340,7 @@ of the effect. `recordScopedRule` performs that check for you.
 export def buildScopedMatch(
   intr: Record<string, any>,
   fields: ScopedRuleFields = {},
-): Record<string, string> {
+): Record<InterruptDataKey, InterruptDataVal> {
   """
   Build glob patterns that pin an interrupt's scoped field values.
   Return {} if there is no scope or a scoped value is missing.
@@ -375,7 +375,8 @@ export def recordRule(
 Use this for an "always approve when" choice. It prepends an approval,
 so a matching scoped rule takes precedence over existing catch-all rules.
 The input policy remains unchanged. If no scope can be built, it returns
-the input policy without adding a rule.
+the input policy without adding a rule. A field tagged `@alwaysPrefix` is
+pinned whole, which is the narrowest rule the terminal prompt offers.
 */
 export def recordScopedRule(
   policy: Policy,

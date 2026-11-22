@@ -1,6 +1,7 @@
 import path from "#path";
 import { sameScopedFields, type ScopedField } from "./alwaysScope.js";
 import type { EffectSetInfo } from "./effectSets.js";
+import { escapeGlob, REST_OF_LIST } from "./policy.js";
 import { isContained } from "../stdlib/isContained.js";
 
 // What the approval prompt in std::policy offers beyond "approve once":
@@ -22,15 +23,58 @@ export const MAX_FOLDER_CHOICES = 8;
 
 const LAUNCH_DIRECTORY_NOTE = "the launch directory";
 
-/** "dir = /x and below, method = GET". Called only when every field is in
- *  `data`: the prompt offers a scoped answer only then. */
+/** How many choices the list step shows at most. */
+export const MAX_PREFIX_CHOICES = 8;
+
+/** The id of the choice that pins the whole list. */
+export const EXACT_PREFIX = "exact";
+
+/** One width a rule for a list can have. `keep` is how many leading items
+ *  it pins. `rest` is true when any items may follow them. */
+export type PrefixChoice = { id: string; keep: number; rest: boolean };
+
+/** "dir = /x and below, args = run build". A list prints as its items
+ *  joined with spaces, which is the narrowest rule: the whole list. Called
+ *  only when every field is in `data`: the prompt offers a scoped answer
+ *  only then. */
 export function describeScope(fields: ScopedField[], data: Record<string, unknown>): string {
   return fields
     .map((field) => {
-      const pinned = `${field.field} = ${String(data[field.field])}`;
+      const value = data[field.field];
+      const shown = Array.isArray(value) ? value.join(" ") : String(value);
+      const pinned = `${field.field} = ${shown}`;
       return field.matchSubpaths ? `${pinned} and below` : pinned;
     })
     .join(", ");
+}
+
+/** `choices` cut to `max`: the narrowest ones, and the widest. */
+function narrowestAndWidest<T>(choices: T[], max: number): T[] {
+  if (choices.length <= max) {
+    return choices;
+  }
+  return [...choices.slice(0, max - 1), choices[choices.length - 1]];
+}
+
+/** The widths a rule for a list of `itemCount` items can have, narrowest
+ *  first: the whole list, then the first `itemCount` items followed by
+ *  anything, down to the first item followed by anything. There is no
+ *  choice that keeps no items: it would cover the program with any
+ *  arguments, which is broader than any rule the prompt saved before. */
+export function prefixChoices(itemCount: number): PrefixChoice[] {
+  const widths = Array.from({ length: itemCount }, (_, index) => itemCount - index);
+  const all = [
+    { id: EXACT_PREFIX, keep: itemCount, rest: false },
+    ...widths.map((keep) => ({ id: String(keep), keep, rest: true })),
+  ];
+  return narrowestAndWidest(all, MAX_PREFIX_CHOICES);
+}
+
+/** The pattern a choice saves: the kept items, each escaped so it matches
+ *  only itself, then REST_OF_LIST when `rest` is true. */
+export function prefixPattern(items: string[], choice: PrefixChoice): string[] {
+  const kept = items.slice(0, choice.keep).map(escapeGlob);
+  return choice.rest ? [...kept, REST_OF_LIST] : kept;
 }
 
 export type FolderChoice = { path: string; note: string };
@@ -79,10 +123,7 @@ export function folderChoices(value: string, dirs: FolderDirs): FolderChoice[] {
   const allowed = reach
     .map((folder, index) => ({ path: folder, note: index === launch ? LAUNCH_DIRECTORY_NOTE : "" }))
     .filter((choice) => !tooBroad(choice.path, dirs));
-  if (allowed.length <= MAX_FOLDER_CHOICES) {
-    return allowed;
-  }
-  return [...allowed.slice(0, MAX_FOLDER_CHOICES - 1), allowed[allowed.length - 1]];
+  return narrowestAndWidest(allowed, MAX_FOLDER_CHOICES);
 }
 
 /**

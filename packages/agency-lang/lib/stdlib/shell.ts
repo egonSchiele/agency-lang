@@ -11,7 +11,7 @@ import type { ThreadStore } from "../runtime/state/threadStore.js";
 import { abortableShell, abortableSpawn, AbortableSpawnOptions, SpawnResult } from "./abortable.js";
 import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
-import { resolveDir } from "./resolveDir.js";
+import { resolveCwdPath, resolveDir } from "./resolveDir.js";
 import { expandTilde, resolveBashPath, type TildeMode } from "./prepareContainedPath.js";
 import {
   type GitignoreFile,
@@ -164,6 +164,14 @@ export async function __internal_exec(
   options?: ExecOptions,
 ): Promise<SpawnResult> {
   return execImpl(ctx, stack, command, args, cwd, timeout, stdin, options);
+}
+
+/** The folder `exec` runs a command in, as an absolute path: an empty
+ *  `cwd` is the run's folder, and a relative one is resolved against it,
+ *  the same way `resolveSpawnCwd` resolves it for the spawn. It reads no
+ *  file, because the `std::exec` question that shows it comes first. */
+export function _execCwd(cwd: string): string {
+  return resolveCwdPath(currentHost(), cwd);
 }
 
 /** ALS-reading replacement for `__internal_exec`. */

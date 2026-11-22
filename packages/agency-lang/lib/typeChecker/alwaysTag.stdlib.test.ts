@@ -38,6 +38,9 @@ function effectDeclarations(file: string): EffectDeclaration[] {
 }
 
 function describeField(field: ScopedField): string {
+  if (field.matchPrefix === true) {
+    return `${field.field}…`;
+  }
   return field.matchSubpaths ? `${field.field}/**` : field.field;
 }
 
@@ -82,7 +85,9 @@ const EXPECTED: Record<string, string[]> = {
   "std::move": ["src/**", "dest/**"],
   "std::applyPatch": [],
   "std::llm::registerProvider": ["path"],
-  "std::exec": ["command", "subcommand"],
+  // The program, as much of the arguments as the person picks, and the
+  // folder the command runs in.
+  "std::exec": ["command", "args…", "cwd/**"],
   "std::bash": ["command", "cwd"],
   "std::bash::readonly": ["command", "cwd"],
   "std::run": [],

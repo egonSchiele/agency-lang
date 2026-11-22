@@ -5,11 +5,13 @@ import {
   type Policy,
   type PolicyRule,
   escapeGlob,
+  REST_OF_LIST,
 } from "./policy.js";
 
 // Read-only `agency` subcommands the code agent runs via its exec-based
-// `agencyCli` tool. Matched on command + subcommand (no shell chaining);
-// other subcommands (run, compile, ...) still prompt.
+// `agencyCli` tool. Matched on the program and its first argument, with
+// any arguments after it (no shell chaining); other subcommands (run,
+// compile, ...) still prompt.
 const AGENCY_SAFE_SUBCOMMANDS = [
   "parse",
   "ast",
@@ -26,7 +28,7 @@ const AGENCY_SAFE_SUBCOMMANDS = [
 
 function agencyExecApproveRules(): PolicyRule[] {
   return AGENCY_SAFE_SUBCOMMANDS.map((sub) => ({
-    match: { command: "agency", subcommand: sub },
+    match: { command: "agency", args: [sub, REST_OF_LIST] },
     action: "approve" as const,
   }));
 }

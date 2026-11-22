@@ -338,7 +338,6 @@ export def globEffect(payload: GlobPayload): Effect {
 export type ExecPayload = {
   command: string;
   args: string[];
-  subcommand: string;
   cwd: string;
   timeout: number;
   stdin: string

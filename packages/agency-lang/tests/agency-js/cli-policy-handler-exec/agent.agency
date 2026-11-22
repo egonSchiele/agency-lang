@@ -1,15 +1,5 @@
-import { cliPolicyHandler, flushPolicy, ScopedRuleFields } from "std::policy"
+import { cliPolicyHandler, flushPolicy } from "std::policy"
 import { exec } from "std::shell"
-
-// The scope std::exec is moving to: the program, how much of the
-// arguments, and the folder.
-const FIELDS: ScopedRuleFields = {
-  "std::exec": [
-    { field: "command", matchSubpaths: false },
-    { field: "args", matchSubpaths: false, matchPrefix: true },
-    { field: "cwd", matchSubpaths: true }
-  ]
-}
 
 def outcome(name: string, failed: boolean): string {
   if (failed) {
@@ -25,7 +15,6 @@ def outcome(name: string, failed: boolean): string {
 node twoCommands(args: { policyFile: string, dir: string, answersOnly: boolean }): string[] {
   const handler = cliPolicyHandler(
     file: args.policyFile,
-    fields: FIELDS,
     policy: {},
     answersOnly: args.answersOnly,
   )
@@ -42,7 +31,7 @@ node twoCommands(args: { policyFile: string, dir: string, answersOnly: boolean }
 
 // One command, answered at the prompts the test scripts.
 node oneCommand(args: { policyFile: string, dir: string }): string[] {
-  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS, policy: {})
+  const handler = cliPolicyHandler(file: args.policyFile, policy: {})
   let outcomes: string[] = []
   handle {
     const first = exec("echo", ["run", "build"], cwd: args.dir)

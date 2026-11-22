@@ -1751,9 +1751,9 @@
     },
     {
       "nodeName": "execPayloadFields",
-      "description": "The std::exec payload carries the exec tool's fields: the program, its arguments as written (a flag as typed, a glob unexpanded), the first argument as the subcommand, the resolved cwd, no timeout, and no stdin.",
+      "description": "The std::exec payload carries the exec tool's fields: the program, its arguments as written (a flag as typed, a glob unexpanded), the resolved cwd, no timeout, and no stdin.",
       "input": "",
-      "expectedOutput": "[[[\"pnpm\",[\"run\",\"build\",\"--filter=web\"],\"run\",true,0,\"\"]],[[\"make\",[],\"\",true,0,\"\"]],[[\"pytest\",[\"tests/*.py\",\"-k\",\"fast\"],\"tests/*.py\",true,0,\"\"]]]",
+      "expectedOutput": "[[[\"pnpm\",[\"run\",\"build\",\"--filter=web\"],true,0,\"\"]],[[\"make\",[],true,0,\"\"]],[[\"pytest\",[\"tests/*.py\",\"-k\",\"fast\"],true,0,\"\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -1790,7 +1790,7 @@
     },
     {
       "nodeName": "programUnderASavedRuleRuns",
-      "description": "The rule always approve when saves for a program, keyed on command and subcommand, also runs that program's bash spelling with no prompt.",
+      "description": "A rule on a program and its arguments, like the one always approve when saves, also runs that program's bash spelling with no prompt.",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

@@ -1,0 +1,30 @@
+// The folder the exec tool's std::exec question names is the folder the
+// command runs in, as an absolute path, so a saved rule can pin it. Each
+// handler rejects with the folder it was shown, so no process runs.
+import { exec } from "std::shell"
+import { cwd } from "std::system"
+
+def reason(result: any): string {
+  if (result is failure(problem)) {
+    return "${problem}"
+  }
+  return "succeeded"
+}
+
+node noCwdNamesTheRunFolder(): boolean {
+  handle {
+    const result = exec("pwd")
+    return reason(result) == cwd()
+  } with (intr) {
+    return reject("${intr.data.cwd}")
+  }
+}
+
+node relativeCwdIsNamedAbsolute(): boolean {
+  handle {
+    const result = exec("pwd", cwd: "sub")
+    return reason(result) == "${cwd()}/sub"
+  } with (intr) {
+    return reject("${intr.data.cwd}")
+  }
+}

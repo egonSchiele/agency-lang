@@ -129,7 +129,8 @@ export type InterruptEffect = string
 
  A rule's globs skip path segments that start with a period: `/x/**` does
  not match `/x/.cache/y`. Set `matchDotFolders: true` to let them match.
- The approval prompt sets it on the read rules it saves.
+ The approval prompt sets it on a rule whose folder came from its folder
+ step.
  */
 export type PolicyRule = {
   match?: Record<InterruptDataKey, InterruptDataVal>;
@@ -228,8 +229,8 @@ export type ScopedField = {
  const FIELDS: ScopedRuleFields = {
    "std::read":  [{ field: "dir", matchSubpaths: true }],
    "std::exec":  [
-     { field: "command",    matchSubpaths: false },
-     { field: "subcommand", matchSubpaths: false },
+     { field: "command", matchSubpaths: false },
+     { field: "args",    matchSubpaths: false, matchPrefix: true },
    ],
  }
  ```

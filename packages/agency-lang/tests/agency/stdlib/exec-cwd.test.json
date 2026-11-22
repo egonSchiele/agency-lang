@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "noCwdNamesTheRunFolder",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "exec with no cwd names the run's folder in its std::exec question"
+    },
+    {
+      "nodeName": "relativeCwdIsNamedAbsolute",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "exec with a relative cwd names the absolute folder it resolves to"
+    }
+  ]
+}

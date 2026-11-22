@@ -2975,7 +2975,7 @@ def payloadsNamed(source: string, name: string): any[] {
 }
 
 def execFields(source: string): any {
-  return [[p.command, p.args, p.subcommand, p.cwd == FIXTURES, p.timeout, p.stdin] for p in payloadsNamed(source, "std::exec")]
+  return [[p.command, p.args, p.cwd == FIXTURES, p.timeout, p.stdin] for p in payloadsNamed(source, "std::exec")]
 }
 
 node execPayloadFields() {
@@ -3007,10 +3007,11 @@ node programUnderRecommendedIsUndecided() {
   return "NO EXEC EFFECT"
 }
 
-/** The rule "always approve when" saves for `node --version`. */
+/** A rule like the one "always approve when" saves for `node --version`,
+ with no folder pinned. */
 const NODE_VERSION_POLICY = {
   "std::exec": [
-    { "match": { "command": "node", "subcommand": "--version" }, "action": "approve" }
+    { "match": { "command": "node", "args": ["--version"] }, "action": "approve" }
   ]
 }
 
@@ -3666,11 +3667,11 @@ def refusalOf(result: Result<any>): string {
   return "ACCEPTED"
 }
 
-/** A plan's outcome, and the program and subcommand of each std::exec. */
+/** A plan's outcome, and the program and first argument of each std::exec. */
 def ghExecRow(source: string): any {
   const plan = planFor(source, "/repo")
   const effects: any[] = plan.effects
-  return [outcomeOf(plan), [[effect.name, effect.payload.command, effect.payload.subcommand] for effect in effects]]
+  return [outcomeOf(plan), [[effect.name, effect.payload.command, effect.payload.args[0]] for effect in effects]]
 }
 
 node ghUnownedStaysExec() {

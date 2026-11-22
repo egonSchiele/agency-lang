@@ -10,17 +10,25 @@ import {
   recommendedAutoApprovePolicy,
 } from "std::policy"
 
-def execIntr(subcommand: string): any {
-  // Mirrors the shape `exec("agency", [subcommand, ...])` raises:
-  // effect std::exec with command + subcommand (subcommand = args[0]).
+def execIntr(sub: string): any {
+  // Mirrors the shape `exec("agency", [sub, "x.agency"])` raises. The rules
+  // match the first argument and let any arguments follow it.
   return {
     effect: "std::exec",
     data: {
       command: "agency",
-      subcommand: subcommand,
-      args: [subcommand]
+      args: [sub, "x.agency"],
+      cwd: "/proj"
     }
   }
+}
+
+node recommendedApprovesParseWithAFile(): boolean {
+  return checkPolicy(recommendedAutoApprovePolicy, execIntr("parse")).type == "approve"
+}
+
+node recommendedDoesNotApproveRun(): boolean {
+  return checkPolicy(recommendedAutoApprovePolicy, execIntr("run")).type != "approve"
 }
 
 node minimalApprovesAst(): boolean {

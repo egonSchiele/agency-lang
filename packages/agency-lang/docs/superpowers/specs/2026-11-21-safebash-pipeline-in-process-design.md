@@ -1,209 +1,201 @@
-# safeBash: run a pipeline in process (ADI-261)
+# safeBash: one rule for what runs in process (ADI-261, ADI-360)
 
 Status: draft, waiting for the owner's yes. Nothing is built.
 
-## What this is for
+The first draft of this spec proposed a rule for pipelines only: a first
+stage from one list, later stages from a second list. The owner turned
+that down on 2026-11-21, because safeBash collects special cases quickly
+and each one makes the next harder. This draft replaces it with one
+general rule.
 
-`safeBash` runs a lone `grep` or a lone `cat`, `head`, or `tail` as the
-stdlib tool, with no shell. A pipeline never does. This line asks
-`std::grep` and then starts bash to run two real programs:
+## The problem
+
+safeBash can run five commands itself, with no shell: `echo`, `grep`,
+`cat`, `head`, and `tail`. Whether it does depends on where the command
+sits in the line, and each position has its own code:
+
+| Line | Runs | Why |
+| --- | --- | --- |
+| `cat a.txt` | in process | the lone-command planner (`tryShellFreeStep`) |
+| `echo ---; cat a.txt` | in process | the chain planner (`tryShellFreeChain`) |
+| `pnpm build; cat a.txt` | bash | a line is in process only when every step is |
+| `cat a.txt \| head -3` | bash | no planner takes a pipeline |
+| `echo hi > out.txt` | in process | a "write", which exists only for `echo` |
+| `grep -rn x lib > out.txt` | bash | a redirect is refused for every other command |
+
+So the same `cat a.txt` is planned by two functions (`tryShellFreeStep`
+and `classify`), and which one wins depends on its neighbours.
+
+The same command can also ask a different question in each position. I
+ran both through `planFor`:
 
 ```
-grep -rn planFor lib | head -20
+grep -rn planFor stdlib           std::grep { flags: "u", maxResults: 1000 }
+true && grep -rn planFor stdlib   std::grep { flags: "",  maxResults: 0 }
 ```
 
-This design lets that line run with no shell: the stdlib grep runs, and
-safeBash keeps the first 20 lines of its text itself.
+Both payloads are true. The first describes the stdlib search, which
+stops at 1000 matches. The second describes real grep. But it is one
+more place where position decides.
 
-It is the first step of the direction set on 2026-11-21: safeBash should
-run an Agency function for every command it can. A step that runs in
-process needs no prediction and no check before it runs, because the
-stdlib tool checks its path when it opens it.
+## The rule
 
-**It saves no prompt.** Every line it touches is narrow today and asks
-the same question afterwards.
+A command is a function. It takes its arguments and some input text, and
+it returns output text and an exit status. Three things about it are
+separate.
 
-## What I measured first
+1. **The command.** One table lists the commands safeBash runs itself.
+   An entry says which arguments it accepts and how to run them. A
+   command whose arguments the entry does not accept runs through bash,
+   as it does today.
+2. **Where its input comes from.** A file it names, or the stage before
+   it in a pipeline. `head -3 a.txt` and `... | head -3` are the same
+   entry with a different input.
+3. **Where its output goes.** To the model, to the next stage, or to a
+   file.
+
+Two rules say where a command may sit. Neither names a command.
+
+- **A pipeline runs in process when every stage is in the table.**
+  Otherwise the whole pipeline runs through bash. The reason is that
+  bash runs the stages at the same time: in `git log | head -5`, bash
+  stops `git` once `head` has five lines. Handing over finished text
+  cannot do that, so `yes | head` would never end.
+- **Each step of a line decides for itself.** The step runner
+  (`runSteps`) already takes a line one step at a time and carries the
+  folder and the exit status between steps. A step is one simple
+  command, one pipeline, or one group.
+
+The table above then reads:
+
+| Line | Today | After |
+| --- | --- | --- |
+| `cat a.txt` | in process | in process |
+| `echo ---; cat a.txt` | in process | in process |
+| `pnpm build; cat a.txt` | bash | `pnpm build` in bash, `cat` in process |
+| `cat a.txt \| head -3` | bash | in process |
+| `grep -rn x lib \| grep -v test \| head` | bash | in process |
+| `git log --oneline \| head -5` | bash | bash, because `git` is not in the table |
+| `echo hi > out.txt` | in process | in process |
+| `grep -rn x lib > out.txt` | bash | in process |
+
+After this, adding a command is one entry in the table. It then works
+alone, in a pipeline, with a redirect, and in a mixed line, with no
+further rule.
+
+## What the logs say this reaches
 
 I collected every shell line the agent ran from the five logs
 (`~/.agency-agent/perry-log.jsonl`, `~/perry/log.jsonl`, and the
 checkout's three `log*.jsonl`), and the corpus in
-`tests/agency/safeBash-corpus.json`. Then I counted the pipelines in
-them and the command in each stage.
+`tests/agency/safeBash-corpus.json`: 89 distinct logged lines and 128
+corpus lines, holding 76 pipelines.
 
-| | Logs | Corpus |
-| --- | --- | --- |
-| Distinct lines | 89 | 128 |
-| Pipelines in them | 50 | 26 |
+- **After a pipe:** `head` 50 times, `grep` 24, `tail` 6. Every other
+  command together appears 13 times. All three are in the table already,
+  so pipelines need no new entry.
+- **Before a pipe:** `grep` 18 times, `find` and `ls` 18, `git` 14,
+  `cat` and `head` 9. So `ls` and `find` are the entries to add next.
+- **Position:** only 9 of the 29 distinct logged lines with a pipe are a
+  lone pipeline. The rest sit in longer lines, usually searches joined
+  by `; echo ---;`, which is why "each step decides for itself" matters
+  as much as pipelines do.
 
-The stages after the first `|`:
+This work saves no prompt. Each line it touches is narrow today.
 
-| Stage | Logs | Corpus |
-| --- | --- | --- |
-| `head` | 36 | 14 |
-| `grep` | 21 | 3 |
-| `tail` | 1 | 5 |
-| `wc` | 0 | 2 |
-| `sort`, `uniq`, `sed`, `awk`, `tee` | 2 | 4 |
-| a program (`tv`) | 3 | 0 |
+## How the code changes
 
-The first stage:
+The useful parts exist. The readers `readGrep` and `readFileVerb` already
+return either the files a command names or `{ kind: "stdin" }`, and both
+planners already call them.
 
-| First stage | Logs | Corpus |
-| --- | --- | --- |
-| `grep` | 10 | 8 |
-| `git` | 10 | 4 |
-| `find` | 7 | 3 |
-| `ls` | 7 | 1 |
-| `cat`, `head` | 5 | 4 |
-| a program or another tool | 11 | 6 |
+- **One classifier.** `classify` gives each simple command its effects,
+  as now, and also its in-process execution when the table accepts it.
+  `runStepOf` stores that in `RunStep.inProcess`, which exists and is
+  null for every step of a narrow line today.
+- **Three functions go away:** the lone-command call at the top of
+  `planLine`, `tryShellFreeChain`, and its tree walk (`linksOf`,
+  `joinedLinks`, `ChainLink`, `stepExecOf`).
+- **Input.** A table entry whose reader returns `stdin` is accepted when
+  the command is a later stage of a pipeline, and takes the text of the
+  stage before. `head` and `tail` print through `_renderReadView`, as
+  now. `grep` on text needs one new function beside
+  `_grepPatternToRegex`, which filters lines by the same regular
+  expression the stdlib search uses.
+- **Output.** A `>` or `>>` on an in-process step writes its text
+  through the write tool's own write (`_write`).
+- **The outcome name `shellFree`** stays, and means what it means today:
+  every step of the line ran in process (`allInProcess`).
 
-Two things follow.
+The runner needs no change for a mixed line. `runOneStep` already runs
+an in-process step with no check before it, because the stdlib tool
+checks its path when it opens it, and a bash step with the check.
 
-1. **The ticket asks for eight filters nobody uses.** It lists `sort`,
-   `uniq`, `cut`, `nl`, `tac`, `rev`, `tr`, and `wc`, each with a test
-   that compares it to the real program. Together they appear 4 times in
-   76 pipelines. `head`, `grep`, and `tail` appear 80 times, and the code
-   that prints `head` and `tail` exists already.
-2. **Most logged pipelines sit inside a longer line.** Only 9 of the 29
-   distinct logged lines with a pipe are a lone pipeline. The usual shape
-   is several searches joined by `; echo ---;`. So a rule for a lone
-   pipeline only, as the ticket has it, would reach almost nothing.
+## What a person is asked
 
-## The rule
+Every question is still raised up front in `approvedPlan`, before
+anything runs. The runner raises nothing. Three payloads change:
 
-A pipeline is one step of a line. That step runs in process when both of
-these hold:
+1. **A grep that moves in process** asks with `flags: "u"` and
+   `maxResults: 1000` where it asked `flags: ""` and `maxResults: 0`.
+   That is the payload the lone grep has today, and it is true of what
+   runs. A saved rule that matches on `pattern`, `dir`, or `file` is not
+   affected.
+2. **A redirect on an in-process step** asks `std::write` with the
+   content empty, as the bash path does today, because the text is not
+   known until the step runs. An `echo` keeps its content in the
+   payload, in a mixed line too: `true; echo hi > out.txt` asks with
+   `content: ""` today and would ask with `content: "hi\n"`.
+3. **`grep -rn x node_modules | head`** asks `std::bash` today, while
+   the same grep alone runs in process. Under this rule it asks
+   `std::grep`. I have not yet read why the bash path refuses it, and I
+   will before the plan is written.
 
-- **The first stage is a command that already runs in process on its
-  own.** That is a `grep`, `cat`, `head`, `tail`, or `echo` that
-  `tryShellFreeStep` accepts today. Nothing about that decision changes.
-- **Every later stage is a `head`, a `tail`, or a `grep` that names no
-  file**, with flags from the short lists below.
-
-Any other pipeline runs through bash as it does today.
-
-| Line | Today | After |
-| --- | --- | --- |
-| `grep -rn planFor lib \| head -20` | `std::grep`, bash | `std::grep`, no shell |
-| `cat package.json \| grep version` | `std::read`, bash | `std::read`, no shell |
-| `head -20 package.json \| tail -5` | `std::read`, bash | `std::read`, no shell |
-| `grep -rn a lib \| grep -v test \| head` | `std::grep`, bash | `std::grep`, no shell |
-| `grep -rn a src \| head; echo ---; grep -n b x.ts` | `std::grep` twice, bash | the same, no shell |
-| `git log --oneline \| head -5` | `std::git::log`, bash | unchanged |
-| `find lib -name "*.ts" \| head` | `std::ls`, bash | unchanged |
-| `sort package.json \| uniq -c \| head` | `std::read`, bash | unchanged |
-| `pnpm build && cat out.txt \| head` | bash | unchanged, waits for ADI-360 |
-
-The fifth row needs one small change. The step runner already runs a
-line with no shell when every step is in process (`allInProcess`), and a
-pipeline is one step. But the function that splits such a line into
-steps (`linksOf`) accepts only simple commands today, so it has to
-accept a pipeline as one link.
-
-### The later stages
-
-- **`head` and `tail`:** no flag, `-N`, or `-n N`. These are the counts
-  the lone forms accept, printed by `_renderReadView`.
-- **`grep`:** one pattern and no file, with any of `-v`, `-i`, `-E`,
-  `-F`, and `-w`. The pattern becomes a regular expression through
-  `_grepPatternToRegex`, which the lone grep uses. A flag that changes
-  the output's shape (`-c`, `-n`, `-o`, `-l`, `-A`, `-B`, `-C`) keeps the
-  pipeline on the bash path.
-
-### What the person is asked
-
-Nothing new and nothing different. A pipeline asks its first stage's
-question today, and a later stage that names no file asks nothing. Both
-stay true. Every question is raised up front in `approvedPlan`, before
-anything runs, and the runner raises nothing.
+No effect is added to or removed from any other line.
 
 ## Where the output can differ from bash
 
-These are the places a person or a model could notice.
+- **A search that skips folders.** The stdlib grep skips ignored
+  folders such as `node_modules`, stops at 1000 matches, and says so in
+  a note. A lone `grep -rn x .` works this way today. Followed by
+  `| head`, or placed after `pnpm build;`, the same search runs real
+  grep today and would run the stdlib search. A note is printed after
+  the last stage, so `| head` does not cut it off.
+- **A stage that fails.** In bash, a failing first stage prints its
+  error and the later stages still run on empty input. A file that is
+  missing when the line is planned is not accepted by the table, so that
+  line runs through bash and nothing changes. A read that fails later,
+  because the file was removed after approval, fails the step with the
+  read tool's message.
+- **Exit status.** A pipeline's status is its last stage's, as in bash:
+  0 after `head` or `tail`, and 1 after a `grep` that matched no line.
 
-- **A failing first stage.** In bash, `cat gone.txt | head` prints the
-  error and `head` still exits 0. A missing file is found when the line
-  is planned, and that line goes to bash, so nothing changes there. A
-  read that fails later (the file was removed after approval) fails the
-  step with the read tool's message and status 1.
-- **Exit status.** It is the last stage's, as in bash: 0 after `head` or
-  `tail`, and 1 after a `grep` that matched no line.
-- **A grep that skips folders.** The stdlib grep skips ignored folders
-  such as `node_modules` and says so in a note. A lone `grep -rn x .`
-  already works this way. The same search followed by `| head` runs real
-  grep today, which searches `node_modules`. After this change the two
-  spellings agree. The note is printed after the last stage, so `| head`
-  cannot cut it off.
+## Three pull requests
 
-## How it is built
+1. **One classifier, and each step decides for itself.** Deletes the two
+   extra planners. No pipelines and no new redirects yet. This is
+   ADI-360. Payload change 1 above lands here, and so does the `echo`
+   half of change 2.
+2. **Input from the stage before.** Pipelines whose stages are all in
+   the table. This is ADI-261. Payload change 3 lands here.
+3. **Output to a file** for every entry in the table.
 
-- **One new execution kind** beside echo, write, grep, and read:
-
-  ```
-  export type PipeExec = {
-    kind: "pipe";
-    first: EchoExec | GrepExec | ReadExec;
-    filters: TextFilter[]
-  }
-
-  export type TextFilter =
-    | { kind: "view"; view: ReadView }
-    | { kind: "match"; pattern: string; flags: string; invert: boolean }
-  ```
-
-  `ReadView` is the existing type, so `head` and `tail` reuse
-  `_renderReadView` with no change.
-- **One new function for the grep stage**, `_filterLines(text, filter)`
-  in `lib/stdlib/grepDialect.ts`, beside the pattern translation it
-  uses.
-- **`printStep` gains one arm.** It prints the first stage with the code
-  that prints it alone, then applies each filter to the text.
-- **`tryShellFreeStep` is tried on a pipeline's first stage**, and the
-  later stages go through one new function that returns a filter or
-  "not this path".
-
-The ticket's own list of gates stays as written, except the two this
-design changes: the pipeline need not be the whole line, and the filter
-list is three commands.
-
-## Tests
-
-- **Parity with the real programs**, in the style of
-  `shellFreeReadMatchesRealTools`: each row runs the line in process and
-  under real bash and compares the text and the exit status. It covers
-  `head` and `tail` with each count spelling, `grep` with each flag, a
-  pattern that matches nothing, an empty first stage, and a file with no
-  final newline.
-- **No shell starts** for the three lines in the ticket that this design
-  keeps, and for the `; echo ---;` line above.
-- **Each line in the "unchanged" rows still plans as it does today.**
-- **A rejected question runs nothing**, as for a lone grep.
+Each pull request is tested the way `shellFreeReadMatchesRealTools`
+tests reads today: a row runs the line in process and under real bash
+and compares the text and the exit status. Each also checks that a
+rejected question runs nothing, and that no shell starts for an
+in-process step.
 
 ## Not in this design
 
-- **A bash first stage with an in-process later stage**
-  (`git log | head -5`). The ticket lists it as done-when. A shell
-  starts for `git` either way, so handing its text to an in-process
-  `head` removes nothing. I recommend dropping it.
-- **`sort`, `uniq`, `cut`, `nl`, `tac`, `rev`, `tr`, `wc`.** 4 uses in 76
-  pipelines. Each needs its own comparison with the real program, and
-  `sort` depends on the locale.
-- **A mixed line** (`pnpm build && cat out.txt | head`). That is ADI-360.
-
-## Two decisions for the owner
-
-1. **`2>/dev/null` on the first stage.** 4 of the 10 logged pipelines
-   this rule could reach are written
-   `grep -rn x lib 2>/dev/null | head`. A lone grep with any redirect is
-   not in process today, so those 4 stay on the bash path unless the
-   rule accepts this one redirect. I recommend accepting it, for the
-   lone grep as well: an in-process grep that succeeds prints nothing to
-   stderr, so the redirect changes nothing. The one difference is that a
-   read failing after approval shows its message where bash would have
-   hidden it.
-2. **What comes after this.** The first stage is `find` or `ls` in 18 of
-   the 76 pipelines and `git` in 14. The stdlib has `ls` and `glob`
-   tools. Moving `ls` and `find` in process would reach more logged
-   lines than the eight filters would, so I would do that next and leave
-   the filters until a log shows them.
+- **New table entries.** `ls` and `find` come next, each as its own
+  small change with its own comparison against the real program.
+- **`sort`, `uniq`, `cut`, `nl`, `tac`, `rev`, `tr`, `wc`,** which the
+  ADI-261 ticket lists. They appear 4 times in 76 pipelines.
+- **The `agency` outcome,** which is also decided for a lone command
+  only (`tryAgencyPlan`). It runs a different kind of thing and is left
+  as it is.
+- **`2>/dev/null` on an in-process step.** 4 of the logged pipelines
+  this could reach are written `grep -rn x lib 2>/dev/null | head`. It
+  fits the rule as a fourth place output can go (nowhere), and I would
+  add it with the third pull request if the owner agrees.

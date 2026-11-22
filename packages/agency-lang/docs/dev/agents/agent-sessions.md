@@ -122,9 +122,11 @@ copy instead.
 
 `_readTranscript` in `agentSessions.ts` returns the list when the
 checkpoint has one. A session saved before the list existed has none, and
-`_readTranscript` reads the thread instead. When such a session goes on,
-the first new entry starts the list from the thread's user and assistant
-messages, so its earlier turns are still shown.
+`_readTranscript` reads the thread instead, so the session can still be
+shown and searched. Such a session cannot go on: its saved
+core code differs from the running one, so `canResume` refuses it
+(`docs/dev/runtime/checkpoint-code-fingerprints.md`). A run with no list
+is therefore always a new one, and its list starts empty.
 
 Compaction does not touch the list, so a compacted session reopens with
 its whole conversation.

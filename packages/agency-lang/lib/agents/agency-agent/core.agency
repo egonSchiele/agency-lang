@@ -431,7 +431,7 @@ export node session(start: SessionStart) {
             addNote(note)
           }
           // Before the turn, so a cancel takes the entry away with the turn.
-          _addToTranscript("user", text, conversationThread())
+          _addToTranscript("user", text)
           setTurnBudget(budget.maxCost, budget.maxTime)
           // The message is worked out on its own line. A call inside the
           // argument of a `try` call is run again when a paused turn is
@@ -452,7 +452,7 @@ export node session(start: SessionStart) {
             return pass()
           }
           if (reply is success(replyText)) {
-            _addToTranscript("assistant", replyText, conversationThread())
+            _addToTranscript("assistant", replyText)
             emit({ type: "session.reply", text: replyText })
           } else if (reply is failure(err)) {
             emit({ type: "session.error", message: "${err}" })

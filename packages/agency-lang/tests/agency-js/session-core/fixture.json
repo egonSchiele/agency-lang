@@ -102,12 +102,6 @@
   "notedTranscriptUser": { "role": "user", "content": "hi" },
   "notedModelSawNotes": true,
   "refusedTargetTranscript": [],
-  "upgradedTranscript": [
-    "user: before the upgrade",
-    "assistant: stub reply",
-    "user: after the upgrade",
-    "assistant: stub reply"
-  ],
   "learnedScansAskNothing": {
     "pausedOn": "agent::sessionInput",
     "reply": "stub reply"

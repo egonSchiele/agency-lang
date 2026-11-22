@@ -1,7 +1,6 @@
 import type { MessageJSON } from "smoltalk";
 import { currentRun } from "../runtime/asyncContext.js";
 import type { Checkpoint } from "../runtime/state/checkpointStore.js";
-import { threadById } from "./agentCompaction.js";
 import { _contentToString } from "./threads.js";
 
 /**
@@ -38,15 +37,17 @@ export function transcriptOfMessages(messages: SavedMessage[]): TranscriptMessag
   return out;
 }
 
-/** `existing` with `entry` added. A session saved before the list existed
- *  has none, so its list starts from the thread's messages. An empty entry
- *  adds nothing. */
+/** `existing` with `entry` added, as a new array. A run starts with no
+ *  list. An empty entry adds nothing.
+ *
+ *  A session saved before the list existed is never resumed: a saved run
+ *  whose core code changed cannot continue (`canResume`). So a run with no
+ *  list is always a new one, and its list starts empty. */
 export function withEntry(
   existing: TranscriptMessage[] | null,
-  threadMessages: SavedMessage[],
   entry: TranscriptMessage,
 ): TranscriptMessage[] {
-  const before = existing ?? transcriptOfMessages(threadMessages);
+  const before = existing ?? [];
   return entry.content === "" ? before : [...before, entry];
 }
 
@@ -59,21 +60,9 @@ export function transcriptIn(checkpoint: Checkpoint): TranscriptMessage[] | null
   return asTranscript(checkpoint.globals.store?.[TRANSCRIPT_MODULE]?.[MESSAGES_KEY]);
 }
 
-/** Add one entry to the current run's transcript. `threadId` is the
- *  conversation's thread, read only when the run has no list yet. */
-export function _addToTranscript(
-  role: "user" | "assistant",
-  content: string,
-  threadId: string,
-): void {
+/** Add one entry to the current run's transcript. */
+export function _addToTranscript(role: "user" | "assistant", content: string): void {
   const run = currentRun();
   const existing = asTranscript(run.globals.get(TRANSCRIPT_MODULE, MESSAGES_KEY));
-  const thread = existing === null ? threadById(threadId) : null;
-  // A live thread holds smoltalk messages. The loop reads saved JSON.
-  const threadMessages = thread === null ? [] : thread.getMessages().map((m) => m.toJSON());
-  run.globals.set(
-    TRANSCRIPT_MODULE,
-    MESSAGES_KEY,
-    withEntry(existing, threadMessages, { role, content }),
-  );
+  run.globals.set(TRANSCRIPT_MODULE, MESSAGES_KEY, withEntry(existing, { role, content }));
 }

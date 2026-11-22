@@ -186,7 +186,7 @@ export function compactedMessages(plan: CompactionPlan, summary: string): smolta
 }
 
 /** The thread with this slug id, such as "t3", or null when there is none. */
-export function threadById(threadId: string): MessageThread | null {
+function threadById(threadId: string): MessageThread | null {
   const store = agency.thread.storeMaybe();
   if (store === undefined || store === null || threadId === "") {
     return null;

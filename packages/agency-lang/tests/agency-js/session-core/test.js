@@ -421,14 +421,6 @@ const refused = await startSession();
 await refused.answer({ kind: "message", text: "hi", notes: [], target: "nope" });
 result.refusedTargetTranscript = transcriptOf(refused);
 
-// A session saved before the transcript existed: its list is deleted from
-// the checkpoint. The next message starts the list from the thread.
-const old = await startSession();
-await old.answer(message("before the upgrade"));
-delete old.pause[0].checkpoint.globals.store.__agentTranscript;
-await old.answer(message("after the upgrade"));
-result.upgradedTranscript = transcriptLines(old);
-
 // The agent's own scans of what it learned are approved by the core: under
 // a policy with no rules, a turn asks nothing about them.
 mkdirSync(path.join(process.env.AGENCY_AGENT_HOME, "skills"), { recursive: true });

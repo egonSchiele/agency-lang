@@ -1,3 +1,21 @@
+## Nov 22 2026 — v0.44.1
+
+safeBash runs more commands itself, with no shell.
+
+### Breaking
+
+- **`withCancelNote` in `agency-lang/stdlib-lib/agentDriver` is replaced by `cancelNote`.**
+
+### safeBash
+
+- **A command safeBash can run itself (eg `echo`, `grep`, `cat`, `head`, `tail`, `cd`) now runs in process even if it's part of a pipeline.** In `pnpm build; cat notes.txt`, bash runs `pnpm` and the read tool runs `cat`. Lines like `cd lib` and `echo a && echo b` no longer raise `std::bash::readonly`.
+- **A pipeline runs with no shell when every stage can,** as in `cat notes.txt | grep TODO | head -3`. `grep -rn x node_modules | head` now asks `std::grep` instead of `std::bash`. Anything else, such as `sort`, `wc`, or a program, sends the whole pipeline to bash as before.
+- **`2>/dev/null` on such a command is dropped,** so `grep -rn x lib 2>/dev/null` runs in process. Other redirects still go to bash.
+
+### Agent
+
+- **A reopened session, and session search, show only what you typed and the agent's replies.** Before, they also showed anything we may have added to a user's message: extra context for example, or `!` output, expanded slash commands, subagent messages, or a compaction summary. A compacted session now reopens with its whole conversation.
+
 ## Nov 21 2026 — v0.44.0
 
 Lots of safeBash updates!

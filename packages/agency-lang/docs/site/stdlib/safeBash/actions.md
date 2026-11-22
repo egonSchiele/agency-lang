@@ -752,15 +752,7 @@ What happens if every effect in the plan is approved.
 
 ```ts
 /** What happens if every effect in the plan is approved. */
-export type Execution =
-  | BashExec
-  | EchoExec
-  | WriteExec
-  | AgencyExec
-  | RefuseExec
-  | GrepExec
-  | ReadExec
-  | StepsExec
+export type Execution = BashExec | AgencyExec | RefuseExec | StepsExec
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L690))
@@ -952,11 +944,11 @@ export type ReadExec = {
 
 ### Join
 
-How a chain step follows the one before it: `;` always runs it, `&&`
+How a step follows the one before it: `;` always runs it, `&&`
  only after a success, `||` only after a failure.
 
 ```ts
-/** How a chain step follows the one before it: `;` always runs it, `&&`
+/** How a step follows the one before it: `;` always runs it, `&&`
  only after a success, `||` only after a failure. */
 export type Join = "seq" | "and" | "or"
 ```
@@ -965,12 +957,12 @@ export type Join = "seq" | "and" | "or"
 
 ### StepExec
 
-The executions a chain may hold: every in-process kind, and nothing
- that spawns a shell.
+What a step safeBash runs itself can be. None of these starts a
+ shell.
 
 ```ts
-/** The executions a chain may hold: every in-process kind, and nothing
- that spawns a shell. */
+/** What a step safeBash runs itself can be. None of these starts a
+ shell. */
 export type StepExec = EchoExec | WriteExec | GrepExec | ReadExec
 ```
 

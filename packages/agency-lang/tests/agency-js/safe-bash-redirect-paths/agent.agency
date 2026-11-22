@@ -12,12 +12,16 @@ node main(args: {
   loopPath: string
 }): any {
   const linkPlan = planFor("echo via-link > ${args.linkPath}", args.base)
-  const linkFields = match(linkPlan.execution) {
+  // A line of one command safeBash runs itself is a plan of one step, and
+  // the step holds the write.
+  const exec: any = linkPlan.execution
+  const own: any = if (exec.kind == "steps" && exec.steps.length == 1) then exec.steps[0].inProcess else null
+  const linkFields = match(own) {
     { kind: "write", dir, filename, mode } => {
       return { kind: "write", dir: dir, filename: filename, mode: mode }
     }
-    { kind } => {
-      return { kind: kind }
+    _ => {
+      return { kind: exec.kind }
     }
   }
 

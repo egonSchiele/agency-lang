@@ -93,11 +93,11 @@ approvable under `std::bash`, which is where the control lives.
 `shellFree`: a single literal `echo`, with `-n` or without, and with or
 without one output redirect, never spawns a shell. The output is computed in Agency and
 returned, or written with `_write` under a `std::write` whose payload
-carries the bytes. A lone `grep` that translates exactly runs the grep
-tool's own search (see "grep" below). A lone `cat`, `head`, or `tail` of
+carries the bytes. A `grep` that translates exactly runs the grep
+tool's own search (see "grep" below). A `cat`, `head`, or `tail` of
 one file runs the read tool's own read (see "The read family" below). A
-chain of such commands joined by `;`, `&&`, or `||` runs them in process
-in order (see "Chains in process" below). An `agency <sub> <file>` line
+line is `shellFree` when every step of it is one of these (see "Each
+step decides for itself" below). An `agency <sub> <file>` line
 runs in-process through `std::agency`.
 
 `bash`: everything else. Narrow when every command was recognized: a git
@@ -112,11 +112,12 @@ program safeBash has no rule for (`std::exec`), a redirect contributing
 
 ## In process when it translates
 
-The shell-free grep and the shell-free read follow one rule. A lone
-command, or a chain of them, whose flags and arguments translate exactly
-runs the matching stdlib tools in process, under each tool's effect. Any other command runs
-through bash, with a narrow effect only when the payload describes what
-bash will do, and `std::bash` otherwise.
+The shell-free grep and the shell-free read follow one rule. A command
+whose flags and arguments translate exactly runs the matching stdlib
+tool in process, under that tool's effect, wherever it sits in the line.
+The one exception is a command inside a pipeline, which bash runs. Any
+other command runs through bash, with a narrow effect only when the
+payload describes what bash will do, and `std::bash` otherwise.
 
 | Command | Runs | Raises |
 |---|---|---|
@@ -631,7 +632,7 @@ Four more refusals:
 no pipe, chain, or redirect, whose flags are all in
 `SHELL_FREE_GREP_FLAGS` (the tool has no `-c`, `-o`, or context lines),
 whose directory target has `-r`, and whose pattern translates. It raises
-`std::grep` and runs `runGrep`, which calls `_grep`. The payload and the
+`std::grep` and runs `printGrep`, which calls `_grep`. The payload and the
 search are built from one `GrepPayload`, and the payload's `pattern` is
 the JavaScript regex the search uses, with the regex flag `u`, so `.`
 matches a whole character, an emoji included, as grep does in a UTF-8
@@ -997,7 +998,7 @@ to a lone `cat -n`, `head -n N`, or `tail -n N` of one file, with no
 redirect, where N is at least 1. `head` and `tail` take one file because
 each prints a `==> name <==` header per file when given several;
 `READ_VERBS` says so, and `readFileVerb` applies it. The plan raises one
-`std::read` per file and runs `runRead`, which reads the files in order
+`std::read` per file and runs `printRead`, which reads the files in order
 with `_read`, joins the texts, and prints the joined text once with
 `_renderReadView` (`lib/stdlib/readDialect.ts`). A first file with no
 final newline runs into the second, as real `cat` prints it. The views:
@@ -1021,7 +1022,7 @@ every path and ask `std::bash`. GNU head and tail take the last count,
 BSD head takes the last, and BSD tail refuses the line, so no one
 answer would be right.
 
-`runRead` returns `_read`'s own failure. The plan already refused a
+`printRead` returns `_read`'s own failure. The plan already refused a
 missing file or a folder, so a failure there is a race or a permission
 error, and `_read`'s message says which. The text of the files read
 before the one that failed is dropped.
@@ -1316,8 +1317,9 @@ with a `%n` conversion, modifiers or not, has no rule. A variable argument to
 ## A line that asks nothing
 
 When every command in a line is recognized and none raises an effect,
-`planLine` asks one question for the line. `pwd`, `echo "---"`, `which
-node; date`, a lone `cd lib`, and `echo hi | grep h` all end here. When
+`planLine` asks one question for the line, unless the line starts no
+shell (see "Each step decides for itself"). `pwd`, `echo "---"`, `which
+node; date`, and `echo hi | grep h` all end here. When
 every word in the line is known now (`everyWordKnown`: `isLiteralWord`,
 or a word made only of such text and `$?`), it asks
 `std::bash::readonly { command, cwd, timeout }` and runs the rebuilt
@@ -2158,48 +2160,68 @@ quote cannot be written this way, so that `cd` is unrecognized. The
 `classify` functions return the rewritten command beside the effects,
 and `rebuild` renders that tree.
 
-## Chains in process
+## Each step decides for itself
 
-`tryShellFreeChain` plans a line whose commands are joined by `;`, `&&`,
-or `||`, such as
+A command safeBash can run itself is run by safeBash wherever it sits in
+a line, and bash runs the steps beside it:
 
 ```
-echo "=== a.txt ==="; cat a.txt; echo; echo "=== b.txt ==="; cat b.txt
+pnpm build && cat dist/out.txt     # bash runs pnpm, the read tool runs cat
+echo "=== a.txt ==="; cat a.txt    # no shell starts
 ```
 
-`chainLinks` flattens the parse into links, each a simple command with
-the join before it: the top-level list is joined by `;`, and an `And` or
-`Or` node joins its right side with `&&` or `||`. The parser is
-left-associative, so `a && b || c` is `Or(And(a, b), c)`, and the flat
-list runs in bash's order.
+`classifySimple` asks `tryShellFreeStep` about every simple command
+before it tries the bash rules. `tryShellFreeStep` is the table of
+commands safeBash runs itself: an echo with or without one redirect, a
+grep that translates, and a cat, head, or tail that translates. When it
+accepts, the command's step holds a `StepExec` in `inProcess`, and its
+effects are the ones the stdlib tool raises. When it refuses, the bash
+rule decides, and the step's `inProcess` is null. An `agency` line is
+not in the table.
 
-Each link must plan through `tryShellFreeStep`, the one list of
-in-process planners that a lone command also uses: an echo with or
-without one redirect, a grep that translates, or a cat, head, or tail
-that translates. An `agency` line is not a step. `stepExecOf` turns each
-step's plan into a `StepExec`, with an exhaustive match that makes a new
-execution kind a type error until someone decides whether a chain may
-hold it. The chain is a plan of kind `steps` whose every step has its
-`StepExec` in `inProcess` (see "A narrow line runs one step at a time").
-It raises every step's effects, in order, and runs no shell.
+Three commands are never taken, whatever the table says:
 
-A parenthesized group or a pipeline refuses the chain. Bash skips
-`(b || c)` in `a && (b || c)` as a whole, which a flat list cannot say,
-and a pipeline needs a runner of its own (ADI-261). `linksOf` is a
-second walk beside `flattenOne` for this reason: `flattenOne` feeds the
-refuse wall and must see through both.
+- **A command inside a pipeline.** Bash runs a pipeline's stages at the
+  same time, which a step cannot. `classifyPipeline` marks the line
+  (`LineState.byBash`) for every stage, a group inside a stage included.
+- **A command behind `timeout`.** The limit is the program's.
+- **A read of a file that does not exist when the line is planned.** The
+  read tool needs a real file, so in `pnpm build > out.txt; cat out.txt`
+  with no `out.txt`, bash runs the `cat`.
 
-The chain is all or nothing. One command the step planners refuse sends
-the whole line down the general path, where the refuse wall runs on
-every command and the line goes to bash. So `cat a.txt && shred a.txt` is
-still refused.
+A step safeBash runs itself is not planned again before it runs
+(`runOneStep`). Its stdlib tool opens the approved folder with
+`fixedRoot`, which refuses a link anywhere in the path (see
+`docs/dev/stdlib/contained-files.md`). So after `git checkout evil; cat
+README.md` swaps the file for a link, the `cat` fails with the read
+tool's message and reads nothing. A step bash runs is planned again, and
+a changed plan stops the line (see the next section). That second plan
+uses the bash rules only (`checkedStep` marks its line `byBash`). In
+`pnpm build > out.txt; grep -n x out.txt` the file exists by the time
+the `grep` is checked, and the table would otherwise take it and ask
+with the stdlib search's payload, which differs from the approved one.
 
-The runner that runs a narrow line runs the chain too, with bash's rule
-for each join (see the next section). The chain fails when the last step
-that ran failed, with the joined text as stdout and that step's message
-as stderr. A failed step adds no text, the way a failing program's
-complaint goes to stderr. `grep` with no match is a failure, as its exit
-code 1 is.
+The payload describes what runs. A grep safeBash runs itself asks with
+`maxResults: 1000`, the stdlib search's limit, where the same grep
+through bash asks with 0. An `echo hi > out.txt` asks `std::write` with
+the bytes, in any position.
+
+A line whose every step is in process starts no shell, and its outcome
+is `shellFree`. A plan of one such step is how a lone `cat a.txt` runs.
+A `cd` counts as in process (`allInProcess`): `runCd` resolves the
+folder and moves the runner there with no shell. So `cd sub && cat
+a.txt` starts no shell, and a lone `cd lib` asks nothing. The refuse
+wall runs on every command of every line first, so `cat a.txt && shred
+a.txt` is still refused.
+
+A job is a shell, so a line that starts none is not one: `startJob("cd
+sub && cat a.txt")` runs in the foreground with the read's own question,
+as `startJob("cat a.txt")` does (`startsShell`).
+
+A line fails when the last step that ran failed, with the joined text as
+stdout. A failed in-process step adds its message to stderr and no text
+to stdout, the way a failing program's complaint goes to stderr. `grep`
+with no match is a failure, as its exit code 1 is.
 
 `runWrite` enters a `destructive { }` region, but that marks only
 `runWrite`'s activation. A failure the runner builds later (`echo started
@@ -2212,18 +2234,18 @@ anything still reports `destructiveRan: true`, which is the safe
 direction. A step that runs through bash is never marked; see "Why a bash
 call is never destructive".
 
-A chain's effects may be empty. A chain of echoes raises nothing, as a
-lone echo raises nothing: the audit rule is about shell spawns, and a
-chain spawns none.
+A line's effects may be empty. A line of echoes raises nothing, as a
+lone echo raises nothing: the audit rule is about shell spawns, and such
+a line spawns none. `planLine` checks `allInProcess` before it asks the
+quiet question for a line with no effects.
 
 Two outputs differ from bash. A shell-free directory grep's
-skipped-folders note lands in the chain's output where that step's text
+skipped-folders note lands in the line's output where that step's text
 goes, so `grep -rn TODO src; echo finished` prints the note before
 `finished`. And every read is resolved when the plan is made, so in
 `echo x > f; cat f` with `f` present, the read prints whatever the write
 left, under a `std::read` that named `f` (see "Resolving the path when
-the plan is made"). With `f` missing, `cat f` is refused at plan time,
-and the line goes to bash.
+the plan is made"). With `f` missing, bash runs the `cat`.
 
 ## A narrow line runs one step at a time
 
@@ -2241,8 +2263,8 @@ and rewritten tree, the classifier returns the same command as steps
 - A `group` step holds the steps inside a pair of parentheses.
 
 Each step carries the join before it. The parser is left-associative, so
-a flat list with one join per step runs in bash's order (the comment in
-`linksOf` says why).
+`a && b || c` is `Or(And(a, b), c)`, and a flat list with one join per
+step runs in bash's order.
 
 `runSteps` runs the list. `runStepList` carries a state from one step to
 the next: the folder, the exit status of the last step that ran, the

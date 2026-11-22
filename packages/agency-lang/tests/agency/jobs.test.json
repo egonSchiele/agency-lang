@@ -99,6 +99,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "aLineThatStartsNoShellIsNotAJob",
+      "description": "A `cd` and a `cat` start no shell, so startJob runs the line in the foreground, as it does a lone `cat`: it asks std::read and nothing else, returns the file's text, and holds no job.",
+      "input": "",
+      "expectedOutput": "[[\"std::read\"],\"{\\\"__type\\\":\\\"resultType\\\",\\\"success\\\":true,\\\"value\\\":\\\"This command ran in the foreground: only a plain shell command can run as a background job.\\\\na\\\\n\\\"}\",0]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "aJobWhoseFileChangedDoesNotStart",
       "description": "When a file the job's one command reads is swapped for a link after the questions were answered, the command plans to the link's target, which was not approved, so the job fails at launch and nothing starts.",
       "input": "",

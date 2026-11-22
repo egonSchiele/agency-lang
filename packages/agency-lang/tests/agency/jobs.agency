@@ -287,6 +287,27 @@ node aJobWhoseCdChangedDoesNotStart() {
   return [isFailure(result), isFailure(result) && result.error.includes("now leads to"), jobs]
 }
 
+// A `cd` and a `cat` start no shell: the runner moves folder itself and
+// the read tool reads the file. So there is nothing to run as a job, and
+// the line runs in the foreground with the read's own question, as a lone
+// `cat` does.
+node aLineThatStartsNoShellIsNotAJob() {
+  remove(JOBS_FIXTURE) with approve
+  mkdir(JOBS_FIXTURE) with approve
+  bash("mkdir sub && printf 'a\\n' > sub/a.txt", cwd: JOBS_FIXTURE) with approve
+  let result: any = null
+  let asked: string[] = []
+  handle {
+    result = startJob("cd sub && cat a.txt", cwd: JOBS_FIXTURE, maxMinutes: 1)
+  } with (intr) {
+    asked.push(intr.effect)
+    return approve()
+  }
+  const jobs = listJobs().length
+  remove(JOBS_FIXTURE) with approve
+  return [asked, JSON.stringify(result), jobs]
+}
+
 // The handler swaps `one.txt` for a link to another file while it answers.
 // A job's one step gets the check a foreground step gets, so the read now
 // plans to the link's target, which nobody approved, and no job starts.

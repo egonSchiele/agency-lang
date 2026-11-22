@@ -152,12 +152,14 @@ def stopRow(line: string, change: string): any {
 // The handler swaps a path for a link to the outside folder while the
 // first question is answered. The step that names it is planned again
 // just before it runs, the new plan differs from the approved one, and
-// the line stops before that step with nothing from outside printed.
+// the line stops before that step with nothing from outside printed. `wc`
+// is a read bash runs; a `cat` is one safeBash runs itself (see
+// `anInProcessReadRefusesASwappedPath`).
 node aChangedPlanStopsTheLine() {
   return [
-    stopRow("pnpm --version; cat one.txt", "rm one.txt && ln -s ${OUTSIDE}/secret.txt one.txt"),
+    stopRow("pnpm --version; wc -l one.txt", "rm one.txt && ln -s ${OUTSIDE}/secret.txt one.txt"),
     stopRow("pnpm --version; ls sub", "rm -r sub && ln -s ${OUTSIDE}/dir sub"),
-    stopRow("pnpm --version; cat one.txt", ""),
+    stopRow("pnpm --version; wc -l one.txt", ""),
   ]
 }
 
@@ -165,13 +167,132 @@ node aChangedPlanStopsTheLine() {
 node theStopSaysWhatChanged() {
   makeFixture()
   makeOutside()
-  const out = changedWhileAsking("pnpm --version; cat one.txt", "rm one.txt && ln -s ${OUTSIDE}/secret.txt one.txt")
+  const out = changedWhileAsking("pnpm --version; wc -l one.txt", "rm one.txt && ln -s ${OUTSIDE}/secret.txt one.txt")
   const text = textOf(out)
   remove(FIXTURE) with approve
   remove(OUTSIDE) with approve
   const lines = text.split("\n")
   const lastLines = lines.slice(lines.length - 2)
-  return [failureType(out), lastLines[1], lastLines[0].startsWith("Stopped before `cat one.txt`: ")]
+  return [failureType(out), lastLines[1], lastLines[0].startsWith("Stopped before `wc -l one.txt`: ")]
+}
+
+/* Which steps of a line safeBash runs itself, in order, with "cd" for a
+ `cd` and a list for a group. */
+def inProcessOf(steps: any[]): any[] {
+  let out: any[] = []
+  for (step in steps) {
+    if (step.kind == "run") {
+      out.push(step.inProcess != null)
+    } else if (step.kind == "cd") {
+      out.push("cd")
+    } else {
+      out.push(inProcessOf(step.steps))
+    }
+  }
+  return out
+}
+
+def decidesRow(line: string): any {
+  const plan = planFor(line, FIXTURE)
+  const exec: any = plan.execution
+  const steps = if (exec.kind == "steps") then inProcessOf(exec.steps) else [exec.kind]
+  return [line, steps, [effect.name for effect in plan.effects]]
+}
+
+// A command safeBash runs itself is run by safeBash wherever it sits in
+// the line, and bash runs its neighbours. A pipeline, a `timeout`, and a
+// file that does not exist when the line is planned stay with bash.
+node eachStepDecidesForItself() {
+  makeFixture()
+  const rows = [
+    decidesRow("pnpm --version; cat one.txt"),
+    decidesRow("cat one.txt && pnpm --version"),
+    decidesRow("cd sub && cat a.txt"),
+    decidesRow("(pnpm --version && cat one.txt)"),
+    decidesRow("pnpm --version > made.txt; cat made.txt"),
+    decidesRow("timeout 5 cat one.txt"),
+    decidesRow("cat one.txt | head -1"),
+    decidesRow("pnpm --version; grep -n one one.txt"),
+    decidesRow("pnpm --version; echo hi > out.txt"),
+  ]
+  remove(FIXTURE) with approve
+  return rows
+}
+
+/* The payload of a line's first effect with the given name. */
+def payloadOf(line: string, name: string): any {
+  const found = [effect.payload for effect in planFor(line, FIXTURE).effects if effect.name == name]
+  return found[0]
+}
+
+// The payload describes what runs. A search safeBash runs itself stops at
+// 1000 matches, and a write of text known when the line is planned shows
+// the text. The folder after a `cd` is the one the read names.
+node aMixedLineAsksAboutWhatRuns() {
+  makeFixture()
+  const search = payloadOf("pnpm --version; grep -rn one .", "std::grep")
+  const write = payloadOf("pnpm --version; echo hi > out.txt", "std::write")
+  const read = payloadOf("cd sub && cat a.txt", "std::read")
+  remove(FIXTURE) with approve
+  return [search.maxResults, search.flags, write.content, read.dir.endsWith("/sub"), read.filename]
+}
+
+def ranRow(line: string): any {
+  makeFixture()
+  const out = safeBash(line, cwd: FIXTURE) with approve
+  remove(FIXTURE) with approve
+  return [line, isSuccess(out), textOf(out)]
+}
+
+// The runner carries the status and the output across the two kinds of
+// step: `echo $?` is a step bash runs, and it reads the status a step
+// safeBash ran left behind.
+node aMixedLineRuns() {
+  return [
+    ranRow("pnpm --version > /dev/null; cat one.txt"),
+    ranRow("cat one.txt; echo $?"),
+    ranRow("grep nomatch one.txt || echo none"),
+    ranRow("grep nomatch one.txt; echo $?"),
+    ranRow("cd sub && cat a.txt && pwd > /dev/null"),
+  ]
+}
+
+// A step safeBash runs itself is not planned again. Its stdlib tool
+// refuses a link in the path it opens, so a file or folder swapped after
+// approval fails the step and prints nothing from outside.
+node anInProcessReadRefusesASwappedPath() {
+  return [
+    stopRow("pnpm --version; cat one.txt", "rm one.txt && ln -s ${OUTSIDE}/secret.txt one.txt"),
+    stopRow("pnpm --version; cat sub/a.txt", "rm -r sub && ln -s ${OUTSIDE}/dir sub && printf 'SECRET\\n' > ${OUTSIDE}/dir/a.txt"),
+  ]
+}
+
+/* A line run in the fixture with `change` run while the first question is
+ answered: the line, whether it succeeded, and what `check` prints
+ afterwards. */
+def writeSwapRow(line: string, change: string, check: string): any {
+  makeFixture()
+  makeOutside()
+  const out = changedWhileAsking(line, change)
+  const after: any = bash(check, cwd: OUTSIDE) with approve
+  remove(FIXTURE) with approve
+  remove(OUTSIDE) with approve
+  return [line, isSuccess(out), after.stdout]
+}
+
+// A write safeBash runs itself is not planned again either. The write
+// tool refuses a link at the file and a link in the folder, so the file
+// outside keeps its text and no file appears in the folder outside.
+node anInProcessWriteRefusesASwappedPath() {
+  return [
+    writeSwapRow("pnpm --version; echo hi > out.txt", "ln -s ${OUTSIDE}/secret.txt out.txt", "cat secret.txt"),
+    writeSwapRow("pnpm --version; echo hi > sub/out.txt", "rm -r sub && ln -s ${OUTSIDE}/dir sub", "ls dir"),
+  ]
+}
+
+// A rejected question runs nothing, the bash step before it included.
+node aRejectedReadRunsNothingInAMixedLine() {
+  return askedBy("pnpm --version > ran.txt && cat one.txt", "std::read")
 }
 
 /* Whether a line ran without a stop. */
@@ -228,6 +349,9 @@ node harmlessLinesDoNotStop() {
     ranWithoutStop("mkdir -p out && ls out"),
     ranWithoutStop("mkdir -p build && cd build && pnpm --version"),
     ranWithoutStop("pnpm --version > v.txt && cat v.txt"),
+    // The file exists by the time the grep is checked. The check plans it
+    // by the bash rules, as the approved plan did.
+    ranWithoutStop("pnpm --version > g.txt; grep -n . g.txt"),
     ranWithoutStop("pnpm --version > v.txt; pnpm --version >> v.txt"),
     // A folder a program makes, which is how `pnpm build && ls dist` runs
     // the first time, and a listing of a file the line wrote.
@@ -332,6 +456,9 @@ def checkoutRow(line: string): any {
 // prints anything from outside.
 node aCheckoutThatSwapsAPathStops() {
   return [
+    checkoutRow("git checkout evil; wc -l one.txt"),
+    // safeBash runs this cat itself, so nothing stops the line: the read
+    // tool refuses the link the checkout put there.
     checkoutRow("git checkout evil; cat one.txt"),
     checkoutRow("git checkout evil && ls sub"),
     checkoutRow("git checkout evil && cd sub && git status"),

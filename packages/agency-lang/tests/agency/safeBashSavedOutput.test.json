@@ -44,9 +44,9 @@
     },
     {
       "nodeName": "aLineWithAnExpansionKeepsItsReadQuestion",
-      "description": "echo raises nothing, but the shell expands a variable or a glob, so `echo \"$HOME\" && wc -l <saved output>` would print what nobody was asked about. A line with any expansion keeps its questions, and with every question rejected it does not run. A leading `~` and a glob in a flag's value count as expansions.",
+      "description": "The shell expands what echo prints, so `echo \"$HOME\" && wc -l <saved output>` would print what nobody was asked about. A line with any expansion keeps its questions, and with every question rejected it does not run. A variable asks std::env, which is the first question of its line. A glob, a leading `~`, and a glob in a flag's value count as expansions and keep std::read.",
       "input": "",
-      "expectedOutput": "[[true,true,true,true,true],[\"std::read\",\"std::read\",\"std::read\",\"std::read\",\"std::read\"]]",
+      "expectedOutput": "[[true,true,true,true,true],[\"std::env\",\"std::env\",\"std::read\",\"std::read\",\"std::read\"]]",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {

@@ -182,6 +182,7 @@ export type Effect =
   | { name: "std::exec"; payload: ExecPayload }
   | { name: "std::remove"; payload: RemovePayload }
   | { name: "std::mkdir"; payload: MkdirPayload }
+  | { name: "std::env"; payload: { name: string } }
   | { name: "std::github::prGet"; payload: GhNumberPayload; lookup: string | null }
   | { name: "std::github::prDiff"; payload: GhNumberPayload; lookup: string | null }
   | { name: "std::github::issueGet"; payload: GhNumberPayload; lookup: string | null }
@@ -284,6 +285,14 @@ export def mkdirEffect(payload: MkdirPayload): Effect {
   return {
     name: "std::mkdir",
     payload: payload
+  }
+}
+
+export def envEffect(name: string): Effect {
+  """Build an approval descriptor for reading an environment variable, without raising it."""
+  return {
+    name: "std::env",
+    payload: { name: name }
   }
 }
 
@@ -655,6 +664,7 @@ def lookupOf(effect: Effect): string | null {
     "std::exec" => null
     "std::remove" => null
     "std::mkdir" => null
+    "std::env" => null
   }
 }
 

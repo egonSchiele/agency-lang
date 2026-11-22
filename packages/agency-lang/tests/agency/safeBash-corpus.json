@@ -124,7 +124,7 @@
   { "command": "pnpm run typecheck", "outcome": "narrow", "effects": ["std::exec"] },
   { "command": "make", "outcome": "narrow", "effects": ["std::exec"] },
   { "command": "rg planFor lib", "outcome": "narrow", "effects": ["std::exec"] },
-  { "command": "git status && echo $GITHUB_TOKEN", "outcome": "narrow", "effects": ["std::git::status"] },
+  { "command": "git status && echo $GITHUB_TOKEN", "outcome": "narrow", "effects": ["std::git::status", "std::env"] },
   { "command": "cd lib && ls", "outcome": "narrow", "effects": ["std::ls"] },
   { "command": "cd lib; grep -rn planFor . | head", "outcome": "narrow", "effects": ["std::grep"] }
 ]

@@ -183,6 +183,43 @@ def ranWithoutStop(line: string): any {
   return [line, isSuccess(out), text.includes("Stopped before")]
 }
 
+// A std::env question sits on its command's step, so the plan made just
+// before the step asks it again and the line runs to the end.
+node aLineWithAVariableRuns() {
+  return ranWithoutStop("pnpm --version; echo $HOME")
+}
+
+/* A line run in the fixture: each question asked, as its effect and the
+ variable it names, with `rejected` rejected and the rest approved. */
+def askedBy(line: string, rejected: string): any {
+  makeFixture()
+  let asked: any[] = []
+  let out: Result<string> = success("")
+  handle {
+    out = safeBash(line, cwd: FIXTURE)
+  } with (intr) {
+    asked.push([intr.effect, intr.data.name ?? ""])
+    if (intr.effect == rejected) {
+      return reject("no")
+    }
+    return approve()
+  }
+  const ran = exists("ran.txt", dir: FIXTURE)
+  remove(FIXTURE) with approve
+  return [asked, isSuccess(out), ran]
+}
+
+// Two commands read the same variable, and the person is asked once.
+node aVariableIsAskedOnce() {
+  return askedBy("echo $HOME; echo $HOME", "")
+}
+
+// Every question is asked before anything runs, so a rejected std::env
+// runs nothing: the write before the echo never happens.
+node aRejectedVariableRunsNothing() {
+  return askedBy("pnpm --version > ran.txt && echo $HOME", "std::env")
+}
+
 // The check plans each step with a fresh line, which knows nothing of
 // what earlier steps wrote or made, while the up-front plan used what the
 // line had written and made. These lines must still run.

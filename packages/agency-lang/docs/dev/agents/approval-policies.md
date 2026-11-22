@@ -44,6 +44,16 @@ line (`⏺ Policy rejected std::read (dir: /private/tmp, filename: …)`).
 Without it a rejection is invisible: the only sign is the agent quietly
 taking another route.
 
+## `recommended` approves reading ten variables
+
+`recommended` approves `std::env` when `name` is one of `HOME`, `PWD`,
+`USER`, `LOGNAME`, `SHELL`, `TERM`, `LANG`, `TMPDIR`, `PATH`, or
+`HOSTNAME`, which hold no secret. Every other name asks. The rule is on
+the effect, so it answers both routes to the same read: `env("HOME")`
+from the `env` tool, and a shell line that expands the variable, as in
+`echo $HOME` (`docs/dev/stdlib/safe-bash.md`, "A variable in a word asks
+`std::env`"). `minimal` has no such rule.
+
 ## A saved policy does not follow `recommended`
 
 `policy.json` is written once, from the built-in the user picked on

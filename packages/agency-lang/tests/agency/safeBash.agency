@@ -739,8 +739,9 @@ node rejectedBroadSaysWhy() {
 }
 
 node rejectedAuditSaysWhy() {
-  // `$HOME` is not known now, so this asks std::bash, not the quiet question.
-  const result = safeBash("echo $HOME | cat")
+  // `$RANDOM` is not known now and asks no std::env, because bash computes
+  // it, so this asks std::bash, not the quiet question.
+  const result = safeBash("echo $RANDOM | cat")
   if (result is failure(why)) {
     return why
   }
@@ -2329,6 +2330,51 @@ node cdAnywhereElseIsBroad() {
 // holds it. A subshell ends the move, so the command after it is
 // classified in the original folder. After `;` or `||` the directory
 // depends on whether the `cd` worked, so the string is broad.
+/* A line's outcome and its effects, each by name, with the variable a
+ std::env effect names. */
+def envRow(line: string): any {
+  const plan = planFor(line, FILES_FIXTURE)
+  const effects: any[] = plan.effects
+  return [line, outcomeOf(plan), [envName(effect) for effect in effects]]
+}
+
+def envName(effect: any): string {
+  if (effect.name == "std::env") {
+    return "std::env ${effect.payload.name}"
+  }
+  return effect.name
+}
+
+// A narrow line asks std::env once for each environment variable a word of
+// it expands, which is the question the `env` tool asks.
+node variablesAskStdEnv() {
+  makeFilesFixture()
+  const rows = [envRow(line) for line in [
+    "git status && echo $GITHUB_TOKEN",
+    "git status && echo \"t: $GITHUB_TOKEN\"",
+    "git status && echo pre$GITHUB_TOKEN",
+    "git status && echo $A $A $B",
+    "echo $A; echo $A",
+    "git status && echo $TOKEN > out.txt",
+    "git status; (echo $TOKEN)",
+    "git status; echo $TOKEN | cat",
+    "git status; timeout 5 echo $TOKEN",
+    "git status && true $TOKEN",
+    "echo $HOME",
+    // Names bash computes itself hold nothing from the environment.
+    "git status; echo $?",
+    "git status; echo $RANDOM $1",
+    "echo $RANDOM",
+    // These have no rule with a variable in them, as before.
+    "git status && printf '%s' $TOKEN",
+    "git status; cat $F",
+    "pnpm test $FLAGS",
+    "git status && echo --token=$TOKEN",
+  ]]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
 node cdDoesNotLeakOutOfItsChain() {
   return [
     cdSummary("(cd grep-fixtures && ls) && ls"),

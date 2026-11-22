@@ -151,6 +151,14 @@ export const recommendedAutoApprovePolicy: Policy = {
   // A shell line whose commands read no file and change nothing, such as
   // `pwd`, with every word known before it runs (stdlib/safeBash.agency).
   "std::bash::readonly": approve,
+  // Variables that hold no secret. The rule answers the `env` tool and a
+  // shell line that expands one (`echo $HOME`), which ask the same question.
+  "std::env": [
+    {
+      match: { name: "{HOME,PWD,USER,LOGNAME,SHELL,TERM,LANG,TMPDIR,PATH,HOSTNAME}" },
+      action: "approve",
+    },
+  ],
   // `writeSettingsFile` creates the agent home when it is missing. An
   // empty directory decides nothing, and the write into it still asks.
   "std::mkdir": [{ match: { dir: AGENT_HOME }, action: "approve" }],

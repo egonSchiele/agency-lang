@@ -1323,8 +1323,42 @@ or a word made only of such text and `$?`), it asks
 `std::bash::readonly { command, cwd, timeout }` and runs the rebuilt
 text, so the plan is narrow. `timeout` is the limit the line runs under,
 as in `std::bash`, so a job started with `startJob("sleep 600")` shows
-its limit. Otherwise, as in `echo $GITHUB_TOKEN`, it asks
-`std::bash` for the original text, with the reason `noEffects`.
+its limit. Otherwise, as in `echo $RANDOM`, it asks `std::bash` for the
+original text, with the reason `noEffects`. A line with an environment
+variable in it never gets here, because it asks `std::env` (next
+section).
+
+## A variable in a word asks `std::env`
+
+Bash expands a variable and the model reads what it printed, so a narrow
+line asks the question the `env` tool asks, `std::env { name }`, once for
+each environment variable a word of it holds:
+
+```
+git status && echo $GITHUB_TOKEN     # std::git::status, std::env GITHUB_TOKEN
+echo $HOME                           # std::env HOME
+```
+
+`envEffects` adds the questions in `classifySimple`, for every command
+and not only `echo`, so a command that later accepts a variable is
+covered with no further change. `variablesOf` finds a name alone (`$X`),
+inside double quotes (`"t: $X"`), and joined to text (`pre$X`,
+`--token=$X`), in a command's words and in its assignments' values.
+
+- **Computed names ask nothing.** `$?`, `$0` to `$9`, `$RANDOM`, and
+  `$SECONDS` hold nothing from the environment (`COMPUTED_VARIABLES`).
+- **The question sits on the command's step.** The plan made just before
+  the step asks it again, so the two plans match and the line runs.
+  `planLine` drops a repeated name (`askedOnce`), so `echo $A; echo $A`
+  asks once.
+- **The payload has no field for the command**, because the effect is
+  the `env` tool's. The message carries the command.
+
+`printf` still refuses a variable argument, and a variable in any other
+command's words has no rule, so those lines ask `std::bash`. The test
+nodes are `variablesAskStdEnv` in `tests/agency/safeBash.agency`, and
+`aLineWithAVariableRuns`, `aVariableIsAskedOnce`, and
+`aRejectedVariableRunsNothing` in `tests/agency/safeBashSteps.agency`.
 
 `std::bash::readonly` is declared in `stdlib/shell.agency`, with
 `@always(command, cwd)`. `recommended` approves it, so a lone `pwd` asks

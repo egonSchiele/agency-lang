@@ -3,6 +3,7 @@
   share, and the model options built from them. `agencyAgent` in
   `std::agents/agency` builds the record from its parameters.
 */
+import { modelOptions } from "std::llm"
 
 /** What a brain and its subagent wrappers need to know about one call. An
   empty model or provider means the ambient one, which `setModel` or
@@ -36,28 +37,6 @@ export type ModelChoice = {
   provider: string
 }
 
-export def modelOptions(model: string, provider: string): any {
-  """
-  Return the `llm()` options that pick `model` and `provider`, or no
-  options when `model` is empty, so the ambient model stays in place. An
-  empty `provider` is left out, so the configured provider stays in place.
-
-  @param model - The model name, or "" for the ambient model
-  @param provider - The model's provider, or "" for the configured one
-  """
-  if (model == "") {
-    return {}
-  }
-  if (provider == "") {
-    return {
-      model: model
-    }
-  }
-  return {
-    model: model,
-    provider: provider
-  }
-}
 
 export def reasoningChoice(settings: AgentSettings): ModelChoice {
   """

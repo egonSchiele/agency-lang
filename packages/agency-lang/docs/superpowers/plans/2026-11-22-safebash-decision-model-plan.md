@@ -716,6 +716,16 @@ the `try` in `judgeGate` is written.
   is narrow (it asks `std::exec`), so the broad test line is a pipe into
   awk, and the job line is two `python3` steps after a `cd`. A guard case
   (`linesFitTheirTests`) fails first if planning changes under them.
+- **The policy check reads the run's root policy too** (PR review). An
+  interactive `agency agent` session gets its policy as the run's root
+  handler (`installRunPolicyHandler`), not through `cliPolicyHandler`, so
+  `currentPolicy()` alone saw nothing there, nor under `agency run
+  --policy`. The runtime now keeps the installed policy on the run, and
+  `runPolicy()` in `std::policy` returns a copy of it. The gate checks
+  both policies.
+- **Shared parts with the router** (PR review). `modelOptions` moved to
+  `std::llm`, and `lastChoiceConfidence()` is new in `std::thread`; both
+  the judge and the router use them.
 - **Resume.** The deterministic client keeps its mock counter across a
   resume in the same process, checked with a throwaway probe. So the
   resume test's second, refusing mock would be taken by a judge that ran

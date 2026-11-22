@@ -44,7 +44,7 @@ export type AgentSettings = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L10))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L11))
 
 ### ModelChoice
 
@@ -58,30 +58,9 @@ export type ModelChoice = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L35))
 
 ## Functions
-
-### modelOptions
-
-```ts
-modelOptions(model: string, provider: string): any
-```
-
-Return the `llm()` options that pick `model` and `provider`, or no
-  options when `model` is empty, so the ambient model stays in place. An
-  empty `provider` is left out, so the configured provider stays in place.
-
-**Parameters:**
-
-| Name | Type | Default | Description |
-|---|---|---|---|
-| model | `string` |  | The model name, or "" for the ambient model |
-| provider | `string` |  | The model's provider, or "" for the configured one |
-
-**Returns:** `any`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L39))
 
 ### reasoningChoice
 
@@ -100,7 +79,7 @@ Return the reasoning model and its provider, or the main model when no
 
 **Returns:** [ModelChoice](#modelchoice)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L41))
 
 ### commandJudgeFor
 
@@ -120,7 +99,7 @@ Return the judge for broad shell lines, or null when no judge model is
 
 **Returns:** `ModelChoice | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L60))
 
 ### commandJudgeOf
 
@@ -138,7 +117,7 @@ Return the call's judge for broad shell lines, or null when it has none.
 
 **Returns:** `ModelChoice | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L77))
 
 ### reasoningOptions
 
@@ -157,4 +136,4 @@ Return the `llm()` options that pick the reasoning model, or the main
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L86))

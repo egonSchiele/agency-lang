@@ -114,8 +114,9 @@ import { _searchTargetIn, _bash, _grep, _skipDirNames, _absoluteCwd } from "agen
 import { _launchJob, _jobStartRefusal } from "agency-lang/stdlib-lib/jobs.js"
 import { basename as lastSegment, dirname as parentOf, join as joinPath } from "std::path"
 import { now } from "std::date"
-import { checkPolicy, currentPolicy } from "std::policy"
-import { lastReply, userMessage } from "std::thread"
+import { checkPolicy, currentPolicy, runPolicy } from "std::policy"
+import { lastChoiceConfidence, userMessage } from "std::thread"
+import { modelOptions } from "std::llm"
 import { _grepPatternToRegex, _renderGrepOutput, _skippedDirsNote } from "agency-lang/stdlib-lib/grepDialect.js"
 import { _renderReadView } from "agency-lang/stdlib-lib/readDialect.js"
 
@@ -6489,17 +6490,12 @@ static const VERDICT_SENTENCES: Record<string, string> = {
   tooLongToReview: "it is too long or dense for a person to check at a glance"
 }
 
-def judgeOptions(judge: CommandJudge): any {
-  if (judge.provider == "") {
-    return { model: judge.model }
-  }
-  return { model: judge.model, provider: judge.provider }
-}
-
 // One decision call on a fresh thread that holds only the command, in the
 // shape of askRouter in std::agents/brains/coordinator/router. The thread
 // keeps the agent's conversation away from the judge, whose provider may
-// not be the agent's. An answer with no confidence refuses nothing.
+// not be the agent's. The typed llm() call stays here, because its
+// annotation is what makes the three labels the answers. An answer with no
+// confidence refuses nothing.
 def askJudge(command: string, reason: BroadReason, judge: CommandJudge): JudgeCall {
   let out: JudgeCall = {
     verdict: "fine",
@@ -6510,20 +6506,17 @@ def askJudge(command: string, reason: BroadReason, judge: CommandJudge): JudgeCa
     const verdict: Verdict = llm(
       "${JUDGE_QUESTION}\n\nWhy it was not split into narrower questions: ${broadExplanation(reason)}",
       {
-        ...judgeOptions(judge),
+        ...modelOptions(judge.model, judge.provider),
         type: "decision",
         retries: 0,
         timeout: JUDGE_TIMEOUT
       },
     )
-    const reply = lastReply()
-    if (reply != null && reply.answers != null) {
-      const answer = reply.answers["answer"]
-      if (answer.type == "choice" && answer.confidence != null) {
-        out = {
-          verdict: verdict,
-          confidence: answer.confidence
-        }
+    const confidence = lastChoiceConfidence()
+    if (confidence != null) {
+      out = {
+        verdict: verdict,
+        confidence: confidence
       }
     }
   }
@@ -6535,11 +6528,16 @@ def askJudge(command: string, reason: BroadReason, judge: CommandJudge): JudgeCa
 // failed call all go on to the question. A cancel is not a failure: `try`
 // passes it through.
 def judgeGate(command: string, reason: BroadReason, dir: string, limitMs: number, background: boolean, judge: CommandJudge): GateResult {
-  // currentPolicy() is the policy of the cliPolicyHandler this program
-  // installed, or an empty one. A rule there that approves or rejects the
-  // question means nobody will be asked, so there is nothing to judge.
-  const decided = checkPolicy(currentPolicy(), bashQuestion(command, dir, limitMs, background))
-  if (decided.type != "propagate") {
+  // A rule that approves or rejects the question means nobody will be
+  // asked, so there is nothing to judge. A run can be answered by two
+  // policies, and either one decides: runPolicy() is the run's root policy
+  // (`agency run --policy`, or the session driver's `policy` option), and
+  // currentPolicy() is the policy of a cliPolicyHandler the program
+  // installed.
+  const question = bashQuestion(command, dir, limitMs, background)
+  const byRun = checkPolicy(runPolicy(), question)
+  const byHandler = checkPolicy(currentPolicy(), question)
+  if (byRun.type != "propagate" || byHandler.type != "propagate") {
     return {
       outcome: "skipped",
       verdict: "fine"

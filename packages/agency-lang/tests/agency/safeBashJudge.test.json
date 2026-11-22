@@ -20,12 +20,21 @@
     },
     {
       "nodeName": "noJudgeAsksAsBefore",
-      "description": "With no judge, a broad line asks std::bash as before and no model is called. There is no mock, so a model call would fail the case.",
+      "description": "With no judge, a broad line asks std::bash as before and no model is called. The mock refuses, so a judge called by mistake would refuse the line and nothing would be raised.",
       "input": "",
       "expectedOutput": "[\"std::bash\"]",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
-      "llmMocks": []
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "useSimplerCommands", "confidence": 0.95, "probabilities": { "fine": 0.03, "useSimplerCommands": 0.95, "tooLongToReview": 0.02 } } } }
+      ]
+    },
+    {
+      "nodeName": "checkUsesTheRaisesOrigin",
+      "description": "The origin the policy check uses is the origin the compiler gives the real raise. This fails the day the module moves and the two drift apart.",
+      "input": "",
+      "expectedOutput": "{\"raised\":\"std::safeBash\",\"checked\":\"std::safeBash\"}",
+      "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "rejectionStaysAFailure",

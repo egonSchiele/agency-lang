@@ -136,7 +136,6 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "scripttestBrain"
   ],
   "std::agents/brains/settings": [
-    "modelOptions",
     "reasoningChoice",
     "commandJudgeFor",
     "commandJudgeOf",
@@ -496,6 +495,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   "std::llm": [
     "setLlmOptions",
     "setModel",
+    "modelOptions",
     "envVarFor",
     "pickProvider",
     "registerProviderModule",
@@ -767,6 +767,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "getTokens",
     "getModelCosts",
     "lastReply",
+    "lastChoiceConfidence",
     "listThreads",
     "sessionThreadId",
     "currentThreadId",

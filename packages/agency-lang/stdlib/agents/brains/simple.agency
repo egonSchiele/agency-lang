@@ -2,7 +2,8 @@
   @summary The simplest brain of the Agency agent: one LLM call with no
   tools of its own, on the caller's conversation thread.
 */
-import { AgentSettings, modelOptions } from "std::agents/brains/settings"
+import { AgentSettings } from "std::agents/brains/settings"
+import { modelOptions } from "std::llm"
 import { Attachment, ensureSystemMessage, systemMessage } from "std::thread"
 
 static const SIMPLE_PROMPT = "You are a helpful assistant. Answer directly and concisely."

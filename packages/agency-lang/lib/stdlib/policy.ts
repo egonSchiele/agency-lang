@@ -24,6 +24,13 @@ export function _checkPolicy(
   const { ctx } = currentRun();
   return checkPolicy(policy, interrupt, ctx.policyDirs);
 }
+/** The policy the run's root handler answers with, or `{}` when it has
+ *  none. A copy: the live policy belongs to the handler, and a caller that
+ *  changed it would change what the handler approves. */
+export function _runPolicy(): Policy {
+  const { ctx } = currentRun();
+  return structuredClone(ctx.runPolicy ?? {});
+}
 export {
   alwaysScopeFor as _alwaysScopeFor,
   allAlwaysScopes as _allAlwaysScopes,

@@ -81,4 +81,4 @@ Ask the router model which agent should handle the message. Anything
 
 **Returns:** [RouteChoice](#routechoice)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/router.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/router.agency#L103))

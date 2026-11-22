@@ -1,5 +1,5 @@
 import { safeBash, startJob, planFor, outcomeOf, CommandJudge } from "std::safeBash"
-import test { judgeGate } from "std::safeBash"
+import test { judgeGate, bashQuestion } from "std::safeBash"
 import { BroadReason } from "std::safeBash/actions"
 import { listJobs } from "std::jobs"
 import { cliPolicyHandler } from "std::policy"
@@ -127,6 +127,25 @@ node gateMatchesOrigin() {
     interactive: false,
   )
   return judgeGate(LINE, REASON, __dirname, 120000, false, JUDGE)
+}
+
+// The raise gets its origin from the compiler; the check builds its own.
+// They must be the same string, or a rule on the origin would decide the
+// raise and not the check. This compares the origin a real raise carries
+// with the one the check uses.
+node checkUsesTheRaisesOrigin() {
+  let raised = ""
+  handle {
+    safeBash(LINE, cwd: __dirname)
+  } with (intr) {
+    raised = intr.origin
+    return reject()
+  }
+  const checked = bashQuestion(LINE, __dirname, 120000, false).origin
+  return {
+    raised: raised,
+    checked: checked
+  }
 }
 
 // A job's question says "in the background". A rule on that wording

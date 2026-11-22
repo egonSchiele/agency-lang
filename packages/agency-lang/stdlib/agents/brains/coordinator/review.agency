@@ -5,7 +5,8 @@
   a chat message, and choosing the reviewer.
 */
 import { agencyReviewAgent } from "std::agents/agency/review"
-import { AgentSettings, modelOptions } from "std::agents/brains/settings"
+import { AgentSettings } from "std::agents/brains/settings"
+import { modelOptions } from "std::llm"
 import { Feedback, mergeFeedback, renderFeedback } from "std::agents/lib/feedback"
 import { reviewAgent as generalReviewAgent } from "std::agents/review"
 import { setMemoryId } from "std::memory"

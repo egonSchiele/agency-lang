@@ -246,9 +246,11 @@ after `asJobPlan` and before `raiseAll`:
    the `std::bash` question with `bashQuestion`, the builder `raiseOne`
    raises from, so the message (with a job's "in the background"), the
    data (with a job's limit), and the origin (`std::safeBash`) are the ones
-   the raise carries. It checks them against `currentPolicy()`. A rule that
-   approves or rejects means nobody will be asked, so the judge is skipped
-   and `raiseAll` lets the rule answer.
+   the raise carries. It checks them against both policies that can answer
+   a run: `runPolicy()`, the run's root policy, and `currentPolicy()`, the
+   policy of a `cliPolicyHandler`. A rule in either that approves or rejects
+   means nobody will be asked, so the judge is skipped and `raiseAll` lets
+   the rule answer.
 3. **Otherwise, ask the judge.** `askJudge` makes one `type: "decision"`
    call on a fresh thread that holds only the command, with no retries and
    a 3-second limit, in the shape of the router's call. The answer is one
@@ -272,14 +274,34 @@ The rules this keeps:
   pauses the run, resuming continues after the judge call and does not
   call the judge again.
 
-What the policy check cannot see: it reads only the policy of the
-`cliPolicyHandler` the program installed. An approval that comes from
-somewhere else, such as a TypeScript host that answers interrupts itself,
-a served agent, a `with approve` around the agent, or a parent process
-answering for a subprocess, does not count, and the judge runs on a line
-that would not have prompted. `currentPolicy()` may also load the policy
-file the first time, and save "always" answers waiting to be written. Those
-reads and writes are the handler's own, which it does not ask about.
+The two policies, and where each comes from:
+
+- **The run's root policy** (`runPolicy()`). `installRunPolicyHandler`
+  keeps the policy it installs on the run (`RuntimeContext.runPolicy`), on
+  a fresh run and again on every resume. It is the policy `agency run
+  --policy`, `--approve`, and `--reject` give a run, and the `policy`
+  option a host passes. The agent's session driver passes the session's
+  policy that way, so in an interactive `agency agent` session this is the
+  policy that holds the user's "always" answers. `runPolicy()` returns a
+  copy, because a caller that changed the live policy would change what
+  the handler approves.
+- **A `cliPolicyHandler`'s policy** (`currentPolicy()`). A program that
+  installs `cliPolicyHandler` itself, such as `agency agent -p`, keeps its
+  rules there. The first call may load the policy file, and any call may
+  save "always" answers waiting to be written. Those reads and writes are
+  the handler's own, which it does not ask about.
+
+What the check cannot see: an answer that comes from neither policy, such
+as a TypeScript host that answers interrupts itself, a `handle` block or
+`with approve` around the agent, or a parent process answering for a
+subprocess (an IPC child installs no root handler, so its `runPolicy()` is
+empty). For those, the judge runs on a line that would not have prompted.
+
+The judge's call shares its parts with the router's: `modelOptions` in
+`std::llm` picks the model, and `lastChoiceConfidence()` in `std::thread`
+reads how sure the model was. The typed `llm()` call itself stays in
+`askJudge`, because its type annotation is what makes the three labels the
+possible answers.
 
 In `agency agent`, the model comes from the `judge` slot
 (`--model judge=<provider>/<model>`, `slots.judge` in a preset). It has

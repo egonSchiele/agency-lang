@@ -2071,38 +2071,63 @@ This asks one `std::exec` whose `cwd` is the real `packages/agency-lang`.
 The `cd` raises nothing. Every path and every payload to its right is
 resolved against the new directory.
 
-The `&&` form needs no help from safeBash. When the `cd` fails, bash
-runs nothing to its right, so the commands there only ever run in the
-new directory, and a payload that names it is true. After `;` or a
-newline, bash runs the next command even when the `cd` failed, so
-safeBash adds a guard that ends the script instead. After `||` the next
-command runs only when the `cd` failed, so that line is broad.
-
-A `cd` that is a whole command of the top-level list runs behind a
-guard:
+Every command after the `cd` is classified in the new directory, whether
+it follows `&&`, `;`, or a newline:
 
 ```
-cd /Users/me/proj/packages/agency-lang
-sed -n 480,560p lib/importPaths.ts
-grep -n findPkgDir lib/importPaths.ts
+cd lib && ls; cat README.md
 ```
 
-runs as
+This asks `std::ls` for `lib` and `std::read` for `lib/README.md`.
+
+### A step runs only in the folder it was planned in
+
+A question names a folder, so it is true only if its command runs
+there. The runner runs each `cd` itself (`runCd`), and a `cd` whose
+folder is gone, or now leads somewhere else, stops the line. That leaves
+a `cd` that bash skips without it failing:
 
 ```
-cd '/Users/me/proj/packages/agency-lang' || exit 1; sed -n 480,560p lib/importPaths.ts; grep -n findPkgDir lib/importPaths.ts
+pnpm build && cd dist && ls; cat out.txt
 ```
 
-The `cd` raises nothing. `classifyAll` classifies every command after it
-in the new directory. When the `cd` fails, `exit 1` ends the script, so
-a later command runs in the new directory or it does not run. Bash
-would run it in the old directory, so the line is stricter than it was
-written. `cdOrExit` builds the guard.
+When the build fails, bash skips the `cd` and the `ls`, and runs `cat
+out.txt` in the starting folder. Its question named `dist/out.txt`. So
+before each run step and each `cd` step, `skippedCd` compares the folder
+the step was planned in (its `cwd`) with the folder the line is in. When
+they differ, the line stops before the step:
 
-`exit 1` ends the shell the guard runs in, so no command after it runs.
-That holds however the host wraps the text: inside a function, a sourced
-file, or a subshell. `guardEndsTheScript` checks that the command after
-the guard prints nothing and that the exit code is 1.
+```
+Stopped before `cat out.txt`: it was planned to run in /repo/dist, and
+the line is still in /repo, because the `cd` before it did not run.
+`pnpm build` already ran. Run the rest as a new command if you still
+want it.
+[stopped: the plan changed]
+```
+
+Both folders are strings the planner wrote, so they are compared as
+text. The stop reuses the label of the stop in "Each step is checked
+just before it runs".
+
+This is the one place a line runs differently from bash, which would
+run `cat out.txt` in `/repo`. The stop applies to a command that ignores
+its folder too, such as `echo finished`. When every `cd` in the line
+happens, the line runs as bash runs it.
+
+A `cd` that exists and cannot be entered is not caught by `runCd`. The
+line moves there, and each later command fails to start in it, so no
+question is false in that case either.
+
+After `||` the next command runs when the `cd` failed or when the
+command after it failed, so `cd x && a || b` is broad. The runner could
+stop it the same way, but not inside a group in a pipeline, which bash
+runs in one step: `(cd x && a || b) | head`. A `;` inside such a group
+would need the same care. Today the bash parser rejects it, and
+`cdDoesNotLeakOutOfItsChain` fails on the day it does not.
+
+A `cd` that is a whole command of the top-level list is rebuilt as
+`cd '/abs' || exit 1` in the plan's `command` text (`cdOrExit`). The
+debug log records that text, and nothing runs it.
 
 A line where no command raises an effect is still broad. `cd x` alone
 and `cd x; echo hi` both ask `std::bash` and run the original text.
@@ -2117,17 +2142,15 @@ with it. The refuse wall still reads the flat list from
   the left, so `cd x && a && b` is `(cd x && a) && b`, and that hand-over
   is how `b` is classified in `x`. `a && cd x && b` is
   `(a && cd x) && b`, so `b` is classified in `x` too, and it runs only
-  when the `cd` worked. The rules below refuse the same `cd` followed by
-  `;` or `||`.
+  when the `cd` worked.
 - **`or`**: a left side that ends in another directory is unrecognized,
   so `cd x && a || b` is broad.
 - **parentheses and pipeline stages**: each is a subshell, so the
   directory after one is the directory before it. `(cd x && a) && b`
   classifies `b` in the original directory.
-- **the top-level list**: a `cd` that is a whole command moves every
-  command after it, behind the guard. Any other command that ends in
-  another directory must be the last one, so `cd x && a; b` is broad and
-  `a; cd x && b` is not.
+- **the top-level list**: each command is classified in the line the one
+  before it ended with. A `cd` that is a whole command moves every
+  command after it, and so does a `cd` inside an `&&` chain.
 
 `cdTarget` accepts one literal argument that resolves to a directory that
 exists, or to a folder the line made (see `made` above). `cd` alone, `cd -`, a variable, a second argument, a redirect, or
@@ -2414,8 +2437,10 @@ two give different payloads; for a folder the line made, a file it wrote,
 and a second write to that file they give the same ones
 (`harmlessLinesDoNotStop`).
 
-A step that runs in process is not checked. The stdlib tool checks the
-path when it opens it. The refuse wall is not run again either. It reads
+A step that runs in process is not planned again. The stdlib tool checks
+the path when it opens it. Like every run step and `cd` step, it is
+still stopped when the line is not in the folder it was planned in (see
+"A step runs only in the folder it was planned in"). The refuse wall is not run again either. It reads
 the disk only for `rm`, and a changed `rm` target changes the
 `std::remove` payload, so the plan check stops the line. The payload keeps
 a link in the last step as written, which is right for `rm link`, so for

@@ -393,6 +393,8 @@ node removeAfterCd() {
   // The same two lines with the `cd` on a line of its own.
   const outOnItsOwnLine = planFor("cd ..\nrm -rf ${folder}", launch)
   const insideOnItsOwnLine = planFor("cd tests\nrm -rf no-such-folder-xyz", launch)
+  // The `rm` after `;` is planned in the folder the `cd` moved to.
+  const outAfterSemicolon = planFor("cd .. && ls; rm -rf ${folder}", launch)
   return [
     outcomeOf(out),
     [e.name for e in out.effects],
@@ -404,6 +406,9 @@ node removeAfterCd() {
     saysRefused(outOnItsOwnLine),
     outcomeOf(insideOnItsOwnLine),
     [e.name for e in insideOnItsOwnLine.effects],
+    outcomeOf(outAfterSemicolon),
+    [e.name for e in outAfterSemicolon.effects],
+    saysRefused(outAfterSemicolon),
   ]
 }
 
@@ -1279,8 +1284,9 @@ node dotDotAfterALinkHasNoRule() {
 }
 
 // `a && cd dir && b`: `b` runs only when the `cd` worked, so it is
-// classified in `dir`. After `;`, `||`, or in a pipe, where it would run
-// either way, the line has no rule.
+// classified in `dir`. After `;` it is classified in `dir` too, and the
+// runner stops the line before it when the `cd` was skipped. After `||`,
+// or in a pipe, the line has no rule.
 node cdOnTheRightOfAnd() {
   makeFilesFixture()
   const rows = [
@@ -2515,18 +2521,30 @@ def rebuiltEndsWith(source: string, ending: string): any {
 }
 
 // Lines that still ask std::bash: a `cd` that names no folder safeBash
-// can resolve, whether it comes first or last, a later command that
-// moves again and is not last, a line
-// where no command raises an effect, and `cd x && a; b`.
+// can resolve, whether it comes first or last, and a line where no
+// command raises an effect.
 node cdOnItsOwnLineStaysStrict() {
   return [
     cdSummary("cd missing\nls"),
     cdSummary("cd -\nls"),
     cdSummary("cd $HOME\nls"),
-    cdSummary("cd grep-fixtures\ncd ../read-fixtures && ls\nls"),
     cdSummary("cd grep-fixtures\necho hi"),
-    cdSummary("cd grep-fixtures && ls; cat one.txt"),
     cdSummary("ls\ncd missing"),
+  ]
+}
+
+// A command after `;` that follows a `cd x &&` chain is classified in `x`.
+// When the `cd` is skipped, the runner stops the line before it
+// (safeBashSteps.agency, `aSkippedCdStopsTheLine`).
+node cdThenMoreCommandsIsNarrow() {
+  return [
+    cdSummary("cd grep-fixtures && ls; ls"),
+    cdSummary("cd grep-fixtures && pnpm test > /tmp/out.txt 2>&1; tail -5 /tmp/out.txt"),
+    cdSummary("cd grep-fixtures && pnpm test 2>&1 | tail -20; echo ---"),
+    cdSummary("pnpm build && cd grep-fixtures && ls; echo finished"),
+    cdSummary("cd grep-fixtures && ls; cd .. && ls"),
+    cdSummary("cd grep-fixtures && ls; cat one.txt"),
+    cdSummary("cd grep-fixtures\ncd ../read-fixtures && ls\nls"),
   ]
 }
 
@@ -2546,10 +2564,6 @@ node cdAnywhereElseIsBroad() {
   ]
 }
 
-// The directory after a `cd` is known only inside the `&&` chain that
-// holds it. A subshell ends the move, so the command after it is
-// classified in the original folder. After `;` or `||` the directory
-// depends on whether the `cd` worked, so the string is broad.
 /* A line's outcome and its effects, each by name, with the variable a
  std::env effect names. */
 def envRow(line: string): any {
@@ -2595,6 +2609,14 @@ node variablesAskStdEnv() {
   return rows
 }
 
+// A subshell ends the move, so the command after it is classified in the
+// original folder. After `||` the folder depends on whether the `cd`
+// worked, so that line is broad.
+//
+// The last row is broad only because the bash parser rejects a `;` inside
+// parentheses. Bash runs a pipeline in one step, so the runner could not
+// stop between the `cd` and the second `ls`. When the parser accepts this
+// line, this row fails, and the group needs a rule of its own.
 node cdDoesNotLeakOutOfItsChain() {
   return [
     cdSummary("(cd grep-fixtures && ls) && ls"),
@@ -2602,6 +2624,7 @@ node cdDoesNotLeakOutOfItsChain() {
     cdSummary("cd grep-fixtures && ls; ls"),
     cdSummary("cd grep-fixtures && ls || ls"),
     cdSummary("ls; cd grep-fixtures && ls"),
+    cdSummary("(cd grep-fixtures && ls; ls) | head"),
   ]
 }
 

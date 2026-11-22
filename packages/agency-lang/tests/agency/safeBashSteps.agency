@@ -64,6 +64,8 @@ node steppedLinesPrintWhatOneBashPrinted() {
     "ls sub; false; printf 'exit=%s\\n' \"$?\"",
     "cd sub && ls",
     "(cd sub && ls); ls",
+    "cd sub && ls; ls",
+    "(false && cd sub && ls); ls",
     "ls | head -1 && printf 'done\\n'",
     "ls sub; printf 'x\\n' >&2; false",
   ]]
@@ -99,6 +101,46 @@ node aGroupWhoseFolderWentAwayStops() {
   const out = withFolderGone("(cd gone && ls); ls sub")
   const text = textOf(out)
   return [kind, isSuccess(out), text.includes("Stopped before"), text.includes("a.txt")]
+}
+
+/* A line run in the fixture, with a folder `sub/other` added, and its
+ text with the fixture's path replaced. */
+def skippedCdRow(line: string): any {
+  makeFixture()
+  mkdir(FIXTURE + "/sub/other") with approve
+  const out = safeBash(line, cwd: FIXTURE) with approve
+  const text = textOf(out).split(FIXTURE).join("<fixture>")
+  remove(FIXTURE) with approve
+  return [line, isSuccess(out), failureType(out), text]
+}
+
+// A command after `;` was planned in the folder a `cd` before it moved to.
+// The `false` skips that `cd`, so the line is still in the fixture, and it
+// stops before the command instead of running it there. The stop names
+// the skipped `cd`, which separates it from the stop for a folder that
+// changed on disk.
+//
+// The first row is a read safeBash runs itself, and nothing else would
+// stop it. The second is a step bash runs, which the folder check would
+// also stop, with a different sentence. The third is a relative `cd`,
+// which would otherwise resolve `other` from the fixture. The last row
+// shows that a command that ignores its folder stops too.
+node aSkippedCdStopsTheLine() {
+  return [
+    skippedCdRow("false && cd sub; cat a.txt"),
+    skippedCdRow("false && cd sub; ls | wc -l"),
+    skippedCdRow("false && cd sub; cd other && ls"),
+    skippedCdRow("false && cd sub && ls; echo finished"),
+  ]
+}
+
+// The `wc` row above is meant to cover a step bash runs. This fails if
+// that pipeline ever moves in process.
+node theSkippedCdPipelineRunsInBash() {
+  makeFixture()
+  const row = decidesRow("false && cd sub; ls | wc -l")
+  remove(FIXTURE) with approve
+  return row
 }
 
 /** A folder outside the fixture, for a link to point at. */
@@ -477,23 +519,32 @@ node aCheckoutThatSwapsAPathStops() {
 /** A link to the fixture, to run a line from a folder spelled through it. */
 static const FIXTURE_LINK = __dirname + "/stdlib/__safebash_steps_link__"
 
-// The folder check compares real folders. The starting folder a line is
-// planned in can be ".", a relative path, or a path through a link, and
-// none of those stops a line whose folder did not change.
+// The folder check compares real folders, and the check for a skipped `cd`
+// compares the folder strings the planner wrote. The starting folder a
+// line is planned in can be ".", a relative path, or a path through a
+// link, and none of those stops a line whose folder did not change, with
+// or without a `cd`.
 node anUnchangedFolderSpelledAnotherWayRuns() {
   makeFixture()
   // `remove` refuses a link, so the link is made and removed by bash. `-n`
   // replaces a link left by an earlier run instead of following it.
   bash("ln -sfn ${FIXTURE} ${FIXTURE_LINK}") with approve
+  const fromHere = relative(cwd(), FIXTURE)
   const fromDot = safeBash("pnpm --version; ls", cwd: ".") with approve
   const fromLink = safeBash("pnpm --version; ls", cwd: FIXTURE_LINK) with approve
-  const fromRelative = safeBash("pnpm --version; ls", cwd: relative(cwd(), FIXTURE)) with approve
+  const fromRelative = safeBash("pnpm --version; ls", cwd: fromHere) with approve
+  const cdFromDot = safeBash("cd ${fromHere}/sub && ls; cat a.txt", cwd: ".") with approve
+  const cdFromLink = safeBash("cd sub && ls; cat a.txt", cwd: FIXTURE_LINK) with approve
+  const cdFromRelative = safeBash("cd sub && ls; cat a.txt", cwd: fromHere) with approve
   bash("rm -f ${FIXTURE_LINK}") with approve
   remove(FIXTURE) with approve
   return [
     [".", textOf(fromDot).includes("Stopped before")],
     ["link", textOf(fromLink).includes("Stopped before")],
     ["relative", textOf(fromRelative).includes("Stopped before")],
+    ["cd from .", textOf(cdFromDot)],
+    ["cd from link", textOf(cdFromLink)],
+    ["cd from relative", textOf(cdFromRelative)],
   ]
 }
 

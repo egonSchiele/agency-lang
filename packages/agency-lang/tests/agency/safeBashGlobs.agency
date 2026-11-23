@@ -1,0 +1,172 @@
+import { mkdir, remove } from "std::fs"
+import { planFor, outcomeOf, safeBash } from "std::safeBash"
+import { bash } from "std::shell"
+
+// A glob in the file-name part of a path asks about the folder the glob is
+// in, and bash expands it. These tests plan lines in one small tree, and
+// run a few of them for real.
+
+static const GLOB_TREE = __dirname + "/stdlib/__safebash_glob_tree__"
+static const GLOB_ROOT = GLOB_TREE + "/tree"
+
+/* `lib/.hidden.ts` and `lib/node_modules/p/x.ts` hold `hello` too, and no
+ run may print them. `dash/-o` is a file that a bare `*` puts first on
+ a command line, where a program would read it as a flag. */
+def makeGlobTree() {
+  remove(GLOB_TREE) with approve
+  mkdir(GLOB_TREE) with approve
+  const folders = "mkdir -p tree/lib/sub tree/lib/node_modules/p tree/dash"
+  const hellos = "for f in tree/one.txt tree/lib/a.ts tree/lib/b.ts tree/lib/c.js tree/lib/.hidden.ts tree/lib/sub/d.ts tree/lib/node_modules/p/x.ts; do echo hello > $f; done"
+  const dash = "cd tree/dash && echo dash > ./-o && echo keep > a.txt && printf 'z\\ny\\n' > b.txt"
+  bash("${folders} && ${hellos} && ${dash}", cwd: GLOB_TREE) with approve
+}
+
+/* The real path of the tree's root, as payloads name it: the folder a
+ bare `ls` asks about. */
+def rootDir(): string {
+  const listing: any = planFor("ls", GLOB_ROOT).effects[0]
+  return listing.payload.dir
+}
+
+def relativeDir(dir: string, root: string): string {
+  if (dir == root) {
+    return ""
+  }
+  if (dir.startsWith(root + "/")) {
+    return dir.slice(root.length)
+  }
+  return dir
+}
+
+def textOrNull(value: any): string {
+  if (value == null) {
+    return "null"
+  }
+  return "${value}"
+}
+
+/* One question as a line: the effect, the folder relative to the root,
+ then what narrows it. */
+def questionOf(effect: any, root: string): string {
+  const name: string = effect.name
+  const payload: any = effect.payload
+  if (name == "std::grep") {
+    return "${name} ${relativeDir(payload.dir, root)} ${textOrNull(payload.file)}"
+  }
+  if (name == "std::read") {
+    return "${name} ${relativeDir(payload.dir, root)} ${textOrNull(payload.filename)}"
+  }
+  if (name == "std::ls") {
+    return "${name} ${relativeDir(payload.dir, root)} ${textOrNull(payload.recursive)}"
+  }
+  return name
+}
+
+def planRow(source: string, root: string): any {
+  const plan = planFor(source, GLOB_ROOT)
+  return [source, outcomeOf(plan), [questionOf(effect, root) for effect in plan.effects]]
+}
+
+def executionCommandIn(source: string, cwd: string): any {
+  return match(planFor(source, cwd).execution) {
+    { kind: "bash", command } => command
+    { kind: "steps", command } => command
+    _ => "NOT-BASH"
+  }
+}
+
+node globPlans() {
+  makeGlobTree()
+  const root = rootDir()
+  const rows = [
+    // The folder and the name part. `wc -l` keeps a grep with bash.
+    planRow("grep -n hello lib/*.ts | wc -l", root),
+    planRow("grep -n hello *.txt | wc -l", root),
+    planRow("grep -n hello lib/[ab].ts | wc -l", root),
+    planRow("grep -n hello lib/*/d.ts | wc -l", root),
+    planRow("grep -n hello lib/.* | wc -l", root),
+    planRow("grep -n hello ~/*.md | wc -l", root),
+    planRow("grep -n hello nope/*.ts | wc -l", root),
+    planRow("grep -n hello one.txt/*.ts | wc -l", root),
+    // grep. The last row is a lone grep the in-process search could run,
+    // which goes to bash because bash expands the glob.
+    planRow("grep -rn hello lib/*.ts | wc -l", root),
+    planRow("grep -n hello one.txt lib/*.ts | wc -l", root),
+    planRow("grep -n hello lib/*.zzz | wc -l", root),
+    planRow("grep -n hello lib/*.ts", root),
+    executionCommandIn("grep -n hello one.txt lib/*.ts | wc -l", GLOB_ROOT),
+    executionCommandIn("grep -rn hello lib/* | wc -l", GLOB_ROOT),
+    // Listings. A fixed path and a glob for the same folder are one question.
+    planRow("ls lib/*.ts", root),
+    planRow("ls -la lib/*.ts | head -3", root),
+    planRow("ls lib lib/*.ts", root),
+    planRow("du -sh lib/*", root),
+    planRow("tree lib/*", root),
+    planRow("ls lib/*/d.ts", root),
+    planRow("find lib/* -name d.ts", root),
+    // `--` goes before the paths of a listing or a read with a glob, and
+    // nowhere else.
+    executionCommandIn("ls -la lib/*.ts", GLOB_ROOT),
+    executionCommandIn("ls *.txt", GLOB_ROOT),
+    executionCommandIn("ls lib", GLOB_ROOT),
+    executionCommandIn("pytest lib/*.ts", GLOB_ROOT),
+    // Reads. A verb with a limit on its file count refuses a glob.
+    planRow("cat lib/*.ts", root),
+    planRow("wc -l lib/*.ts one.txt", root),
+    planRow("sort lib/*.ts | uniq -c", root),
+    planRow("cat *.txt", root),
+    planRow("head -5 lib/*.ts", root),
+    planRow("uniq lib/*.ts", root),
+    planRow("diff one.txt lib/*.ts", root),
+    planRow("cat lib/*/d.ts", root),
+    planRow("sed -n 1,5p lib/*.ts", root),
+    planRow("rm lib/*.ts", root),
+    executionCommandIn("wc -l one.txt lib/*.ts", GLOB_ROOT),
+  ]
+  remove(GLOB_TREE) with approve
+  return rows
+}
+
+/* What safeBash prints in `dir`, approving only `effect`: its lines
+ sorted, because ugrep promises no order across files, or "FAILED". */
+def runApproving(source: string, effect: string, dir: string): string {
+  let out = "FAILED"
+  handle {
+    const result = safeBash(source, cwd: dir)
+    if (result is success(text)) {
+      out = [line for line in text.split("\n") if line != ""].sort().join("\n")
+    }
+  } with (intr) {
+    if (intr.effect == effect) {
+      return approve()
+    }
+    return reject()
+  }
+  return out
+}
+
+/* What `sort *` printed in `dash`, and what `a.txt` holds afterward.
+ Without the `--`, bash would run `sort -o a.txt b.txt`. */
+def sortInDash(): any {
+  const dash = GLOB_ROOT + "/dash"
+  const printed = runApproving("sort *", "std::read", dash)
+  const after = read("a.txt", dash) with approve
+  if (after is failure(why)) {
+    return [printed, "UNREADABLE"]
+  }
+  return [printed, after.value.trim()]
+}
+
+node globsRunUnderTheFolderQuestion() {
+  makeGlobTree()
+  const rows = [
+    runApproving("grep -n hello lib/*.ts", "std::grep", GLOB_ROOT),
+    runApproving("grep -rn hello lib/*", "std::grep", GLOB_ROOT),
+    runApproving("ls lib/*.ts", "std::ls", GLOB_ROOT),
+    runApproving("cat lib/*.ts", "std::read", GLOB_ROOT),
+    runApproving("uniq lib/*.ts", "std::read", GLOB_ROOT),
+    sortInDash(),
+  ]
+  remove(GLOB_TREE) with approve
+  return rows
+}

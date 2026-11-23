@@ -9,7 +9,7 @@ import { _escapeGlob } from "agency-lang/stdlib-lib/policy.js"
 // mock, so nothing here reaches a provider.
 static const JUDGE: CommandJudge = {
   model: "jev-1.13",
-  provider: "typesafe"
+  provider: "openrouter"
 }
 
 // A broad line: safeBash has no rule for awk, and a pipe into it cannot be

@@ -1,5 +1,0 @@
-[
-  { "decide": { "answer": { "type": "choice", "choice": "useSimplerCommands", "confidence": 0.95, "probabilities": { "fine": 0.03, "useSimplerCommands": 0.95, "tooLongToReview": 0.02 } } } },
-  { "decide": { "answer": { "type": "choice", "choice": "useSimplerCommands", "confidence": 0.95, "probabilities": { "fine": 0.03, "useSimplerCommands": 0.95, "tooLongToReview": 0.02 } } } },
-  { "decide": { "answer": { "type": "choice", "choice": "useSimplerCommands", "confidence": 0.95, "probabilities": { "fine": 0.03, "useSimplerCommands": 0.95, "tooLongToReview": 0.02 } } } }
-]

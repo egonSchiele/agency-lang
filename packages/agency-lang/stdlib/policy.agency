@@ -266,9 +266,8 @@ let _internalIoDir: string = ""
 // prints once and not on every retry.
 let _saveFailing: boolean = false
 // Set by `useRunPolicy`. The policy in memory is then a run's policy, which
-// can hold rules its file must not get (the flags given at resume, the
-// saved policy's rejects), so a save applies only the new "always" answers
-// to what the file holds now.
+// can hold rules its file must not get (the flags given at resume), so a
+// save applies only the new "always" answers to what the file holds now.
 let _saveAnswersOnly: boolean = false
 // The "always" answers not yet saved, in the order they were given.
 let _pendingAnswers: PendingAnswer[] = []

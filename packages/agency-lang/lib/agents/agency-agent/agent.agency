@@ -97,9 +97,9 @@ def interactive(args: any, brainName: string, startAgent: string, seedPrompt: st
   // an `/image` read does) are judged by the session's policy too, and an
   // "always" answer to a session's approval is saved by this handler's
   // state (askAbout).
-  // Answers only: the policy can be layered (a session's own policy, the
-  // flags given now), and only what the person
-  // answers "always" belongs in the file.
+  // Answers only: the policy can be the session's own with the flags
+  // given now on top, and only what the person answers "always" belongs
+  // in the file.
   const handler = cliPolicyHandler(
     file: sessionPolicy.file,
     policy: sessionPolicy.policy,

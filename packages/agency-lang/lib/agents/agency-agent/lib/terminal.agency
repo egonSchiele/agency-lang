@@ -124,8 +124,8 @@ def savedPolicy(): Policy {
 }
 
 /** A resumed session's policy. One that carries its own runs under it, in
-  place of the saved policy, with the flags given now laid on top. One that carries none runs as a new session
-  without its own would. */
+  place of the saved policy, with the flags given now laid on top. One
+  that carries none runs as a new session without its own would. */
 export def resumedSessionPolicy(id: string, flags: any): SessionPolicy {
   const carried = readCarriedPolicy({ home: POLICY_DIR, id: id })
   if (carried is failure(reason)) {

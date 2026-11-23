@@ -5,7 +5,7 @@ import {
 } from "../../runtime/builtinPolicies.js";
 import { checkPolicyExplicit, type Policy, type PolicyDirs } from "../../runtime/policy.js";
 import { failure, success, type Result } from "../../types/result.js";
-import { rejectRulesOf, sessionRunPolicy, withPauseLeftAlone } from "./policy.js";
+import { sessionRunPolicy, withPauseLeftAlone } from "./policy.js";
 import { POLICY_UNREADABLE } from "./sessionPolicy.js";
 
 const PIN = [{ action: "propagate" }];
@@ -72,7 +72,9 @@ describe("sessionRunPolicy", () => {
     expect(checkPolicyExplicit(policy, raise("std::read"), DIRS)).toBeNull();
   });
 
-  it("keeps the saved policy's rejects in a session with a policy of its own", () => {
+  // A session's policy replaces the saved one whole. A reject can depend
+  // on the rules before it in its list, so it is not carried over alone.
+  it("does not take the saved policy's rejects into a session with a policy of its own", () => {
     const saved: Policy = {
       "std::bash": [{ action: "reject" }],
       "std::read": [{ action: "approve" }],
@@ -80,7 +82,8 @@ describe("sessionRunPolicy", () => {
     const policy = policyOf(
       sessionRunPolicy({ carried: success(minimalAutoApprovePolicy), saved, extra: null }),
     );
-    expect(checkPolicyExplicit(policy, raise("std::bash"), DIRS)).toEqual({ type: "reject" });
+    expect({ ...policy }).toEqual(minimalAutoApprovePolicy);
+    expect(checkPolicyExplicit(policy, raise("std::bash"), DIRS)).toBeNull();
     expect(checkPolicyExplicit(policy, raise("std::read"), DIRS)).toBeNull();
   });
 
@@ -137,20 +140,6 @@ describe("sessionRunPolicy", () => {
     expect(carried).toEqual({ "std::bash": [{ action: "reject" }] });
     expect(saved).toEqual({ "std::bash": [{ action: "reject" }] });
     expect(extra).toEqual({ "std::bash": [{ action: "approve" }] });
-  });
-});
-
-describe("rejectRulesOf", () => {
-  it("keeps each effect's reject rules in order and drops effects with none", () => {
-    const scoped = { match: { dir: "/secret/**" }, action: "reject" as const };
-    const policy: Policy = {
-      "std::read": [{ action: "approve" }, scoped, { action: "reject" }],
-      "std::ls": [{ action: "approve" }],
-      "*": [{ action: "propagate" }],
-    };
-    expect({ ...rejectRulesOf(policy) }).toEqual({
-      "std::read": [scoped, { action: "reject" }],
-    });
   });
 });
 

@@ -7,10 +7,11 @@ import { SESSION_INPUT_EFFECT } from "./interface.js";
  *  `readCarriedPolicy` gives for the session, and `saved` is the user's
  *  saved policy.
  *
- *  - The session has a policy of its own: that policy, with the reject
- *    rules of `saved` ahead of its rules. Only the rejects: beside
- *    `recommended`, a session started with `--policy minimal` would have
- *    its reads approved, since `minimal` says nothing about `std::read`.
+ *  - The session has a policy of its own: that policy, and nothing from
+ *    `saved`. A session started with `--policy minimal` gets neither the
+ *    approvals nor the rejects in the saved file. A rule's meaning can
+ *    depend on the rules before it in its list, so no rule is lifted out
+ *    of one policy into another.
  *  - It has none: `saved`.
  *  - Its policy can't be read: this fails, and `saved` is never used.
  *
@@ -37,23 +38,8 @@ export function sessionRunPolicy(args: {
   if (!carried.success) {
     return carried;
   }
-  const base =
-    carried.value === null
-      ? saved
-      : layerPolicy({ top: rejectRulesOf(saved), base: carried.value });
+  const base = carried.value === null ? saved : carried.value;
   return success(extra === null ? base : layerPolicy({ top: extra, base }));
-}
-
-/** Each effect's reject rules, in order. An effect with none is left out. */
-export function rejectRulesOf(policy: Policy): Policy {
-  const rejects: Policy = Object.create(null);
-  for (const effect of Object.keys(policy)) {
-    const rules = policy[effect].filter((rule) => rule.action === "reject");
-    if (rules.length > 0) {
-      rejects[effect] = rules;
-    }
-  }
-  return rejects;
 }
 
 /** `policy` with the core's pause pinned to `propagate`.

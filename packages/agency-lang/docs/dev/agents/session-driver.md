@@ -208,11 +208,11 @@ if (!policy.success) {
 await resumeRun({ agent, callbacks, policy: policy.value, interrupts: pause, responses });
 ```
 
-- With a policy of its own, the run gets that policy with the saved
-  policy's reject rules ahead of its rules. The saved approvals are left
-  out. Every handler is consulted, and a policy with no rule for an
-  effect says nothing, so beside `recommended` a session started with
-  `--policy minimal` would have its reads approved.
+- With a policy of its own, the run gets that policy and nothing from
+  the saved one, which is what the session ran under when it started.
+  No rule is lifted out of the saved policy: under first-match-wins, a
+  reject that follows an approve means "reject, unless the approve
+  already answered", and lifted out alone it would reject more.
 - With none, the run gets `saved`.
 - When the file can't be read, or is not a valid policy, it fails with
   "This session's own policy can't be read, so it can't be continued
@@ -227,7 +227,7 @@ await resumeRun({ agent, callbacks, policy: policy.value, interrupts: pause, res
 "Always" answers given in a session with a policy of its own are saved
 to its policy file, approvals and rejections both, so they follow the
 session to any front-end. Only the answer's rule is added to the file;
-the flags given at resume and the saved policy's rejects stay out of it.
+the flags given at resume stay out of it.
 The terminal does this by passing that file to `askAbout`
 (`approval-policies.md`).
 
@@ -393,11 +393,10 @@ A session started with no flags carries no policy, so flags given when it
 is resumed apply to that sitting only: the next resume, here or in
 another front-end, runs it under the saved policy again. The shell
 installs `cliPolicyHandler` with the session's policy and file, and with
-`answersOnly: true`, since the policy can be layered from the session's
-own, the saved policy's rejects and flags given now, and only what a
-person answers "always" belongs in the file. A resume of a session this
-build can't run is refused before `takeHold`, so the front-end that has
-it open keeps it.
+`answersOnly: true`, since the policy can be the session's own with the
+flags given now on top, and only what a person answers "always" belongs
+in the file. A resume of a session this build can't run is refused
+before `takeHold`, so the front-end that has it open keeps it.
 
 **What the commands read.** The footer, `/cost`, `/model`, `/preset`,
 `/settings` and `/search` read the session's last pause (`_pause()`) and

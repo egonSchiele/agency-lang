@@ -152,12 +152,13 @@ async function uploadRun(
       // cannot complete.
       return failed(dir, traceId, summary, plan.reason);
     }
-    // Chunked before any post, so an event statelog can never accept refuses
-    // the run instead of leaving a trace that can't be finished.
+    // Split before any post, so a run with an event over the request limit
+    // fails before anything is sent, instead of leaving a trace that can't be
+    // finished.
     const from = plan.kind === "resume" ? plan.from : 0;
     const chunks =
       plan.kind === "upload-all" || plan.kind === "resume"
-        ? requestChunks(sequencedFrom(events, from))
+        ? requestChunks(traceId, sequencedFrom(events, from))
         : [];
     if (plan.kind === "create-empty") {
       await client.postEvents(traceId, []);

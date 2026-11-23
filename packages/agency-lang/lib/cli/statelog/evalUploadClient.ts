@@ -33,8 +33,9 @@ export type SequencedEvent = { sequence: number; envelope: EventEnvelope };
 
 export type EvalUploadClient = {
   traceUploadState(traceId: string): Promise<RemoteTraceState>;
-  /** At most `EVENTS_PER_REQUEST` events and `MAX_REQUEST_BYTES` of events
-   *  (split with `requestChunks`). An empty list creates the trace. */
+  /** At most `EVENTS_PER_REQUEST` events in a body of at most
+   *  `MAX_REQUEST_BYTES` (split with `requestChunks`). An empty list creates
+   *  the trace. */
   postEvents(traceId: string, events: readonly SequencedEvent[]): Promise<void>;
   /** Upsert by deterministic id; the server recomputes the id before writing. */
   postAnnotations(rows: readonly Annotation[]): Promise<void>;
@@ -42,9 +43,9 @@ export type EvalUploadClient = {
 
 export const EVENTS_PER_REQUEST = 500;
 
-/** Counts the events as sent, not the small request wrapper; kept under
- *  statelog's 5 MiB JSON body limit. */
-export const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+/** Statelog's JSON body limit (`express.json({ limit: "5mb" })`), measured
+ *  on the exact body `postEvents` sends. */
+export const MAX_REQUEST_BYTES = 5 * 1024 * 1024;
 
 type RequestLimits = { maxEvents: number; maxBytes: number };
 
@@ -53,44 +54,58 @@ const DEFAULT_LIMITS: RequestLimits = {
   maxBytes: MAX_REQUEST_BYTES,
 };
 
-function toWireEvent(entry: SequencedEvent): { sequence: number; event: EventEnvelope } {
+type WireEvent = { sequence: number; event: EventEnvelope };
+
+function toWireEvent(entry: SequencedEvent): WireEvent {
   return { sequence: entry.sequence, event: entry.envelope };
 }
 
-function wireBytes(entry: SequencedEvent): number {
-  return Buffer.byteLength(JSON.stringify(toWireEvent(entry)));
+function bulkBody(
+  traceId: string,
+  events: readonly SequencedEvent[],
+): { traceId: string; events: WireEvent[] } {
+  return { traceId, events: events.map(toWireEvent) };
 }
 
+function jsonBytes(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value));
+}
+
+/** Rounded up, so a size just over a limit never prints as equal to it. */
 function mebibytes(bytes: number): string {
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+  return `${(Math.ceil((bytes / (1024 * 1024)) * 100) / 100).toFixed(2)} MiB`;
 }
 
-/** Splits events into the requests `postEvents` accepts. Throws, before
- *  anything is sent, if one event alone is over the byte limit: statelog
- *  could never accept it, and a partial upload could never be finished. */
+/** Splits events into the requests `postEvents` accepts, sizing each by its
+ *  exact body. Throws, before anything is sent, if one event alone makes a
+ *  request over the byte limit: statelog could never accept it, and a
+ *  partial upload could never be finished. */
 export function requestChunks(
+  traceId: string,
   events: readonly SequencedEvent[],
   limits: RequestLimits = DEFAULT_LIMITS,
 ): SequencedEvent[][] {
+  const emptyBytes = jsonBytes(bulkBody(traceId, []));
   const chunks: SequencedEvent[][] = [];
   let current: SequencedEvent[] = [];
-  let currentBytes = 0;
+  let currentBytes = emptyBytes;
   for (const event of events) {
-    const bytes = wireBytes(event);
-    if (bytes > limits.maxBytes) {
+    const bytes = jsonBytes(toWireEvent(event));
+    if (emptyBytes + bytes > limits.maxBytes) {
       throw new EvalUploadError(
-        `event ${event.sequence} is ${mebibytes(bytes)}, over the ` +
+        `event ${event.sequence} is ${mebibytes(emptyBytes + bytes)}, over the ` +
           `${mebibytes(limits.maxBytes)} request limit; this run cannot be uploaded`,
       );
     }
-    const full = current.length === limits.maxEvents || currentBytes + bytes > limits.maxBytes;
+    // +1 for the comma between events in the array.
+    const full = current.length === limits.maxEvents || currentBytes + 1 + bytes > limits.maxBytes;
     if (current.length > 0 && full) {
       chunks.push(current);
       current = [];
-      currentBytes = 0;
+      currentBytes = emptyBytes;
     }
+    currentBytes += (current.length > 0 ? 1 : 0) + bytes;
     current.push(event);
-    currentBytes += bytes;
   }
   if (current.length > 0) chunks.push(current);
   return chunks;
@@ -205,14 +220,14 @@ export function createEvalUploadClient(
           `postEvents: ${events.length} events in one request; the limit is ${EVENTS_PER_REQUEST}`,
         );
       }
-      const bytes = events.reduce((total, entry) => total + wireBytes(entry), 0);
+      const body = bulkBody(traceId, events);
+      const bytes = jsonBytes(body);
       if (bytes > MAX_REQUEST_BYTES) {
         throw new EvalUploadError(
-          `postEvents: ${mebibytes(bytes)} of events in one request; ` +
-            `the limit is ${mebibytes(MAX_REQUEST_BYTES)}`,
+          `postEvents: a ${mebibytes(bytes)} request; the limit is ${mebibytes(MAX_REQUEST_BYTES)}`,
         );
       }
-      await request("POST", ["logs", "bulk"], { traceId, events: events.map(toWireEvent) });
+      await request("POST", ["logs", "bulk"], body);
     },
     async postAnnotations(rows) {
       await request("POST", ["annotations"], { annotations: rows });

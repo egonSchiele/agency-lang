@@ -131,10 +131,11 @@ order:
    | invalid | | refuse, with the server's reason |
 
 4. Split the events with `requestChunks` (in `evalUploadClient.ts`): at most
-   `EVENTS_PER_REQUEST` (500) events and `MAX_REQUEST_BYTES` (4 MiB, under
-   statelog's 5 MiB body limit) per request. This happens before any post, so
-   a run with one event over 4 MiB is refused whole instead of leaving a trace
-   that can't be finished. Post each chunk to
+   `EVENTS_PER_REQUEST` (500) events and `MAX_REQUEST_BYTES` (5 MiB,
+   statelog's body limit, measured on the exact body) per request. This
+   happens before any post, so a run with an event too big for a request of
+   its own is refused whole instead of leaving a trace that can't be
+   finished. Post each chunk to
    `POST /api/projects/:slug/logs/bulk`, each with its 0-based `sequence`
    (its position in the file). Then post every annotation row to
    `POST /api/projects/:slug/annotations`, which upserts by the row's

@@ -33,6 +33,17 @@ function envelope(sequence: number): EventEnvelope {
   };
 }
 
+function padded(sequence: number, padChars: number): SequencedEvent {
+  const base = envelope(sequence);
+  return { sequence, envelope: { ...base, data: { ...base.data, pad: "x".repeat(padChars) } } };
+}
+
+/** Bytes of the exact bulk body `postEvents` sends for these events. */
+function bodyBytes(events: SequencedEvent[]): number {
+  const wire = events.map((entry) => ({ sequence: entry.sequence, event: entry.envelope }));
+  return Buffer.byteLength(JSON.stringify({ traceId: "t1", events: wire }));
+}
+
 function lastOptions() {
   const call = requestMock.mock.calls.at(-1);
   if (call === undefined) {
@@ -132,38 +143,53 @@ describe("postEvents", () => {
 
   it("refuses a request over the byte limit before any transport", async () => {
     const third = Math.ceil(MAX_REQUEST_BYTES / 3);
-    const tooBig = [0, 1, 2].map((index) => ({
-      sequence: index,
-      envelope: { ...envelope(index), data: { type: "tick", pad: "x".repeat(third) } },
-    }));
+    const tooBig = [0, 1, 2].map((index) => padded(index, third));
     const error = await failureOf(client().postEvents("t1", tooBig));
-    expect(error.message).toMatch(/MiB.*limit is 4\.0 MiB/);
+    expect(error.message).toMatch(/MiB.*limit is 5\.00 MiB/);
     expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it("measures the whole body: exactly 5 MiB is sent, one byte more is refused", async () => {
+    const padChars = MAX_REQUEST_BYTES - bodyBytes([padded(0, 0)]);
+    expect(bodyBytes([padded(0, padChars)])).toBe(MAX_REQUEST_BYTES);
+    requestMock.mockResolvedValueOnce({ ok: true, value: { accepted: 1 }, status: 200 });
+    await client().postEvents("t1", [padded(0, padChars)]);
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    await failureOf(client().postEvents("t1", [padded(0, padChars + 1)]));
+    expect(requestMock).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("requestChunks", () => {
-  const padded = (sequence: number, padChars: number): SequencedEvent => ({
-    sequence,
-    envelope: { ...envelope(sequence), data: { type: "tick", pad: "x".repeat(padChars) } },
-  });
   const sizes = (chunks: SequencedEvent[][]): number[] => chunks.map((chunk) => chunk.length);
 
   it("closes a request before it would pass the byte limit", () => {
     const events = [0, 1, 2, 3, 4].map((n) => padded(n, 1500));
-    expect(sizes(requestChunks(events, { maxEvents: 500, maxBytes: 4000 }))).toEqual([2, 2, 1]);
+    expect(sizes(requestChunks("t1", events, { maxEvents: 500, maxBytes: 4000 }))).toEqual([
+      2, 2, 1,
+    ]);
   });
 
   it("still caps a request by event count", () => {
     const events = [0, 1, 2, 3, 4].map((n) => padded(n, 10));
-    expect(sizes(requestChunks(events, { maxEvents: 2, maxBytes: 1_000_000 }))).toEqual([2, 2, 1]);
+    expect(sizes(requestChunks("t1", events, { maxEvents: 2, maxBytes: 1_000_000 }))).toEqual([
+      2, 2, 1,
+    ]);
   });
 
   it("refuses an event larger than the byte limit, naming it", () => {
     const events = [padded(0, 100), padded(1, 5000)];
-    expect(() => requestChunks(events, { maxEvents: 500, maxBytes: 4000 })).toThrow(
+    expect(() => requestChunks("t1", events, { maxEvents: 500, maxBytes: 4000 })).toThrow(
       /event 1 is .* MiB, over the .* MiB request limit/,
     );
+  });
+
+  it("never prints an event just over the limit as equal to it", () => {
+    const limit = 1024 * 1024;
+    const padChars = limit + 1 - bodyBytes([padded(0, 0)]);
+    expect(() =>
+      requestChunks("t1", [padded(0, padChars)], { maxEvents: 500, maxBytes: limit }),
+    ).toThrow(/event 0 is 1\.01 MiB, over the 1\.00 MiB request limit/);
   });
 });
 

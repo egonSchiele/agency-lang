@@ -121,8 +121,8 @@ describe("evalUpload", () => {
     expect(posted[0].events.map((event) => event.sequence)).toEqual([7, 8, 9]);
   });
 
-  it("resumes a bulk prefix in requests sized under the 4 MiB limit", async () => {
-    const dir = bigRun(6, "agency-agent/simple", 1_500_000);
+  it("resumes a bulk prefix in requests sized under the 5 MiB limit", async () => {
+    const dir = bigRun(6, "agency-agent/simple", 2_000_000);
     const { client, posted } = fakeClient({
       big: { kind: "bulk-prefix", eventCount: 2, nextSequence: 2 },
     });
@@ -134,11 +134,14 @@ describe("evalUpload", () => {
   });
 
   it("refuses a run with an event over the request limit before posting anything", async () => {
-    const dir = bigRun(3, "agency-agent/simple", 5_000_000);
+    const dir = bigRun(3, "agency-agent/simple", 6_000_000);
     const { client, posted, annotations } = fakeClient({});
     const result = await evalUpload([dir], target, { client });
     expect(result.runs[0]).toMatchObject({ status: "failed" });
-    expect(result.runs[0]).toHaveProperty("error", expect.stringMatching(/event 2 is 4\.8 MiB/));
+    expect(result.runs[0]).toHaveProperty(
+      "error",
+      expect.stringMatching(/event 2 is 5\.7\d MiB, over the 5\.00 MiB request limit/),
+    );
     expect(posted).toEqual([]);
     expect(annotations).toEqual([]);
   });

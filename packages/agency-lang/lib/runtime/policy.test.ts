@@ -1084,7 +1084,18 @@ describe("a reject rule and a value that is a glob", () => {
     const policy = holed("reject", "secrets.json");
     expect(decide(policy, "!notes.md")).toBe("approve");
     expect(decide(policy, "{a,secrets}.json")).toBe("approve");
+    expect(decide(policy, "(a|secrets).json")).toBe("approve");
     expect(decide(policy, "x".repeat(70000))).toBe("approve");
+  });
+
+  it("reads a value of any length as a glob", () => {
+    const longBracket = "*.jso[" + "n".repeat(70000) + "]";
+    expect(decide(holed("reject", "secrets.json"), longBracket)).toBe("reject");
+  });
+
+  it("decides quickly on a value built to make a matcher backtrack", () => {
+    const policy = holed("propagate", "{policy.json,session-policy.json}");
+    expect(decide(policy, "*?".repeat(14) + "Z")).toBe("approve");
   });
 
   it("does not reject a `!` command a reject rule has nothing to do with", () => {

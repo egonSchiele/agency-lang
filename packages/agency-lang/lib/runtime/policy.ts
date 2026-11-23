@@ -1,5 +1,6 @@
 import picomatch from "picomatch";
 import { z } from "zod";
+import { bashGlobMayName } from "./bashGlob.js";
 
 /** The longest pattern picomatch accepts. It throws on a longer one, and a
  *  rule that throws would break every interrupt that reaches it. */
@@ -231,19 +232,6 @@ function matchesRule(rule: PolicyRule, interrupt: PolicyInterrupt, dirs: PolicyD
   );
 }
 
-/** picomatch read the way bash 3.2 reads a glob: no negation, no braces,
- *  no extglob, `**` the same as `*`, and `*` never matching a leading dot. */
-const BASH_GLOB = { dot: false, nonegate: true, nobrace: true, noextglob: true, noglobstar: true };
-
-/** Whether `value`, read as a bash 3.2 glob, names the text `name`. A
- *  value too long for picomatch is not read as a glob. */
-function globNames(value: string, name: string): boolean {
-  if (value.length > MAX_PATTERN_LENGTH) {
-    return false;
-  }
-  return picomatch.isMatch(name, value, BASH_GLOB);
-}
-
 function fieldValue(key: string, interrupt: PolicyInterrupt): unknown {
   if (key === "origin") return interrupt.origin;
   if (key === "message") return interrupt.message;
@@ -274,7 +262,7 @@ function matchesField(
   // A reject or propagate rule also matches a value that can name the
   // rule's file: `cat config/*.json` asks with the filename `*.json`, and
   // a reject rule for `secrets.json` must see it.
-  return seesGlobs && globNames(stripDotSlash(text), stripDotSlash(pattern));
+  return seesGlobs && bashGlobMayName(stripDotSlash(text), stripDotSlash(pattern));
 }
 
 function isScalar(value: unknown): value is string | number | boolean {

@@ -1018,7 +1018,8 @@ A question's field can hold a glob. `cat config/*.json` through safeBash
 asks `std::read { dir: ".../config", filename: "*.json" }`, and bash, not
 the read, expands the glob. So a reject or propagate rule matches a scalar
 field when the usual test passes, or when the rule's pattern, read as plain
-text, is a name the value can stand for when read as a glob (`globNames`).
+text, is a name the value can stand for when read as a glob
+(`bashGlobMayName` in `lib/runtime/bashGlob.ts`).
 An approve rule is matched as before. The rule names no effect and no
 field, and it can only make a reject or propagate rule match more often.
 
@@ -1031,12 +1032,16 @@ field, and it can only make a reject or propagate rule match more often.
 | approve `settings.json` | `*.json` | no: an approve rule does not read the value as a glob |
 | approve `*.json` | `*.json` | yes, by the usual test |
 
-The value is read the way bash 3.2 reads a glob: no `!` negation, no
-braces, no extglob, `**` the same as `*`, and `*` never matching a leading
-dot, whatever the rule's `matchDotFolders` says. Without these, a
-`std::bash` command that starts with `!` would read as "anything except
-this" and match every reject rule that names `command`. A value longer than
-`MAX_PATTERN_LENGTH` is not read as a glob, because picomatch throws on it.
+The value is read the way bash 3.2 expands a path: `*`, `?`, brackets,
+and `\` only, no wildcard matching a `/`, `**` the same as `*`, and a
+leading dot matched only by a plain `.`, whatever the rule's
+`matchDotFolders` says. `!x`, `{a,b}`, and `(a|b)` are plain text, so a
+`std::bash` command that starts with `!` does not read as "anything except
+this". The comparison is written by hand and not with picomatch, because
+the value comes from the model and a regular expression built from it can
+backtrack for seconds. It gives up after a fixed number of steps and then
+counts as a match, so a value built to be slow makes a reject rule match.
+A value of any length is read.
 
 Known limits:
 

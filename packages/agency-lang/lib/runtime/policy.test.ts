@@ -903,9 +903,11 @@ describe("escapeGlob", () => {
     for (const value of ['"a"', '"*"', 'say "hello"']) {
       const policy = { "example::write": [{ match: { id: escapeGlob(value) }, action }] };
       expect(checkPolicy(policy, intr("example::write", { id: value })).type).toBe(action);
-      expect(
-        checkPolicy(policy, intr("example::write", { id: value.replaceAll('"', "") })).type,
-      ).toBe("propagate");
+      const unquoted = value.replaceAll('"', "");
+      // A reject rule reads a value as a glob too, and the value `*` names
+      // every name that does not start with a dot, the quoted one included.
+      const expected = action === "reject" && unquoted === "*" ? "reject" : "propagate";
+      expect(checkPolicy(policy, intr("example::write", { id: unquoted })).type).toBe(expected);
     }
   });
 
@@ -1010,6 +1012,105 @@ describe("matchDotFolders", () => {
   it("is accepted by validatePolicy as a boolean and refused as a string", () => {
     expect(validatePolicy(rule({ matchDotFolders: true })).success).toBe(true);
     expect(validatePolicy(rule({ matchDotFolders: "yes" })).success).toBe(false);
+  });
+});
+
+describe("a reject rule and a value that is a glob", () => {
+  const read = (filename: string) => ({
+    effect: "std::read",
+    message: "",
+    origin: "",
+    data: { dir: "/proj/config", filename },
+  });
+  const holed = (
+    action: "reject" | "propagate" | "approve",
+    filename: string,
+    matchDotFolders = false,
+  ): Policy => ({
+    "std::read": [
+      { match: { dir: "/proj/config", filename }, action, matchDotFolders },
+      { match: { dir: "/proj/config" }, action: "approve" },
+    ],
+  });
+  const decide = (policy: Policy, filename: string) => checkPolicy(policy, read(filename)).type;
+
+  it("matches a value that, as a glob, names the rule's file", () => {
+    expect(decide(holed("reject", "secrets.json"), "*.json")).toBe("reject");
+  });
+
+  it("does not match a glob that cannot name the rule's file", () => {
+    expect(decide(holed("reject", "secrets.json"), "*.ts")).toBe("approve");
+  });
+
+  it("does not match a plain value that names another file", () => {
+    expect(decide(holed("reject", "secrets.json"), "notes.json")).toBe("approve");
+  });
+
+  it("does not let `*` name a file that starts with a dot", () => {
+    expect(decide(holed("reject", ".env"), "*")).toBe("approve");
+    expect(decide(holed("reject", ".env", true), "*")).toBe("approve");
+  });
+
+  it("leaves an approve rule as it was", () => {
+    const settings: Policy = {
+      "std::read": [{ match: { filename: "settings.json" }, action: "approve" }],
+    };
+    expect(decide(settings, "*.json")).toBe("propagate");
+    const json: Policy = { "std::read": [{ match: { filename: "*.json" }, action: "approve" }] };
+    expect(decide(json, "*.json")).toBe("approve");
+  });
+
+  it("applies to a propagate rule too", () => {
+    expect(decide(holed("propagate", "secrets.json"), "*.json")).toBe("propagate");
+  });
+
+  it("does not read a list value as a glob", () => {
+    const policy: Policy = {
+      "std::exec": [
+        { match: { args: "secrets.json" }, action: "reject" },
+        { match: { command: "cat" }, action: "approve" },
+      ],
+    };
+    const intr = {
+      effect: "std::exec",
+      message: "",
+      origin: "",
+      data: { command: "cat", args: ["*.json"] },
+    };
+    expect(checkPolicy(policy, intr).type).toBe("approve");
+  });
+
+  it("reads the value as a bash glob, without picomatch's wider syntax", () => {
+    const policy = holed("reject", "secrets.json");
+    expect(decide(policy, "!notes.md")).toBe("approve");
+    expect(decide(policy, "{a,secrets}.json")).toBe("approve");
+    expect(decide(policy, "(a|secrets).json")).toBe("approve");
+    expect(decide(policy, "x".repeat(70000))).toBe("approve");
+  });
+
+  it("matches a value whose bracket holds a character class", () => {
+    expect(decide(holed("reject", "secrets.json"), "[[:alpha:]]ecrets.json")).toBe("reject");
+  });
+
+  it("reads a value of any length as a glob", () => {
+    const longBracket = "*.jso[" + "n".repeat(70000) + "]";
+    expect(decide(holed("reject", "secrets.json"), longBracket)).toBe("reject");
+  });
+
+  it("decides quickly on a value built to make a matcher backtrack", () => {
+    const policy = holed("propagate", "{policy.json,session-policy.json}");
+    expect(decide(policy, "*?".repeat(14) + "Z")).toBe("approve");
+  });
+
+  it("does not reject a `!` command a reject rule has nothing to do with", () => {
+    const policy: Policy = { "std::bash": [{ match: { command: "*rm -rf*" }, action: "reject" }] };
+    const intr = {
+      effect: "std::bash",
+      message: "",
+      origin: "",
+      data: { command: "! grep -q TODO notes.md && echo none" },
+    };
+    expect(checkPolicy(policy, intr).type).toBe("propagate");
   });
 });
 

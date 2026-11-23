@@ -451,7 +451,8 @@ def simpleCommandRule(command: SimpleCommand, line: LineState, origin: GhRepo | 
     }
   }
   const effects = verbEffects(name.text, command, line, readsStdin, redirect)?
-  return success({ effects: effects, command: command })
+  const run = endFlagsBeforeGlob(name.text, command)?
+  return success({ effects: effects, command: run })
 }
 
 /** The variables a command may be given in front of it. Each changes how
@@ -513,6 +514,37 @@ def withAssignments(command: Command, assignments: Assignment[]): Command {
     return { tag: "and", left: withAssignments(command.left, assignments), right: withAssignments(command.right, assignments) }
   }
   return command
+}
+
+/* A listing or read command with a glob path, with `--` before its first
+ path, so a name bash expands the glob to is never read as a flag: in a
+ folder holding `-o`, `sort *` would run as `sort -o a.txt b.txt`. Any
+ other command is returned as it is. Every row of both tables sets
+ `optionsFirst`, so the paths are the last words. */
+def endFlagsBeforeGlob(verb: string, command: SimpleCommand): Result<SimpleCommand> {
+  const globs = [word for word in command.args if word.tag == "glob"]
+  if (globs.length == 0) {
+    return success(command)
+  }
+  const listing = LIST_VERBS[verb]
+  if (listing != null) {
+    return pathsAfterEndOfFlags(verb, command, listing.flags)
+  }
+  const reading = READ_VERBS[verb]
+  if (reading != null) {
+    return pathsAfterEndOfFlags(verb, command, reading.flags)
+  }
+  return success(command)
+}
+
+/* The command with `--` before the words `splitFlags` read as paths. */
+def pathsAfterEndOfFlags(verb: string, command: SimpleCommand, flags: FlagSpec): Result<SimpleCommand> {
+  const split = splitFlags(verb, command, flags)?
+  const first = command.args.length - split.positionals.length
+  return success({
+    ...command,
+    args: [...command.args.slice(0, first), END_OF_FLAGS_WORD, ...command.args.slice(first)]
+  })
 }
 
 // `echo` contributes nothing on its own, whatever its arguments: bash
@@ -1238,7 +1270,10 @@ type GrepCall = {
   /** The saved output's name when the path is one, else null. */
   saved: string | null;
   /** The path word as the model wrote it, or null when there was none. */
-  word: Word | null
+  word: Word | null;
+  /** True when the path word is a glob that bash expands. The target is
+   then the folder the glob is in, with `file` null. */
+  expands: boolean
 }
 
 /** The pattern, and the words after it that name paths. */
@@ -1327,6 +1362,17 @@ def readGrep(command: SimpleCommand, line: LineState, spec: FlagSpec): Result<Gr
 
 @capabilities(fileRead)
 def grepCallFor(args: SplitArgs, pattern: string, pathWord: Word, line: LineState): Result<GrepCall> {
+  const glob = globTargetOf(pathWord, line.cwd)?
+  if (glob != null) {
+    return success({
+      split: args,
+      pattern: pattern,
+      target: { dir: glob.dir, file: null, argument: glob.argument },
+      saved: null,
+      word: pathWord,
+      expands: true
+    })
+  }
   const text = literalWordText(pathWord)
   if (text is failure(why)) {
     return failure("the grep path is not literal")
@@ -1338,7 +1384,8 @@ def grepCallFor(args: SplitArgs, pattern: string, pathWord: Word, line: LineStat
       pattern: pattern,
       target: { dir: saved.folder, file: saved.name, argument: text.value },
       saved: saved.name,
-      word: pathWord
+      word: pathWord,
+      expands: false
     })
   }
   const target = resolveTarget(text.value, pathWord, line.cwd)
@@ -1352,7 +1399,8 @@ def grepCallFor(args: SplitArgs, pattern: string, pathWord: Word, line: LineStat
       pattern: pattern,
       target: { dir: missing.dir, file: missing.filename, argument: text.value },
       saved: null,
-      word: pathWord
+      word: pathWord,
+      expands: false
     })
   }
   return success({
@@ -1360,7 +1408,8 @@ def grepCallFor(args: SplitArgs, pattern: string, pathWord: Word, line: LineStat
     pattern: pattern,
     target: target.value,
     saved: null,
-    word: pathWord
+    word: pathWord,
+    expands: false
   })
 }
 
@@ -1393,7 +1442,8 @@ def searchHere(args: SplitArgs, pattern: string, cwd: string): Result<GrepRead> 
           argument: ""
         },
         saved: null,
-        word: null
+        word: null,
+        expands: false
       },
     ]
   })
@@ -1472,7 +1522,10 @@ def grepRule(command: SimpleCommand, line: LineState, readsStdin: boolean, redir
 // One std::grep per path, with the payload the grep tool raises for it.
 // A folder is searched with `-r` only, and never one whose own name the
 // tool's walk skips: with `--exclude-dir=dist`, `grep -r x dist` searches
-// nothing, while the tool searches a folder it is given.
+// nothing, while the tool searches a folder it is given. A glob asks about
+// the folder it is in, and neither check applies: bash hands grep what the
+// glob matches, and under `-r` the excludes still skip a matched folder
+// named `node_modules`, in GNU grep, BSD grep, and ugrep alike.
 def grepSearchRule(calls: GrepCall[], command: SimpleCommand, redirects: Effect[]): Result<SimpleRule> {
   """
   Describe a grep through bash of files and folders, and write the command that runs.
@@ -1481,7 +1534,11 @@ def grepSearchRule(calls: GrepCall[], command: SimpleCommand, redirects: Effect[
   let effects: Effect[] = []
   let searchesFolder = false
   for (call in calls) {
-    if (call.target.file == null) {
+    if (call.expands) {
+      if (call.split.plain.includes("r")) {
+        searchesFolder = true
+      }
+    } else if (call.target.file == null) {
       if (!call.split.plain.includes("r")) {
         return failure("grep without -r does not search a folder")
       }
@@ -1609,6 +1666,9 @@ def shellFreeGrepPlan(call: GrepCall, command: SimpleCommand): Result<InProcess>
   """
   Build an in-process search plan from a validated grep call.
   """
+  if (call.expands) {
+    return failure("bash expands the grep path")
+  }
   const letters = call.split.plain
   const target = call.target
   // Without -r, grep does not search a directory, and the tool would.
@@ -1811,7 +1871,10 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
  bash hands it to the program. */
 type ReadPath = {
   source: ReadSource;
-  argument: string
+  argument: string;
+  /** True when the path word is a glob that bash expands. The source's
+   `filename` is then the name pattern, and no file has that name. */
+  expands: boolean
 }
 
 /** What a read verb reads: the files it names, or its stdin. */
@@ -1975,7 +2038,8 @@ def resolveReadPath(text: string, word: Word, line: LineState, subject: string):
   if (saved != null) {
     return success({
       source: { kind: "saved", folder: saved.folder, name: saved.name },
-      argument: text
+      argument: text,
+      expands: false
     })
   }
   const target = resolveTarget(text, word, line.cwd)
@@ -1986,7 +2050,8 @@ def resolveReadPath(text: string, word: Word, line: LineState, subject: string):
     }
     return success({
       source: { kind: "disk", dir: missing.dir, filename: missing.filename },
-      argument: text
+      argument: text,
+      expands: false
     })
   }
   const file = target.value.file
@@ -1995,7 +2060,8 @@ def resolveReadPath(text: string, word: Word, line: LineState, subject: string):
   }
   return success({
     source: { kind: "disk", dir: target.value.dir, filename: file },
-    argument: target.value.argument
+    argument: target.value.argument,
+    expands: false
   })
 }
 
@@ -2012,6 +2078,49 @@ def resolveTarget(text: string, word: Word, cwd: string): Result<PathTarget> {
   Resolve a path against the working directory and distinguish files from directories.
   """
   return try _searchTargetIn(text, cwd, tildeModeFor(word))
+}
+
+/** The characters that make a word a glob, as the parser reads them. */
+static const GLOB_TRIGGERS: string[] = ["*", "?", "["]
+
+/* A glob word as the folder bash expands it in: `dir` is that folder's
+ real path, `file` the name pattern, and `argument` the word as written.
+ Null for a word that is not a glob. A glob in the folder part, after
+ `~`, or whose name starts with `.` has no rule: bash 3.2 expands `.*`
+ to `.` and `..` too, which would read the folder above. */
+@capabilities(fileRead)
+def globTargetOf(word: Word, cwd: string): Result<PathTarget | null> {
+  return match(word) {
+    { tag: "glob", text } => globTargetIn(text, cwd)
+    _ => success(null)
+  }
+}
+
+@capabilities(fileRead)
+def globTargetIn(text: string, cwd: string): Result<PathTarget | null> {
+  if (text.startsWith("~")) {
+    return failure("a glob after `~` has no rule")
+  }
+  const slash = text.lastIndexOf("/")
+  let folder = "."
+  if (slash == 0) {
+    folder = "/"
+  } else if (slash > 0) {
+    folder = text.slice(0, slash)
+  }
+  const name = text.slice(slash + 1)
+  const inFolder = [trigger for trigger in GLOB_TRIGGERS if folder.includes(trigger)]
+  if (inFolder.length > 0) {
+    return failure("a glob in the folder part of a path has no rule")
+  }
+  if (name.startsWith(".")) {
+    return failure("a glob that starts with `.` can match `..`")
+  }
+  const target = resolveTarget(folder, literalWordOf(folder), cwd)?
+  if (target.file != null) {
+    return failure("the folder of a glob is a file")
+  }
+  return success({ dir: target.dir, file: name, argument: text })
 }
 
 /** What the classifier knows about a line as it walks it, command by
@@ -2411,14 +2520,22 @@ def listEffects(verb: string, command: SimpleCommand, line: LineState, spec: Lis
   // A verb that asks for the folder a file is in can name a missing file
   // the same way; `tree` refuses a file, so it needs a real folder.
   const lookup: LineState = if (spec.files == "folder") then line else strictLine(line)
-  const entries = resolveTargets(verb, words, lookup)
-  if (isFailure(entries)) {
-    return entries
-  }
   const walk = spec.recursive == "always" || split.value.plain.includes("R")
   const follows = followsFolderLink(verb, split.value)
   let payloads: LsPayload[] = []
-  for (entry in entries.value) {
+  for (word in words) {
+    // `ls lib/*` lists every folder the glob matches, one level below a
+    // listing of `lib`, so a glob's question walks.
+    const glob = globTargetOf(word, line.cwd)?
+    if (glob != null) {
+      payloads.push({ dir: glob.dir, recursive: true, maxResults: 0 })
+      continue
+    }
+    const text = literalWordText(word)
+    if (text is failure(why)) {
+      return failure("the ${verb} path is not literal")
+    }
+    const entry = listTargetOf(text.value, word, lookup)?
     const payload = listingOf(verb, spec, entry, walk, follows)
     if (isFailure(payload)) {
       return payload
@@ -2536,6 +2653,20 @@ def readFileVerb(verb: string, command: SimpleCommand, line: LineState, spec: Re
   }
   let paths: ReadPath[] = []
   for (word in positionals) {
+    const glob = globTargetOf(word, lookup.cwd)?
+    if (glob != null) {
+      // One word that bash can expand to any number of files: `uniq` takes
+      // one because a second is its output file.
+      if (spec.paths.most != null) {
+        return failure("a glob can name any number of files, and `${verb}` takes ${describeCount(spec.paths, "path")}")
+      }
+      paths.push({
+        source: { kind: "disk", dir: glob.dir, filename: glob.file ?? "" },
+        argument: glob.argument,
+        expands: true
+      })
+      continue
+    }
     const text = literalWordText(word)
     if (text is failure(why)) {
       return failure("the ${verb} path is not literal")
@@ -4370,6 +4501,10 @@ def shellFreeReadOf(verb: string, found: FileRead, command: SimpleCommand): Resu
 }
 
 def shellFreeReadPlan(verb: string, paths: ReadPath[], split: SplitArgs, command: SimpleCommand): Result<InProcess> {
+  const expanded = [path for path in paths if path.expands]
+  if (expanded.length > 0) {
+    return failure("bash expands the read path")
+  }
   // How many paths each verb takes is READ_VERBS' rule, already applied
   // by readFileVerb: head and tail take at most one.
   const view = readViewFor(verb, split, paths.length)

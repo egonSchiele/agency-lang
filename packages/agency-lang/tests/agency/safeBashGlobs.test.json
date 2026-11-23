@@ -1,0 +1,26 @@
+{
+  "tests": [
+    {
+      "nodeName": "globPlans",
+      "description": "A glob in the file-name part of a path asks the command's usual question about the folder the glob is in: std::grep with no file, std::ls with a walk, or std::read with the name pattern as the filename. A glob in the folder part, after `~`, or whose name starts with `.`, a folder that is missing or is a file, a read verb with a limit on its file count, find, sed, and rm ask std::bash. A lone grep or cat of a glob runs through bash, never in process. The command that runs carries `--` before the paths of a listing or a read with a glob, and is unchanged otherwise.",
+      "input": "",
+      "expectedOutput": "[[\"grep -n hello lib/*.ts | wc -l\",\"narrow\",[\"std::grep /lib null\"]],[\"grep -n hello *.txt | wc -l\",\"narrow\",[\"std::grep  null\"]],[\"grep -n hello lib/[ab].ts | wc -l\",\"narrow\",[\"std::grep /lib null\"]],[\"grep -n hello lib/*/d.ts | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -n hello lib/.* | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -n hello ~/*.md | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -n hello nope/*.ts | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -n hello one.txt/*.ts | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello lib/*.ts | wc -l\",\"narrow\",[\"std::grep /lib null\"]],[\"grep -n hello one.txt lib/*.ts | wc -l\",\"narrow\",[\"std::grep  one.txt\",\"std::grep /lib null\"]],[\"grep -n hello lib/*.zzz | wc -l\",\"narrow\",[\"std::grep /lib null\"]],[\"grep -n hello lib/*.ts\",\"narrow\",[\"std::grep /lib null\"]],\"grep -n -e 'hello' -- one.txt lib/*.ts | wc -l\",\"grep -r -n --exclude-dir=node_modules --exclude=node_modules --exclude-dir=.git --exclude=.git --exclude-dir=dist --exclude=dist --exclude-dir=build --exclude=build --exclude-dir=.next --exclude=.next --exclude-dir=.cache --exclude=.cache -e 'hello' -- lib/* | wc -l\",[\"ls lib/*.ts\",\"narrow\",[\"std::ls /lib true\"]],[\"ls -la lib/*.ts | head -3\",\"narrow\",[\"std::ls /lib true\"]],[\"ls lib lib/*.ts\",\"narrow\",[\"std::ls /lib true\"]],[\"du -sh lib/*\",\"narrow\",[\"std::ls /lib true\"]],[\"tree lib/*\",\"narrow\",[\"std::ls /lib true\"]],[\"ls lib/*/d.ts\",\"broad\",[\"std::bash\"]],[\"find lib/* -name d.ts\",\"broad\",[\"std::bash\"]],\"ls -la -- lib/*.ts\",\"ls -- *.txt\",\"ls lib\",\"pytest lib/*.ts\",[\"cat lib/*.ts\",\"narrow\",[\"std::read /lib *.ts\"]],[\"wc -l lib/*.ts one.txt\",\"narrow\",[\"std::read /lib *.ts\",\"std::read  one.txt\"]],[\"sort lib/*.ts | uniq -c\",\"narrow\",[\"std::read /lib *.ts\"]],[\"cat *.txt\",\"narrow\",[\"std::read  *.txt\"]],[\"head -5 lib/*.ts\",\"broad\",[\"std::bash\"]],[\"uniq lib/*.ts\",\"broad\",[\"std::bash\"]],[\"diff one.txt lib/*.ts\",\"broad\",[\"std::bash\"]],[\"cat lib/*/d.ts\",\"broad\",[\"std::bash\"]],[\"sed -n 1,5p lib/*.ts\",\"broad\",[\"std::bash\"]],[\"rm lib/*.ts\",\"broad\",[\"std::bash\"]],\"wc -l -- one.txt lib/*.ts\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "globsRunUnderTheFolderQuestion",
+      "description": "Run for real under only the folder question: a grep of a glob reads what bash expands it to, and under -r skips node_modules as the grep tool does; no output names a file that starts with a dot; a cat of a glob prints each match; a uniq of a glob is refused; and `sort *` in a folder holding a file named `-o` reads that file and writes nothing.",
+      "input": "",
+      "expectedOutput": "[\"lib/a.ts:1:hello\\nlib/b.ts:1:hello\",\"lib/a.ts:1:hello\\nlib/b.ts:1:hello\\nlib/c.js:1:hello\\nlib/sub/d.ts:1:hello\",\"lib/a.ts\\nlib/b.ts\",\"hello\\nhello\",\"FAILED\",[\"dash\\nkeep\\ny\\nz\",\"keep\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

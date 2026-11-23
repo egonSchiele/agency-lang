@@ -14,7 +14,7 @@ Each run has a folder for temporary files. On Linux it looks like this:
 <temp folder>/agency-scratch-<user id>/<id>
 ```
 
-- The temp folder is `host.system.tempDir()`. On macOS that is a per-user folder under `/var/folders`.
+- The temp folder is `host.system.tempDir()`, as a real path. On macOS that is a per-user folder under `/private/var/folders`. `scratchDir()`, the agent's project context, and a reject message all spell the folder this one way, which is also how file effects spell it in their payloads.
 - The parent, `agency-scratch-<user id>`, is named and created the way the saved-output folder `agency-spill-<user id>` is (`lib/runtime/userTempFolder.ts`). `privateDir` makes it for this user alone and throws when an existing folder is someone else's.
 - `<id>` is the first 16 hex characters of `sha256("agency-scratch:" + runId)` (`scratchId` in `lib/runtime/scratchDir.ts`).
 
@@ -65,7 +65,9 @@ The runtime does not delete the folder. A run paused on an interrupt has not end
 
 ## Making sure the folder exists
 
-The reject message sends the model to the folder, so the folder has to be there. The agent calls `scratchDir()` at the start of every turn (`runTurn`), which also brings it back after a reboot. A model that made the folder itself with `mkdir -p` would create the parent with ordinary permissions, and `ensureScratchDir` would then fail with an error naming the folder to delete. A program other than the agent that uses these rules should call `scratchDir()` first.
+The reject message sends the model to the folder, and the policy approves a write or a `mkdir` there. If the folder were missing, the model's own write would create it, and its parent, with ordinary permissions. `privateDir` never changes an existing folder's mode, so every later `scratchDir()` for that user would fail until someone deleted the parent.
+
+So the runtime makes the folder itself. `createExecutionContext` (`lib/runtime/state/context.ts`) calls `ensureScratchDir` right after it sets the run's id. Every run, every resume, and every subprocess passes through there, so a resume in a new process after a reboot gets its folder back. A failure is ignored, which keeps a host with no temp folder working. The cost is one empty folder per run under the private parent.
 
 ## Files and tests
 

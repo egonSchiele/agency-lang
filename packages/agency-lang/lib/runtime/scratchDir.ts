@@ -5,7 +5,7 @@
 // work it out from the interrupt. See docs/dev/runtime/scratch-dir.md.
 import type { Host } from "../host/host.js";
 import { sha256Text } from "../utils/hash.js";
-import { ensureUserTempFolder, userTempFolder } from "./userTempFolder.js";
+import { ensureUserTempFolder, userTempFolderName } from "./userTempFolder.js";
 
 /** The start of the scratch parent folder's name; the user id follows. */
 export const SCRATCH_FOLDER_PREFIX = "agency-scratch-";
@@ -17,15 +17,23 @@ export function scratchId(runId: string): string {
   return sha256Text(`agency-scratch:${runId}`).slice(0, 16);
 }
 
-/** The scratch folder of the run `runId`, with the temp folder spelled as
- *  the host gives it. */
+/** The folder every run's scratch folder is in, with the temp folder as a
+ *  real path. File effects put real paths in their payloads, and a policy's
+ *  reject message names this folder, so every place spells it one way. The
+ *  temp folder exists, so it resolves whether or not the parent does yet. */
+export function scratchParentPath(host: Host): string {
+  const temp = host.system.realDir(host.system.tempDir()).replace(/\/+$/, "");
+  return `${temp}/${userTempFolderName(host, SCRATCH_FOLDER_PREFIX)}`;
+}
+
+/** The scratch folder of the run `runId`, as a real path. */
 export function scratchDirPath(host: Host, runId: string): string {
-  return `${userTempFolder(host, SCRATCH_FOLDER_PREFIX)}/${scratchId(runId)}`;
+  return `${scratchParentPath(host)}/${scratchId(runId)}`;
 }
 
 /** Create the run's scratch folder if it is missing and return its path. */
 export async function ensureScratchDir(host: Host, runId: string): Promise<string> {
-  const parent = userTempFolder(host, SCRATCH_FOLDER_PREFIX);
+  const parent = scratchParentPath(host);
   let made: Awaited<ReturnType<typeof ensureUserTempFolder>>;
   try {
     made = await ensureUserTempFolder(host, SCRATCH_FOLDER_PREFIX);

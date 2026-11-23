@@ -9,6 +9,7 @@ import { ensureScratchDir, scratchDirPath, scratchId } from "./scratchDir.js";
 import { builtinPolicy } from "./builtinPolicies.js";
 import { checkPolicyExplicit, type PolicyDirs } from "./policy.js";
 import { resolvePolicyDirs } from "./policyDirs.js";
+import { RuntimeContext } from "./state/context.js";
 
 /** A nodeHost whose temp folder and user id are the test's. */
 function hostWith(args: { tempDir: string; userId?: string }): Host {
@@ -25,22 +26,50 @@ function hostWith(args: { tempDir: string; userId?: string }): Host {
 
 describe("scratchDirPath", () => {
   const host = hostWith({ tempDir: "/tmp/", userId: "1000" });
+  // On macOS `/tmp` is a link to `/private/tmp`, and the path is a real one.
+  const parent = `${realpathSync("/tmp")}/agency-scratch-1000`;
 
   it("is the same path for the same run id, and differs for another", () => {
     expect(scratchDirPath(host, "run-a")).toBe(scratchDirPath(host, "run-a"));
     expect(scratchDirPath(host, "run-a")).not.toBe(scratchDirPath(host, "run-b"));
   });
 
-  it("is <temp>/agency-scratch-<user id>/<16 hex characters>", () => {
-    expect(scratchDirPath(host, "run-a")).toMatch(/^\/tmp\/agency-scratch-1000\/[0-9a-f]{16}$/);
+  it("is <real temp>/agency-scratch-<user id>/<16 hex characters>", () => {
+    expect(scratchDirPath(host, "run-a")).toBe(`${parent}/${scratchId("run-a")}`);
+    expect(scratchId("run-a")).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("is spelled the way a policy's <scratch> is, so the model sees one path", () => {
+    expect(resolvePolicyDirs(host).scratchParent).toBe(parent);
   });
 
   it("keeps a run id that holds path characters inside the parent", () => {
     for (const runId of ["../../Users/me/.agency-agent", "/etc", "a/b", "..", ""]) {
       expect(scratchId(runId), runId).toMatch(/^[0-9a-f]{16}$/);
-      expect(scratchDirPath(host, runId), runId).toMatch(
-        /^\/tmp\/agency-scratch-1000\/[0-9a-f]{16}$/,
-      );
+      expect(scratchDirPath(host, runId), runId).toBe(`${parent}/${scratchId(runId)}`);
+    }
+  });
+});
+
+describe("a run's scratch folder is made when the run starts", () => {
+  it("exists, private, before anything in the run asks for it", async () => {
+    const temp = realpathSync(mkdtempSync(path.join(os.tmpdir(), "agency-scratch-test-")));
+    try {
+      const host = hostWith({ tempDir: temp });
+      const ctx = new RuntimeContext({
+        statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false },
+        smoltalkDefaults: {},
+        dirname: temp,
+        host,
+      });
+      const execCtx = await ctx.createExecutionContext({ runId: "run-start" });
+      const folder = scratchDirPath(host, "run-start");
+      expect(execCtx.policyDirs.scratch).toBe(folder);
+      expect(statSync(folder).isDirectory()).toBe(true);
+      expect(statSync(folder).mode & 0o777).toBe(0o700);
+      expect(statSync(path.dirname(folder)).mode & 0o777).toBe(0o700);
+    } finally {
+      safeDeleteDirectoryWithin(realpathSync(os.tmpdir()), temp);
     }
   });
 });

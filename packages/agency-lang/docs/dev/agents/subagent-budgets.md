@@ -9,7 +9,9 @@ not guard the turn.
 - The `--max-time` and `--max-cost` flags cap the whole agent process. The
   runtime installs them as a root budget before any Agency code runs
   (`installRootBudget`, `lib/runtime/node.ts`), and a root budget cannot
-  be granted more.
+  be granted more. No code pops a root budget, so `RuntimeContext.cleanup`
+  pops it when the run ends. Its time guard's timer would otherwise keep
+  the process alive until the limit, after the run had finished.
 - `researchAgent`, `explorerAgent`, `oracleAgent`, `codeAgent`, and
   `agencyCodeAgent` take
   `maxSeconds` and `maxDollars`. The coordinator fills them in from the user's words.

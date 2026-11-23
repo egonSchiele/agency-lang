@@ -98,7 +98,7 @@ def interactive(args: any, brainName: string, startAgent: string, seedPrompt: st
   // "always" answer to a session's approval is saved by this handler's
   // state (askAbout).
   // Answers only: the policy can be layered (a session's own policy, the
-  // saved policy's rejects, flags given now), and only what the person
+  // flags given now), and only what the person
   // answers "always" belongs in the file.
   const handler = cliPolicyHandler(
     file: sessionPolicy.file,

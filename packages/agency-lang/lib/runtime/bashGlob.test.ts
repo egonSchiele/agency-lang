@@ -70,13 +70,14 @@ describe("bashGlobMayName", () => {
     expect(bashGlobMayName("x".repeat(70000), "secrets.json")).toBe(false);
   });
 
-  it("reads a long run of unclosed brackets in linear time", () => {
-    const opens = "[".repeat(1_000_000);
-    const started = Date.now();
+  // No clock check, which a slow CI machine fails. A scan that searched
+  // again for every `[` took 13 seconds on a million, and time grows with
+  // the square, so these sizes pass the timeout only if the scan is linear.
+  it("reads a long run of unclosed brackets in linear time", { timeout: 15_000 }, () => {
+    const opens = "[".repeat(2_000_000);
     expect(bashGlobMayName(opens, opens)).toBe(true);
-    expect(bashGlobMayName("[[:".repeat(300_000), "x")).toBe(false);
-    expect(bashGlobMayName("[".repeat(1_000_000) + "[:a:]", "x")).toBe(false);
-    expect(Date.now() - started).toBeLessThan(1000);
+    expect(bashGlobMayName("[[:".repeat(600_000), "x")).toBe(false);
+    expect(bashGlobMayName(opens + "[:a:]", "x")).toBe(false);
   });
 
   it("stays quick on a value built to make a matcher backtrack", () => {

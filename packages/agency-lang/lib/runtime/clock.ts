@@ -52,6 +52,11 @@ export class FakeClock implements Clock {
     this.timers = this.timers.filter((t) => t.id !== handle.id);
   }
 
+  /** How many timers are armed and not yet fired or cleared. */
+  pendingTimerCount(): number {
+    return this.timers.length;
+  }
+
   /**
    * Move the clock forward `ms` and fire every timer due within that span.
    *

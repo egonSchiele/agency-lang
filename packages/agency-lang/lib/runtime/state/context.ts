@@ -892,8 +892,9 @@ export class RuntimeContext<T> {
         new AgencyCancelledError("cleanup", makeAbortCause({ kind: "cleanup" })),
       );
     }
-    // Nothing pops a root budget (`--max-time`), and an armed time guard's
-    // timer keeps the process alive until it fires. Popping clears it.
+    // Pop every guard still on the stack. Nothing else pops a root budget
+    // (`--max-time`, `budget.maxTime`, a served host's limit), and an armed
+    // time guard's timer keeps the process alive until it fires.
     while (this.stateStack?.guards.length) {
       this.stateStack.popGuard();
     }

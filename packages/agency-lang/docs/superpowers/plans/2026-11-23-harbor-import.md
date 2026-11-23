@@ -17,7 +17,7 @@ The CLI only parses flags and prints the summary.
 
 ## Global Constraints
 
-- **ADI-370 must be merged first.** `RunPayload` and `RunAnnotationSchema` (`lib/runDirectory/annotations.ts`) must have optional `benchmark?: string` and `reasoning?: string`. If they don't, stop: this plan does not add them.
+- **ADI-370 must be merged first.** `RunPayload` and `RunAnnotationSchema` (`lib/runDirectory/annotations.ts`) must have optional `benchmark?: string` and `reasoning?: string`. If they don't, stop: this plan does not add them, and don't work around it. A re-import skips folders that already have a `run` row, so runs imported before these fields exist could never gain them without deleting and re-importing them.
 - All writes go through `recordCompletedRun` and `recordGradingPass` (`lib/runDirectory/mutations.ts`). Nothing else writes `annotations.jsonl` or `statelog.jsonl`.
 - Run folder path: always `<out>/<batch>/<testId>/<trial>/`, even with one trial. (Unlike `runDirFor` in `runSuite.ts`, which drops the trial folder for a single trial, because a batch can gain trials later through `--batch`.)
 - The `run` row's annotator is `{ kind: "harness", id: "harbor-import@<harnessVersion()>" }`. The score annotator is `{ kind: "grader", id: "harbor-verifier:<benchmark>" }`.
@@ -95,16 +95,14 @@ The CLI only parses flags and prints the summary.
 - Test: `lib/eval/harbor/planImport.test.ts`
 
 **Interfaces:**
-- Consumes: `HarborTrial` (Task 2), `RunOutcome` and `Score` (`lib/runDirectory/annotations.ts`).
+- Consumes: `HarborTrial` (Task 2), `RunOutcome` and `RunPayload` (`lib/runDirectory/annotations.ts`), and `ScoreDraft` (`lib/runDirectory/mutations.ts`).
 - Produces:
   ```ts
-  export type PlannedScore = { name: string; score: Score };
+  export type PlannedScore = Pick<ScoreDraft, "name" | "score">;
   export type PlannedRun = {
     trial: HarborTrial;
-    relativeDir: string;          // `${testId}/${trialNumber}`
-    trialNumber: number;
-    ended: RunOutcome;
-    error?: string;               // `${type}: ${message}` when exception is set
+    relativeDir: string;          // `${testId}/${payload.trial}`
+    payload: RunPayload;          // the whole run row; the writer only adds traceId and annotator
     scores: PlannedScore[];       // [] = unscored
     unknownException?: string;    // an exception type outside both rule-C lists
   };
@@ -112,10 +110,11 @@ The CLI only parses flags and prints the summary.
     jobs: HarborTrial[][];        // one array per job, in command-line order
     batch: string;
     reasoning?: string;
-  }): { batch: string; reasoning?: string; runs: PlannedRun[] };
+  }): { batch: string; runs: PlannedRun[] };
   export function endedOf(exceptionType: string | null): RunOutcome;
   export function scoresOf(rewards: Record<string, number> | null, exceptionType: string | null): PlannedScore[];
   ```
+- `payload` is `{ kind: "run", test: { id: testId }, suite: null, ended, error?, flags: { harborJob: <job folder name>, harborTrial: trialName }, batch, trial, benchmark, reasoning? }`. `error` is `` `${type}: ${message}` `` when there's an exception. `harborJob` is the folder's name, not its path, so run ids don't depend on where the job lives and no local paths reach statelog.
 
 - [ ] **Step 1: Write the failing tests:**
   - `endedOf`: `null` gives `"ok"`, `AgentTimeoutError` gives `"timeout"`, `CancelledError` gives `"killed"`, and `DaytonaError` and an unknown type give `"error"`.
@@ -132,6 +131,7 @@ The CLI only parses flags and prints the summary.
     - Equal `startedAt` values break ties on `trialName`.
     - Two jobs `[[A@t5], [A@t1]]` give `1` for the first job and `2` for the second: numbering follows command-line order, not time, across jobs.
   - `relativeDir` is `"astropy__astropy-12907/1"`.
+  - `payload` equals the full expected run row for one trial, including `flags: { harborJob: "k1-agency-minimal", harborTrial: "<trial folder>" }` (the job's folder name, never its path), `benchmark`, `reasoning`, `batch` and `trial`.
   - `unknownException` is set for `SomethingNew` and unset for every listed type.
 - [ ] **Step 2: Run** `pnpm exec vitest run lib/eval/harbor/planImport.test.ts`. Expected: FAIL, module not found.
 - [ ] **Step 3: Implement `endedOf`, `scoresOf` and `planHarborImport`.** The two rule-C lists are `const` arrays in this file.
@@ -167,12 +167,7 @@ The CLI only parses flags and prints the summary.
 - **Per planned run:**
   1. No `statelogPath`: `no-trace`.
   2. The folder exists with a `run` row: `present` if it has a complete grading pass or plans no scores. Otherwise call only `recordGradingPass`: `scored`.
-  3. Otherwise, take `traceId` from `readTracesOrThrow(statelogPath)`, which must hold exactly one trace. Call `recordCompletedRun` with:
-     - `test: { id }`, `suite: null`, `ended`, `error`,
-     - `flags: { harborJob: jobDir, harborTrial: trialName }`,
-     - `batch`, `trial`, `benchmark`, `reasoning`.
-
-     Then call `recordGradingPass` if there are scores. Result: `imported`.
+  3. Otherwise, take `traceId` from `readTracesOrThrow(statelogPath)`, which must hold exactly one trace. Call `recordCompletedRun` with `run: { traceId, annotator, payload }`, using the planner's payload unchanged. Then call `recordGradingPass` if there are scores. Result: `imported`.
   4. Any throw: `failed` with the message. The loop continues.
 
 - [ ] **Step 1: Write the failing tests** (temp dirs via `tempDir`, trials via `writeHarborTrial`, traces via `statelogLine` / `agentStartLine` from `lib/runDirectory/testFixtures.ts`):
@@ -194,7 +189,7 @@ The CLI only parses flags and prints the summary.
 - Modify: `scripts/agency.ts` (beside `evalCmd.command("upload")`, around `:1350`)
 - Create: `lib/eval/harbor/formatImport.ts`
 - Test: `lib/eval/harbor/formatImport.test.ts`
-- Modify: `docs/dev/evals/eval-tracking.md` (a short "Importing Harbor jobs" section: the command, the batch rule, rule C, and that trials without a trace are skipped)
+- Modify: `docs/dev/evals/eval-tracking.md` (a short "Importing Harbor jobs" section: the command, the batch rule, rule C, and that trials without a trace are skipped). Dev docs only: the command is hidden and stays out of `docs/site/cli/eval.md`.
 
 **Interfaces:**
 - Consumes: `importHarborJobs` and `ImportResult` (Task 4).
@@ -204,14 +199,14 @@ The CLI only parses flags and prints the summary.
 - [ ] **Step 2: Run** `pnpm exec vitest run lib/eval/harbor/formatImport.test.ts`. Expected: FAIL.
 - [ ] **Step 3: Implement it, and register the command:**
   ```ts
-  evalCmd.command("import-harbor")
+  evalCmd.command("import-harbor", { hidden: true })   // internal benchmarking tool, like `remote` and `review`
     .argument("<jobs...>")
     .requiredOption("--out <dir>")
     .option("--batch <name>")
     .option("--reasoning <level>")
   ```
   It prints `formatImportSummary(...)` and sets `process.exitCode = 1` when any outcome is `failed`. A thrown `several jobs need --batch` exits 2 with that message.
-- [ ] **Step 4: Run** `pnpm exec vitest run lib/eval/harbor` and `pnpm run typecheck`, then `make` and `node dist/scripts/agency.js eval import-harbor --help`. Expected: tests pass, and the help lists `--out`, `--batch` and `--reasoning`.
+- [ ] **Step 4: Run** `pnpm exec vitest run lib/eval/harbor` and `pnpm run typecheck`, then `make` and `node dist/scripts/agency.js eval import-harbor --help`. Expected: tests pass, the help lists `--out`, `--batch` and `--reasoning`, and `node dist/scripts/agency.js eval --help` does **not** list `import-harbor`.
 - [ ] **Step 5: Write the doc section, and commit** with the message `agency eval import-harbor`.
 
 ### Task 6: Check against real jobs

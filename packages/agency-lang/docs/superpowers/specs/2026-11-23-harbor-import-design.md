@@ -44,6 +44,8 @@ Reasoning level is recorded nowhere. The adapter reads `AGENCY_EFFORT` from the 
 
 ### Command
 
+Hidden from `agency eval --help` (`{ hidden: true }`, like `remote` and `review`), because it's an internal benchmarking tool. It's documented in `docs/dev/` only.
+
 ```
 agency eval import-harbor <job folder>... --out <dir> [--batch <name>] [--reasoning <level>]
 ```
@@ -66,7 +68,7 @@ Output goes to `<out>/<batch>/<test>/<trial>/`, the layout `findRunDirectories` 
 | `--reasoning` | `run.reasoning` (new field, ADI-370). Absent when the flag isn't given. |
 | the job | `run.batch` and `run.trial` (above) |
 | `exception_info` | `run.ended`, plus `run.error` set to `<exception_type>: <exception_message>` |
-| Harbor job path and trial name | `run.flags = { harborJob, harborTrial }`, so a run can be traced back |
+| Harbor job folder name and trial name | `run.flags = { harborJob, harborTrial }`, so a run can be traced back. Names, not paths, so a run's id doesn't depend on where the job lives and no local paths reach statelog. |
 | `verifier_result.rewards` | one `score` row per reward (below) |
 
 `run.suite` is null, because there's no Agency suite. The `run` row's annotator is `{ kind: "harness", id: "harbor-import@<agency version>" }`.

@@ -3,6 +3,7 @@ import * as path from "path";
 import {
   createEvalUploadClient,
   EVENTS_PER_REQUEST,
+  MAX_REQUEST_BYTES,
   type EvalUploadClient,
   type RemoteTraceState,
   type SequencedEvent,
@@ -157,7 +158,8 @@ async function uploadRun(
     }
     const from = plan.kind === "resume" ? plan.from : 0;
     if (plan.kind === "upload-all" || plan.kind === "resume") {
-      for (const chunk of chunked(sequencedFrom(events, from), EVENTS_PER_REQUEST)) {
+      const limits = { maxEvents: EVENTS_PER_REQUEST, maxBytes: MAX_REQUEST_BYTES };
+      for (const chunk of requestChunks(sequencedFrom(events, from), limits)) {
         await client.postEvents(traceId, chunk);
       }
     }
@@ -216,11 +218,27 @@ function sequencedFrom(events: readonly EventEnvelope[], from: number): Sequence
   return events.slice(from).map((envelope, offset) => ({ sequence: from + offset, envelope }));
 }
 
-function chunked<T>(items: readonly T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let start = 0; start < items.length; start += size) {
-    chunks.push(items.slice(start, start + size));
+/** Splits events into requests of at most `maxEvents` and about `maxBytes`.
+ *  An event larger than `maxBytes` goes alone. Exported for tests. */
+export function requestChunks(
+  events: readonly SequencedEvent[],
+  limits: { maxEvents: number; maxBytes: number },
+): SequencedEvent[][] {
+  const chunks: SequencedEvent[][] = [];
+  let current: SequencedEvent[] = [];
+  let currentBytes = 0;
+  for (const event of events) {
+    const bytes = Buffer.byteLength(JSON.stringify(event));
+    const full = current.length === limits.maxEvents || currentBytes + bytes > limits.maxBytes;
+    if (current.length > 0 && full) {
+      chunks.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(event);
+    currentBytes += bytes;
   }
+  if (current.length > 0) chunks.push(current);
   return chunks;
 }
 

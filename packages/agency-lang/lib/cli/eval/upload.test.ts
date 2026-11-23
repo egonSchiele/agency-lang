@@ -12,8 +12,9 @@ import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
 import type { Annotation } from "@/runDirectory/annotations.js";
 import { recordGradingPass } from "@/runDirectory/mutations.js";
 import { statelogLine, tempDir } from "@/runDirectory/testFixtures.js";
+import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
-import { eventPlan, evalUpload, formatUploadResult } from "./upload.js";
+import { eventPlan, evalUpload, formatUploadResult, requestChunks } from "./upload.js";
 
 const target = { origin: "https://h", projectSlug: "proj", apiKey: "k" };
 
@@ -308,5 +309,35 @@ describe("formatUploadResult", () => {
       "1 uploaded · 1 present · 1 resumed · 1 failed",
       "batch: https://h/projects/evals/batch?id=p&batch=b1",
     ]);
+  });
+});
+
+describe("requestChunks", () => {
+  const baseEnvelope: EventEnvelope = JSON.parse(statelogLine("t", "debug"));
+  const seq = (sequence: number, padChars: number): SequencedEvent => ({
+    sequence,
+    envelope: { ...baseEnvelope, data: { type: "debug", pad: "x".repeat(padChars) } },
+  });
+  const sizes = (chunks: SequencedEvent[][]): number[] => chunks.map((chunk) => chunk.length);
+
+  it("closes a chunk before it would pass the byte budget", () => {
+    const events = [0, 1, 2, 3, 4].map((n) => seq(n, 1500));
+    expect(sizes(requestChunks(events, { maxEvents: 500, maxBytes: 4000 }))).toEqual([2, 2, 1]);
+  });
+
+  it("puts an event larger than the budget in a chunk of its own", () => {
+    const events = [seq(0, 100), seq(1, 5000), seq(2, 100)];
+    expect(sizes(requestChunks(events, { maxEvents: 500, maxBytes: 4000 }))).toEqual([1, 1, 1]);
+  });
+
+  it("still caps a chunk by event count", () => {
+    const events = [0, 1, 2, 3, 4].map((n) => seq(n, 10));
+    expect(sizes(requestChunks(events, { maxEvents: 2, maxBytes: 1_000_000 }))).toEqual([2, 2, 1]);
+  });
+
+  it("keeps sequences in order and starts wherever the input starts (a resume)", () => {
+    const events = [3, 4, 5].map((n) => seq(n, 1500));
+    const chunks = requestChunks(events, { maxEvents: 500, maxBytes: 4000 });
+    expect(chunks.flat().map((event) => event.sequence)).toEqual([3, 4, 5]);
   });
 });

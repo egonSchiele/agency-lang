@@ -130,7 +130,8 @@ order:
    | bulk-prefix, more | | refuse |
    | invalid | | refuse, with the server's reason |
 
-4. Post events in chunks of `EVENTS_PER_REQUEST` (500) to
+4. Post events in chunks of at most `EVENTS_PER_REQUEST` (500) events and
+   about `MAX_REQUEST_BYTES` (4 MiB, under statelog's 5 MiB body limit) to
    `POST /api/projects/:slug/logs/bulk`, each with its 0-based `sequence`
    (its position in the file). Then post every annotation row to
    `POST /api/projects/:slug/annotations`, which upserts by the row's

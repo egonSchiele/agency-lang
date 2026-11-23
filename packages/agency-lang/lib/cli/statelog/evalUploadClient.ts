@@ -41,6 +41,10 @@ export type EvalUploadClient = {
 
 export const EVENTS_PER_REQUEST = 500;
 
+/** Approximate (counts events, not the request wrapper); kept under
+ *  statelog's 5 MiB JSON body limit. */
+export const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+
 export class EvalUploadError extends Error {
   readonly status: number | undefined;
 

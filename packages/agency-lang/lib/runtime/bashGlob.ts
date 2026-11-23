@@ -28,11 +28,14 @@ const GLOB_CHARS = ["*", "?", "[", "\\"];
  *  a `]`, and that `]` does not close the bracket. */
 const CLASS_KINDS = [":", "=", "."];
 
-/** What a scan of one part has already found missing, so no later `[`
- *  searches for it again: a closing `]`, or the end of a class kind. Each
- *  search goes to the end of the part, and repeating one for every `[`
- *  would take time quadratic in the length of the value. */
-type BracketScan = { noClose: boolean; noClassEnd: Record<string, boolean> };
+/** What the scans of one part have already found, so no later `[` repeats
+ *  a search that cannot succeed. Repeating one for every `[` would take
+ *  time quadratic in the length of the value.
+ *  - `dead` marks each position a failed search for `]` passed through. A
+ *    search's path depends only on where it is, so a later search that
+ *    reaches one of these positions fails the same way.
+ *  - `noClassEnd` marks a class kind whose end appears nowhere ahead. */
+type BracketScan = { dead: boolean[]; noClassEnd: Record<string, boolean> };
 
 /** Whether `glob`, expanded by bash 3.2, can name the path `name`. A
  *  comparison too long to finish counts as yes. */
@@ -120,7 +123,7 @@ function inSet(token: { members: string; ranges: string[] }, char: string): bool
 
 function tokenize(pattern: string): GlobToken[] {
   const tokens: GlobToken[] = [];
-  const scan: BracketScan = { noClose: false, noClassEnd: {} };
+  const scan: BracketScan = { dead: [], noClassEnd: {} };
   let index = 0;
   while (index < pattern.length) {
     const char = pattern[index];
@@ -197,11 +200,10 @@ function findClose(
   scan: BracketScan,
 ): { close: number; hasClass: boolean } {
   let hasClass = false;
-  if (scan.noClose) {
-    return { close: -1, hasClass };
-  }
+  const passed: number[] = [];
   let index = from;
-  while (index < pattern.length) {
+  while (index < pattern.length && scan.dead[index] !== true) {
+    passed.push(index);
     const char = pattern[index];
     if (char === "]") {
       return { close: index, hasClass };
@@ -219,6 +221,8 @@ function findClose(
     }
     index += 1;
   }
-  scan.noClose = true;
+  for (const position of passed) {
+    scan.dead[position] = true;
+  }
   return { close: -1, hasClass };
 }

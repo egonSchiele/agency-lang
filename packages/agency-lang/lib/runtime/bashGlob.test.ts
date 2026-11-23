@@ -31,6 +31,11 @@ describe("bashGlobMayName", () => {
     expect(bashGlobMayName("[[:alpha:]]x", "]x")).toBe(true);
   });
 
+  it("lets a later bracket close on a `]` an earlier scan stepped over", () => {
+    // The first `[` has no close, so it is plain; the second holds `:` and `s`.
+    expect(bashGlobMayName("[[:s:]ecrets.json", "[secrets.json")).toBe(true);
+  });
+
   it("reads an unclosed bracket as a plain character", () => {
     expect(bashGlobMayName("a[b", "a[b")).toBe(true);
     expect(bashGlobMayName("a[b", "ab")).toBe(false);
@@ -70,6 +75,7 @@ describe("bashGlobMayName", () => {
     const started = Date.now();
     expect(bashGlobMayName(opens, opens)).toBe(true);
     expect(bashGlobMayName("[[:".repeat(300_000), "x")).toBe(false);
+    expect(bashGlobMayName("[".repeat(1_000_000) + "[:a:]", "x")).toBe(false);
     expect(Date.now() - started).toBeLessThan(1000);
   });
 

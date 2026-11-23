@@ -6,7 +6,21 @@ Each run has a folder for temporary files. On Linux it looks like this:
 /tmp/agency-scratch-1000/3f9a1c0be27d4a15/
 ```
 
-`scratchDir()` in `std::fs` returns the path and creates the folder on first use. The built-in policies approve file work there, and `recommended` rejects a write elsewhere under `/tmp` with a message that names it.
+`scratchDir()` in `std::fs` returns the path. The built-in policies approve file work there, and `recommended` rejects a write elsewhere under `/tmp` with a message that names it.
+
+## It is off unless the run is asked for one
+
+A run has a scratch folder only when the setting `AGENCY_SCRATCH` is `1` (`scratchEnabled` in `lib/runtime/scratchDir.ts`). `agency agent` sets it for the session it starts, and `agency run --scratch` sets it for one run. A plain `agency run` leaves nothing on disk.
+
+It is a setting the host reads, like `AGENCY_AGENT_HOME`, and not an option on one host object. The code that answers an interrupt outside the run builds its own host, and so does a subprocess. A setting reaches both. It only turns the folder on. It cannot say where the folder is.
+
+With the setting off:
+
+- No folder is made, and `scratchDir()` returns a failure.
+- `resolvePolicyDirs` gives no scratch parent, so `<scratch>` in a rule stays as written and the rule matches nothing.
+- A reject rule whose message names `<scratch>` matches nothing either (`messageNamesNoFolder` in `lib/runtime/policy.ts`). Without that, `recommended` would reject a write to `/tmp` and tell the model to write under `<scratch>`, which is no path.
+
+So a run under `recommended` with no scratch folder behaves as it did before the scratch rules: a write to `/tmp` prompts.
 
 ## Where the path comes from
 
@@ -67,7 +81,9 @@ The runtime does not delete the folder. A run paused on an interrupt has not end
 
 The reject message sends the model to the folder, and the policy approves a write or a `mkdir` there. If the folder were missing, the model's own write would create it, and its parent, with ordinary permissions. `privateDir` never changes an existing folder's mode, so every later `scratchDir()` for that user would fail until someone deleted the parent.
 
-So the runtime makes the folder itself. `createExecutionContext` (`lib/runtime/state/context.ts`) calls `ensureScratchDir` right after it sets the run's id. Every run, every resume, and every subprocess passes through there, so a resume in a new process after a reboot gets its folder back. A failure is ignored, which keeps a host with no temp folder working. The cost is one empty folder per run under the private parent.
+So the runtime makes the folder itself, on a host that was asked for one. `createExecutionContext` (`lib/runtime/state/context.ts`) calls `ensureScratchDir` right after it sets the run's id. Every run, every resume, and every subprocess passes through there, so a resume in a new process after a reboot gets its folder back. A failure is ignored, which leaves the run without a folder.
+
+Because the folder already exists, `scratchDir()` creates nothing new and raises no interrupt. The consent is the setting, given by whoever launched the run.
 
 ## Files and tests
 

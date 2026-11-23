@@ -62,16 +62,34 @@ function ruleResult(rule: PolicyRule, dirs: PolicyDirs): PolicyResult {
  *  path, so the model reads a real folder. A placeholder with no folder
  *  stays as written. */
 function fillPlaceholders(text: string, dirs: PolicyDirs): string {
-  const folders: [string, string | null | undefined][] = [
+  return namedFolders(dirs).reduce(
+    (filled, [placeholder, folder]) =>
+      folder === null || folder === undefined ? filled : filled.split(placeholder).join(folder),
+    text,
+  );
+}
+
+/** Each named placeholder with the folder it stands for in this check. */
+function namedFolders(dirs: PolicyDirs): [string, string | null | undefined][] {
+  return [
     [AGENCY_INSTALL_DIR_PLACEHOLDER, dirs.agencyInstallDir],
     [AGENT_HOME_PLACEHOLDER, dirs.agentHome],
     [HOME_PLACEHOLDER, dirs.home],
     [SCRATCH_PLACEHOLDER, dirs.scratch],
   ];
-  return folders.reduce(
-    (filled, [placeholder, folder]) =>
-      folder === null || folder === undefined ? filled : filled.split(placeholder).join(folder),
-    text,
+}
+
+/** Whether a reject message names a placeholder that has no folder here.
+ *  Such a rule does not match, as a rule whose pattern names one does not:
+ *  its message would tell the model to use `<scratch>`, which is no path. */
+function messageNamesNoFolder(rule: PolicyRule, dirs: PolicyDirs): boolean {
+  const message = rule.rejectMessage;
+  if (message === undefined) {
+    return false;
+  }
+  return namedFolders(dirs).some(
+    ([placeholder, folder]) =>
+      (folder === null || folder === undefined) && message.includes(placeholder),
   );
 }
 
@@ -285,6 +303,7 @@ export type PolicyInterrupt = {
 };
 
 function matchesRule(rule: PolicyRule, interrupt: PolicyInterrupt, dirs: PolicyDirs): boolean {
+  if (messageNamesNoFolder(rule, dirs)) return false;
   if (!rule.match) return true; // catch-all
   const dot = rule.matchDotFolders === true;
   const seesGlobs = rule.action !== "approve";

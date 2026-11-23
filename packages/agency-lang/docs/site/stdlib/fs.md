@@ -281,10 +281,10 @@ Delete a file or directory recursively. Succeeds if the target is missing.
 scratchDir(): Result<string>
 ```
 
-Return the absolute path of this run's scratch folder, creating the folder if it does not exist yet. Use it for temporary files. The path is the same for the whole run, including after an interrupt and resume.
+Return the absolute path of this run's scratch folder, for temporary files. The path is the same for the whole run, including after an interrupt and resume. Fails when the run has no scratch folder: start the program with `agency run --scratch` to give it one.
 
 **Returns:** `Result<string>`
 
 **Needs:** `fileRead`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L232))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/fs.agency#L235))

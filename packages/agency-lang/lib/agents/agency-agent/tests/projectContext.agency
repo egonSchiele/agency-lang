@@ -5,6 +5,7 @@
  */
 import { mkdir, remove } from "std::fs"
 import { bash } from "std::shell"
+import { setEnv } from "std::system"
 
 import { setAgentCwd } from "std::index"
 
@@ -128,6 +129,8 @@ node blockFollowsTheAgentDirectory(): boolean {
   }
   const work = tree() + "/repo/sub/work"
   setAgentCwd(work)
+  // `agency agent` turns the scratch folder on when it starts the session.
+  setEnv("AGENCY_SCRATCH", "1") with approve
   const block = projectContextText()
   clearTree()
   const named = block.includes("Scratch folder for temporary files: ") && block.includes("/agency-scratch-")

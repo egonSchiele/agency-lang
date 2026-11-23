@@ -8,7 +8,7 @@
 import { defaultHost } from "#default-host";
 import type { Host } from "../host/host.js";
 import { agentHomeDir } from "./agentHome.js";
-import { scratchParentPath } from "./scratchDir.js";
+import { scratchEnabled, scratchParentPath } from "./scratchDir.js";
 import {
   substituteAgentHome,
   substituteDot,
@@ -29,7 +29,9 @@ export function resolvePolicyDirs(host: Host): PolicyDirs {
     agentHome: host.system.realDir(agentHomeDir(host)),
     home: host.system.realDir(host.system.homeDir()),
     agencyInstallDir: host.system.installDir(),
-    scratchParent: scratchParentPath(host),
+    // Null when the host gives its runs no scratch folder. `<scratch>` in
+    // a rule then stays as written, and the rule matches nothing.
+    scratchParent: scratchEnabled(host) ? scratchParentPath(host) : null,
   };
 }
 

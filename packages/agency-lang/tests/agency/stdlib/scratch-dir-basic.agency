@@ -1,7 +1,13 @@
 import { scratchDir } from "std::fs"
 import { exists } from "std::shell"
+import { setEnv } from "std::system"
 
+// A run has a scratch folder only when it was asked for one. This test's
+// run was not, so the first call fails. The setting is then turned on, as
+// `agency run --scratch` would have done before the run started.
 node main() {
+  const off = scratchDir()
+  setEnv("AGENCY_SCRATCH", "1") with approve
   const first = scratchDir()
   const second = scratchDir()
   if (first is failure(why)) {
@@ -11,6 +17,7 @@ node main() {
     return why
   }
   return {
+    refusedWhenOff: isFailure(off),
     same: first.value == second.value,
     named: first.value.includes("/agency-scratch-"),
     exists: exists(first.value)

@@ -16,7 +16,7 @@ import type { Clock } from "../clock.js";
 import { defaultHost } from "#default-host";
 import { requireCapabilities, withClock, type Host } from "../../host/host.js";
 import { resolvePolicyDirs } from "../policyDirs.js";
-import { ensureScratchDir } from "../scratchDir.js";
+import { ensureScratchDir, scratchEnabled } from "../scratchDir.js";
 import { withRunScratch, type Policy, type PolicyDirs } from "../policy.js";
 import { DEFAULT_MAX_CALL_DEPTH } from "../callDepth.js";
 import { InvocationUsageMeter } from "../invocationUsage.js";
@@ -620,11 +620,14 @@ export class RuntimeContext<T> {
     execCtx.runId = runId;
     // `<scratch>` in a policy rule means this run's scratch folder.
     execCtx.policyDirs = withRunScratch(execCtx.policyDirs, runId);
-    // A policy names this folder to the model, so it must exist, made
-    // private, before the model can make it itself: a folder the model
-    // made would have ordinary permissions, and `scratchDir()` would then
-    // refuse it. A host with no temp folder goes without one.
-    await ensureScratchDir(execCtx.host, runId).catch(() => {});
+    // Only on a host that was asked for one (`AGENCY_SCRATCH`), so a plain
+    // script leaves nothing on disk. A policy names this folder to the
+    // model, so it must exist, made private, before the model can make it
+    // itself: a folder the model made would have ordinary permissions, and
+    // `privateDir` would then refuse it. A failure leaves the run without.
+    if (scratchEnabled(execCtx.host)) {
+      await ensureScratchDir(execCtx.host, runId).catch(() => {});
+    }
     execCtx.subprocessDepth = getSubprocessRunInfo().depth;
     execCtx.verbose = this.verbose;
     execCtx.logLevel = this.logLevel;

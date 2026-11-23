@@ -3,7 +3,7 @@ import diff_match_patch from "diff-match-patch";
 import type { Host, Located } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
 import { currentRun } from "../runtime/asyncContext.js";
-import { ensureScratchDir } from "../runtime/scratchDir.js";
+import { ensureScratchDir, scratchEnabled } from "../runtime/scratchDir.js";
 import { assertContained } from "./assertContained.js";
 import { WINDOWS_PATHS } from "./isContained.js";
 import { expandPath } from "./expandPath.js";
@@ -397,8 +397,16 @@ function cwdStartsWith(cwd: string, prefix: string): boolean {
   return cwd.startsWith(prefix);
 }
 
-/** The run's scratch folder, made if it is missing. */
+/** The run's scratch folder. The runtime makes it when the run starts, on
+ *  a host that was asked for one, so this creates nothing new: the call
+ *  here only brings the folder back if something removed it. On any other
+ *  host it throws, and no folder is made. */
 export async function _scratchDir(): Promise<string> {
   const { ctx } = currentRun();
+  if (!scratchEnabled(ctx.host)) {
+    throw new Error(
+      "This run has no scratch folder. Start it with `agency run --scratch`, or set AGENCY_SCRATCH=1.",
+    );
+  }
   return ensureScratchDir(ctx.host, ctx.getRunId());
 }

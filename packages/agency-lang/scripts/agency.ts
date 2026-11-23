@@ -189,6 +189,7 @@ type RunOptions = Omit<CliFlags, "trace"> & {
   /** `run` only: a resumed program's threads come from its checkpoint. */
   messages?: string;
   detach?: string;
+  scratch?: boolean;
   maxCost?: string;
   maxTime?: string;
   local?: string;
@@ -548,6 +549,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .option(
         "--name <name>",
         "The name this run shows in `ps`, as `agency run <name>` (default: the input file's name)",
+      )
+      .option(
+        "--scratch",
+        "Give the run a scratch folder for temporary files, which `scratchDir()` returns and `<scratch>` in a policy stands for",
       )
       .addOption(
         new Option(

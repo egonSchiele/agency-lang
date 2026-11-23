@@ -226,12 +226,15 @@ export def remove(target: string, allowedPaths: string[] = [], useAgentCwd: bool
   }
 }
 
-// No interrupt: the caller chooses neither where the folder is nor its
-// name, so there is nothing to approve. Nothing in a run can move it.
+// No interrupt: the runtime made the folder when the run started, because
+// whoever launched the run asked for one (`agency run --scratch`, or
+// `agency agent`). The caller here chooses nothing, and nothing in a run
+// can move the folder. In a run that was not asked for one, this fails
+// and makes no folder.
 @capabilities(fileRead, fileWrite)
 export def scratchDir(): Result<string> {
   """
-  Return the absolute path of this run's scratch folder, creating the folder if it does not exist yet. Use it for temporary files. The path is the same for the whole run, including after an interrupt and resume.
+  Return the absolute path of this run's scratch folder, for temporary files. The path is the same for the whole run, including after an interrupt and resume. Fails when the run has no scratch folder: start the program with `agency run --scratch` to give it one.
   """
   return try _scratchDir()
 }

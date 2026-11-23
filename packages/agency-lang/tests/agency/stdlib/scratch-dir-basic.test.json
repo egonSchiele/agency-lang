@@ -3,13 +3,13 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "{\"same\":true,\"named\":true,\"exists\":true}",
+      "expectedOutput": "{\"refusedWhenOff\":true,\"same\":true,\"named\":true,\"exists\":true}",
       "evaluationCriteria": [
         {
           "type": "exact"
         }
       ],
-      "description": "scratchDir returns the same path on every call in a run, under an agency-scratch folder, and the folder exists after the first call"
+      "description": "scratchDir fails in a run that was not asked for a scratch folder. With the setting on, it returns the same path on every call, under an agency-scratch folder, and the folder exists"
     }
   ]
 }

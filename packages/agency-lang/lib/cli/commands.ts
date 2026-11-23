@@ -29,7 +29,7 @@ import { RunStrategy } from "../importStrategy.js";
 import { compileAgencyOnly } from "../compiler/compileSandboxed.js";
 import { withRootCarriers } from "./childEnv.js";
 import type { ResumeCarrier } from "./resumeCarrier.js";
-import { SEED_FROM_STDIN } from "@/constants.js";
+import { AGENCY_CARRIER_ON, AGENCY_SCRATCH, SEED_FROM_STDIN } from "@/constants.js";
 import { startDetached } from "./detached.js";
 import type { RunLaunch } from "./runLaunch.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
@@ -353,6 +353,11 @@ export function run(
     seedMessages: launch?.seedMessages,
     outputFile: detachedOutputFile,
   });
+  // `--scratch`. Without the flag the variable is left as the shell has
+  // it, so `AGENCY_SCRATCH=1 agency run` works too.
+  if (launch?.scratch === true) {
+    env[AGENCY_SCRATCH] = AGENCY_CARRIER_ON;
+  }
   const captured = capture === undefined ? undefined : prepareCapture(capture.runDir);
   env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(
     runChildOverrides({

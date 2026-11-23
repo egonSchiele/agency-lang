@@ -5,15 +5,18 @@ import path from "path";
 import { nodeHost } from "../host/node/nodeHost.js";
 import type { Host } from "../host/host.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
-import { ensureScratchDir, scratchDirPath, scratchId } from "./scratchDir.js";
+import { AGENCY_SCRATCH } from "../constants.js";
+import { ensureScratchDir, scratchDirPath, scratchEnabled, scratchId } from "./scratchDir.js";
 import { builtinPolicy } from "./builtinPolicies.js";
 import { checkPolicyExplicit, type PolicyDirs } from "./policy.js";
 import { resolvePolicyDirs } from "./policyDirs.js";
 import { RuntimeContext } from "./state/context.js";
 
-/** A nodeHost whose temp folder and user id are the test's. */
-function hostWith(args: { tempDir: string; userId?: string }): Host {
+/** A nodeHost whose temp folder and user id are the test's, and which
+ *  gives its runs a scratch folder unless `scratch` is false. */
+function hostWith(args: { tempDir: string; userId?: string; scratch?: boolean }): Host {
   const base = nodeHost();
+  const on = args.scratch !== false;
   return {
     ...base,
     system: {
@@ -21,8 +24,51 @@ function hostWith(args: { tempDir: string; userId?: string }): Host {
       tempDir: () => args.tempDir,
       userId: () => args.userId ?? base.system.userId(),
     },
+    settings: {
+      ...base.settings,
+      read: (name) => (name === AGENCY_SCRATCH ? (on ? "1" : null) : base.settings.read(name)),
+    },
   };
 }
+
+describe("a host that was not asked for a scratch folder", () => {
+  it("resolves no scratch parent, and a run makes no folder", async () => {
+    const temp = realpathSync(mkdtempSync(path.join(os.tmpdir(), "agency-scratch-test-")));
+    try {
+      const host = hostWith({ tempDir: temp, scratch: false });
+      expect(scratchEnabled(host)).toBe(false);
+      expect(resolvePolicyDirs(host).scratchParent).toBeNull();
+      const ctx = new RuntimeContext({
+        statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false },
+        smoltalkDefaults: {},
+        dirname: temp,
+        host,
+      });
+      const execCtx = await ctx.createExecutionContext({ runId: "run-off" });
+      expect(execCtx.policyDirs.scratch ?? null).toBeNull();
+      expect(existsSync(`${temp}/agency-scratch-${host.system.userId()}`)).toBe(false);
+    } finally {
+      safeDeleteDirectoryWithin(realpathSync(os.tmpdir()), temp);
+    }
+  });
+
+  it("leaves the scratch rules of 'recommended' doing nothing", () => {
+    const host = hostWith({ tempDir: "/tmp", scratch: false });
+    const dirs = resolvePolicyDirs(host);
+    const recommended = builtinPolicy("recommended", "/home/me/proj")!;
+    const write = (dir: string) => ({
+      effect: "std::write",
+      message: "m",
+      data: { dir, filename: "out.log" },
+      origin: "test",
+      runId: "run-off",
+    });
+    // No approval, and no rejection with a message that names no folder:
+    // a write to /tmp goes to the user, as it did before the scratch rules.
+    expect(checkPolicyExplicit(recommended, write("/tmp"), dirs)).toBeNull();
+    expect(checkPolicyExplicit(recommended, write("/private/tmp/x"), dirs)).toBeNull();
+  });
+});
 
 describe("scratchDirPath", () => {
   const host = hostWith({ tempDir: "/tmp/", userId: "1000" });
@@ -185,14 +231,12 @@ describe("<scratch> in a rule", () => {
     });
   });
 
-  it("stays in a reject message when there is no scratch folder", () => {
+  it("makes a reject rule match nothing when its message names a folder that is not there", () => {
     const policy = { "std::write": [{ action: "reject", rejectMessage: "Use <scratch>." }] };
     const none: PolicyDirs = { ...dirs, scratch: null };
-    expect(checkPolicyExplicit(policy as never, intr("std::write", { dir: "/x" }), none)).toEqual({
-      type: "reject",
-      message: "Use <scratch>.",
-      value: "Use <scratch>.",
-    });
+    expect(
+      checkPolicyExplicit(policy as never, intr("std::write", { dir: "/x" }), none),
+    ).toBeNull();
   });
 });
 
@@ -252,14 +296,11 @@ describe("the scratch rules in the built-in policies", () => {
     expect(check("std::edit", { dir: scratch, filename: "a" })).toEqual({ type: "approve" });
   });
 
-  it("recommended: with no scratch folder, the message keeps the placeholder", () => {
+  it("recommended: with no scratch folder, a write under /tmp is left to the user", () => {
     const policy = builtinPolicy("recommended", "/home/me/proj")!;
     const dirs: PolicyDirs = { ...dirsIn("/home/me/proj"), scratch: null };
-    expect(checkPolicyExplicit(policy, ask("std::write", { dir: scratch }), dirs)).toEqual({
-      type: "reject",
-      message: "Write temporary files under <scratch> instead.",
-      value: "Write temporary files under <scratch> instead.",
-    });
+    expect(checkPolicyExplicit(policy, ask("std::write", { dir: scratch }), dirs)).toBeNull();
+    expect(checkPolicyExplicit(policy, ask("std::write", { dir: "/tmp" }), dirs)).toBeNull();
   });
 
   it("with-writes: the launch folder wins over the /tmp reject, and the policy files still prompt", () => {

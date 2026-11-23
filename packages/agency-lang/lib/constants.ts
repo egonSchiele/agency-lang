@@ -101,6 +101,14 @@ export const AGENCY_RUN_POLICY_WAIT = "AGENCY_RUN_POLICY_WAIT";
  */
 export const AGENCY_SAVE_HELD_CHECKPOINT = "AGENCY_SAVE_HELD_CHECKPOINT";
 
+/**
+ * Set to `AGENCY_CARRIER_ON` to give every run a scratch folder
+ * (docs/dev/runtime/scratch-dir.md). `agency agent` sets it, and so does
+ * `agency run --scratch`. It only turns the folder on. Nothing sets where
+ * the folder is. A subprocess inherits it with the rest of the environment.
+ */
+export const AGENCY_SCRATCH = "AGENCY_SCRATCH";
+
 /** The value of a carrier that is either set or absent. */
 export const AGENCY_CARRIER_ON = "1";
 

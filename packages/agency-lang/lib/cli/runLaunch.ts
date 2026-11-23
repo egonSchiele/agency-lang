@@ -16,12 +16,15 @@ export type RunLaunch = {
   /** When set, the program starts detached, with its output saved to
    *  this file. */
   detachedOutputFile?: string;
+  /** From `--scratch`: the run gets a scratch folder. */
+  scratch?: boolean;
 };
 
 export type LaunchFlags = {
   name?: string;
   messages?: string;
   detach?: string;
+  scratch?: boolean;
 };
 
 export type LaunchRefusal = { refused: string };
@@ -73,6 +76,9 @@ export function runLaunchFrom(
   cwd: string,
 ): RunLaunch | LaunchRefusal {
   const launch: RunLaunch = { title: TITLE_PREFIX + (flags.name ?? path.basename(input)) };
+  if (flags.scratch === true) {
+    launch.scratch = true;
+  }
   if (flags.detach !== undefined) {
     launch.detachedOutputFile = path.resolve(cwd, flags.detach);
   }

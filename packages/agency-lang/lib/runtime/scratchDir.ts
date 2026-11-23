@@ -4,8 +4,16 @@
 // its parent's, and code that answers an interrupt outside the run can
 // work it out from the interrupt. See docs/dev/runtime/scratch-dir.md.
 import type { Host } from "../host/host.js";
+import { AGENCY_CARRIER_ON, AGENCY_SCRATCH } from "../constants.js";
 import { sha256Text } from "../utils/hash.js";
 import { ensureUserTempFolder, userTempFolderName } from "./userTempFolder.js";
+
+/** Whether this host gives its runs a scratch folder. Off unless the
+ *  `AGENCY_SCRATCH` setting is on, so a plain script leaves nothing on
+ *  disk. Whoever launches the run turns it on. */
+export function scratchEnabled(host: Pick<Host, "settings">): boolean {
+  return host.settings.read(AGENCY_SCRATCH) === AGENCY_CARRIER_ON;
+}
 
 /** The start of the scratch parent folder's name; the user id follows. */
 export const SCRATCH_FOLDER_PREFIX = "agency-scratch-";

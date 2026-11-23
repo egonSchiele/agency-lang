@@ -12,6 +12,7 @@ import { stageConfiguredAgent } from "./stageConfiguredAgent.js";
 import { compiledOutputNodeArgs } from "./commands.js";
 import { compile } from "@/compiler/defaultSession.js";
 import { withRootCarriers } from "./childEnv.js";
+import { AGENCY_CARRIER_ON, AGENCY_SCRATCH } from "@/constants.js";
 import { keychainWarning, loadApiKeys } from "@/stdlib/apiKeys.js";
 import { currentHost } from "@/runtime/currentHost.js";
 import { spawn as realSpawn } from "child_process";
@@ -298,6 +299,9 @@ export async function runBundledAgent(
   if (launchArgs.agentHome !== null) {
     env.AGENCY_AGENT_HOME = launchArgs.agentHome;
   }
+  // An agent session gets a scratch folder. Its policy names the folder to
+  // the model, and the runtime makes it when the run starts.
+  env[AGENCY_SCRATCH] = AGENCY_CARRIER_ON;
 
   // Cleanup ownership: staging owns it until spawn succeeds, then the
   // child's handlers own it. A synchronous spawn throw cleans up here.

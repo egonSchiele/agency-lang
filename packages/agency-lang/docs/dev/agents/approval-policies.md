@@ -877,11 +877,34 @@ address, which would hand the conversation credentials to send on with
 the next approved GET. A saved policy from before this change has no
 rule and keeps prompting; `/policy` offers the missing rules.
 
-## Why `recommended` has no `std::write` rule
+## Why `recommended` approves writes only in the agent's scratch folder
 
-It approves no file write at all. `std::mkdir` has one, for the agent home
-itself, which `writeSettingsFile` creates when it is not there yet: an
-empty directory decides nothing, and the write into it still asks.
+It approves a file write in one place, `<agent-home>/scratch` and
+everything under it. The agent makes a folder there for each session
+(`scratchFolder` in `lib/agents/agency-agent/lib/projectContext.agency`)
+and names it in its project context as the place for temporary files:
+
+```
+Scratch folder for temporary files: /home/me/.agency-agent/scratch/<session id>
+```
+
+A model writes a build log or a PR body to `/tmp` by habit. `/tmp` is
+shared with every other program, so no built-in approves it. The scratch
+folder gives the model somewhere it can write and read back with no
+prompt: `std::write`, `std::writeBinary`, `std::edit`, `std::mkdir`, and
+`std::remove` each have an approve rule for it, and it is in the read
+scope. Nothing reads the folder as configuration or code, which is what
+sets it apart from the rest of the home.
+
+Nothing forces the model to use it. A write to `/tmp` asks, as before.
+The user no longer sees the contents of a file the agent writes to its
+scratch folder, though running such a file still asks `std::exec`. The
+agent does not delete the folder.
+
+Everywhere else it approves no file write. `std::mkdir` has one more rule,
+for the agent home itself, which `writeSettingsFile` creates when it is
+not there yet: an empty directory decides nothing, and the write into it
+still asks.
 
 The write the agent most obviously wants is its own `settings.json`,
 which `/model` and `/preset` save. That one is left to the prompt on

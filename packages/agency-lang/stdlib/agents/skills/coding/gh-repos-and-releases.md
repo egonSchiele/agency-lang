@@ -34,7 +34,7 @@ gh repo edit --default-branch main --enable-auto-merge
 
 ```bash
 gh release create v1.2.0 --title "v1.2.0" --generate-notes
-gh release create v1.2.0 --notes-file /tmp/notes.md
+gh release create v1.2.0 --notes-file <scratch folder>/notes.md
 gh release create v2.0.0-rc1 --draft --prerelease --generate-notes
 
 # Attach built artifacts by listing them after the tag.

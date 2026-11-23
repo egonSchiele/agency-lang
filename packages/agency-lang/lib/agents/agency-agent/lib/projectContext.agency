@@ -4,11 +4,14 @@
   and the code subagent for its own prompt.
 */
 import { today } from "std::date"
+import { mkdir } from "std::fs"
 import { getAgentCwd } from "std::index"
 import { exists } from "std::shell"
 import { cwd } from "std::system"
 
 import { projectFolders } from "./claudeSkills.agency"
+import { currentSessionId } from "./record.agency"
+import { AGENCY_AGENT_DIR } from "../shared.agency"
 import { _repositoryAncestors } from "agency-lang/stdlib-lib/gitignore.js"
 
 // The files a folder's instructions come from, in the order they are tried.
@@ -110,12 +113,37 @@ export def projectContextText(): string {
   return """
 
   Current date: ${today()}
-  Current working directory: ${dir}
+  Current working directory: ${dir}${scratchLine()}
 
   <project_context>
   ${projectContext}
   </project_context>
   """
+}
+
+/** The agent's scratch folder for this session: a folder under the agent
+  home that the built-in policies approve file work in, so a build log or
+  a PR body need not go to `/tmp`. Each session has its own, so two
+  sessions running at once do not overwrite each other's files. */
+def scratchFolder(): string {
+  const session = currentSessionId()
+  if (session == "") {
+    return "${AGENCY_AGENT_DIR}/scratch"
+  }
+  return "${AGENCY_AGENT_DIR}/scratch/${session}"
+}
+
+/** The block's line that names the scratch folder, with the newline before
+  it, or nothing when the folder cannot be made. The agent makes the
+  folder itself, as it makes the rest of its home, so naming it is not a
+  promise the model has to keep by creating it. */
+def scratchLine(): string {
+  const folder = scratchFolder()
+  const made = mkdir(folder) with approve
+  if (made is failure(why)) {
+    return ""
+  }
+  return "\n  Scratch folder for temporary files: ${folder}"
 }
 
 /** The user's message, with the project block above it when the agent's

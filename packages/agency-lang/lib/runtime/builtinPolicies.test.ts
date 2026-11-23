@@ -19,7 +19,7 @@ describe("builtinPolicy", () => {
       { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" },
       {
         match: {
-          dir: "{<agent-home>/skills,<agent-home>/skills/**,<agent-home>/tools,<agent-home>/tools/**,<agent-home>/memory,<agent-home>/memory/**}",
+          dir: "{<agent-home>/skills,<agent-home>/skills/**,<agent-home>/tools,<agent-home>/tools/**,<agent-home>/memory,<agent-home>/memory/**,<agent-home>/scratch,<agent-home>/scratch/**}",
         },
         action: "approve",
       },
@@ -39,12 +39,61 @@ describe("builtinPolicy", () => {
       ...scope,
       { match: { dir: "<agent-home>", filename: "settings.json" }, action: "approve" },
     ]);
-    // No write is approved anywhere. settings.json is executable
-    // configuration: an mcpServers entry is a command the next agent
-    // start spawns, so saving it asks like any other write.
-    expect(p!["std::write"]).toBeUndefined();
-    expect(p!["std::writeBinary"]).toBeUndefined();
-    expect(p!["std::edit"]).toBeUndefined();
+    // The only write approved is in the agent's scratch folder.
+    // settings.json is executable configuration: an mcpServers entry is a
+    // command the next agent start spawns, so saving it asks like any
+    // other write.
+    const inScratch = [
+      { match: { dir: "{<agent-home>/scratch,<agent-home>/scratch/**}" }, action: "approve" },
+    ];
+    expect(p!["std::write"]).toEqual(inScratch);
+    expect(p!["std::writeBinary"]).toEqual(inScratch);
+    expect(p!["std::edit"]).toEqual(inScratch);
+  });
+
+  it("approves file work in the agent's scratch folder and nowhere else in the home", () => {
+    const dirs: PolicyDirs = {
+      cwd: "/work",
+      agentHome: "/home/me/.agency-agent",
+      home: "/home/me",
+      agencyInstallDir: null,
+    };
+    const ask = (effect: string, data: Record<string, string>) => ({
+      effect,
+      message: "",
+      data,
+      origin: "test",
+    });
+    const scratch = "/home/me/.agency-agent/scratch";
+    for (const name of ["recommended", "with-writes"]) {
+      const policy = builtinPolicy(name, "/work")!;
+      const check = (effect: string, data: Record<string, string>) =>
+        checkPolicyExplicit(policy, ask(effect, data), dirs);
+      const approved = { type: "approve" };
+      expect(check("std::write", { dir: scratch, filename: "out.log" }), name).toEqual(approved);
+      expect(check("std::write", { dir: `${scratch}/s1`, filename: "a" }), name).toEqual(approved);
+      expect(check("std::edit", { dir: `${scratch}/s1`, filename: "a" }), name).toEqual(approved);
+      expect(check("std::mkdir", { dir: `${scratch}/s1` }), name).toEqual(approved);
+      expect(check("std::remove", { target: `${scratch}/s1/a` }), name).toEqual(approved);
+      expect(check("std::read", { dir: `${scratch}/s1`, filename: "a" }), name).toEqual(approved);
+      expect(check("std::grep", { dir: scratch }), name).toEqual(approved);
+      // The rest of the home still asks: settings.json decides what the
+      // next start runs, and policy.json is the policy.
+      const home = "/home/me/.agency-agent";
+      expect(check("std::write", { dir: home, filename: "settings.json" })?.type, name).not.toBe(
+        "approve",
+      );
+      expect(check("std::write", { dir: home, filename: "policy.json" })?.type, name).not.toBe(
+        "approve",
+      );
+      expect(check("std::write", { dir: `${home}/skills`, filename: "x.md" })?.type, name).not.toBe(
+        "approve",
+      );
+      // A write to the shared temp folder still asks.
+      expect(check("std::write", { dir: "/tmp", filename: "out.log" })?.type, name).not.toBe(
+        "approve",
+      );
+    }
   });
 
   it("approves a public https GET or HEAD through std::http under 'recommended' and nothing else", () => {

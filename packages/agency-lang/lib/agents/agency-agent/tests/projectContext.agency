@@ -130,7 +130,8 @@ node blockFollowsTheAgentDirectory(): boolean {
   setAgentCwd(work)
   const block = projectContextText()
   clearTree()
-  return block.includes("Current working directory: ${work}") && block.includes("work rules")
+  const named = block.includes("Scratch folder for temporary files: ") && block.includes("/scratch")
+  return block.includes("Current working directory: ${work}") && block.includes("work rules") && named
 }
 
 // After the agent's directory changes, the next message carries the new

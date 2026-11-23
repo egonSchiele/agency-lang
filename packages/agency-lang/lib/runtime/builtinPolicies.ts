@@ -56,9 +56,22 @@ const approve: PolicyRule[] = [{ action: "approve" }];
 // keeps meaning "wherever the agent runs, wherever agency is installed
 // now". Reads anywhere else fall through: a prompt in an interactive
 // session, an automatic rejection in a headless one.
-const AGENT_HOME_READ_DIRS = ["skills", "tools", "memory"]
+const AGENT_HOME_READ_DIRS = ["skills", "tools", "memory", "scratch"]
   .flatMap((name) => [`${AGENT_HOME}/${name}`, `${AGENT_HOME}/${name}/**`])
   .join(",");
+
+// The agent's scratch folder, `<agent-home>/scratch`, and everything under
+// it. The agent names it to the model as the place for temporary files, so
+// that a build log or a PR body need not go to `/tmp`, which is shared
+// with every other program. Nothing reads this folder as configuration or
+// code, unlike the rest of the home, so file work in it is approved.
+const AGENT_SCRATCH_SCOPE = `{${AGENT_HOME}/scratch,${AGENT_HOME}/scratch/**}`;
+
+/** Approve file work in the agent's scratch folder, matched on `field`:
+ *  `dir` for a write, an edit, and a mkdir, `target` for a remove. */
+function agentScratchApprove(field: string): PolicyRule[] {
+  return [{ match: { [field]: AGENT_SCRATCH_SCOPE }, action: "approve" }];
+}
 
 // Claude Code skill folders: the personal one in the user's home, and the
 // launch directory's own project folder, which `./**` misses because `**`
@@ -163,7 +176,12 @@ export const recommendedAutoApprovePolicy: Policy = {
   ],
   // `writeSettingsFile` creates the agent home when it is missing. An
   // empty directory decides nothing, and the write into it still asks.
-  "std::mkdir": [{ match: { dir: AGENT_HOME }, action: "approve" }],
+  "std::mkdir": [{ match: { dir: AGENT_HOME }, action: "approve" }, ...agentScratchApprove("dir")],
+  // The only writes approved are in the agent's scratch folder.
+  "std::write": agentScratchApprove("dir"),
+  "std::writeBinary": agentScratchApprove("dir"),
+  "std::edit": agentScratchApprove("dir"),
+  "std::remove": agentScratchApprove("target"),
   "std::read": [...readScopeRules(), ...settingsReadRule()],
   "std::readBinary": readScopeRules(),
   "std::ls": readScopeRules(),
@@ -260,6 +278,7 @@ export function withWritesPolicy(baseDir: string): Policy {
   const scope = dirScope(baseDir);
   const dirRule: PolicyRule[] = [
     ...ownPolicyFileRules(),
+    ...agentScratchApprove("dir"),
     { match: { dir: scope }, action: "approve" },
   ];
   const cwdRule: PolicyRule[] = [{ match: { cwd: scope }, action: "approve" }];
@@ -271,10 +290,12 @@ export function withWritesPolicy(baseDir: string): Policy {
     "std::mkdir": [
       ...ownPolicyFileRules(),
       { match: { dir: AGENT_HOME }, action: "approve" },
+      ...agentScratchApprove("dir"),
       { match: { dir: scope }, action: "approve" },
     ],
     "std::remove": [
       ...ownPolicyPathRules(["target"]),
+      ...agentScratchApprove("target"),
       { match: { target: scope }, action: "approve" },
     ],
     "std::copy": [
@@ -311,7 +332,7 @@ export const BUILTIN_POLICIES: { name: string; description: string }[] = [
   {
     name: "recommended",
     description:
-      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills, tools, and memory (plus the toolbox's own drafting and use-count files there), web/search and GET fetches, and the agent reading its own settings.json; prompt for reads elsewhere, every write, shell, git changes, and any HTTP request that sends a body.",
+      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills, tools, and memory (plus the toolbox's own drafting and use-count files there), web/search and GET fetches, the agent reading its own settings.json, and reads and writes in the agent's scratch folder; prompt for reads elsewhere, every other write, shell, git changes, and any HTTP request that sends a body.",
   },
   {
     name: "minimal",

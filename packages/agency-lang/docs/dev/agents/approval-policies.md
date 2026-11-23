@@ -981,12 +981,13 @@ against the interrupt's data field of the same name (`origin` and
 with no `match` is a catch-all.
 
 Which comparison applies depends on the shape of the value and the shape
-of the pattern, and on nothing else (`matchesField` in
-`lib/runtime/policy.ts`):
+of the pattern, and for a scalar value on the rule's action too
+(`matchesField` in `lib/runtime/policy.ts`):
 
 | The value | The pattern | It matches when |
 | --- | --- | --- |
 | a string, a number, or true/false | a string | the picomatch glob matches |
+| a string, a number, or true/false, in a reject or propagate rule | a string | the glob matches, or the value read as a glob names the pattern's text |
 | a list | a string | the list is not empty, and the glob matches every item |
 | a list | a list | the items match one by one, in order; a last item of `**` stands for any items after it, or none |
 | anything else | anything else | never |
@@ -1012,6 +1013,45 @@ before the glob. An item that is not a string, a number, or true/false
 never matches, so no rule matches inside `std::edit`'s list of edits. A
 list pattern is by position, which suits arguments; a rule cannot say
 "some item matches".
+
+A question's field can hold a glob. `cat config/*.json` through safeBash
+asks `std::read { dir: ".../config", filename: "*.json" }`, and bash, not
+the read, expands the glob. So a reject or propagate rule matches a scalar
+field when the usual test passes, or when the rule's pattern, read as plain
+text, is a name the value can stand for when read as a glob (`globNames`).
+An approve rule is matched as before. The rule names no effect and no
+field, and it can only make a reject or propagate rule match more often.
+
+| Rule | Value | Matches |
+| --- | --- | --- |
+| reject `secrets.json` | `*.json` | yes: the value, as a glob, names the rule's file |
+| reject `secrets.json` | `*.ts` | no: it cannot name it |
+| reject `secrets.json` | `notes.json` | no: a plain value is a glob that names only itself |
+| reject `.env` | `*` | no: a `*` skips a name that starts with a dot, in bash and here |
+| approve `settings.json` | `*.json` | no: an approve rule does not read the value as a glob |
+| approve `*.json` | `*.json` | yes, by the usual test |
+
+The value is read the way bash 3.2 reads a glob: no `!` negation, no
+braces, no extglob, `**` the same as `*`, and `*` never matching a leading
+dot, whatever the rule's `matchDotFolders` says. Without these, a
+`std::bash` command that starts with `!` would read as "anything except
+this" and match every reject rule that names `command`. A value longer than
+`MAX_PATTERN_LENGTH` is not read as a glob, because picomatch throws on it.
+
+Known limits:
+
+- A file literally named `*.json` is treated as the glob.
+- A file literally named `[id].tsx` is read as a glob that names `i.tsx`
+  and `d.tsx`, so a reject rule for `d.tsx` matches a read of it.
+- When the rule and the value are both globs, the rule may fail to match.
+  A rule for `secret*` does not match the value `*.json`, though both can
+  name `secret.json`. A rule for `*.pem` does match the value `*`, because
+  the text `*.pem` is a name that `*` matches.
+- An approve rule for `?.json` matches the value `*.json`, because the
+  text `*.json` is five characters after one. Approve rules are unchanged.
+
+A folder search such as `grep -rn KEY config` asks with `file: null`, so a
+reject rule for one file under `config` does not match it.
 
 A pattern may be at most `MAX_PATTERN_LENGTH` (65,536) characters, the
 most picomatch accepts. picomatch throws on a longer one, and a rule that

@@ -225,9 +225,23 @@ type PolicyInterrupt = { effect: string; message: string; data: any; origin: str
 function matchesRule(rule: PolicyRule, interrupt: PolicyInterrupt, dirs: PolicyDirs): boolean {
   if (!rule.match) return true; // catch-all
   const dot = rule.matchDotFolders === true;
+  const seesGlobs = rule.action !== "approve";
   return Object.entries(rule.match).every(([key, pattern]) =>
-    matchesField(key, pattern, fieldValue(key, interrupt), dot, dirs),
+    matchesField(key, pattern, fieldValue(key, interrupt), dot, seesGlobs, dirs),
   );
+}
+
+/** picomatch read the way bash 3.2 reads a glob: no negation, no braces,
+ *  no extglob, `**` the same as `*`, and `*` never matching a leading dot. */
+const BASH_GLOB = { dot: false, nonegate: true, nobrace: true, noextglob: true, noglobstar: true };
+
+/** Whether `value`, read as a bash 3.2 glob, names the text `name`. A
+ *  value too long for picomatch is not read as a glob. */
+function globNames(value: string, name: string): boolean {
+  if (value.length > MAX_PATTERN_LENGTH) {
+    return false;
+  }
+  return picomatch.isMatch(name, value, BASH_GLOB);
 }
 
 function fieldValue(key: string, interrupt: PolicyInterrupt): unknown {
@@ -237,13 +251,15 @@ function fieldValue(key: string, interrupt: PolicyInterrupt): unknown {
 }
 
 /** Whether one field of an interrupt matches one pattern of a rule. Which
- *  comparison applies depends on the shapes of the two, and on nothing else:
- *  the table is in "Rule matching" in docs/dev/agents/approval-policies.md. */
+ *  comparison applies depends on the shapes of the two, and for a scalar
+ *  value on whether the rule approves: the table is in "Rule matching" in
+ *  docs/dev/agents/approval-policies.md. */
 function matchesField(
   key: string,
   pattern: MatchPattern,
   value: unknown,
   dot: boolean,
+  seesGlobs: boolean,
   dirs: PolicyDirs,
 ): boolean {
   // A null field is one the call did not fill in, such as `file` on a
@@ -251,7 +267,14 @@ function matchesField(
   if (value === undefined || value === null) return false;
   if (Array.isArray(value)) return matchesList(pattern, value, dot);
   if (typeof pattern !== "string" || !isScalar(value)) return false;
-  return matchesScalar(key, pattern, String(value), dot, dirs);
+  const text = String(value);
+  if (matchesScalar(key, pattern, text, dot, dirs)) {
+    return true;
+  }
+  // A reject or propagate rule also matches a value that can name the
+  // rule's file: `cat config/*.json` asks with the filename `*.json`, and
+  // a reject rule for `secrets.json` must see it.
+  return seesGlobs && globNames(stripDotSlash(text), stripDotSlash(pattern));
 }
 
 function isScalar(value: unknown): value is string | number | boolean {

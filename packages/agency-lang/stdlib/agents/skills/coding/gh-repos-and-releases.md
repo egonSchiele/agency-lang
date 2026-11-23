@@ -32,6 +32,9 @@ gh repo edit --default-branch main --enable-auto-merge
 
 ## Releases
 
+Where an example says `<scratch folder>`, write the scratch folder your
+project context names. If it names none, use a temporary file.
+
 ```bash
 gh release create v1.2.0 --title "v1.2.0" --generate-notes
 gh release create v1.2.0 --notes-file <scratch folder>/notes.md

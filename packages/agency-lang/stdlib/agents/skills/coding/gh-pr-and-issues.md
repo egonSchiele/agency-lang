@@ -92,9 +92,9 @@ caller and stop only when a typed tool fails with "No GitHub credential" and
 
 A PR body is almost always multi-line Markdown. Passing it with
 `--body "..."` mangles newlines and breaks on quotes. Write the text to a
-file and pass `--body-file`. If your project context names a scratch
-folder, put the file there and write that folder's path where the
-examples say `<scratch folder>`:
+file and pass `--body-file`. Where the examples say `<scratch folder>`,
+write the scratch folder your project context names. If it names none,
+use a temporary file:
 
 ```bash
 cat > <scratch folder>/pr-body.md <<'EOF'

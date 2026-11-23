@@ -10,7 +10,8 @@ import { exists } from "std::shell"
 import { cwd } from "std::system"
 
 import { projectFolders } from "./claudeSkills.agency"
-import { currentSessionId } from "./record.agency"
+import { currentSessionId, isIncognito } from "./record.agency"
+import { newSessionId } from "./sessions.agency"
 import { AGENCY_AGENT_DIR } from "../shared.agency"
 import { _repositoryAncestors } from "agency-lang/stdlib-lib/gitignore.js"
 
@@ -121,23 +122,35 @@ export def projectContextText(): string {
   """
 }
 
-/** The agent's scratch folder for this session: a folder under the agent
-  home that the built-in policies approve file work in, so a build log or
-  a PR body need not go to `/tmp`. Each session has its own, so two
-  sessions running at once do not overwrite each other's files. */
+// The scratch folder's name for a run with no session, such as `-p`. Made
+// once, so every block this run builds names the same folder.
+let _runScratchId = ""
+
+/** The agent's scratch folder for this run: a folder under the agent home
+  that the built-in policies approve file work in, so a build log or a PR
+  body need not go to `/tmp`. A session uses its id. A run with no session
+  gets a new id of its own. So two runs at once never share a folder, and
+  none is `scratch` itself, which the policies leave to the prompt. */
 def scratchFolder(): string {
   const session = currentSessionId()
-  if (session == "") {
-    return "${AGENCY_AGENT_DIR}/scratch"
+  if (session != "") {
+    return "${AGENCY_AGENT_DIR}/scratch/${session}"
   }
-  return "${AGENCY_AGENT_DIR}/scratch/${session}"
+  if (_runScratchId == "") {
+    _runScratchId = newSessionId()
+  }
+  return "${AGENCY_AGENT_DIR}/scratch/${_runScratchId}"
 }
 
 /** The block's line that names the scratch folder, with the newline before
   it, or nothing when the folder cannot be made. The agent makes the
   folder itself, as it makes the rest of its home, so naming it is not a
-  promise the model has to keep by creating it. */
+  promise the model has to keep by creating it. An --incognito run gets
+  none: it saves nothing, and files in the folder would outlive it. */
 def scratchLine(): string {
+  if (isIncognito()) {
+    return ""
+  }
   const folder = scratchFolder()
   const made = mkdir(folder) with approve
   if (made is failure(why)) {

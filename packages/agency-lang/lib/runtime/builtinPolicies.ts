@@ -35,11 +35,25 @@ function agencyExecApproveRules(): PolicyRule[] {
 
 const approve: PolicyRule[] = [{ action: "approve" }];
 
+// The agent's scratch folders. Each run of the agent makes its own folder
+// under `<agent-home>/scratch` and names it to the model as the place for
+// temporary files, so that a build log or a PR body need not go to
+// `/tmp`, which is shared with every other program. Nothing reads these
+// folders as configuration or code, unlike the rest of the home, so file
+// work in them is approved.
+//
+// The rules match a folder below `scratch` and everything in it, never
+// `scratch` itself. A run knows its own folder's name, a timestamp and a
+// random number, from its prompt. Finding another run's folder means
+// listing or searching `scratch`, and that asks. So does `rm -r` of it.
+const AGENT_SCRATCH_DIRS = [`${AGENT_HOME}/scratch/*`, `${AGENT_HOME}/scratch/*/**`];
+const AGENT_SCRATCH_SCOPE = `{${AGENT_SCRATCH_DIRS.join(",")}}`;
+
 // Where the read-only file tools may look without asking. The launch
 // directory. The agency install itself, because the agent's docs tools
 // (`agencyGuide` and friends) and bundled skills are plain reads of
 // shipped files. Three directories of the agent home: the skills and
-// tools it has learned, and its memory.
+// tools it has learned, and its memory. And the scratch folders above.
 //
 // The home as a whole is deliberately not in scope. `sessions/` and
 // `history` hold earlier conversations, often from other projects, and
@@ -47,7 +61,8 @@ const approve: PolicyRule[] = [{ action: "approve" }];
 // search a whole tree. With the home in scope, text injected into one
 // project could have the agent grep every earlier conversation and put
 // what it found into a web search, which this same policy approves, and
-// the user would not be asked at any step.
+// the user would not be asked at any step. `scratch` itself is left out
+// for the same reason: it holds the temporary files of earlier runs.
 //
 // All of these are placeholders the matcher expands at match time
 // (`.` to the process cwd, `<agency>` to the package root,
@@ -56,16 +71,10 @@ const approve: PolicyRule[] = [{ action: "approve" }];
 // keeps meaning "wherever the agent runs, wherever agency is installed
 // now". Reads anywhere else fall through: a prompt in an interactive
 // session, an automatic rejection in a headless one.
-const AGENT_HOME_READ_DIRS = ["skills", "tools", "memory", "scratch"]
+const AGENT_HOME_READ_DIRS = ["skills", "tools", "memory"]
   .flatMap((name) => [`${AGENT_HOME}/${name}`, `${AGENT_HOME}/${name}/**`])
+  .concat(AGENT_SCRATCH_DIRS)
   .join(",");
-
-// The agent's scratch folder, `<agent-home>/scratch`, and everything under
-// it. The agent names it to the model as the place for temporary files, so
-// that a build log or a PR body need not go to `/tmp`, which is shared
-// with every other program. Nothing reads this folder as configuration or
-// code, unlike the rest of the home, so file work in it is approved.
-const AGENT_SCRATCH_SCOPE = `{${AGENT_HOME}/scratch,${AGENT_HOME}/scratch/**}`;
 
 /** Approve file work in the agent's scratch folder, matched on `field`:
  *  `dir` for a write, an edit, and a mkdir, `target` for a remove. */

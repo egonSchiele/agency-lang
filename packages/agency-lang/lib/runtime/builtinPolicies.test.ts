@@ -19,7 +19,7 @@ describe("builtinPolicy", () => {
       { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" },
       {
         match: {
-          dir: "{<agent-home>/skills,<agent-home>/skills/**,<agent-home>/tools,<agent-home>/tools/**,<agent-home>/memory,<agent-home>/memory/**,<agent-home>/scratch,<agent-home>/scratch/**}",
+          dir: "{<agent-home>/skills,<agent-home>/skills/**,<agent-home>/tools,<agent-home>/tools/**,<agent-home>/memory,<agent-home>/memory/**,<agent-home>/scratch/*,<agent-home>/scratch/*/**}",
         },
         action: "approve",
       },
@@ -44,7 +44,7 @@ describe("builtinPolicy", () => {
     // command the next agent start spawns, so saving it asks like any
     // other write.
     const inScratch = [
-      { match: { dir: "{<agent-home>/scratch,<agent-home>/scratch/**}" }, action: "approve" },
+      { match: { dir: "{<agent-home>/scratch/*,<agent-home>/scratch/*/**}" }, action: "approve" },
     ];
     expect(p!["std::write"]).toEqual(inScratch);
     expect(p!["std::writeBinary"]).toEqual(inScratch);
@@ -70,29 +70,36 @@ describe("builtinPolicy", () => {
       const check = (effect: string, data: Record<string, string>) =>
         checkPolicyExplicit(policy, ask(effect, data), dirs);
       const approved = { type: "approve" };
-      expect(check("std::write", { dir: scratch, filename: "out.log" }), name).toEqual(approved);
-      expect(check("std::write", { dir: `${scratch}/s1`, filename: "a" }), name).toEqual(approved);
-      expect(check("std::edit", { dir: `${scratch}/s1`, filename: "a" }), name).toEqual(approved);
-      expect(check("std::mkdir", { dir: `${scratch}/s1` }), name).toEqual(approved);
-      expect(check("std::remove", { target: `${scratch}/s1/a` }), name).toEqual(approved);
-      expect(check("std::read", { dir: `${scratch}/s1`, filename: "a" }), name).toEqual(approved);
-      expect(check("std::grep", { dir: scratch }), name).toEqual(approved);
+      const asks = (effect: string, data: Record<string, string>) =>
+        expect(check(effect, data)?.type, `${name} ${effect}`).not.toBe("approve");
+      // A run's own folder, and the folders inside it.
+      const own = `${scratch}/s1`;
+      expect(check("std::write", { dir: own, filename: "out.log" }), name).toEqual(approved);
+      expect(check("std::write", { dir: `${own}/sub`, filename: "a" }), name).toEqual(approved);
+      expect(check("std::edit", { dir: own, filename: "a" }), name).toEqual(approved);
+      expect(check("std::mkdir", { dir: own }), name).toEqual(approved);
+      expect(check("std::remove", { target: `${own}/a` }), name).toEqual(approved);
+      expect(check("std::remove", { target: own }), name).toEqual(approved);
+      expect(check("std::read", { dir: own, filename: "a" }), name).toEqual(approved);
+      expect(check("std::grep", { dir: own }), name).toEqual(approved);
+      expect(check("std::ls", { dir: own }), name).toEqual(approved);
+      // `scratch` itself asks. It holds every earlier run's folder, so a
+      // listing or a search of it would find them, and removing it would
+      // delete them.
+      asks("std::write", { dir: scratch, filename: "out.log" });
+      asks("std::grep", { dir: scratch });
+      asks("std::ls", { dir: scratch });
+      asks("std::glob", { dir: scratch });
+      asks("std::read", { dir: scratch, filename: "*" });
+      asks("std::remove", { target: scratch });
       // The rest of the home still asks: settings.json decides what the
       // next start runs, and policy.json is the policy.
       const home = "/home/me/.agency-agent";
-      expect(check("std::write", { dir: home, filename: "settings.json" })?.type, name).not.toBe(
-        "approve",
-      );
-      expect(check("std::write", { dir: home, filename: "policy.json" })?.type, name).not.toBe(
-        "approve",
-      );
-      expect(check("std::write", { dir: `${home}/skills`, filename: "x.md" })?.type, name).not.toBe(
-        "approve",
-      );
+      asks("std::write", { dir: home, filename: "settings.json" });
+      asks("std::write", { dir: home, filename: "policy.json" });
+      asks("std::write", { dir: `${home}/skills`, filename: "x.md" });
       // A write to the shared temp folder still asks.
-      expect(check("std::write", { dir: "/tmp", filename: "out.log" })?.type, name).not.toBe(
-        "approve",
-      );
+      asks("std::write", { dir: "/tmp", filename: "out.log" });
     }
   });
 

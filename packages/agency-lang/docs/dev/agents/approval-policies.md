@@ -879,10 +879,11 @@ rule and keeps prompting; `/policy` offers the missing rules.
 
 ## Why `recommended` approves writes only in the agent's scratch folder
 
-It approves a file write in one place, `<agent-home>/scratch` and
-everything under it. The agent makes a folder there for each session
-(`scratchFolder` in `lib/agents/agency-agent/lib/projectContext.agency`)
-and names it in its project context as the place for temporary files:
+It approves a file write in one kind of place: a folder below
+`<agent-home>/scratch`, and everything in it. Each run of the agent makes
+its own folder there (`scratchFolder` in
+`lib/agents/agency-agent/lib/projectContext.agency`) and names it in its
+project context as the place for temporary files:
 
 ```
 Scratch folder for temporary files: /home/me/.agency-agent/scratch/<session id>
@@ -896,10 +897,42 @@ prompt: `std::write`, `std::writeBinary`, `std::edit`, `std::mkdir`, and
 scope. Nothing reads the folder as configuration or code, which is what
 sets it apart from the rest of the home.
 
-Nothing forces the model to use it. A write to `/tmp` asks, as before.
+The folder's name is the session id. A run with no session, such as
+`agency agent -p`, makes up an id of its own the same way, so two `-p`
+runs at once never share a folder. An `--incognito` run is given no
+folder at all: it promises to save nothing, and files in the folder would
+outlive it.
+
+The rules match `scratch/*` and `scratch/*/**`, never `scratch` itself.
+The agent never deletes these folders, so `scratch` holds the build logs
+and PR bodies of every earlier run, from every project. The same reason
+that keeps `sessions/` out of the read scope applies: text injected into
+one project could have the agent grep earlier runs' files and put what it
+found into an approved web fetch. A run knows its own folder from its
+prompt. Finding another run's folder means listing or searching
+`scratch`, and both ask. The name is a timestamp and a random number, so
+it cannot be guessed instead. `rm -r` of `scratch` asks too.
+
+Nothing forces the model to use the folder. A write to `/tmp` asks, as
+before.
+
 The user no longer sees the contents of a file the agent writes to its
-scratch folder, though running such a file still asks `std::exec`. The
-agent does not delete the folder.
+scratch folder. Running such a file as a program still asks `std::exec`.
+Passing it to a command as input is the case to know about, because the
+`gh` skills recommend it:
+
+```bash
+cat > <scratch folder>/pr-body.md <<'EOF'   # approved, nobody sees the text
+...
+EOF
+gh pr create --title "..." --body-file <scratch folder>/pr-body.md   # asks std::exec
+```
+
+The `std::exec` prompt shows the path, not the body. Before this rule,
+the `std::write` prompt was where the user read a PR description. Now the
+first place anyone reads it is GitHub, after it is public. The same goes
+for `gh release create --notes-file`, `gh issue comment --body-file`,
+`git commit -F`, and `curl -d @file`.
 
 Everywhere else it approves no file write. `std::mkdir` has one more rule,
 for the agent home itself, which `writeSettingsFile` creates when it is

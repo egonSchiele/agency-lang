@@ -213,9 +213,9 @@ await resumeRun({ agent, callbacks, policy: policy.value, interrupts: pause, res
   consulted, and a policy with no rule for an effect says nothing, so
   beside `recommended` a session started with `--policy minimal` would
   have its reads approved. A rule's meaning can depend on the rules
-  before it in its list. The `/tmp` reject in `recommended` follows an
-  approve rule for the scratch folder, and lifted out alone it would
-  reject writes to that folder. So no rule is taken out of one policy
+  before it in its list: under first-match-wins, a reject that follows
+  an approve means "reject, unless the approve already answered". Lifted
+  out alone it would reject more. So no rule is taken out of one policy
   and put into another.
 - With none, the run gets `saved`.
 - When the file can't be read, or is not a valid policy, it fails with

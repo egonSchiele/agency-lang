@@ -2,7 +2,7 @@ import * as path from "path";
 
 import {
   createEvalUploadClient,
-  EVENTS_PER_REQUEST,
+  requestChunks,
   type EvalUploadClient,
   type RemoteTraceState,
   type SequencedEvent,
@@ -152,14 +152,19 @@ async function uploadRun(
       // cannot complete.
       return failed(dir, traceId, summary, plan.reason);
     }
+    // Split before any post, so a run with an event over the request limit
+    // fails before anything is sent, instead of leaving a trace that can't be
+    // finished.
+    const from = plan.kind === "resume" ? plan.from : 0;
+    const chunks =
+      plan.kind === "upload-all" || plan.kind === "resume"
+        ? requestChunks(traceId, sequencedFrom(events, from))
+        : [];
     if (plan.kind === "create-empty") {
       await client.postEvents(traceId, []);
     }
-    const from = plan.kind === "resume" ? plan.from : 0;
-    if (plan.kind === "upload-all" || plan.kind === "resume") {
-      for (const chunk of chunked(sequencedFrom(events, from), EVENTS_PER_REQUEST)) {
-        await client.postEvents(traceId, chunk);
-      }
+    for (const chunk of chunks) {
+      await client.postEvents(traceId, chunk);
     }
     if (rows.length > 0) {
       await client.postAnnotations(rows);
@@ -214,14 +219,6 @@ function failed(
 
 function sequencedFrom(events: readonly EventEnvelope[], from: number): SequencedEvent[] {
   return events.slice(from).map((envelope, offset) => ({ sequence: from + offset, envelope }));
-}
-
-function chunked<T>(items: readonly T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let start = 0; start < items.length; start += size) {
-    chunks.push(items.slice(start, start + size));
-  }
-  return chunks;
 }
 
 /** The batch page, only when it would show exactly these runs: every run

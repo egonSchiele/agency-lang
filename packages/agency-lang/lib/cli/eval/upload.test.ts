@@ -43,15 +43,16 @@ function fakeClient(
   return { client, posted, annotations };
 }
 
-/** A run directory whose trace has `count` events and names its agent. */
-function bigRun(count: number, agentName: string = "agency-agent/simple"): string {
+/** A run directory whose trace has `count` events and names its agent.
+ *  `padChars` makes every event after the first two that much larger. */
+function bigRun(count: number, agentName: string = "agency-agent/simple", padChars = 0): string {
   const dir = tempDir("upload-");
   const lines = [
     statelogLine("big", "agentStart", { entryNode: "main", args: {} }),
     statelogLine("big", "agentName", { name: agentName }),
   ];
   while (lines.length < count) {
-    lines.push(statelogLine("big", "tick", { n: lines.length }));
+    lines.push(statelogLine("big", "tick", { n: lines.length, pad: "x".repeat(padChars) }));
   }
   fs.writeFileSync(path.join(dir, "statelog.jsonl"), lines.join("\n") + "\n");
   return dir;
@@ -118,6 +119,31 @@ describe("evalUpload", () => {
     const result = await evalUpload([dir], target, { client });
     expect(result.runs[0]).toMatchObject({ status: "resumed", from: 7, events: 3 });
     expect(posted[0].events.map((event) => event.sequence)).toEqual([7, 8, 9]);
+  });
+
+  it("resumes a bulk prefix in requests sized under the 5 MiB limit", async () => {
+    const dir = bigRun(6, "agency-agent/simple", 2_000_000);
+    const { client, posted } = fakeClient({
+      big: { kind: "bulk-prefix", eventCount: 2, nextSequence: 2 },
+    });
+    await evalUpload([dir], target, { client });
+    expect(posted.map((post) => post.events.length)).toEqual([2, 2]);
+    expect(posted.flatMap((post) => post.events.map((event) => event.sequence))).toEqual([
+      2, 3, 4, 5,
+    ]);
+  });
+
+  it("refuses a run with an event over the request limit before posting anything", async () => {
+    const dir = bigRun(3, "agency-agent/simple", 6_000_000);
+    const { client, posted, annotations } = fakeClient({});
+    const result = await evalUpload([dir], target, { client });
+    expect(result.runs[0]).toMatchObject({ status: "failed" });
+    expect(result.runs[0]).toHaveProperty(
+      "error",
+      expect.stringMatching(/event 2 is 5\.7\d MiB, over the 5\.00 MiB request limit/),
+    );
+    expect(posted).toEqual([]);
+    expect(annotations).toEqual([]);
   });
 
   it("a run that never wrote a trace creates an empty trace, then posts its run and score rows", async () => {

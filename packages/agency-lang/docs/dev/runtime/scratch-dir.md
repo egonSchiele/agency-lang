@@ -18,7 +18,9 @@ With the setting off:
 
 - No folder is made, and `scratchDir()` returns a failure.
 - `resolvePolicyDirs` gives no scratch parent, so `<scratch>` in a rule stays as written and the rule matches nothing.
-- A reject rule whose message names `<scratch>` matches nothing either (`messageNamesNoFolder` in `lib/runtime/policy.ts`). Without that, `recommended` would reject a write to `/tmp` and tell the model to write under `<scratch>`, which is no path.
+- A reject rule whose message names `<scratch>` matches nothing either (`messageNamesNoFolder` in `lib/runtime/policy.ts`). Without that, `recommended` would reject a write to `/tmp` and tell the model to write under `<scratch>`, which is no path. The check is for `<scratch>` alone, the one placeholder a run is meant to be able to lack. A message that names another placeholder never decides whether its rule fires.
+
+The setting belongs to the process, and a checkpoint does not record it. A run started with `agency run --scratch` and continued with `agency resume` needs `--scratch` on the resume too. `resume` takes the flag because it shares `run`'s options. Without it, `scratchDir()` fails with a message that says so.
 
 So a run under `recommended` with no scratch folder behaves as it did before the scratch rules: a write to `/tmp` prompts.
 
@@ -81,7 +83,7 @@ The runtime does not delete the folder. A run paused on an interrupt has not end
 
 The reject message sends the model to the folder, and the policy approves a write or a `mkdir` there. If the folder were missing, the model's own write would create it, and its parent, with ordinary permissions. `privateDir` never changes an existing folder's mode, so every later `scratchDir()` for that user would fail until someone deleted the parent.
 
-So the runtime makes the folder itself, on a host that was asked for one. `createExecutionContext` (`lib/runtime/state/context.ts`) calls `ensureScratchDir` right after it sets the run's id. Every run, every resume, and every subprocess passes through there, so a resume in a new process after a reboot gets its folder back. A failure is ignored, which leaves the run without a folder.
+So the runtime makes the folder itself, on a host that was asked for one. `createExecutionContext` (`lib/runtime/state/context.ts`) calls `ensureScratchDir` right after it sets the run's id. Every run, every resume, and every subprocess passes through there, so a resume in a new process after a reboot gets its folder back. A failure stops the run with an error that names the folder to delete. The rules name this folder to the model and approve writes there, so it has to exist and belong to this user. On a shared machine another user can own the parent, and a run that carried on would send the model's files into their folder.
 
 Because the folder already exists, `scratchDir()` creates nothing new and raises no interrupt. The consent is the setting, given by whoever launched the run.
 

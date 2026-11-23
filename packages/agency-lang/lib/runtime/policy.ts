@@ -79,18 +79,16 @@ function namedFolders(dirs: PolicyDirs): [string, string | null | undefined][] {
   ];
 }
 
-/** Whether a reject message names a placeholder that has no folder here.
- *  Such a rule does not match, as a rule whose pattern names one does not:
- *  its message would tell the model to use `<scratch>`, which is no path. */
+/** Whether a reject message sends the model to a scratch folder this run
+ *  does not have. Such a rule does not match: its message would tell the
+ *  model to write under `<scratch>`, which is no path. Only `<scratch>` is
+ *  checked, because it is the one placeholder a run is meant to be able to
+ *  lack. The wording of any other message never decides whether its rule
+ *  fires. */
 function messageNamesNoFolder(rule: PolicyRule, dirs: PolicyDirs): boolean {
   const message = rule.rejectMessage;
-  if (message === undefined) {
-    return false;
-  }
-  return namedFolders(dirs).some(
-    ([placeholder, folder]) =>
-      (folder === null || folder === undefined) && message.includes(placeholder),
-  );
+  const missing = dirs.scratch === null || dirs.scratch === undefined;
+  return message !== undefined && missing && message.includes(SCRATCH_PLACEHOLDER);
 }
 
 /** Escape picomatch metacharacters so a literal value matches only itself

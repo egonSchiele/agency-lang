@@ -405,7 +405,7 @@ export async function _scratchDir(): Promise<string> {
   const { ctx } = currentRun();
   if (!scratchEnabled(ctx.host)) {
     throw new Error(
-      "This run has no scratch folder. Start it with `agency run --scratch`, or set AGENCY_SCRATCH=1.",
+      "This run has no scratch folder. Start it with `agency run --scratch`, or set AGENCY_SCRATCH=1. A run continued with `agency resume` needs `--scratch` again.",
     );
   }
   return ensureScratchDir(ctx.host, ctx.getRunId());

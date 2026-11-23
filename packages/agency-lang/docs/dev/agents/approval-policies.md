@@ -1120,7 +1120,10 @@ interrupts, never more.
 A named placeholder in a `rejectMessage` (`<scratch>`, `<agent-home>`,
 `<home>`, `<agency>`) is replaced by its plain path before the message is
 returned, so the model reads a real folder. One with no folder stays as
-written.
+written. A rule whose message names `<scratch>` does not match in a run
+that has no scratch folder, since the message would point at a folder
+that is not there. No other placeholder in a message affects whether its
+rule matches.
 
 A reject rule may carry a `rejectMessage`: the rejection's reason,
 handed back to whoever raised the interrupt. For a rejected tool call it

@@ -24,6 +24,15 @@ describe("runLaunchFrom", () => {
     });
   });
 
+  // `run` and `resume` share this, so a resume can be given the folder too.
+  it("carries --scratch, and leaves it out when the flag is not given", () => {
+    expect(runLaunchFrom({ scratch: true }, "agents/report.agency", dir)).toEqual({
+      title: "agency run report.agency",
+      scratch: true,
+    });
+    expect(runLaunchFrom({}, "agents/report.agency", dir)).not.toHaveProperty("scratch");
+  });
+
   it("makes the output file of --detach absolute", () => {
     expect(runLaunchFrom({ detach: "out.log" }, "a.agency", dir)).toEqual({
       title: "agency run a.agency",

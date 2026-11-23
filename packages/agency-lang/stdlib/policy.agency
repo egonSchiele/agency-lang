@@ -128,6 +128,11 @@ export type InterruptEffect = string
  example, a rule rejecting `std::bash` with
  `rejectMessage: "Use safeBash instead"`.
 
+ A message may name a folder with `<scratch>`, `<agent-home>`, `<home>`,
+ or `<agency>`, and the real path is filled in. A rule whose message
+ names `<scratch>` does nothing in a run that has no scratch folder,
+ since its message would point at a folder that is not there.
+
  A rule's globs skip path segments that start with a period: `/x/**` does
  not match `/x/.cache/y`. Set `matchDotFolders: true` to let them match.
  The approval prompt sets it on a rule whose folder came from its folder

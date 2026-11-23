@@ -624,9 +624,11 @@ export class RuntimeContext<T> {
     // script leaves nothing on disk. A policy names this folder to the
     // model, so it must exist, made private, before the model can make it
     // itself: a folder the model made would have ordinary permissions, and
-    // `privateDir` would then refuse it. A failure leaves the run without.
+    // `privateDir` would then refuse it. A failure stops the run: the rules
+    // name this folder and approve writes there, so it must be this
+    // user's alone. On a shared machine another user may own the parent.
     if (scratchEnabled(execCtx.host)) {
-      await ensureScratchDir(execCtx.host, runId).catch(() => {});
+      await ensureScratchDir(execCtx.host, runId);
     }
     execCtx.subprocessDepth = getSubprocessRunInfo().depth;
     execCtx.verbose = this.verbose;

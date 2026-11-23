@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, mkdtempSync, realpathSync, statSync } from "fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, statSync } from "fs";
 import os from "os";
 import path from "path";
 import { nodeHost } from "../host/node/nodeHost.js";
@@ -136,6 +136,57 @@ describe("ensureScratchDir", () => {
     } finally {
       safeDeleteDirectoryWithin(realpathSync(os.tmpdir()), temp);
     }
+  });
+});
+
+describe("a scratch parent that is not this user's alone", () => {
+  it("stops the run, naming the folder to delete", async () => {
+    const temp = realpathSync(mkdtempSync(path.join(os.tmpdir(), "agency-scratch-test-")));
+    try {
+      const host = hostWith({ tempDir: temp });
+      // What a model's own `mkdir -p` leaves, or another user's folder:
+      // readable by everyone.
+      const parent = `${temp}/agency-scratch-${host.system.userId()}`;
+      mkdirSync(parent);
+      chmodSync(parent, 0o755);
+      const ctx = new RuntimeContext({
+        statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false },
+        smoltalkDefaults: {},
+        dirname: temp,
+        host,
+      });
+      await expect(ctx.createExecutionContext({ runId: "run-shared" })).rejects.toThrow(
+        `cannot be used until ${parent} is deleted`,
+      );
+    } finally {
+      safeDeleteDirectoryWithin(realpathSync(os.tmpdir()), temp);
+    }
+  });
+});
+
+describe("a reject message that names another placeholder", () => {
+  it("does not decide whether its rule fires", () => {
+    const dirs: PolicyDirs = {
+      cwd: "/home/me/proj",
+      agentHome: "/home/me/.agency-agent",
+      home: "/home/me",
+      agencyInstallDir: null,
+    };
+    const policy = {
+      "std::write": [
+        {
+          match: { dir: "/etc/**" },
+          action: "reject",
+          rejectMessage: "Keep changes inside <agency>.",
+        },
+      ],
+    };
+    const write = { effect: "std::write", message: "m", data: { dir: "/etc/x" }, origin: "t" };
+    expect(checkPolicyExplicit(policy as never, write, dirs)).toEqual({
+      type: "reject",
+      message: "Keep changes inside <agency>.",
+      value: "Keep changes inside <agency>.",
+    });
   });
 });
 

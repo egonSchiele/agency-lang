@@ -1346,12 +1346,13 @@ def readGrep(command: SimpleCommand, line: LineState, spec: FlagSpec): Result<Gr
   if (paths.length == 0) {
     return searchHere(args, words.value.pattern, cwd)
   }
-  // A grep -r searches a folder, which must be real. Without -r it reads
-  // files, and a missing one resolves like any other read's.
-  const lookup: LineState = if (args.plain.includes("r")) then strictLine(line) else line
+  // A path that is missing now resolves like any other read's, with or
+  // without -r. If it is a folder by the time grep runs, the step's fresh
+  // plan asks about the folder, which is not what was approved, and the
+  // line stops (`checkedStep`).
   let calls: GrepCall[] = []
   for (pathWord in paths) {
-    const call = grepCallFor(args, words.value.pattern, pathWord, lookup)
+    const call = grepCallFor(args, words.value.pattern, pathWord, line)
     if (isFailure(call)) {
       return call
     }
@@ -2152,8 +2153,8 @@ def bashLine(line: LineState): LineState {
 }
 
 /* The same line, for a lookup where a missing path has no rule: `find`,
- `tree`, `grep`, `diff`, `cmp`, an input redirect, and the shell-free
- paths, which each need a real folder or real files. */
+ `tree`, `diff`, `cmp`, an input redirect, and the shell-free paths,
+ which each need a real folder or real files. */
 def strictLine(line: LineState): LineState {
   return { ...line, strict: true }
 }

@@ -1024,6 +1024,14 @@ A path that does not exist when the plan is made has a rule
    folder, as `ls file` does. After a program too: `pnpm build && cat
    dist/out.txt` asks `std::read` for `dist/out.txt`.
 
+A grep asks about a missing path as the file it would be, with or
+without `-r`: `grep -rn x lib/nope.ts` asks `std::grep` for `nope.ts` in
+`lib`. Under `-r` that guess can be wrong. In `pnpm build && grep -rn x
+dist`, with no `dist` yet, the grep asks about a file named `dist`. The
+build makes `dist` a folder, the grep step's fresh plan asks about the
+folder, and the line stops before the grep. A grep does not use
+`madeFolder`, so `mkdir -p out && grep -rn x out` stops the same way.
+
 `_missingTarget` finds the place with `_resolveRedirectTarget`, the
 resolver `>` uses, so a read and a write of one new file name one
 `dir` and `filename`. It adds two checks: nothing is at the path, and the
@@ -1047,8 +1055,8 @@ redirects, and glob words"). In `pnpm test | cat nope.txt` only the
 Parentheses end a `cd`, but not what the line wrote or ran.
 
 Some lookups set `strict` and never use the three rules above, because
-each needs a real path: `find`, `tree`, `grep -r`, `diff`, `cmp`, an input
-redirect, and the shell-free paths. A lone `cat nope.txt` therefore goes
+each needs a real path: `find`, `tree`, `diff`, `cmp`, an input redirect,
+and the shell-free paths. A lone `cat nope.txt` therefore goes
 to bash, which runs real cat, and the model reads cat's own error.
 
 The shell-free read does not have the swap gap at all: `_read` opens the

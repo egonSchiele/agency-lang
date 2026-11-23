@@ -127,7 +127,7 @@ export type ReadVerb = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1763))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1764))
 
 ### ListWalk
 
@@ -138,7 +138,7 @@ Whether a listing walks the tree always, or only when given -R.
 export type ListWalk = "always" | "withR"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2357))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2358))
 
 ### FileArgument
 
@@ -151,7 +151,7 @@ What a listing verb does with a path that names a file: list the
 export type FileArgument = "folder" | "refuse"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2361))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2362))
 
 ### ListVerb
 
@@ -171,7 +171,7 @@ export type ListVerb = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2365))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2366))
 
 ### FlatCommand
 
@@ -185,7 +185,7 @@ export type FlatCommand = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4702))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4703))
 
 ### SafeBashEffects
 
@@ -198,7 +198,7 @@ Every effect `safeBash` can raise. `startJob` raises the same ones,
 export effectSet SafeBashEffects = <std::bash, std::bash::readonly, std::write, std::remove, std::mkdir, std::grep, std::git::status, std::git::diff, std::git::log, std::git::show, std::git::blame, std::git::branchList, std::git::remoteList, std::git::stashList, std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore, std::github::prGet, std::github::prDiff, std::github::issueGet, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueCommentList, std::github::prList, std::github::issueList, std::github::issueSearch, std::read, std::ls, std::glob, std::exec, std::env, std::run, std::guard>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6146))
 
 ### JobHandle
 
@@ -220,7 +220,7 @@ export type JobHandle = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6415))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6416))
 
 ### ShellStart
 
@@ -235,7 +235,7 @@ export type ShellStart =
   | { ran: "foreground"; output: string }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6424))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6425))
 
 ### CommandJudge
 
@@ -255,7 +255,7 @@ export type CommandJudge = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6546))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6547))
 
 ## Constants
 
@@ -507,7 +507,7 @@ export static const READ_VERBS: Record<string, ReadVerb> = {
 
 **Type:** `Record<string, ReadVerb>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1787))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L1788))
 
 ### LIST_VERBS
 
@@ -597,7 +597,7 @@ export static const LIST_VERBS: Record<string, ListVerb> = {
 
 **Type:** `Record<string, ListVerb>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2386))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L2387))
 
 ## Functions
 
@@ -646,7 +646,7 @@ Name a plan's outcome: refuse, shellFree, agency, narrow, or broad.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4672))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4673))
 
 ### planFor
 
@@ -668,7 +668,7 @@ Plan approvals and execution for Bash source without running the command.
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4961))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L4962))
 
 ### removeRefusal
 
@@ -689,7 +689,7 @@ Why an rm or rmdir is refused, or an empty string when it is not: a target that 
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5899))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5900))
 
 ### isRefused
 
@@ -707,7 +707,7 @@ Check whether a command matches an explicitly refused destructive spelling.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5980))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5981))
 
 ### bashParser
 
@@ -725,7 +725,7 @@ Parse a string of bash code into an AST.
 
 **Returns:** `Result<BashAST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6078))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6079))
 
 ### resolveCwd
 
@@ -743,7 +743,7 @@ Use the requested directory, then the agent directory, then the process director
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6105))
 
 ### safeBash
 
@@ -783,7 +783,7 @@ Run Bash commands after approval of the actions they perform.
 
 **Needs:** `fileRead`, `subprocess`, `env`, `fileWrite`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6148))
 
 ### startJob
 
@@ -813,7 +813,7 @@ Start a shell command in the background and return its job id at once, while the
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6390))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6391))
 
 ### startShellJob
 
@@ -847,4 +847,4 @@ Start a shell command as a detached job, after asking the approvals running it i
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `env`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6429))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L6430))

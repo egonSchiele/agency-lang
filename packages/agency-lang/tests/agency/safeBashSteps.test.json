@@ -45,6 +45,17 @@
       ]
     },
     {
+      "nodeName": "aGrepOfAPathThatBecameAFolderStops",
+      "description": "In `mkdir -p out && grep -rn x out | wc -l`, `out` is missing when the line is planned, so the grep asks about a file named `out`. The mkdir makes it a folder, the grep step's fresh plan asks about the folder, and the line stops before the grep with a planChanged failure.",
+      "input": "",
+      "expectedOutput": "[false,\"planChanged\",true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "theSkippedCdPipelineRunsInBash",
       "description": "The `ls | wc -l` step of the skipped-cd test runs in bash, so that row covers a step bash runs.",
       "input": "",

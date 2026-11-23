@@ -701,6 +701,17 @@
       ]
     },
     {
+      "nodeName": "grepRNamesAMissingFile",
+      "description": "A grep -r of a missing file whose folder exists asks std::grep for that file, as a grep without -r does, alone or in a pipeline, and beside a file that exists. The questions name the files one.txt and nope.txt, not the folder. The command that runs keeps both paths and has no --exclude flags, because no path is a folder. A missing file in a missing folder still asks std::bash. A folder that exists asks about the folder, and safeBash runs that pipeline itself, as before.",
+      "input": "",
+      "expectedOutput": "[[\"grep -rn x nope.txt | head\",\"narrow\",[[\"std::grep\",\"<fix>\"]]],[\"grep -rn x nope.txt\",\"narrow\",[[\"std::grep\",\"<fix>\"]]],[\"grep -rn x one.txt nope.txt | wc -l\",\"narrow\",[[\"std::grep\",\"<fix>\"],[\"std::grep\",\"<fix>\"]]],[\"grep -rn x nodir/nope.txt | head\",\"broad\",[[\"std::bash\",\"\"]]],[\"grep -rn x sub | head\",\"shellFree\",[[\"std::grep\",\"<fix>/sub\"]]],[\"one.txt\",\"nope.txt\"],\"grep -r -n -e 'x' -- one.txt nope.txt | wc -l\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "foldersTheLineMade",
       "description": "A folder the line made with mkdir can be named by a later command. `mkdir x; ls x` asks std::mkdir and std::ls for that folder. A redirect into it and a read of the file it wrote name the file in it. A cd into it moves every later payload there, and the cd that runs names the resolved folder. A folder above the named one, which `mkdir -p` makes too, is a made folder as well, so `ls -R a` after `mkdir -p a/b` asks std::ls for `a`. A cd into a folder nobody made asks std::bash. A read of a file nobody wrote, in a made folder, asks std::read for that file. The folder stays remembered after a program or rm, before or after the mkdir, for the reason a written file does, and after git checkout too: the runner plans each later step again just before it runs.",
       "input": "",
@@ -812,7 +823,7 @@
     },
     {
       "nodeName": "grepMissingPath",
-      "description": "A grep path that does not exist makes the command unrecognized; planFor does not throw.",
+      "description": "A grep path whose folder is missing too makes the command unrecognized; planFor does not throw.",
       "input": "",
       "expectedOutput": "\"unrecognized\"",
       "evaluationCriteria": [
@@ -1001,9 +1012,9 @@
     },
     {
       "nodeName": "grepThroughBashAsksStdGrep",
-      "description": "A grep through bash asks std::grep for each path, through a pipe, with two paths, with a file filter, and with a flag after the path. A folder the grep tool skips by name stays broad, whether named as written, with a trailing slash, or as `.` inside such a folder; the same folder's contents do not. A folder without -r is broad. A lone grep -r runs shell-free. A grep that reads a pipe runs as written, so a flag after its pattern is refused. The pipelines here end in `wc -l`, which keeps them with bash. The last row is a search of a skipped folder into `head`: safeBash runs that pipeline itself, and the tool searches the folder it is given.",
+      "description": "A grep through bash asks std::grep for each path, through a pipe, with two paths, with a file filter, and with a flag after the path. A folder the grep tool skips by name stays broad, whether named as written, with a trailing slash, or as `.` inside such a folder; the same folder's contents do not. A folder without -r is broad. A lone grep -r runs shell-free. A grep that reads a pipe runs as written, so a flag after its pattern is refused. With `-e x` as the pattern, `hello` in `grep -rn hello src -e x` is a path: it does not exist, and it is asked about as a file beside the folder `src`. The pipelines here end in `wc -l`, which keeps them with bash. The last row is a search of a skipped folder into `head`: safeBash runs that pipeline itself, and the tool searches the folder it is given.",
       "input": "",
-      "expectedOutput": "[[\"grep -rn hello . | wc -l\",\"narrow\",[\"std::grep\"]],[\"grep -rn \\\"a\\\\|b\\\" src\",\"narrow\",[\"std::grep\"]],[\"grep -rn hello src lib\",\"narrow\",[\"std::grep\",\"std::grep\"]],[\"grep -rn hello src --include=\\\"*.ts\\\"\",\"narrow\",[\"std::grep\"]],[\"grep -n hello one.txt -A 5\",\"narrow\",[\"std::grep\"]],[\"grep -rn hello node_modules | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello node_modules/p | wc -l\",\"narrow\",[\"std::grep\"]],[\"grep -n hello src\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src\",\"shellFree\",[\"std::grep\"]],[\"grep -rn hello src/dist | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src/dist/ | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello . | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello | wc -l\",\"narrow\",[\"std::grep\"]],[\"pnpm test | grep FAIL -v\",\"broad\",[\"std::bash\"]],[\"git status | grep -v deleted -c\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src -e x | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello node_modules | head\",\"shellFree\",[\"std::grep\"]]]",
+      "expectedOutput": "[[\"grep -rn hello . | wc -l\",\"narrow\",[\"std::grep\"]],[\"grep -rn \\\"a\\\\|b\\\" src\",\"narrow\",[\"std::grep\"]],[\"grep -rn hello src lib\",\"narrow\",[\"std::grep\",\"std::grep\"]],[\"grep -rn hello src --include=\\\"*.ts\\\"\",\"narrow\",[\"std::grep\"]],[\"grep -n hello one.txt -A 5\",\"narrow\",[\"std::grep\"]],[\"grep -rn hello node_modules | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello node_modules/p | wc -l\",\"narrow\",[\"std::grep\"]],[\"grep -n hello src\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src\",\"shellFree\",[\"std::grep\"]],[\"grep -rn hello src/dist | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src/dist/ | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello . | wc -l\",\"broad\",[\"std::bash\"]],[\"grep -rn hello | wc -l\",\"narrow\",[\"std::grep\"]],[\"pnpm test | grep FAIL -v\",\"broad\",[\"std::bash\"]],[\"git status | grep -v deleted -c\",\"broad\",[\"std::bash\"]],[\"grep -rn hello src -e x | wc -l\",\"narrow\",[\"std::grep\",\"std::grep\"]],[\"grep -rn hello node_modules | head\",\"shellFree\",[\"std::grep\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"

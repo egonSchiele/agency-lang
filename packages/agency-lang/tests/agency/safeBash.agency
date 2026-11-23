@@ -1130,6 +1130,24 @@ node missingPathsResolveByParent() {
   return rows
 }
 
+// A grep -r of a missing file asks about the file where it would be, as a
+// grep without -r does. `fileRow` prints a grep question as its folder
+// only, so the last row but one reads each question's file directly.
+node grepRNamesAMissingFile() {
+  makeFilesFixture()
+  const rows = [
+    fileRow("grep -rn x nope.txt | head"),
+    fileRow("grep -rn x nope.txt"),
+    fileRow("grep -rn x one.txt nope.txt | wc -l"),
+    fileRow("grep -rn x nodir/nope.txt | head"),
+    fileRow("grep -rn x sub | head"),
+    [effect.payload.file for effect in planFor("grep -rn x one.txt nope.txt | wc -l", FILES_FIXTURE).effects],
+    executionCommandIn("grep -rn x one.txt nope.txt | wc -l", FILES_FIXTURE),
+  ]
+  remove(FILES_FIXTURE) with approve
+  return rows
+}
+
 // A folder the line made with mkdir can be named by a later command: a
 // listing of it, a file in it, a cd into it, and so can a folder above it
 // that `mkdir -p` made. It stays remembered after a program or `rm`.
@@ -1498,7 +1516,7 @@ node grepUnrecognized() {
 node grepMissingPath() {
   // The detail names an absolute path, which differs per machine, so
   // only the kind is pinned.
-  const reason = planFor("grep -rn hello missing-dir", FIXTURES).broadReason
+  const reason = planFor("grep -rn hello nodir/missing-dir", FIXTURES).broadReason
   if (reason == null) {
     return null
   }

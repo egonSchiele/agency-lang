@@ -143,6 +143,18 @@ node theSkippedCdPipelineRunsInBash() {
   return row
 }
 
+// The line stops because grep does not know the folders a line made, as
+// a listing does (`madeFolder`). If grep learns that, this line runs
+// whole and this test changes. The stop is not a safety rule.
+node aGrepOfAPathThatBecameAFolderStops() {
+  makeFixture()
+  const line = "mkdir -p out && grep -rn x out | wc -l"
+  const out = safeBash(line, cwd: FIXTURE) with approve
+  const text = textOf(out)
+  remove(FIXTURE) with approve
+  return [isSuccess(out), failureType(out), text.startsWith("Stopped before `grep -rn x out | wc -l`: ")]
+}
+
 /** A folder outside the fixture, for a link to point at. */
 static const OUTSIDE = __dirname + "/stdlib/__safebash_steps_outside__"
 

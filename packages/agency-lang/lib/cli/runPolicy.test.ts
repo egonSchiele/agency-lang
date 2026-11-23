@@ -104,11 +104,12 @@ describe("resolveRunPolicy", () => {
   it("threads cwd into the 'with-writes' base scope", () => {
     const r = resolveRunPolicy({ policy: "with-writes", cwd: "/work" });
     const p = JSON.parse(r!.policyJson);
-    // The project scope this flag asked for, and no other approval:
-    // `recommended` underneath approves no write of its own. The rules
-    // ahead of it leave the agent's policy files to the prompt.
+    // The project scope this flag asked for, and the agent's scratch
+    // folders, the one write `recommended` underneath approves. The rules
+    // ahead of them leave the agent's policy files to the prompt.
     const write: { action: string; match?: Record<string, string> }[] = p["std::write"];
     expect(write.filter((rule) => rule.action === "approve")).toEqual([
+      { match: { dir: "{<agent-home>/scratch/*,<agent-home>/scratch/*/**}" }, action: "approve" },
       { match: { dir: "{/work,/work/**}" }, action: "approve" },
     ]);
     expect(write[write.length - 1]).toEqual({

@@ -43,6 +43,7 @@ import {
   recordTurn,
   renameSession,
   setCurrentRecord,
+  startIncognito,
  } from "./lib/record.agency"
 import { getSearchBackend, switchSearchBackend } from "./lib/search.agency"
 import {
@@ -387,6 +388,12 @@ export node session(start: SessionStart) {
   setAgentCwd(start.cwd)
   setSessionFolder(start.cwd)
   setCurrentRecord(recordFor(start.record))
+  // Before the grounding: an incognito run's grounding names no scratch
+  // folder.
+  const flags: any = start.flags ?? {}
+  if (flags.incognito == true) {
+    startIncognito()
+  }
   setReplyStyle(start.replyStyle)
   const bundles = checkCliBundles()
   if (bundles is failure(reason)) {

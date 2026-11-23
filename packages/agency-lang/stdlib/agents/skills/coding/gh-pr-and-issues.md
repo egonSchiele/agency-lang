@@ -92,10 +92,12 @@ caller and stop only when a typed tool fails with "No GitHub credential" and
 
 A PR body is almost always multi-line Markdown. Passing it with
 `--body "..."` mangles newlines and breaks on quotes. Write the text to a
-file and pass `--body-file`:
+file and pass `--body-file`. Where the examples say `<scratch folder>`,
+write the scratch folder your project context names. If it names none,
+use a temporary file:
 
 ```bash
-cat > /tmp/pr-body.md <<'EOF'
+cat > <scratch folder>/pr-body.md <<'EOF'
 ## Summary
 - Adds retry logic to the upload client
 - Covers the timeout path with a new test
@@ -112,7 +114,7 @@ expanding `$`, backticks, and `!` inside your Markdown.
 ```bash
 # Push your branch first, then open the PR against the default base branch.
 git push -u origin HEAD
-gh pr create --title "Short imperative title" --body-file /tmp/pr-body.md
+gh pr create --title "Short imperative title" --body-file <scratch folder>/pr-body.md
 ```
 
 Useful flags: `--draft` (open as a draft), `--base <branch>` (target a

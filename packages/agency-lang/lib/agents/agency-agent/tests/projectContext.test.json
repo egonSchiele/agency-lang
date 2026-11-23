@@ -71,6 +71,26 @@
       ]
     },
     {
+      "nodeName": "runWithNoSessionGetsItsOwnFolder",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "incognitoNamesNoScratchFolder",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "movedDirectorySendsTheBlockAgain",
       "input": "",
       "expectedOutput": "\"[true,true,true,true,true]\"",

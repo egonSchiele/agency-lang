@@ -4,9 +4,12 @@
  * and after.
  */
 import { mkdir, remove } from "std::fs"
-import { bash } from "std::shell"
+import { bash, exists } from "std::shell"
 
 import { setAgentCwd } from "std::index"
+
+import { startIncognito } from "../lib/record.agency"
+import { AGENCY_AGENT_DIR } from "../shared.agency"
 
 import {
   InstructionFile,
@@ -131,6 +134,35 @@ node blockFollowsTheAgentDirectory(): boolean {
   const block = projectContextText()
   clearTree()
   return block.includes("Current working directory: ${work}") && block.includes("work rules")
+}
+
+// The scratch folder the block names, or "" when it names none.
+def scratchFolderOf(block: string): string {
+  const label = "Scratch folder for temporary files: "
+  for (line in block.split("\n")) {
+    const at = line.indexOf(label)
+    if (at >= 0) {
+      return line.slice(at + label.length)
+    }
+  }
+  return ""
+}
+
+// A run with no session, such as `-p`, gets a folder of its own below
+// `scratch`, never `scratch` itself, which every run's folder is in. Each
+// block the run builds names the same folder.
+node runWithNoSessionGetsItsOwnFolder(): boolean {
+  const first = scratchFolderOf(projectContextText())
+  const second = scratchFolderOf(projectContextText())
+  const root = "${AGENCY_AGENT_DIR}/scratch"
+  const below = first.startsWith(root + "/") && first.length > root.length + 1
+  return below && first == second && exists(first)
+}
+
+// An --incognito run saves nothing, so it is given no scratch folder.
+node incognitoNamesNoScratchFolder(): boolean {
+  startIncognito()
+  return scratchFolderOf(projectContextText()) == ""
 }
 
 // After the agent's directory changes, the next message carries the new

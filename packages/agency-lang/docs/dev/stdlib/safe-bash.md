@@ -479,12 +479,14 @@ shell-free write. It runs through bash and asks `std::write` for
 A `glob` word is never a literal:
 `literalWordText` refuses it, so every rule that needs a literal (a
 redirect target, an `echo` argument, a git argument) treats a command
-with one as unrecognized until a later slice gives globs a meaning.
+with one as unrecognized. The grep, listing, and read rules give a glob
+in a path its own meaning, described in "A glob in a path".
 
 The parser returns a bare `--` as a flag word whose name is `--`. No
 flag table lists it, so `ls -- src` and `cat -- a.txt` are unrecognized,
-as any unknown flag is. Two readers of a command's words do not go
-through a flag table. The refuse wall looks for `--` after `git
+as any unknown flag is. safeBash writes one itself before the paths of a
+grep, and of a listing or read whose path is a glob. Two readers of a
+command's words do not go through a flag table. The refuse wall looks for `--` after `git
 checkout`. And a program with no rule takes it as one more argument, so
 `pnpm test -- --watch` asks `std::exec` with `--` and `--watch` in its
 arguments.
@@ -772,6 +774,82 @@ what it knows about the line as it walks it, command by command, in a
 - `made`, the folders the line has asked `std::mkdir` for, by real path;
 - `disk`, what the commands so far may have done to the disk (below);
 - `strict`, set for a lookup that needs a real path (below).
+
+### A glob in a path
+
+A glob in the file-name part of a path asks the command's usual question
+about the folder the glob is in. Bash still expands the glob when the
+line runs. safeBash never lists the folder or matches names itself.
+
+```bash
+grep -rn "origin" lib/runtime/*.ts | head -8
+```
+
+This asks one `std::grep` whose `dir` is the real path of `lib/runtime`
+and whose `file` is null, the same question `grep -rn "origin"
+lib/runtime` asks.
+
+| Command, run in `/proj` | Question |
+|---|---|
+| `grep -rn hello lib/*.ts` | `std::grep { dir: "/proj/lib", file: null, ... }` |
+| `grep -n hello one.txt lib/*.ts` | `std::grep` for `one.txt`, and `std::grep { dir: "/proj/lib", file: null }` |
+| `grep -n hello *.ts` | `std::grep { dir: "/proj", file: null }` |
+| `ls lib/*.ts` | `std::ls { dir: "/proj/lib", recursive: true, maxResults: 0 }` |
+| `cat lib/*.ts` | `std::read { dir: "/proj/lib", filename: "*.ts" }` |
+| `grep -n hello lib/*/a.ts` | `std::bash` |
+| `uniq lib/*.ts` | `std::bash` |
+| `find lib/* -name a.ts` | `std::bash` |
+| `rm lib/*.ts` | `std::bash` |
+
+A glob listing walks, because `ls lib/*` lists the contents of every
+subfolder of `lib`, one level below a listing of `lib`. The question names
+more than runs.
+
+`globTargetOf` splits the word at its last `/` and resolves the folder
+part. It refuses these, and the command asks `std::bash`:
+
+- A glob in the folder part (`lib/*/a.ts`). The question would have to
+  name every folder it matches.
+- A glob that starts with `~`. `tildeModeFor` treats a glob word as
+  literal text, so the folder would resolve to one named `~`.
+- A name part that starts with `.`. In bash 3.2, `lib/.*` expands to
+  `lib/.` and `lib/..`, so the command would read the folder above `lib`.
+  A bracket such as `[.]*` never matches a leading dot in bash.
+- A folder part that does not exist, or that is a file. A folder an
+  earlier command in the line makes is not there yet, so `pnpm build &&
+  ls dist/*.js` stays broad.
+
+A read verb whose row limits how many files it takes refuses a glob. A
+glob is one word, and bash can expand it to any number of files. `uniq`
+takes one file because a second is its output file, so `uniq u*.txt`
+would overwrite the second match. The check reads the row's range and
+names no verb, so today it covers `uniq`, `diff`, `cmp`, `head`, and
+`tail`.
+
+Bash can also expand a glob to a name that starts with `-`. In a folder
+holding `-o`, `a.txt`, and `b.txt`, `sort *` would run as `sort -o a.txt
+b.txt` and overwrite `a.txt`. So `endFlagsBeforeGlob` writes `--` before
+the first path of a listing or read command with a glob. grep's rule
+already writes `--` before every grep's paths.
+
+| The model writes | bash runs |
+|---|---|
+| `ls *.json` | `ls -- *.json` |
+| `wc -l one.txt lib/*.ts` | `wc -l -- one.txt lib/*.ts` |
+| `ls src` | `ls src` |
+
+A command with a glob never runs in process. `shellFreeGrepPlan` and
+`shellFreeReadPlan` refuse a path whose `expands` is true, so bash runs
+the command and expands the glob. In process, `cat lib/*.ts` would read a
+file named `*.ts`.
+
+A policy author needs one more fact. A glob read asks `std::read` with
+the pattern in `filename`, and a reject or propagate rule that names a
+file matches it when the pattern can name that file: a reject rule for
+`secrets.json` matches `cat config/*.json`. See "Rule matching" in
+`docs/dev/agents/approval-policies.md`. A folder search has no such match
+yet: a glob grep asks with `file: null`, as `grep -rn KEY config` does, and
+a reject rule for one file under `config` does not match it.
 
 ### What an earlier command did to the disk
 
@@ -1066,9 +1144,9 @@ asks:
 prints too, so it asks what `ls -l` asks.
 
 `listEffects` raises one `std::ls { dir, recursive, maxResults: 0 }` per
-folder named, and `.` when none is named. Every path goes through
-`resolveTargets`: it must be literal, and the payload names the real
-folder. A glob word makes the command unrecognized, and a missing path
+folder named, and `.` when none is named. A path that is not a glob must
+be literal, and the payload names the real folder. A glob asks about the
+folder it is in, with a walk (see "A glob in a path"). A missing path
 follows `missingPath`, except under `tree`, which needs a real folder. A
 listing ignores its stdin, so `git log | ls` is a listing of `.`.
 
@@ -2678,6 +2756,10 @@ nothing more, as it does for a file on disk.
 - `lib/stdlib/shell.ts`: `_searchTargetIn`, which resolves a grep path
   or a read path against safeBash's cwd.
 - `lib/stdlib/statelog.ts`: `_debug`.
+- `tests/agency/safeBashGlobs.agency`: a glob in a path. `globPlans`
+  holds the question and the command text for each kind of glob, and
+  `globsRunUnderTheFolderQuestion` runs a few under only the folder
+  question, including `sort *` beside a file named `-o`.
 - `tests/agency/safeBash.agency`: plan tests (`planReasons`,
   `planVerbs`, `planOutcomes`, `wholeStringPlans`, ...), the end-to-end
   runs with interrupt expectations, and the rejection messages. The

@@ -397,7 +397,8 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "mkdir",
     "copy",
     "move",
-    "remove"
+    "remove",
+    "scratchDir"
   ],
   "std::git": [
     "gitIsRepo",

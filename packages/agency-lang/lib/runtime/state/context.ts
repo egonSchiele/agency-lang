@@ -16,7 +16,7 @@ import type { Clock } from "../clock.js";
 import { defaultHost } from "#default-host";
 import { requireCapabilities, withClock, type Host } from "../../host/host.js";
 import { resolvePolicyDirs } from "../policyDirs.js";
-import type { Policy, PolicyDirs } from "../policy.js";
+import { withRunScratch, type Policy, type PolicyDirs } from "../policy.js";
 import { DEFAULT_MAX_CALL_DEPTH } from "../callDepth.js";
 import { InvocationUsageMeter } from "../invocationUsage.js";
 import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
@@ -617,6 +617,8 @@ export class RuntimeContext<T> {
     });
     execCtx.traceConfig = this.traceConfig;
     execCtx.runId = runId;
+    // `<scratch>` in a policy rule means this run's scratch folder.
+    execCtx.policyDirs = withRunScratch(execCtx.policyDirs, runId);
     execCtx.subprocessDepth = getSubprocessRunInfo().depth;
     execCtx.verbose = this.verbose;
     execCtx.logLevel = this.logLevel;

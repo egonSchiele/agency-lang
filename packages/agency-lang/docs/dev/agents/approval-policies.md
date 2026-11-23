@@ -877,11 +877,36 @@ address, which would hand the conversation credentials to send on with
 the next approved GET. A saved policy from before this change has no
 rule and keeps prompting; `/policy` offers the missing rules.
 
-## Why `recommended` has no `std::write` rule
+## Why `recommended` approves writes only in the scratch folder
 
-It approves no file write at all. `std::mkdir` has one, for the agent home
-itself, which `writeSettingsFile` creates when it is not there yet: an
-empty directory decides nothing, and the write into it still asks.
+It approves a file write in one place, the run's scratch folder
+(`docs/dev/runtime/scratch-dir.md`). `std::write` has three rules, read in
+order:
+
+```json
+[
+  { "match": { "dir": "{<scratch>,<scratch>/**}" }, "action": "approve" },
+  { "match": { "dir": "{.,./**}" }, "action": "propagate" },
+  { "match": { "dir": "{/tmp,/tmp/**,/private/tmp,/private/tmp/**}" },
+    "action": "reject",
+    "rejectMessage": "Write temporary files under <scratch> instead." }
+]
+```
+
+A model writes to `/tmp` by habit, and the reject message is how it learns
+where to write instead. The approve rule comes first because the scratch
+folder is under `/tmp` on Linux. The propagate rule comes before the
+reject because a project can live under `/tmp`, and its writes must still
+reach the user. `std::writeBinary`, `std::edit`, `std::mkdir`, and
+`std::remove` have an approve rule for the scratch folder and no reject.
+
+The user no longer sees the contents of a file the agent writes there.
+Running such a file still asks `std::exec`.
+
+Everywhere else it approves no file write. `std::mkdir` has one more rule,
+for the agent home itself, which `writeSettingsFile` creates when it is
+not there yet: an empty directory decides nothing, and the write into it
+still asks.
 
 The write the agent most obviously wants is its own `settings.json`,
 which `/model` and `/preset` save. That one is left to the prompt on
@@ -925,6 +950,10 @@ the record the stdlib composes.
 The save and review gates (`std::skills::save`, `std::skills::review`,
 `std::toolbox::save`, `std::toolbox::review`) have no rule in any
 built-in but `approve-all`. They prompt.
+
+`<scratch>` is a placeholder too. It stands for the scratch folder of the
+run that raised the interrupt, worked out from the run's id, so it differs
+from run to run (`docs/dev/runtime/scratch-dir.md`).
 
 All four read rules, and the `std::mkdir` rule, are placeholders, not paths. `.` expands to the
 run's working folder (the process's, unless the run's host was given one),
@@ -1087,6 +1116,11 @@ rules, the built-in policies, and `recordScopedRule` leave it off. The rule
 schema drops keys it does not know, so an older Agency version that reads a
 policy file with the field ignores it: its rules then match fewer
 interrupts, never more.
+
+A named placeholder in a `rejectMessage` (`<scratch>`, `<agent-home>`,
+`<home>`, `<agency>`) is replaced by its plain path before the message is
+returned, so the model reads a real folder. One with no folder stays as
+written.
 
 A reject rule may carry a `rejectMessage`: the rejection's reason,
 handed back to whoever raised the interrupt. For a rejected tool call it

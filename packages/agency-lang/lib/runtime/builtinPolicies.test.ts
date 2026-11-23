@@ -29,6 +29,7 @@ describe("builtinPolicy", () => {
         },
         action: "approve",
       },
+      { match: { dir: "{<scratch>,<scratch>/**}" }, action: "approve" },
     ];
     for (const effect of ["std::readBinary", "std::ls", "std::glob", "std::grep"]) {
       expect(p![effect]).toEqual(scope);
@@ -39,12 +40,21 @@ describe("builtinPolicy", () => {
       ...scope,
       { match: { dir: "<agent-home>", filename: "settings.json" }, action: "approve" },
     ]);
-    // No write is approved anywhere. settings.json is executable
-    // configuration: an mcpServers entry is a command the next agent
-    // start spawns, so saving it asks like any other write.
-    expect(p!["std::write"]).toBeUndefined();
-    expect(p!["std::writeBinary"]).toBeUndefined();
-    expect(p!["std::edit"]).toBeUndefined();
+    // The only write approved is in the run's scratch folder. settings.json
+    // is executable configuration: an mcpServers entry is a command the
+    // next agent start spawns, so saving it asks like any other write.
+    const inScratch = { match: { dir: "{<scratch>,<scratch>/**}" }, action: "approve" };
+    expect(p!["std::write"]).toEqual([
+      inScratch,
+      { match: { dir: "{.,./**}" }, action: "propagate" },
+      {
+        match: { dir: "{/tmp,/tmp/**,/private/tmp,/private/tmp/**}" },
+        action: "reject",
+        rejectMessage: "Write temporary files under <scratch> instead.",
+      },
+    ]);
+    expect(p!["std::writeBinary"]).toEqual([inScratch]);
+    expect(p!["std::edit"]).toEqual([inScratch]);
   });
 
   it("approves a public https GET or HEAD through std::http under 'recommended' and nothing else", () => {
@@ -249,8 +259,11 @@ describe("builtinPolicy", () => {
     // dir field. The agent home is not in scope here either: the settings
     // file is written by the same std::write, and a project scope is no
     // reason to stop asking about it.
+    // The launch folder's rule is the last but one: the reject of other
+    // writes under /tmp comes after it.
     const write = p!["std::write"];
-    expect(write[write.length - 1]).toEqual({ match: { dir: scope }, action: "approve" });
+    expect(write[write.length - 2]).toEqual({ match: { dir: scope }, action: "approve" });
+    expect(write[write.length - 1].action).toBe("reject");
     // target field (remove) — a fat-fingered "dir" here would silently disable scoping
     const remove = p!["std::remove"];
     expect(remove[remove.length - 1]).toEqual({ match: { target: scope }, action: "approve" });
@@ -267,7 +280,7 @@ describe("builtinPolicy", () => {
   it("scopes with-writes literally even when baseDir has glob metacharacters", () => {
     const p = builtinPolicy("with-writes", "/a,b");
     const write = p!["std::write"];
-    const pattern = write[write.length - 1].match!.dir!;
+    const pattern = write[write.length - 2].match!.dir!;
     // Inside the real directory: matches. Widened brace alternatives (/a, b): not.
     expect(picomatch.isMatch("/a,b/file.txt", pattern)).toBe(true);
     expect(picomatch.isMatch("/a/file.txt", pattern)).toBe(false);

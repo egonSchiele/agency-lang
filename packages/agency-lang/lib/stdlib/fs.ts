@@ -2,6 +2,8 @@ import path from "#path";
 import diff_match_patch from "diff-match-patch";
 import type { Host, Located } from "../host/host.js";
 import { currentHost } from "../runtime/currentHost.js";
+import { currentRun } from "../runtime/asyncContext.js";
+import { ensureScratchDir } from "../runtime/scratchDir.js";
 import { assertContained } from "./assertContained.js";
 import { WINDOWS_PATHS } from "./isContained.js";
 import { expandPath } from "./expandPath.js";
@@ -393,4 +395,10 @@ function cwdStartsWith(cwd: string, prefix: string): boolean {
     return cwd.toLowerCase().startsWith(prefix.toLowerCase());
   }
   return cwd.startsWith(prefix);
+}
+
+/** The run's scratch folder, made if it is missing. */
+export async function _scratchDir(): Promise<string> {
+  const { ctx } = currentRun();
+  return ensureScratchDir(ctx.host, ctx.getRunId());
 }

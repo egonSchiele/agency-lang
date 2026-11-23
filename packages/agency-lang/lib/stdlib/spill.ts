@@ -3,6 +3,7 @@
 // run's globals, so it travels with every checkpoint.
 import type { Host } from "../host/host.js";
 import { currentRun } from "../runtime/asyncContext.js";
+import { ensureUserTempFolder } from "../runtime/userTempFolder.js";
 import {
   SPILL_FOLDER_PREFIX,
   findOutput,
@@ -197,9 +198,7 @@ export async function _prepareSpillFiles(paths: SavedPath[]): Promise<void> {
  *  have made it first, and could then swap a copy for a link between the
  *  write and the shell's read. */
 async function writeCopy(host: Host, name: string, text: string): Promise<void> {
-  const temp = await host.files.root(host.system.tempDir());
-  const folder = `${SPILL_FOLDER_PREFIX}${host.system.userId()}`;
-  await host.files.privateDir(temp, folder);
+  const { temp, folder } = await ensureUserTempFolder(host, SPILL_FOLDER_PREFIX);
   await host.files.writeText(temp, `${folder}/${name}`, text, {
     mode: "overwrite",
     fileMode: 0o600,

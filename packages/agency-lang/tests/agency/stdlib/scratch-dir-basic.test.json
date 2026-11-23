@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"same\":true,\"named\":true,\"exists\":true}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "scratchDir returns the same path on every call in a run, under an agency-scratch folder, and the folder exists after the first call"
+    }
+  ]
+}

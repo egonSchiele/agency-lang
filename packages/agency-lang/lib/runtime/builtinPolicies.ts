@@ -2,6 +2,7 @@ import {
   AGENCY_INSTALL_DIR_PLACEHOLDER as INSTALL,
   AGENT_HOME_PLACEHOLDER as AGENT_HOME,
   HOME_PLACEHOLDER as HOME,
+  SCRATCH_PLACEHOLDER as SCRATCH,
   type Policy,
   type PolicyRule,
   escapeGlob,
@@ -74,12 +75,38 @@ const CLAUDE_SKILL_READ_DIRS = [
   "./.claude/skills/**",
 ].join(",");
 
+// The run's scratch folder and everything under it, as a path pattern.
+const SCRATCH_SCOPE = `{${SCRATCH},${SCRATCH}/**}`;
+
+/** Approve file work in the run's scratch folder, matched on `field`:
+ *  `dir` for a write, an edit, a mkdir, and the reads, `target` for a
+ *  remove. The folder is one only this run uses, so nothing another
+ *  program trusts lives there (docs/dev/runtime/scratch-dir.md). */
+function scratchApprove(field: string): PolicyRule[] {
+  return [{ match: { [field]: SCRATCH_SCOPE }, action: "approve" }];
+}
+
+/** Reject a write to the shared temp folder, and say where to write
+ *  instead. A model writes to `/tmp` by habit, and this message is how it
+ *  learns the scratch folder's path. It goes last in a list: the scratch
+ *  folder is under `/tmp` on Linux, and so can the launch folder be. */
+function tmpWriteReject(): PolicyRule[] {
+  return [
+    {
+      match: { dir: "{/tmp,/tmp/**,/private/tmp,/private/tmp/**}" },
+      action: "reject",
+      rejectMessage: `Write temporary files under ${SCRATCH} instead.`,
+    },
+  ];
+}
+
 export function readScopeRules(): PolicyRule[] {
   return [
     { match: { dir: "{.,./**}" }, action: "approve" },
     { match: { dir: `{${INSTALL}/stdlib/**,${INSTALL}/dist/**}` }, action: "approve" },
     { match: { dir: `{${AGENT_HOME_READ_DIRS}}` }, action: "approve" },
     { match: { dir: `{${CLAUDE_SKILL_READ_DIRS}}` }, action: "approve" },
+    ...scratchApprove("dir"),
   ];
 }
 
@@ -163,7 +190,18 @@ export const recommendedAutoApprovePolicy: Policy = {
   ],
   // `writeSettingsFile` creates the agent home when it is missing. An
   // empty directory decides nothing, and the write into it still asks.
-  "std::mkdir": [{ match: { dir: AGENT_HOME }, action: "approve" }],
+  "std::mkdir": [{ match: { dir: AGENT_HOME }, action: "approve" }, ...scratchApprove("dir")],
+  // The only writes approved are in the run's scratch folder. A write into
+  // the launch folder goes to the user, as before, and the rule for it
+  // sits ahead of the reject because a project can live under `/tmp`.
+  "std::write": [
+    ...scratchApprove("dir"),
+    { match: { dir: "{.,./**}" }, action: "propagate" },
+    ...tmpWriteReject(),
+  ],
+  "std::writeBinary": scratchApprove("dir"),
+  "std::edit": scratchApprove("dir"),
+  "std::remove": scratchApprove("target"),
   "std::read": [...readScopeRules(), ...settingsReadRule()],
   "std::readBinary": readScopeRules(),
   "std::ls": readScopeRules(),
@@ -260,21 +298,26 @@ export function withWritesPolicy(baseDir: string): Policy {
   const scope = dirScope(baseDir);
   const dirRule: PolicyRule[] = [
     ...ownPolicyFileRules(),
+    ...scratchApprove("dir"),
     { match: { dir: scope }, action: "approve" },
   ];
   const cwdRule: PolicyRule[] = [{ match: { cwd: scope }, action: "approve" }];
   return {
     ...recommendedAutoApprovePolicy,
-    "std::write": dirRule,
+    // The reject comes after the launch folder's rule, since a project
+    // can live under `/tmp`.
+    "std::write": [...dirRule, ...tmpWriteReject()],
     "std::writeBinary": dirRule,
     "std::edit": dirRule,
     "std::mkdir": [
       ...ownPolicyFileRules(),
       { match: { dir: AGENT_HOME }, action: "approve" },
+      ...scratchApprove("dir"),
       { match: { dir: scope }, action: "approve" },
     ],
     "std::remove": [
       ...ownPolicyPathRules(["target"]),
+      ...scratchApprove("target"),
       { match: { target: scope }, action: "approve" },
     ],
     "std::copy": [
@@ -311,7 +354,7 @@ export const BUILTIN_POLICIES: { name: string; description: string }[] = [
   {
     name: "recommended",
     description:
-      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills, tools, and memory (plus the toolbox's own drafting and use-count files there), web/search and GET fetches, and the agent reading its own settings.json; prompt for reads elsewhere, every write, shell, git changes, and any HTTP request that sends a body.",
+      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills, tools, and memory (plus the toolbox's own drafting and use-count files there), web/search and GET fetches, the agent reading its own settings.json, and reads and writes in the run's scratch folder; reject other writes under /tmp with a message naming the scratch folder; prompt for reads elsewhere, every other write, shell, git changes, and any HTTP request that sends a body.",
   },
   {
     name: "minimal",

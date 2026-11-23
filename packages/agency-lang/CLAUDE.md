@@ -264,6 +264,7 @@ Other process docs:
 - `docs/dev/runtime/resume-command.md` — The `agency resume` command: restoring a checkpoint in a child process, overrides, and the integrity check.
 - `docs/dev/runtime/runBatch.md` — The one primitive that owns concurrent-interrupt orchestration for forks, parallel blocks, tool calls, and subprocesses.
 - `docs/dev/runtime/saveDraft.md` — How a scope's best-so-far value survives a guard trip instead of being lost.
+- `docs/dev/runtime/scratch-dir.md` — A run's scratch folder: its path from the run id, the `<scratch>` policy placeholder, and `scratchDir()`.
 - `docs/dev/runtime/simplemachine.md` — The graph execution engine that runs compiled Agency programs.
 - `docs/dev/runtime/spawn.md` — `spawn`: a program in its own process, how it holds an interrupt nobody settled, and how `agency attach` answers it.
 - `docs/dev/runtime/subprocess-ipc.md` — How an agent runs Agency code in a subprocess, how the parent's handlers extend into it, and what the child inherits.

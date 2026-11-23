@@ -1,0 +1,27 @@
+// The scratch folder across a pause and resume
+// (docs/dev/runtime/scratch-dir.md). The folder's path comes from the run's
+// id, which a resume keeps, so the call after the interrupt must return the
+// path the call before it returned, and the file written before the pause
+// must still be there.
+import { scratchDir } from "std::fs"
+
+node main() {
+  const before = scratchDir()
+  if (before is failure(why)) {
+    return { error: "before: ${why}" }
+  }
+  write("note.txt", "kept", dir: before.value) with approve
+  const answer = interrupt("pause here")
+  const after = scratchDir()
+  if (after is failure(why)) {
+    return { error: "after: ${why}" }
+  }
+  const text = read("note.txt", after.value) with approve
+  if (text is failure(why)) {
+    return { error: "read: ${why}" }
+  }
+  return {
+    same: before.value == after.value,
+    text: text.value
+  }
+}

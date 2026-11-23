@@ -6,6 +6,7 @@
   docs/dev/agents/agent-brains.md.
 */
 import { map } from "std::array"
+import { scratchDir } from "std::fs"
 import { expandSlash } from "std::skills"
 import { Attachment, currentThreadId } from "std::thread"
 
@@ -128,6 +129,10 @@ export def runTurn(target: string, userMsg: string): string {
   // Recorded before the turn too, so a turn the user cancels still leaves
   // the id behind.
   setConversationThread(currentThreadId())
+  // Every turn, so the scratch folder is back after a reboot cleared the
+  // temp folder. The policy sends the model there, and a model that made
+  // the folder itself would make its parent readable by other users.
+  scratchDir()
   let reply = ""
   handle {
     reply = dispatchToBrain(target, userMsg)

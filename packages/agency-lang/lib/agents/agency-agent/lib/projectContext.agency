@@ -4,6 +4,7 @@
   and the code subagent for its own prompt.
 */
 import { today } from "std::date"
+import { scratchDir } from "std::fs"
 import { getAgentCwd } from "std::index"
 import { exists } from "std::shell"
 import { cwd } from "std::system"
@@ -110,12 +111,24 @@ export def projectContextText(): string {
   return """
 
   Current date: ${today()}
-  Current working directory: ${dir}
+  Current working directory: ${dir}${scratchLine()}
 
   <project_context>
   ${projectContext}
   </project_context>
   """
+}
+
+/** The block's line that names the run's scratch folder, with the newline
+  before it, or nothing when the folder cannot be made. The policy rejects
+  a write elsewhere under `/tmp` with a message naming this folder, so the
+  line only saves the model a rejected call. */
+def scratchLine(): string {
+  const scratch = scratchDir()
+  if (scratch is failure(why)) {
+    return ""
+  }
+  return "\n  Scratch folder for temporary files: ${scratch.value}"
 }
 
 /** The user's message, with the project block above it when the agent's

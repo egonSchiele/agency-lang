@@ -1,4 +1,4 @@
-import { _multiedit, _previewEdit, _checkEdit, _applyPatch, _patchFiles, _mkdir, _copy, _move, _remove, _prepareContainedPath, _realTarget } from "agency-lang/stdlib-lib/fs.js"
+import { _multiedit, _previewEdit, _checkEdit, _applyPatch, _patchFiles, _mkdir, _copy, _move, _remove, _prepareContainedPath, _realTarget, _scratchDir } from "agency-lang/stdlib-lib/fs.js"
 import { bash, glob, ls, grep } from "std::shell"
 import { applyAgentCwd } from "std::index"
 
@@ -224,4 +224,14 @@ export def remove(target: string, allowedPaths: string[] = [], useAgentCwd: bool
   destructive {
     return try _remove(real.value, allowedPaths)
   }
+}
+
+// No interrupt: the caller chooses neither where the folder is nor its
+// name, so there is nothing to approve. Nothing in a run can move it.
+@capabilities(fileRead, fileWrite)
+export def scratchDir(): Result<string> {
+  """
+  Return the absolute path of this run's scratch folder, creating the folder if it does not exist yet. Use it for temporary files. The path is the same for the whole run, including after an interrupt and resume.
+  """
+  return try _scratchDir()
 }

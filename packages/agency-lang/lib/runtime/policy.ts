@@ -1,6 +1,7 @@
 import picomatch from "picomatch";
 import { z } from "zod";
 import { bashGlobMayName } from "./bashGlob.js";
+import { scratchId } from "./scratchDir.js";
 
 /** The longest pattern picomatch accepts. It throws on a longer one, and a
  *  rule that throws would break every interrupt that reaches it. */
@@ -49,11 +50,29 @@ type PolicyResult =
  *  because a handler may return this result directly as its response
  *  (`return checkPolicy(policy, intr)` is a supported idiom) and the
  *  handler chain reads a rejection's reason from `value`. */
-function ruleResult(rule: PolicyRule): PolicyResult {
+function ruleResult(rule: PolicyRule, dirs: PolicyDirs): PolicyResult {
   if (rule.action === "reject" && rule.rejectMessage !== undefined) {
-    return { type: "reject", message: rule.rejectMessage, value: rule.rejectMessage };
+    const message = fillPlaceholders(rule.rejectMessage, dirs);
+    return { type: "reject", message, value: message };
   }
   return { type: rule.action };
+}
+
+/** A reject message with each named placeholder replaced by its plain
+ *  path, so the model reads a real folder. A placeholder with no folder
+ *  stays as written. */
+function fillPlaceholders(text: string, dirs: PolicyDirs): string {
+  const folders: [string, string | null | undefined][] = [
+    [AGENCY_INSTALL_DIR_PLACEHOLDER, dirs.agencyInstallDir],
+    [AGENT_HOME_PLACEHOLDER, dirs.agentHome],
+    [HOME_PLACEHOLDER, dirs.home],
+    [SCRATCH_PLACEHOLDER, dirs.scratch],
+  ];
+  return folders.reduce(
+    (filled, [placeholder, folder]) =>
+      folder === null || folder === undefined ? filled : filled.split(placeholder).join(folder),
+    text,
+  );
 }
 
 /** Escape picomatch metacharacters so a literal value matches only itself
@@ -65,7 +84,7 @@ export function escapeGlob(s: string): string {
 
 export function checkPolicy(
   policy: Policy,
-  interrupt: { effect: string; message: string; data: any; origin: string },
+  interrupt: PolicyInterrupt,
   dirs: PolicyDirs,
 ): PolicyResult {
   return checkPolicyExplicit(policy, interrupt, dirs) ?? { type: "propagate" };
@@ -78,15 +97,16 @@ export function checkPolicy(
  * fall-through-is-propagate contract. */
 export function checkPolicyExplicit(
   policy: Policy,
-  interrupt: { effect: string; message: string; data: any; origin: string },
-  dirs: PolicyDirs,
+  interrupt: PolicyInterrupt,
+  given: PolicyDirs,
 ): PolicyResult | null {
+  const dirs = withRunScratch(given, interrupt.runId);
   // Effect-specific rules take precedence over the wildcard.
   const rules = policy[interrupt.effect];
   if (rules) {
     for (const rule of rules) {
       if (matchesRule(rule, interrupt, dirs)) {
-        return ruleResult(rule);
+        return ruleResult(rule, dirs);
       }
     }
   }
@@ -99,7 +119,7 @@ export function checkPolicyExplicit(
   if (wildcard) {
     for (const rule of wildcard) {
       if (matchesRule(rule, interrupt, dirs)) {
-        return ruleResult(rule);
+        return ruleResult(rule, dirs);
       }
     }
   }
@@ -134,7 +154,25 @@ export type PolicyDirs = {
    *  (a bundled build with no package.json above it). The placeholder then
    *  stays as written, so the rule never matches; nothing throws. */
   agencyInstallDir: string | null;
+  /** The real path of the folder every run's scratch folder is in, or
+   *  absent when the host could not say. Resolved once from the host. */
+  scratchParent?: string | null;
+  /** What `<scratch>` means: one run's scratch folder. An execution
+   *  context sets it for its own run. Outside a run it is absent, and the
+   *  matcher works it out from `scratchParent` and the interrupt's run id.
+   *  With neither, the placeholder stays as written and the rule never
+   *  matches. */
+  scratch?: string | null;
 };
+
+/** `dirs` with `scratch` set for the run `runId`, unless it is set already
+ *  or there is no parent folder or run id to build it from. Reads no file. */
+export function withRunScratch(dirs: PolicyDirs, runId: string | undefined): PolicyDirs {
+  if (typeof dirs.scratch === "string" || !dirs.scratchParent || !runId) {
+    return dirs;
+  }
+  return { ...dirs, scratch: `${dirs.scratchParent}/${scratchId(runId)}` };
+}
 
 // In a `dir` pattern, `.` also means "wherever the agent was launched".
 // Tools absolutize the dir they put in interrupt data, so a literal `.` in
@@ -203,12 +241,27 @@ export function substituteHome(pattern: string, home: string): string {
   return pattern.split(HOME_PLACEHOLDER).join(escapeGlob(home));
 }
 
+/** In a path pattern, `<scratch>` stands for the scratch folder of the run
+ *  that raised the interrupt (lib/runtime/scratchDir.ts). The built-in
+ *  policies approve file work there, so a saved policy names no run. */
+export const SCRATCH_PLACEHOLDER = "<scratch>";
+
+/** Replace `<scratch>` with the run's scratch folder, escaped the same
+ *  way. With no folder, the pattern stays as written and never matches. */
+export function substituteScratch(pattern: string, scratch: string | null | undefined): string {
+  if (scratch === null || scratch === undefined || !pattern.includes(SCRATCH_PLACEHOLDER)) {
+    return pattern;
+  }
+  return pattern.split(SCRATCH_PLACEHOLDER).join(escapeGlob(scratch));
+}
+
 /** Every directory placeholder in `pattern` replaced by what it means for
  *  this run. `.` is handled apart, by `substituteDot`. */
 export function substitutePlaceholders(pattern: string, dirs: PolicyDirs): string {
   const withInstall = substituteInstallDir(pattern, dirs.agencyInstallDir);
   const withAgentHome = substituteAgentHome(withInstall, dirs.agentHome);
-  return substituteHome(withAgentHome, dirs.home);
+  const withHome = substituteHome(withAgentHome, dirs.home);
+  return substituteScratch(withHome, dirs.scratch);
 }
 
 /** The data fields that hold a path, where the named placeholders
@@ -221,7 +274,15 @@ function matchesGlob(value: string, pattern: string, dot: boolean): boolean {
   return pattern === "" ? value === "" : picomatch.isMatch(value, pattern, { dot });
 }
 
-type PolicyInterrupt = { effect: string; message: string; data: any; origin: string };
+/** What the matcher reads of an interrupt. `runId` says which run raised
+ *  it, which is what `<scratch>` stands for when the dirs do not say. */
+export type PolicyInterrupt = {
+  effect: string;
+  message: string;
+  data: any;
+  origin: string;
+  runId?: string;
+};
 
 function matchesRule(rule: PolicyRule, interrupt: PolicyInterrupt, dirs: PolicyDirs): boolean {
   if (!rule.match) return true; // catch-all

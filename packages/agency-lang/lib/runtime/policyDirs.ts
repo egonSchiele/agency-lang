@@ -8,6 +8,8 @@
 import { defaultHost } from "#default-host";
 import type { Host } from "../host/host.js";
 import { agentHomeDir } from "./agentHome.js";
+import { SCRATCH_FOLDER_PREFIX } from "./scratchDir.js";
+import { userTempFolderName } from "./userTempFolder.js";
 import {
   substituteAgentHome,
   substituteDot,
@@ -28,7 +30,16 @@ export function resolvePolicyDirs(host: Host): PolicyDirs {
     agentHome: host.system.realDir(agentHomeDir(host)),
     home: host.system.realDir(host.system.homeDir()),
     agencyInstallDir: host.system.installDir(),
+    scratchParent: scratchParentOf(host),
   };
+}
+
+/** The folder every run's scratch folder is in, with the temp folder as a
+ *  real path, since file effects put real paths in their payloads. The
+ *  temp folder exists, so it resolves whether or not the parent does yet. */
+function scratchParentOf(host: Host): string {
+  const temp = host.system.realDir(host.system.tempDir()).replace(/\/+$/, "");
+  return `${temp}/${userTempFolderName(host, SCRATCH_FOLDER_PREFIX)}`;
 }
 
 /** `substituteDot` over the real path of `cwd`. For tests, which inject

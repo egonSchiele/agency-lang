@@ -9,6 +9,7 @@ import type { Host } from "../host/host.js";
 import type { Run } from "./asyncContext.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { toHex } from "../utils/hash.js";
+import { userTempFolder } from "./userTempFolder.js";
 
 /** One saved output. `source` is what produced it, for a human: the command
  *  that ran, or the tool and its first string argument. Entries saved before
@@ -62,8 +63,7 @@ export type SavedPath = { folder: string; name: string };
  *  temp folder as the host gives it, never a real path, so the notices and
  *  the check in `prepareSpillFiles` compare the same text. */
 export function spillFolder(host: Host): string {
-  const temp = host.system.tempDir().replace(/\/+$/, "");
-  return `${temp}/${SPILL_FOLDER_PREFIX}${host.system.userId()}/`;
+  return `${userTempFolder(host, SPILL_FOLDER_PREFIX)}/`;
 }
 
 /** The saved output a path names, or null. The whole path must end in an

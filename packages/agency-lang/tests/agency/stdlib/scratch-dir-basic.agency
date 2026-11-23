@@ -1,0 +1,18 @@
+import { scratchDir } from "std::fs"
+import { exists } from "std::shell"
+
+node main() {
+  const first = scratchDir()
+  const second = scratchDir()
+  if (first is failure(why)) {
+    return why
+  }
+  if (second is failure(why)) {
+    return why
+  }
+  return {
+    same: first.value == second.value,
+    named: first.value.includes("/agency-scratch-"),
+    exists: exists(first.value)
+  }
+}

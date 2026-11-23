@@ -10,7 +10,8 @@ export type InterruptHandlers = {
 };
 
 function applyPolicy(
-  interrupts: Array<{ effect: string; message: string; data: any; origin: string }>,
+  // `runId` is what `<scratch>` in a rule is worked out from.
+  interrupts: Array<{ effect: string; message: string; data: any; origin: string; runId?: string }>,
   policy: Record<string, any>,
 ) {
   const dirs = resolvePolicyDirs(defaultHost());
@@ -36,6 +37,7 @@ export async function runWithPolicy(
       message: string;
       data: any;
       origin: string;
+      runId?: string;
     }>;
     const responses = applyPolicy(interrupts, policyStore.get());
     result = await handlers.respondToInterrupts(interrupts, responses);

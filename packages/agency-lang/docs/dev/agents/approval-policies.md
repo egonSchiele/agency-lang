@@ -1052,6 +1052,23 @@ Known limits:
   A rule for `secret*` does not match the value `*.json`, though both can
   name `secret.json`. A rule for `*.pem` does match the value `*`, because
   the text `*.pem` is a name that `*` matches.
+
+  This is the limit a policy author is most likely to meet, because a
+  rule that protects secrets is usually written as a glob:
+
+  ```json
+  "std::read": [
+    { "match": { "filename": "*.pem" }, "action": "reject" },
+    { "match": { "dir": "{/proj,/proj/**}" }, "action": "approve" }
+  ]
+  ```
+
+  `cat certs/key.pem` is rejected. `cat certs/k*` asks with the filename
+  `k*`. The text `*.pem` is not a name `k*` can stand for, so the reject
+  rule does not match, the approve rule answers, and the line prints
+  `certs/key.pem`. A reject rule that names the file exactly, `key.pem`,
+  does match `k*`. The limit is accepted for now, and ADI-364 covers how a
+  rule should keep a file out of a folder approval.
 - An approve rule for `?.json` matches the value `*.json`, because the
   text `*.json` is five characters after one. Approve rules are unchanged.
 

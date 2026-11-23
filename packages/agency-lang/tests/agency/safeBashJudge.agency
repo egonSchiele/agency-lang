@@ -1,0 +1,214 @@
+import { safeBash, startJob, planFor, outcomeOf, CommandJudge } from "std::safeBash"
+import test { judgeGate, bashQuestion } from "std::safeBash"
+import { BroadReason } from "std::safeBash/actions"
+import { listJobs } from "std::jobs"
+import { cliPolicyHandler } from "std::policy"
+import { _escapeGlob } from "agency-lang/stdlib-lib/policy.js"
+
+// The judge model. The deterministic client answers it from a { decide }
+// mock, so nothing here reaches a provider.
+static const JUDGE: CommandJudge = {
+  model: "jev-1.13",
+  provider: "typesafe"
+}
+
+// A broad line: safeBash has no rule for awk, and a pipe into it cannot be
+// split into narrow questions. Every case rejects or refuses it, so it
+// never runs.
+static const LINE = "printf hi | awk NF"
+
+// LINE as a rule names it. A saved rule escapes the command the same way,
+// since `|` is a glob character.
+static const LINE_PATTERN = _escapeGlob(LINE)
+
+// A broad line that is safe to run, for the resume case.
+static const RUN_LINE = "printf hi | awk '{print toupper($0)}'"
+
+// Narrow steps in the foreground, each asking std::exec. A job runs its
+// line whole, and two commands after the `cd` is not a job's shape, so
+// asJobPlan makes it broad.
+static const JOB_LINE = "cd stdlib && python3 -c pass && python3 -c pass"
+
+static const REASON: BroadReason = {
+  kind: "unrecognized",
+  detail: ""
+}
+
+// Never written: the handler is given its rules, and nothing here answers
+// "always".
+static const POLICY_FILE = __dirname + "/safeBashJudge-policy.json"
+
+// The tests below rely on these outcomes. If planning changes, this case
+// fails first and says which line no longer fits.
+node linesFitTheirTests() {
+  return [
+    outcomeOf(planFor(LINE, __dirname)),
+    outcomeOf(planFor(RUN_LINE, __dirname)),
+    outcomeOf(planFor(JOB_LINE, __dirname)),
+  ]
+}
+
+node judgeRejects() {
+  let raised: string[] = []
+  let out = ""
+  handle {
+    const result = safeBash(LINE, cwd: __dirname, commandJudge: JUDGE)
+    if (result is failure(why)) {
+      out = why
+    }
+  } with (intr) {
+    raised.push(intr.effect)
+    return reject()
+  }
+  return {
+    out: out,
+    raised: raised
+  }
+}
+
+node noJudgeAsksAsBefore() {
+  let raised: string[] = []
+  handle {
+    safeBash(LINE, cwd: __dirname)
+  } with (intr) {
+    raised.push(intr.effect)
+    return reject()
+  }
+  return raised
+}
+
+node rejectionStaysAFailure() {
+  let failed = false
+  handle {
+    const result = safeBash(LINE, cwd: __dirname, exitIsFailure: false, commandJudge: JUDGE)
+    failed = isFailure(result)
+  } with (intr) {
+    return reject()
+  }
+  return failed
+}
+
+node gatePasses() {
+  return judgeGate(LINE, REASON, __dirname, 120000, false, JUDGE)
+}
+
+node gateUnavailable() {
+  return judgeGate(LINE, REASON, __dirname, 120000, false, JUDGE)
+}
+
+node gateDoubtful() {
+  return judgeGate(LINE, REASON, __dirname, 120000, false, JUDGE)
+}
+
+node gateNoConfidence() {
+  return judgeGate(LINE, REASON, __dirname, 120000, false, JUDGE)
+}
+
+// The rule an "always approve" answer saves: this command in this folder.
+node gateSkipsOnAnAlwaysRule() {
+  cliPolicyHandler(
+    file: POLICY_FILE,
+    policy: {
+      "std::bash": [{ action: "approve", match: { command: LINE_PATTERN, cwd: _escapeGlob(__dirname) } }]
+    },
+    interactive: false,
+  )
+  return judgeGate(LINE, REASON, __dirname, 120000, false, JUDGE)
+}
+
+// A rule can name the origin. The check passes the origin the raise
+// carries, so the rule decides the check too.
+node gateMatchesOrigin() {
+  cliPolicyHandler(
+    file: POLICY_FILE,
+    policy: {
+      "std::bash": [{ action: "approve", match: { origin: "std::safeBash" } }]
+    },
+    interactive: false,
+  )
+  return judgeGate(LINE, REASON, __dirname, 120000, false, JUDGE)
+}
+
+// The raise gets its origin from the compiler; the check builds its own.
+// They must be the same string, or a rule on the origin would decide the
+// raise and not the check. This compares the origin a real raise carries
+// with the one the check uses.
+node checkUsesTheRaisesOrigin() {
+  let raised = ""
+  handle {
+    safeBash(LINE, cwd: __dirname)
+  } with (intr) {
+    raised = intr.origin
+    return reject()
+  }
+  const checked = bashQuestion(LINE, __dirname, 120000, false).origin
+  return {
+    raised: raised,
+    checked: checked
+  }
+}
+
+// A job's question says "in the background". A rule on that wording
+// decides the job's question and not the foreground one.
+node gateMatchesJobWording() {
+  cliPolicyHandler(
+    file: POLICY_FILE,
+    policy: {
+      "std::bash": [{ action: "approve", match: { message: "*in the background?" } }]
+    },
+    interactive: false,
+  )
+  const job = judgeGate(LINE, REASON, __dirname, 60000, true, JUDGE)
+  const foreground = judgeGate(LINE, REASON, __dirname, 120000, false, JUDGE)
+  return {
+    job: job.outcome,
+    foreground: foreground.outcome
+  }
+}
+
+// A rule decides the question, so the judge is not asked, although its
+// mock would refuse. The rule's rejection is what comes back.
+node ruleDecidesBeforeTheJudge() {
+  const handler = cliPolicyHandler(
+    file: POLICY_FILE,
+    policy: {
+      "std::bash": [{ action: "reject", match: { command: LINE_PATTERN }, rejectMessage: "held by a rule" }]
+    },
+    interactive: false,
+  )
+  let out = ""
+  handle {
+    const result = safeBash(LINE, cwd: __dirname, commandJudge: JUDGE)
+    if (result is failure(why)) {
+      out = why
+    }
+  } with handler
+  return [out.includes("held by a rule"), out.includes("too complex")]
+}
+
+// The judge refuses the job's whole line, so nothing is asked and no job
+// starts.
+node jobLineIsJudged() {
+  const before = listJobs().length
+  let raised: string[] = []
+  let failed = false
+  handle {
+    const result = startJob(JOB_LINE, cwd: __dirname, maxMinutes: 1, commandJudge: JUDGE)
+    failed = isFailure(result)
+  } with (intr) {
+    raised.push(intr.effect)
+    return reject()
+  }
+  return [failed, raised, listJobs().length - before]
+}
+
+// The judge passes, the question goes to the test runner, and the run
+// resumes after approval. The second mock would refuse: a judge that ran
+// again on resume would take it, and the line would not run.
+node resumeDoesNotJudgeAgain() {
+  const result = safeBash(RUN_LINE, cwd: __dirname, commandJudge: JUDGE)
+  if (result is failure(why)) {
+    return "failed: ${why}"
+  }
+  return result.value.trim()
+}

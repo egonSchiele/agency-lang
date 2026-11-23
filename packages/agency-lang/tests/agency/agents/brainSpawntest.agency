@@ -20,6 +20,8 @@ def settingsWith(model: string, provider: string, context: string = ""): AgentSe
     reasoningProvider: "",
     routerModel: "",
     routerProvider: "",
+    judgeModel: "",
+    judgeProvider: "",
     coderTools: []
   }
 }

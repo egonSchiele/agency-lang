@@ -72,6 +72,12 @@ must name its provider, a bare `--model` never sets them, and they get no
 (`DECISION_PROVIDERS` in `lib/slots.agency`), and it may be set beside
 `local`. The router also accepts `off`, which turns routing off.
 
+The `judge` slot is set the same way, `--model judge=<provider>/<model>`
+or `slots.judge`, and takes the same decision providers. It names the
+decision model that may refuse a broad shell line too complex to review
+("The command judge" in `docs/dev/stdlib/safe-bash.md`). It has no
+default and no `off`, and a local session does not carry it.
+
 A preset with `local` runs `configureLocalModel`, the same call `--local`
 makes. A local model that fails to load ends the process, from startup or
 from `/preset`.

@@ -10,6 +10,7 @@ import {
   SAVE_DRAFT_HINT,
  } from "std::agents/lib/toolkits"
 import { guarded } from "std::decorators"
+import { CommandJudge } from "std::safeBash"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { agentSkill } from "std::skills"
 import { systemMessage } from "std::thread"
@@ -48,14 +49,16 @@ ${PROGRESS_NOTE}${SAVE_DRAFT_HINT}
 
 static const skills = agentSkill("coding")
 
-export def buildTools(): any[] {
+export def buildTools(commandJudge: CommandJudge | null = null): any[] {
   """
   Return the coding agent's built-in tools for inspection or extension.
+
+  @param commandJudge - A decision model that may refuse a bash command too complex to review, or null for none
   """
   return [
     setAgentCwd,
     getAgentCwd,
-    ...codingFileAndShellTools(),
+    ...codingFileAndShellTools(commandJudge),
     githubAgent,
     ...memoryTools(),
     ...fetchTools(),
@@ -70,6 +73,7 @@ def solve(
   model: string,
   provider: string,
   extraTools: any[],
+  commandJudge: CommandJudge | null,
 ): string {
   systemMessage(systemPrompt, expires: "llmCall")
   return llm(
@@ -77,7 +81,7 @@ def solve(
     llmOptions(
     model: model,
     provider: provider,
-    tools: [...buildTools(), ...extraTools, saveDraft],
+    tools: [...buildTools(commandJudge), ...extraTools, saveDraft],
     spillToolResultsOver: AGENT_SPILL_OVER,
     hostedTools: hostedSearchTools(model, provider),
   ),
@@ -97,6 +101,7 @@ export handoff def codingAgent(
   model: string = "",
   provider: string = "",
   extraTools: any[] = [],
+  commandJudge: CommandJudge | null = null,
 ): Result<string> {
   """
   Write, edit, and run code to complete a task on disk. Returns a short
@@ -110,6 +115,7 @@ export handoff def codingAgent(
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override, ignored when model is empty.
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  @param commandJudge - A decision model that may refuse a bash command too complex to review, or null for none
   """
 
   // Return position: a draft the model saved reaches the guard, which
@@ -120,5 +126,6 @@ export handoff def codingAgent(
     model: model,
     provider: provider,
     extraTools: extraTools,
+    commandJudge: commandJudge,
   )
 }

@@ -5,7 +5,7 @@
   background job tools. The harness passes them to `agencyAgent`.
 */
 import { AgencySource } from "std::agency"
-import { AgentSettings, reasoningOptions } from "std::agents/brains/settings"
+import { AgentSettings, commandJudgeFor, reasoningOptions } from "std::agents/brains/settings"
 import { coordinatorTools } from "std::agents/brains/coordinator"
 import { jobTools, spillTools } from "std::agents/lib/toolkits"
 import { skillsDir } from "std::skills"
@@ -19,6 +19,7 @@ import { useLlmOptions } from "./llmOptionTools.agency"
 import { getMcpTools } from "./mcp.agency"
 import { deletePreset, listPresets, savePreset } from "./presetTools.agency"
 import { searchSessions } from "./sessionSearch.agency"
+import { getJudgeModel, getJudgeProvider } from "../shared.agency"
 
 // Skills about the agent itself. The folder ships with the agent, so the
 // scan is approved here, as the bundled prompt reads are. An outer handler
@@ -53,12 +54,13 @@ export def setJobToolsOn(on: boolean) {
 }
 
 /** The job tools for this session: none in a one-shot run, whose model
-  could never read a job it started, since its turn is the whole run. */
+  could never read a job it started, since its turn is the whole run. A
+  job's line is judged by the judge slot's model, when one is set. */
 export def sessionJobTools(): any[] {
   if (!_jobToolsOn) {
     return []
   }
-  return jobTools()
+  return jobTools(commandJudgeFor(getJudgeModel(), getJudgeProvider()))
 }
 
 // A long job read is saved and previewed. The coordinator has no shell to

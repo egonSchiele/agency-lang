@@ -18,6 +18,8 @@ def settingsWith(context: string, model: string): AgentSettings {
     reasoningProvider: "",
     routerModel: "",
     routerProvider: "",
+    judgeModel: "",
+    judgeProvider: "",
     coderTools: []
   }
 }

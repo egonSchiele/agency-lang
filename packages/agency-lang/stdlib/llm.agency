@@ -156,6 +156,29 @@ export def setModel(name: string) {
   _setLlmOptions({ model: name })
 }
 
+export def modelOptions(model: string, provider: string): any {
+  """
+  Return the `llm()` options that pick `model` and `provider`, or no
+  options when `model` is empty, so the ambient model stays in place. An
+  empty `provider` is left out, so the configured provider stays in place.
+
+  @param model - The model name, or "" for the ambient model
+  @param provider - The model's provider, or "" for the configured one
+  """
+  if (model == "") {
+    return {}
+  }
+  if (provider == "") {
+    return {
+      model: model
+    }
+  }
+  return {
+    model: model,
+    provider: provider
+  }
+}
+
 /**
 Recognizes anthropic, google, openai, openrouter, and litellm. LiteLLM also
 needs LITELLM_BASE_URL; this helper returns only its API-key variable name.

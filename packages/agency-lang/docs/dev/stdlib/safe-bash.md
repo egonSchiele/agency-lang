@@ -230,6 +230,89 @@ The four broad branches of `planFor` go through `broadPlan`, which is
 decided over, in order: `""` for an assignment-only command, `[]` when
 the string was unparseable.
 
+## The command judge
+
+`safeBash`, `startJob`, and `startShellJob` take `commandJudge`, a
+decision model (`{ model, provider }`) or `null`. With `null`, nothing
+below happens. With a model, a broad plan is checked in `approvedPlan`
+after `asJobPlan` and before `raiseAll`:
+
+1. **Is the plan broad?** The test is `toRaise.broadReason != null`. It
+   is the same test `outcomeOf` uses to call a plan broad, so the gate and
+   the `safeBash plan` event always agree. It looks at `toRaise`, so a job
+   line that `asJobPlan` made broad is judged too. The read-only shell line
+   has no reason and is never judged.
+2. **Does a policy rule already decide the question?** `judgeGate` builds
+   the `std::bash` question with `bashQuestion`, the builder `raiseOne`
+   raises from, so the message (with a job's "in the background"), the
+   data (with a job's limit), and the origin (`std::safeBash`) are the ones
+   the raise carries. It checks them against both policies that can answer
+   a run: `runPolicy()`, the run's root policy, and `currentPolicy()`, the
+   policy of a `cliPolicyHandler`. A rule in either that approves or rejects
+   means nobody will be asked, so the judge is skipped and `raiseAll` lets
+   the rule answer.
+3. **Otherwise, ask the judge.** `askJudge` makes one `type: "decision"`
+   call on a fresh thread that holds only the command, with no retries and
+   a 3-second limit, in the shape of the router's call. The answer is one
+   of `fine`, `useSimplerCommands`, or `tooLongToReview`. Only a refusal
+   with confidence of at least `JUDGE_MIN_CONFIDENCE` (0.9) refuses; an
+   answer with no confidence refuses nothing. A refusal returns a plain
+   failure built from `VERDICT_SENTENCES`, before anything is raised, as
+   the refuse wall does. A doubtful answer, a `fine`, and a failed call all
+   go on to `raiseAll`.
+
+The rules this keeps:
+
+- **The judge never approves.** No path turns its answer into an
+  approval. Editing a saved verdict in a checkpoint can only turn a
+  refusal into a pass, which leads to the ordinary question.
+- **A refusal is a failure, not a rejected interrupt.** A rejected
+  interrupt reaches the model with a do-not-retry line. A refusal asks
+  the model to write the command again, so it must not carry that line.
+- **The judge runs once per call.** The gate's result is a local in
+  `approvedPlan`, saved with the checkpoint. When a passed line's question
+  pauses the run, resuming continues after the judge call and does not
+  call the judge again.
+
+The two policies, and where each comes from:
+
+- **The run's root policy** (`runPolicy()`). `installRunPolicyHandler`
+  keeps the policy it installs on the run (`RuntimeContext.runPolicy`), on
+  a fresh run and again on every resume. It is the policy `agency run
+  --policy`, `--approve`, and `--reject` give a run, and the `policy`
+  option a host passes. The agent's session driver passes the session's
+  policy that way, so in an interactive `agency agent` session this is the
+  policy that holds the user's "always" answers. `runPolicy()` returns a
+  copy, because a caller that changed the live policy would change what
+  the handler approves.
+- **A `cliPolicyHandler`'s policy** (`currentPolicy()`). A program that
+  installs `cliPolicyHandler` itself, such as `agency agent -p`, keeps its
+  rules there. The first call may load the policy file, and any call may
+  save "always" answers waiting to be written. Those reads and writes are
+  the handler's own, which it does not ask about.
+
+What the check cannot see: an answer that comes from neither policy, such
+as a TypeScript host that answers interrupts itself, a `handle` block or
+`with approve` around the agent, or a parent process answering for a
+subprocess (an IPC child installs no root handler, so its `runPolicy()` is
+empty). For those, the judge runs on a line that would not have prompted.
+
+The judge's call shares its parts with the router's: `modelOptions` in
+`std::llm` picks the model, and `lastChoiceConfidence()` in `std::thread`
+reads how sure the model was. The typed `llm()` call itself stays in
+`askJudge`, because its type annotation is what makes the three labels the
+possible answers.
+
+In `agency agent`, the model comes from the `judge` slot
+(`--model judge=<provider>/<model>`, `slots.judge` in a preset). It has
+no default, because the judge sends command lines to its provider. It
+reaches the tools through `AgentSettings.judgeModel` and
+`judgeProvider`: the coder's and the minimal brain's `bash`, and the job
+tools. The toolkits bind `commandJudge` even when it is `null`, so the
+model never sees the argument. A local session (`--local`) has no judge:
+the local setup sets only the main, reasoning, embedding, and router
+slots.
+
 ## The debug event
 
 Every call posts one statelog `debug` event with the message
@@ -246,6 +329,15 @@ the list of effect names; `accesses` is `accessesOf(effects)` (see "File
 accesses"). A session's calls are tallied with a filter over its JSONL
 for `debug` events whose message is `safeBash plan`. There is no
 dedicated event type.
+
+When the command judge runs, a second event follows, with the message
+`safeBash judge` and the data `{ command, outcome, verdict }`. `outcome`
+is `skipped` (a policy rule decides the question), `rejected`, `passed`,
+or `unavailable` (the judge call failed, and an event with the message
+`safeBash judge call failed` before it carries the error). A replay of
+logged lines through
+`planFor` cannot predict the judge, so this event is the only record of
+why a broad line did or did not prompt.
 
 ## File accesses
 

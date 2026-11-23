@@ -141,6 +141,25 @@ export def getRouterProvider(): string {
   return router.provider
 }
 
+/** The judge slot's model, or "" when it is unset. Like the router, a
+  derived slot with no module global of its own. */
+export def getJudgeModel(): string {
+  const judge = _resolved["judge"]
+  if (judge == null) {
+    return ""
+  }
+  return judge.model
+}
+
+/** The judge slot's provider, or "" when it is unset. */
+export def getJudgeProvider(): string {
+  const judge = _resolved["judge"]
+  if (judge == null) {
+    return ""
+  }
+  return judge.provider
+}
+
 /** The router as `provider/model` when the user set it, or "" when it is
   unset or came from the default layer. */
 export def explicitRouterSpec(): string {

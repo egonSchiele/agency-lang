@@ -1,0 +1,157 @@
+{
+  "tests": [
+    {
+      "nodeName": "linesFitTheirTests",
+      "description": "The test lines plan as the cases below need: two broad lines, and a job line that is narrow in the foreground.",
+      "input": "",
+      "expectedOutput": "[\"broad\",\"broad\",\"narrow\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "judgeRejects",
+      "description": "A confident refusal returns the judge's message, and no question is raised. This fails if the gate raises std::bash before judging, or turns the refusal into a question.",
+      "input": "",
+      "expectedOutput": "{\"out\":\"This command is too complex to review safely: it runs a script through awk, perl, sed, or an interpreter where plain commands would do. Write simpler commands that do the same thing, or write the script to a file and run the file.\",\"raised\":[]}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "useSimplerCommands", "confidence": 0.95, "probabilities": { "fine": 0.03, "useSimplerCommands": 0.95, "tooLongToReview": 0.02 } } } }
+      ]
+    },
+    {
+      "nodeName": "noJudgeAsksAsBefore",
+      "description": "With no judge, a broad line asks std::bash as before and no model is called. The mock refuses, so a judge called by mistake would refuse the line and nothing would be raised.",
+      "input": "",
+      "expectedOutput": "[\"std::bash\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "useSimplerCommands", "confidence": 0.95, "probabilities": { "fine": 0.03, "useSimplerCommands": 0.95, "tooLongToReview": 0.02 } } } }
+      ]
+    },
+    {
+      "nodeName": "checkUsesTheRaisesOrigin",
+      "description": "The origin the policy check uses is the origin the compiler gives the real raise. This fails the day the module moves and the two drift apart.",
+      "input": "",
+      "expectedOutput": "{\"raised\":\"std::safeBash\",\"checked\":\"std::safeBash\"}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "rejectionStaysAFailure",
+      "description": "exitIsFailure: false turns only a nonzero exit into a success. The judge's refusal stays a failure the model reads.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "useSimplerCommands", "confidence": 0.95, "probabilities": { "fine": 0.03, "useSimplerCommands": 0.95, "tooLongToReview": 0.02 } } } }
+      ]
+    },
+    {
+      "nodeName": "gatePasses",
+      "description": "A confident fine passes. The outcome tells a pass from a failed judge call, which both end in the question.",
+      "input": "",
+      "expectedOutput": "{\"outcome\":\"passed\",\"verdict\":\"fine\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "fine", "confidence": 0.95, "probabilities": { "fine": 0.95, "useSimplerCommands": 0.03, "tooLongToReview": 0.02 } } } }
+      ]
+    },
+    {
+      "nodeName": "gateUnavailable",
+      "description": "A judge call that fails (here, no mock) is unavailable and refuses nothing.",
+      "input": "",
+      "expectedOutput": "{\"outcome\":\"unavailable\",\"verdict\":\"fine\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "gateDoubtful",
+      "description": "A refusal below the confidence threshold passes, so the line is asked.",
+      "input": "",
+      "expectedOutput": "{\"outcome\":\"passed\",\"verdict\":\"useSimplerCommands\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "useSimplerCommands", "confidence": 0.6, "probabilities": { "fine": 0.3, "useSimplerCommands": 0.6, "tooLongToReview": 0.1 } } } }
+      ]
+    },
+    {
+      "nodeName": "gateNoConfidence",
+      "description": "An answer with no confidence refuses nothing.",
+      "input": "",
+      "expectedOutput": "{\"outcome\":\"passed\",\"verdict\":\"fine\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "useSimplerCommands", "probabilities": { "fine": 0.03, "useSimplerCommands": 0.95, "tooLongToReview": 0.02 } } } }
+      ]
+    },
+    {
+      "nodeName": "gateSkipsOnAnAlwaysRule",
+      "description": "A rule for this command in this folder, the rule an always-approve answer saves, decides the question, so the judge is not asked. There is no mock, so a judge call would read unavailable.",
+      "input": "",
+      "expectedOutput": "{\"outcome\":\"skipped\",\"verdict\":\"fine\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "gateMatchesOrigin",
+      "description": "A rule that names the origin decides the check, so the check carries the origin the raise carries.",
+      "input": "",
+      "expectedOutput": "{\"outcome\":\"skipped\",\"verdict\":\"fine\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "gateMatchesJobWording",
+      "description": "The check builds a job's question with its background wording: a rule on that wording decides the job's question and not the foreground one.",
+      "input": "",
+      "expectedOutput": "{\"job\":\"skipped\",\"foreground\":\"passed\"}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "fine", "confidence": 0.95, "probabilities": { "fine": 0.95, "useSimplerCommands": 0.03, "tooLongToReview": 0.02 } } } }
+      ]
+    },
+    {
+      "nodeName": "ruleDecidesBeforeTheJudge",
+      "description": "Through safeBash: a rule that decides the question keeps the judge out, though its mock would refuse. The rule's rejection comes back, not the judge's message.",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "useSimplerCommands", "confidence": 0.95, "probabilities": { "fine": 0.03, "useSimplerCommands": 0.95, "tooLongToReview": 0.02 } } } }
+      ]
+    },
+    {
+      "nodeName": "jobLineIsJudged",
+      "description": "A line that is broad only as a job is judged. The refusal raises nothing and starts no job.",
+      "input": "",
+      "expectedOutput": "[true,[],0]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "tooLongToReview", "confidence": 0.95, "probabilities": { "fine": 0.03, "useSimplerCommands": 0.02, "tooLongToReview": 0.95 } } } }
+      ]
+    },
+    {
+      "nodeName": "resumeDoesNotJudgeAgain",
+      "description": "After the question is approved and the run resumes, the judge is not called again. The second mock refuses, so a second call would stop the line from running.",
+      "input": "",
+      "expectedOutput": "\"HI\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "interruptHandlers": [{ "action": "approve" }],
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "fine", "confidence": 0.95, "probabilities": { "fine": 0.95, "useSimplerCommands": 0.03, "tooLongToReview": 0.02 } } } },
+        { "decide": { "answer": { "type": "choice", "choice": "useSimplerCommands", "confidence": 0.95, "probabilities": { "fine": 0.03, "useSimplerCommands": 0.95, "tooLongToReview": 0.02 } } } }
+      ]
+    }
+  ]
+}

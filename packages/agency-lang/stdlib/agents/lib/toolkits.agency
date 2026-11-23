@@ -42,7 +42,7 @@ import {
  } from "std::github"
 import { fetchMarkdown } from "std::http"
 import { remember, recall } from "std::memory"
-import { safeBash, startJob } from "std::safeBash"
+import { safeBash, startJob, CommandJudge } from "std::safeBash"
 import { jobOutput, stopJob } from "std::jobs"
 import { ls, glob, grep, exec } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
@@ -157,15 +157,16 @@ export def shellTools(): any[] {
   """
   Return command execution tools for the agent's working directory.
   """
-  return [modelSafeBash(), exec.partial(useAgentCwd: true)]
+  return [modelSafeBash(null), exec.partial(useAgentCwd: true)]
 }
 
-// safeBash as every agent's model gets it. `exitIsFailure` is bound, so
-// the harness decides and the model never sees the argument: a command
-// that exits non-zero is a result to read (a failing test run, a grep with
-// no match), not a tool call that failed.
-def modelSafeBash(): any {
-  return safeBash.partial(exitIsFailure: false)
+// safeBash as every agent's model gets it. `exitIsFailure` and
+// `commandJudge` are bound, so the harness decides and the model never sees
+// either argument: a command that exits non-zero is a result to read (a
+// failing test run, a grep with no match), not a tool call that failed.
+// `commandJudge` is bound even when null, so the model cannot pick a judge.
+def modelSafeBash(commandJudge: CommandJudge | null): any {
+  return safeBash.partial(exitIsFailure: false, commandJudge: commandJudge)
 }
 
 // Measured against longer prompts in docs/dev/agents/coding-agent.md.
@@ -212,8 +213,8 @@ idempotent def readCapped(
 
 // safeBash under the name models know. `cwd` is bound to the agent's
 // working directory; a command that needs another folder starts with `cd`.
-def bashTool(): any {
-  return modelSafeBash().partial(cwd: "").rename("bash").describe(
+def bashTool(commandJudge: CommandJudge | null): any {
+  return modelSafeBash(commandJudge).partial(cwd: "").rename("bash").describe(
     "Run a bash command in the working directory. Returns stdout. When the command exits non-zero, returns stdout and stderr, then a last line `Command exited with code N`. Output is cut to its last 2000 lines or 50,000 characters; when it is cut, the full output is saved as a file, and the last line gives its path, which can be read like any file with read, tail, grep or any other command. A command still running after timeout seconds is stopped."
   )
 }
@@ -227,13 +228,15 @@ agent's working directory. There is no `ls`, `glob`, `grep`, or `exec`:
 `bash` does the listing, searching, and running, and every tool definition
 is sent with every request. An agent that uses this bundle tells the model
 so with `CODING_RULES`. */
-export def codingFileAndShellTools(): any[] {
+export def codingFileAndShellTools(commandJudge: CommandJudge | null = null): any[] {
   """
   Return the file and shell tools for a coding agent.
+
+  @param commandJudge - A decision model that may refuse a bash command too complex to review, or null for none
   """
   return [
     readCapped.rename("read"),
-    bashTool(),
+    bashTool(commandJudge),
     edit.partial(useAgentCwd: true),
     write.partial(useAgentCwd: true, mode: "overwrite"),
   ]
@@ -242,11 +245,13 @@ export def codingFileAndShellTools(): any[] {
 /** Start a shell command in the background, read its output, and stop it.
 Not part of `shellTools()`: an agent that exits when its turn ends would
 stop its jobs before they finish. */
-export def jobTools(): any[] {
+export def jobTools(commandJudge: CommandJudge | null = null): any[] {
   """
   Return the tools for running a shell command as a background job.
+
+  @param commandJudge - A decision model that may refuse a command too complex to review, or null for none
   """
-  return [startJob, jobOutput, stopJob]
+  return [startJob.partial(commandJudge: commandJudge), jobOutput, stopJob]
 }
 
 /** Add these when an agent enables `spillToolResultsOver` and has neither

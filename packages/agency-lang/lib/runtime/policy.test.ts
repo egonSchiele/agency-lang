@@ -1088,6 +1088,10 @@ describe("a reject rule and a value that is a glob", () => {
     expect(decide(policy, "x".repeat(70000))).toBe("approve");
   });
 
+  it("matches a value whose bracket holds a character class", () => {
+    expect(decide(holed("reject", "secrets.json"), "[[:alpha:]]ecrets.json")).toBe("reject");
+  });
+
   it("reads a value of any length as a glob", () => {
     const longBracket = "*.jso[" + "n".repeat(70000) + "]";
     expect(decide(holed("reject", "secrets.json"), longBracket)).toBe("reject");

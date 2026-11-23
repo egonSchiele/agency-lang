@@ -23,6 +23,14 @@ describe("bashGlobMayName", () => {
     expect(bashGlobMayName("\\*.json", "a.json")).toBe(false);
   });
 
+  it("finds a bracket's closing `]` past a character class inside it", () => {
+    expect(bashGlobMayName("[[:alpha:]]ecrets.json", "secrets.json")).toBe(true);
+    expect(bashGlobMayName("secret[[:alpha:]].json", "secrets.json")).toBe(true);
+    expect(bashGlobMayName("[[=s=]]ecrets.json", "secrets.json")).toBe(true);
+    expect(bashGlobMayName("[[.s.]]ecrets.json", "secrets.json")).toBe(true);
+    expect(bashGlobMayName("[[:alpha:]]x", "]x")).toBe(true);
+  });
+
   it("reads an unclosed bracket as a plain character", () => {
     expect(bashGlobMayName("a[b", "a[b")).toBe(true);
     expect(bashGlobMayName("a[b", "ab")).toBe(false);
@@ -55,6 +63,14 @@ describe("bashGlobMayName", () => {
   it("reads a value of any length", () => {
     expect(bashGlobMayName("*.jso[" + "n".repeat(70000) + "]", "secrets.json")).toBe(true);
     expect(bashGlobMayName("x".repeat(70000), "secrets.json")).toBe(false);
+  });
+
+  it("reads a long run of unclosed brackets in linear time", () => {
+    const opens = "[".repeat(1_000_000);
+    const started = Date.now();
+    expect(bashGlobMayName(opens, opens)).toBe(true);
+    expect(bashGlobMayName("[[:".repeat(300_000), "x")).toBe(false);
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 
   it("stays quick on a value built to make a matcher backtrack", () => {

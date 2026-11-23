@@ -20,9 +20,27 @@ type GlobToken =
  *  linear comparison of a megabyte-long command stays far below it. */
 const MAX_STEPS = 10_000_000;
 
+/** The characters that give a value a meaning beyond its own text. */
+const GLOB_CHARS = ["*", "?", "[", "\\"];
+
+/** The openers of what a bracket can hold besides plain characters:
+ *  `[:alpha:]`, `[=e=]`, and `[.a.]`. Each ends with its own character and
+ *  a `]`, and that `]` does not close the bracket. */
+const CLASS_KINDS = [":", "=", "."];
+
+/** What a scan of one part has already found missing, so no later `[`
+ *  searches for it again: a closing `]`, or the end of a class kind. Each
+ *  search goes to the end of the part, and repeating one for every `[`
+ *  would take time quadratic in the length of the value. */
+type BracketScan = { noClose: boolean; noClassEnd: Record<string, boolean> };
+
 /** Whether `glob`, expanded by bash 3.2, can name the path `name`. A
  *  comparison too long to finish counts as yes. */
 export function bashGlobMayName(glob: string, name: string): boolean {
+  // Most values hold no glob character, and such a value names only itself.
+  if (!GLOB_CHARS.some((char) => glob.includes(char))) {
+    return glob === name;
+  }
   // Bash splits a pattern at `/` before it expands it, and no wildcard
   // matches a `/`, so the two paths must have the same number of parts.
   const globParts = glob.split("/");
@@ -102,6 +120,7 @@ function inSet(token: { members: string; ranges: string[] }, char: string): bool
 
 function tokenize(pattern: string): GlobToken[] {
   const tokens: GlobToken[] = [];
+  const scan: BracketScan = { noClose: false, noClassEnd: {} };
   let index = 0;
   while (index < pattern.length) {
     const char = pattern[index];
@@ -115,7 +134,7 @@ function tokenize(pattern: string): GlobToken[] {
       tokens.push({ kind: "char", char: pattern[index + 1] });
       index += 2;
     } else if (char === "[") {
-      const bracket = readBracket(pattern, index);
+      const bracket = readBracket(pattern, index, scan);
       tokens.push(bracket.token);
       index = bracket.end;
     } else {
@@ -128,9 +147,13 @@ function tokenize(pattern: string): GlobToken[] {
 
 /* A bracket from `start`, which holds `[`. A `]` right after the `[`, or
  after `[!` or `[^`, is a member. A bracket with no closing `]` is a plain
- `[`. A character class such as `[:alpha:]` inside it matches any
- character, which names more than bash would: a reject rule matches more. */
-function readBracket(pattern: string, start: number): { token: GlobToken; end: number } {
+ `[`. A bracket holding a class such as `[:alpha:]` matches any character,
+ which names more than bash would: a reject rule matches more, not less. */
+function readBracket(
+  pattern: string,
+  start: number,
+  scan: BracketScan,
+): { token: GlobToken; end: number } {
   let index = start + 1;
   const negated = pattern[index] === "!" || pattern[index] === "^";
   if (negated) {
@@ -140,14 +163,15 @@ function readBracket(pattern: string, start: number): { token: GlobToken; end: n
   if (pattern[index] === "]") {
     index += 1;
   }
-  const close = pattern.indexOf("]", index);
-  if (close === -1) {
+  const found = findClose(pattern, index, scan);
+  if (found.close === -1) {
     return { token: { kind: "char", char: "[" }, end: start + 1 };
   }
-  const content = pattern.slice(contentStart, close);
-  if (content.includes("[:")) {
+  const close = found.close;
+  if (found.hasClass) {
     return { token: { kind: "anyClass" }, end: close + 1 };
   }
+  const content = pattern.slice(contentStart, close);
   let members = "";
   const ranges: string[] = [];
   let at = 0;
@@ -162,4 +186,39 @@ function readBracket(pattern: string, start: number): { token: GlobToken; end: n
     }
   }
   return { token: { kind: "set", members, ranges, negated }, end: close + 1 };
+}
+
+/* The `]` that closes a bracket whose members start at `from`, stepping
+ over each class inside it, so the `]` that ends `[:alpha:]` does not
+ close the bracket. -1 when there is none. */
+function findClose(
+  pattern: string,
+  from: number,
+  scan: BracketScan,
+): { close: number; hasClass: boolean } {
+  let hasClass = false;
+  if (scan.noClose) {
+    return { close: -1, hasClass };
+  }
+  let index = from;
+  while (index < pattern.length) {
+    const char = pattern[index];
+    if (char === "]") {
+      return { close: index, hasClass };
+    }
+    const kind = pattern[index + 1];
+    const opensClass = char === "[" && kind !== undefined && CLASS_KINDS.includes(kind);
+    if (opensClass && scan.noClassEnd[kind] !== true) {
+      const classEnd = pattern.indexOf(kind + "]", index + 2);
+      if (classEnd !== -1) {
+        hasClass = true;
+        index = classEnd + 2;
+        continue;
+      }
+      scan.noClassEnd[kind] = true;
+    }
+    index += 1;
+  }
+  scan.noClose = true;
+  return { close: -1, hasClass };
 }

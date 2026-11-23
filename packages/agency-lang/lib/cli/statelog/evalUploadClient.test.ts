@@ -3,7 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Annotation } from "@/runDirectory/annotations.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
-import { createEvalUploadClient, EVENTS_PER_REQUEST, EvalUploadError } from "./evalUploadClient.js";
+import {
+  createEvalUploadClient,
+  EVENTS_PER_REQUEST,
+  EvalUploadError,
+  MAX_REQUEST_BYTES,
+  requestChunks,
+  type SequencedEvent,
+} from "./evalUploadClient.js";
 import { statelogRequest, type StatelogFailure } from "./statelogRequest.js";
 
 vi.mock("./statelogRequest.js", () => ({ statelogRequest: vi.fn() }));
@@ -121,6 +128,42 @@ describe("postEvents", () => {
     const error = await failureOf(client().postEvents("t1", tooMany));
     expect(error.message).toMatch(/501 events.*limit is 500/);
     expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a request over the byte limit before any transport", async () => {
+    const third = Math.ceil(MAX_REQUEST_BYTES / 3);
+    const tooBig = [0, 1, 2].map((index) => ({
+      sequence: index,
+      envelope: { ...envelope(index), data: { type: "tick", pad: "x".repeat(third) } },
+    }));
+    const error = await failureOf(client().postEvents("t1", tooBig));
+    expect(error.message).toMatch(/MiB.*limit is 4\.0 MiB/);
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("requestChunks", () => {
+  const padded = (sequence: number, padChars: number): SequencedEvent => ({
+    sequence,
+    envelope: { ...envelope(sequence), data: { type: "tick", pad: "x".repeat(padChars) } },
+  });
+  const sizes = (chunks: SequencedEvent[][]): number[] => chunks.map((chunk) => chunk.length);
+
+  it("closes a request before it would pass the byte limit", () => {
+    const events = [0, 1, 2, 3, 4].map((n) => padded(n, 1500));
+    expect(sizes(requestChunks(events, { maxEvents: 500, maxBytes: 4000 }))).toEqual([2, 2, 1]);
+  });
+
+  it("still caps a request by event count", () => {
+    const events = [0, 1, 2, 3, 4].map((n) => padded(n, 10));
+    expect(sizes(requestChunks(events, { maxEvents: 2, maxBytes: 1_000_000 }))).toEqual([2, 2, 1]);
+  });
+
+  it("refuses an event larger than the byte limit, naming it", () => {
+    const events = [padded(0, 100), padded(1, 5000)];
+    expect(() => requestChunks(events, { maxEvents: 500, maxBytes: 4000 })).toThrow(
+      /event 1 is .* MiB, over the .* MiB request limit/,
+    );
   });
 });
 

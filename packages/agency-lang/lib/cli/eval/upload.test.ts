@@ -12,9 +12,8 @@ import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
 import type { Annotation } from "@/runDirectory/annotations.js";
 import { recordGradingPass } from "@/runDirectory/mutations.js";
 import { statelogLine, tempDir } from "@/runDirectory/testFixtures.js";
-import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
-import { eventPlan, evalUpload, formatUploadResult, requestChunks } from "./upload.js";
+import { eventPlan, evalUpload, formatUploadResult } from "./upload.js";
 
 const target = { origin: "https://h", projectSlug: "proj", apiKey: "k" };
 
@@ -44,15 +43,16 @@ function fakeClient(
   return { client, posted, annotations };
 }
 
-/** A run directory whose trace has `count` events and names its agent. */
-function bigRun(count: number, agentName: string = "agency-agent/simple"): string {
+/** A run directory whose trace has `count` events and names its agent.
+ *  `padChars` makes every event after the first two that much larger. */
+function bigRun(count: number, agentName: string = "agency-agent/simple", padChars = 0): string {
   const dir = tempDir("upload-");
   const lines = [
     statelogLine("big", "agentStart", { entryNode: "main", args: {} }),
     statelogLine("big", "agentName", { name: agentName }),
   ];
   while (lines.length < count) {
-    lines.push(statelogLine("big", "tick", { n: lines.length }));
+    lines.push(statelogLine("big", "tick", { n: lines.length, pad: "x".repeat(padChars) }));
   }
   fs.writeFileSync(path.join(dir, "statelog.jsonl"), lines.join("\n") + "\n");
   return dir;
@@ -119,6 +119,28 @@ describe("evalUpload", () => {
     const result = await evalUpload([dir], target, { client });
     expect(result.runs[0]).toMatchObject({ status: "resumed", from: 7, events: 3 });
     expect(posted[0].events.map((event) => event.sequence)).toEqual([7, 8, 9]);
+  });
+
+  it("resumes a bulk prefix in requests sized under the 4 MiB limit", async () => {
+    const dir = bigRun(6, "agency-agent/simple", 1_500_000);
+    const { client, posted } = fakeClient({
+      big: { kind: "bulk-prefix", eventCount: 2, nextSequence: 2 },
+    });
+    await evalUpload([dir], target, { client });
+    expect(posted.map((post) => post.events.length)).toEqual([2, 2]);
+    expect(posted.flatMap((post) => post.events.map((event) => event.sequence))).toEqual([
+      2, 3, 4, 5,
+    ]);
+  });
+
+  it("refuses a run with an event over the request limit before posting anything", async () => {
+    const dir = bigRun(3, "agency-agent/simple", 5_000_000);
+    const { client, posted, annotations } = fakeClient({});
+    const result = await evalUpload([dir], target, { client });
+    expect(result.runs[0]).toMatchObject({ status: "failed" });
+    expect(result.runs[0]).toHaveProperty("error", expect.stringMatching(/event 2 is 4\.8 MiB/));
+    expect(posted).toEqual([]);
+    expect(annotations).toEqual([]);
   });
 
   it("a run that never wrote a trace creates an empty trace, then posts its run and score rows", async () => {
@@ -309,35 +331,5 @@ describe("formatUploadResult", () => {
       "1 uploaded · 1 present · 1 resumed · 1 failed",
       "batch: https://h/projects/evals/batch?id=p&batch=b1",
     ]);
-  });
-});
-
-describe("requestChunks", () => {
-  const baseEnvelope: EventEnvelope = JSON.parse(statelogLine("t", "debug"));
-  const seq = (sequence: number, padChars: number): SequencedEvent => ({
-    sequence,
-    envelope: { ...baseEnvelope, data: { type: "debug", pad: "x".repeat(padChars) } },
-  });
-  const sizes = (chunks: SequencedEvent[][]): number[] => chunks.map((chunk) => chunk.length);
-
-  it("closes a chunk before it would pass the byte budget", () => {
-    const events = [0, 1, 2, 3, 4].map((n) => seq(n, 1500));
-    expect(sizes(requestChunks(events, { maxEvents: 500, maxBytes: 4000 }))).toEqual([2, 2, 1]);
-  });
-
-  it("puts an event larger than the budget in a chunk of its own", () => {
-    const events = [seq(0, 100), seq(1, 5000), seq(2, 100)];
-    expect(sizes(requestChunks(events, { maxEvents: 500, maxBytes: 4000 }))).toEqual([1, 1, 1]);
-  });
-
-  it("still caps a chunk by event count", () => {
-    const events = [0, 1, 2, 3, 4].map((n) => seq(n, 10));
-    expect(sizes(requestChunks(events, { maxEvents: 2, maxBytes: 1_000_000 }))).toEqual([2, 2, 1]);
-  });
-
-  it("keeps sequences in order and starts wherever the input starts (a resume)", () => {
-    const events = [3, 4, 5].map((n) => seq(n, 1500));
-    const chunks = requestChunks(events, { maxEvents: 500, maxBytes: 4000 });
-    expect(chunks.flat().map((event) => event.sequence)).toEqual([3, 4, 5]);
   });
 });

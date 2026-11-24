@@ -157,8 +157,8 @@ function countsOf(trialsPerTest: Record<string, number>): Record<number, string[
 
 function unknownExceptionsOf(trials: HarborTrial[]): string[] {
   const types = trials
-    .filter((trial) => isVoid(trial) && trial.exception !== null)
-    .map((trial) => trial.exception?.type ?? "")
+    .filter(isVoid)
+    .flatMap((trial) => (trial.exception === null ? [] : [trial.exception.type]))
     .filter((type) => !AGENT_FAULT.includes(type) && !KNOWN_VOID.includes(type));
-  return [...new Set(types)].sort();
+  return types.filter((type, index) => types.indexOf(type) === index).sort();
 }

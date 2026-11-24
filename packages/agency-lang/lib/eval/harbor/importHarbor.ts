@@ -119,8 +119,12 @@ function finishExisting({
   dir: string;
   existing: ExistingRun;
 }): ImportOutcome {
+  const { harborJob, harborTrial } = existing.row.flags;
+  if (harborJob === undefined || harborTrial === undefined) {
+    throw new Error(`${dir} already holds a run that wasn't imported from Harbor.`);
+  }
   const wanted = `${run.trial.jobName}/${run.trial.trialName}`;
-  const found = `${existing.row.flags.harborJob}/${existing.row.flags.harborTrial}`;
+  const found = `${harborJob}/${harborTrial}`;
   if (found !== wanted) {
     throw new Error(
       `${dir} holds Harbor trial ${found}, but this import puts ${wanted} there. ` +

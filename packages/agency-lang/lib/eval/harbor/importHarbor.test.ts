@@ -145,6 +145,38 @@ describe("importHarbor", () => {
     expect(summaryAt(runDir)).toMatchObject({ score: 1 });
   });
 
+  it("a folder holding a run not imported from Harbor fails, saying so", () => {
+    const root = tempDir("harbor-");
+    const jobDir = path.join(root, "job");
+    const trialDir = writeHarborTrial(jobDir, harborTrial({ name: "a__1" }));
+    const outDir = path.join(root, "out");
+    const runDir = path.join(outDir, "job", "astropy__astropy-12907", "1");
+    fs.mkdirSync(runDir, { recursive: true });
+    recordCompletedRun({
+      dir: runDir,
+      stagedStatelogFile: path.join(trialDir, "agent", "statelog.jsonl"),
+      run: {
+        traceId: "trace-a__1",
+        annotator: { kind: "harness", id: "eval-run@test" },
+        payload: {
+          kind: "run",
+          test: { id: "astropy__astropy-12907" },
+          suite: null,
+          ended: "ok",
+          flags: {},
+        },
+      },
+    });
+    const result = importHarbor({ jobDirs: [jobDir], outDir });
+    expect(result.outcomes).toEqual([
+      {
+        status: "failed",
+        path: runDir,
+        error: `${runDir} already holds a run that wasn't imported from Harbor.`,
+      },
+    ]);
+  });
+
   it("importing in a different order fails the moved runs, naming both", () => {
     const root = tempDir("harbor-");
     const first = path.join(root, "job1");

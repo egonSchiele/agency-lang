@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { RunSummary } from "@/runDirectory/list.js";
+import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
+import { summarizeRunDirectory, type RunSummary } from "@/runDirectory/list.js";
+import { readRunDirectory } from "@/runDirectory/runDir.js";
 
 import {
   batchStatistics,
@@ -47,7 +49,30 @@ function run(overrides: Overrides): RunSummary {
   };
 }
 
+function infrastructureRun(testId: string): RunSummary {
+  const dir = writeRunDirectory({
+    traceId: `silent-${testId}`,
+    test: { id: testId, input: "t" },
+    wroteStatelog: false,
+    ended: "infrastructure",
+    batch: "b1",
+    trial: 1,
+  });
+  const summary = summarizeRunDirectory(readRunDirectory(dir, { reportWarning: () => {} }));
+  if (summary === null) throw new Error("expected a run summary");
+  return summary;
+}
+
 describe("batchStatistics", () => {
+  it("an infrastructure run is left out of accuracy", () => {
+    const stats = batchStatistics([
+      run({ testId: "fib", score: 1 }),
+      run({ testId: "sum", score: 0 }),
+      infrastructureRun("max"),
+    ]);
+    expect(stats.accuracy).toBe(0.5);
+  });
+
   it("one trial: means, no standard error, totals", () => {
     const stats = batchStatistics([
       run({ testId: "fib", score: 1, costUsd: 2, durationMs: 100 }),

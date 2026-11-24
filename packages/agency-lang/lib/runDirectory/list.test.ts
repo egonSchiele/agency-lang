@@ -353,7 +353,7 @@ describe("summarizeEvalRun and summarizeRunDirectory", () => {
     ).toEqual(summary);
   });
 
-  it("score: the effective score for a run that ended ok, 0 for one that did not, null when ungraded", () => {
+  it("score: the effective score when graded, 0 for an ungraded run that did not end ok, null when ungraded", () => {
     const ok = writeRunDirectory({ test: { id: "a", input: "t" }, output: "x" });
     expect(summarizeRunDirectory(readRunDirectory(ok, quiet))).toMatchObject({
       latestScore: null,
@@ -387,7 +387,51 @@ describe("summarizeEvalRun and summarizeRunDirectory", () => {
     expect(summarizeRunDirectory(readRunDirectory(killed, quiet))).toMatchObject({
       status: "killed",
       latestScore: 0.75,
+      score: 0.75,
+    });
+  });
+
+  it("a timed-out run keeps the score it was given", () => {
+    const dir = writeRunDirectory({ test: { id: "a", input: "t" }, output: "x", ended: "timeout" });
+    recordGradingPass({
+      dir,
+      scores: [
+        {
+          traceId: "trace-1",
+          annotator: { kind: "grader", id: "g@1" },
+          name: "reward",
+          score: { kind: "binary", pass: true },
+          weight: 1,
+          mustPass: false,
+        },
+      ],
+    });
+    expect(summarizeRunDirectory(readRunDirectory(dir, quiet))).toMatchObject({
+      ended: "timeout",
+      score: 1,
+    });
+  });
+
+  it("an ungraded run that didn't end ok still scores 0", () => {
+    const dir = writeRunDirectory({ test: { id: "a", input: "t" }, output: "x", ended: "error" });
+    expect(summarizeRunDirectory(readRunDirectory(dir, quiet))).toMatchObject({
+      ended: "error",
+      latestScore: null,
       score: 0,
+    });
+  });
+
+  it("an infrastructure failure has no score", () => {
+    const dir = writeRunDirectory({
+      traceId: "silent-1",
+      test: { id: "a", input: "t" },
+      wroteStatelog: false,
+      ended: "infrastructure",
+    });
+    expect(summarizeRunDirectory(readRunDirectory(dir, quiet))).toMatchObject({
+      ended: "infrastructure",
+      status: "failed",
+      score: null,
     });
   });
 

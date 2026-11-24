@@ -1,6 +1,6 @@
 # Importing Harbor jobs as Agency run folders
 
-Linear: ADI-367 (this design) and ADI-372 (building it). ADI-370 adds two fields this relies on.
+Linear: ADI-367 (this design) and ADI-372 (building it). ADI-370 adds two fields this relies on. ADI-375 uses this to import the results we already have.
 
 ## Why
 
@@ -8,14 +8,15 @@ Most of our benchmark results come from Harbor (SWE-bench Verified, Terminal-Ben
 
 ## Goals
 
-- One command turns Harbor job folders into Agency run folders that `agency runs list` reads and `agency eval upload` sends to statelog.
+- One command converts the Harbor trials it's given into Agency run folders that `agency runs list` reads and `agency eval upload` sends to statelog.
 - A converted run can't be told apart from one written by `agency eval run`.
 - Running it again changes nothing.
 
 ## Non-goals
 
-- Trials with no Agency trace: other agents (Pi, OpenCode, mini, gold), and the July Terminal-Bench trials whose adapter saved only a text transcript. That's 694 of the 726 Terminal-Bench trials. Showing other agents is ADI-378.
-- Deciding which old jobs to trust. The command converts what it's given. ADI-375 picks the list, which leaves out the web-search-contaminated Agency runs before `fw-agency-minimal-path` and everything in `jobs-discarded/`.
+- **Deciding which attempts belong to a suite run (owner's decision).** One suite run is often spread over several jobs, with reruns of attempts that failed for infrastructure reasons. The command does not try to work out which attempt a rerun replaces. Whoever imports picks the trials by hand and passes them in; for old results that's ADI-375. The command only *reports* when tests end up with different numbers of attempts.
+- Deciding which old jobs to trust, for example the web-search-contaminated Agency runs before `fw-agency-minimal-path`, or `jobs-discarded/`. That's also ADI-375.
+- Other agents (Pi, OpenCode, mini, gold), and the July Terminal-Bench jobs whose adapter saved only a text transcript. ADI-378.
 
 ## Anti-goals
 
@@ -24,85 +25,113 @@ Most of our benchmark results come from Harbor (SWE-bench Verified, Terminal-Ben
 
 ## What exists today
 
-A Harbor job folder holds `config.json` (agents, model, datasets) and one folder per trial, named `<task>__<random suffix>`. A trial holds:
+A Harbor job folder holds `config.json` and one folder per trial, named `<task>__<random suffix>`. A trial holds:
 
-- `result.json`: `task_name` (e.g. `swe-bench/astropy__astropy-12907`), `source` (e.g. `swe-bench-verified`), `agent_info.model_info`, `verifier_result.rewards` (`{reward: 1.0}`, or null), `exception_info` (`{exception_type, exception_message}`, or null), and per-phase timestamps. `agent_result` (tokens, cost) is always null for Agency trials.
-- `verifier/reward.txt`, or `reward.json` for named rewards.
-- `agent/statelog.jsonl`, the Agency trace. It carries the model, agent name, cost and per-call token `usage`.
+- `result.json`: `task_name` (e.g. `swe-bench/astropy__astropy-12907`), `source` (e.g. `swe-bench-verified`), `verifier_result.rewards` (`{reward: 1.0}`, or null), `exception_info` (`{exception_type, exception_message}`, or null), and `started_at`. `agent_result` (tokens, cost) is always null for Agency trials.
+- `agent/statelog.jsonl`, the Agency trace, when the agent started. It carries the model, agent name, cost and per-call token `usage`.
 
-Across the 6,602 Agency trials: 6,385 ended normally with a reward, 124 hit `AgentTimeoutError` with a reward, and about 95 have no reward (`CancelledError` 33, `DaytonaError` 29, `VerifierTimeoutError` 11, `AgentTimeoutError` 7, `RewardFileNotFoundError` 5, others 10).
+**When the agent never started there's no trace.** For example, all 25 trace-less trials in `full-agency-6e9db1438-flash-high` are `NonZeroAgentExitCodeError` from the firewall setup script. Other trials with no reward are `CancelledError`, `DaytonaError`, `VerifierTimeoutError`, `RewardFileNotFoundError` (the verifier didn't write its result) and network errors.
 
-Reasoning level is recorded nowhere. The adapter reads `AGENCY_EFFORT` from the host's environment, and it appears only in job names like `flash-high`.
+**Agency scores every run that didn't end `ok` as 0** today (`lib/runDirectory/list.ts:184`), whatever its score rows say. That would count infrastructure failures against a model, and score a timeout that passed the verifier as 0.
+
+Reasoning level is recorded nowhere. The adapter reads `AGENCY_EFFORT` from the host's environment, and it shows only in job names like `flash-high`.
 
 ## Approaches
 
 1. **A TypeScript command in agency-lang** that writes through `recordCompletedRun` and `recordGradingPass`. **Chosen.**
-2. **A Python script beside `adapter.py`** that writes `annotations.jsonl` itself. Rejected: it would re-implement annotation ids, schema checks, locking and layout, so converted runs could drift from `eval run` output.
+2. **A Python script beside `adapter.py`** that writes `annotations.jsonl` itself. Rejected: it would re-implement annotation ids, schema checks, locking and layout.
 3. **Python calling `agency runs add`.** Rejected: `runs add` files runs under `<group>/<traceId>/`, not `<test>/<trial>/`, and can't mint `run` or `score` rows.
+
+The command once had a built-in rule for choosing which attempts to keep. It was replaced by picking trials by hand (see Non-goals), because the real jobs mix continuations, reruns and reruns that failed again, and no rule fit them simply.
 
 ## Design
 
 ### Command
 
-Hidden from `agency eval --help` (`{ hidden: true }`, like `remote` and `review`), because it's an internal benchmarking tool. It's documented in `docs/dev/` only.
-
 ```
-agency eval import-harbor <job folder>... --out <dir> [--batch <name>] [--reasoning <level>]
+agency eval import-harbor [<job folder>...] [--trials <file>] --out <dir> [--batch <name>] [--reasoning <level>]
 ```
 
-Output goes to `<out>/<batch>/<test>/<trial>/`, the layout `findRunDirectories` already walks. Uploading is then `agency eval upload <out>/<batch>`. Several job folders need `--batch`.
+- **Hidden** from `agency eval --help` (`{ hidden: true }`, like `remote` and `review`), because it's an internal benchmarking tool. It's documented in `docs/dev/` only.
+- **Input:** job folders, a `--trials` file, or both.
+  - A job folder means all of its trials, ordered by `started_at`, then trial folder name.
+  - A `--trials` file lists one trial folder path per line, in the order they should be numbered. Blank lines and `#` comments are ignored.
+- **Everything in one call becomes one batch.** With exactly one job folder and no `--trials`, the batch is the job's folder name. Otherwise `--batch` is required.
+- Output goes to `<out>/<batch>/<test>/<trial>/`, always with the trial folder, the layout `findRunDirectories` already walks. Uploading is then `agency eval upload <out>/<batch>`.
 
-### Batches and trials (owner's decisions)
+**Examples:**
+- `k1-agency-minimal` on its own is one job folder: batch `k1-agency-minimal`, trial 1 for each test.
+- `k1`…`k5` as five job folders with `--batch k-agency-minimal`: each test gets trials 1–5 in job order.
+- `flash-high` plus its reruns uses `--trials flash-high.txt --batch flash-high`. The file lists the 500 trial folders chosen by hand: the main job's attempts, except the ones replaced by a rerun in `-rest2` or `-fixup`.
 
-- **By default, one job is one batch**, and the batch id is the job folder's name. Unlike `eval run`, there's no random suffix, so a re-import keeps the same id.
-- **`--batch <name>` merges several jobs into one batch.** This is for attempts that were run as separate jobs, like `k1-agency-minimal`…`k5-agency-minimal`.
-- **Trial numbers:** within a job, each task's trials are numbered 1…k by `started_at`. With several jobs, numbering continues across them in the order given on the command line.
+### Trial numbers
+
+Each test's trials are numbered 1, 2, 3… in input order. Job folders come in argument order, then the `--trials` lines.
+
+The command doesn't check that the selection makes sense. It does report when tests have different numbers of trials, for example `5 trials: 498 tests; 4 trials: 2 tests (astropy-13033, django-10097)`, because Agency's batch statistics then give the batch no accuracy.
+
+### How a trial is scored (owner's decision: rule C)
+
+- **No trace (the agent never started):** an infrastructure failure. `ended: "infrastructure"`, no score.
+- **A reward:** that's the score, even after a timeout.
+- **A trace, no reward, and an agent-fault exception** (`AgentTimeoutError`, `NonZeroAgentExitCodeError`): one binary score of 0.
+- **A trace, no reward, and anything else** (`DaytonaError`, `CancelledError`, `VerifierTimeoutError`, `RewardFileNotFoundError`, `NetworkConnectionError`, or an unknown type): an infrastructure failure. `ended: "infrastructure"`, no score. Unknown types are named in the output.
 
 ### One trial becomes one run folder
 
 | Harbor | Run folder |
 |---|---|
-| `agent/statelog.jsonl` | `statelog.jsonl` (`stagedStatelogFile`). Model, agent name, cost, tokens and runtime all come from the trace. That also sidesteps Harbor's wrong timings at high concurrency. |
-| `task_name` minus its `<source>/` prefix | `run.test = { id }` |
+| `agent/statelog.jsonl` | `statelog.jsonl` (`stagedStatelogFile`). Model, agent name, cost, tokens and runtime all come from it. |
+| no trace | a silent run: a `run` row only. Its `traceId` is `harbor-` + the first 24 hex characters of sha256 of `<job folder name>/<trial name>`, so it's the same on every import. |
+| `task_name` minus its `<source>/` prefix | `run.test = { id }`. An id containing `/` or `..` is refused. |
 | `source` | `run.benchmark` (new field, ADI-370) |
 | `--reasoning` | `run.reasoning` (new field, ADI-370). Absent when the flag isn't given. |
-| the job | `run.batch` and `run.trial` (above) |
-| `exception_info` | `run.ended`, plus `run.error` set to `<exception_type>: <exception_message>` |
-| Harbor job folder name and trial name | `run.flags = { harborJob, harborTrial }`, so a run can be traced back. Names, not paths, so a run's id doesn't depend on where the job lives and no local paths reach statelog. |
-| `verifier_result.rewards` | one `score` row per reward (below) |
+| the batch, and the trial's number | `run.batch`, `run.trial` |
+| how it ended | `run.ended`: `infrastructure` (above), otherwise `ok` (no exception), `timeout` (`AgentTimeoutError`), `killed` (`CancelledError` with a reward), or `error`. Plus `run.error` as `<exception_type>: <exception_message>`. |
+| job folder name and trial name | `run.flags = { harborJob, harborTrial }`. Names, not paths, so a run's id doesn't depend on where the job lives and no local paths reach statelog. |
+| `verifier_result.rewards` | one `score` row per reward |
 
 `run.suite` is null, because there's no Agency suite. The `run` row's annotator is `{ kind: "harness", id: "harbor-import@<agency version>" }`.
 
-**How a run ended:** no exception means `ok`. `AgentTimeoutError` means `timeout`. `CancelledError` means `killed`. Any other exception means `error`.
+**Scores:** each reward becomes a `score` row from `{ kind: "grader", id: "harbor-verifier:<source>" }`, named after the reward key, with `weight: 1` and `mustPass: false`. A reward of exactly 0 or 1 is binary; anything else is a scalar. All of a trial's rewards are one grading pass, written after `recordCompletedRun`. A silent run can't have score rows, because `recordGradingPass` needs the trace. That's fine, because silent runs are infrastructure failures.
 
-**Scores:** each reward becomes a `score` row from `{ kind: "grader", id: "harbor-verifier:<source>" }`, named after the reward key (`reward` for `reward.txt`), with `weight: 1` and `mustPass: false`. A reward of exactly 0 or 1 is binary (`pass`); anything else is a scalar. All of a trial's rewards are one grading pass. `recordGradingPass` requires the trace to be in the folder first, so scores are written after `recordCompletedRun`.
+### Change to Agency's run summary
 
-**No reward (owner's decision, rule C).** Agency's batch accuracy skips runs with no score.
-- **The agent was at fault** (`AgentTimeoutError`, `RewardFileNotFoundError`, `NonZeroAgentExitCodeError`): write one binary score of 0, so the failure counts.
-- **The infrastructure was at fault** (`DaytonaError`, `CancelledError`, `VerifierTimeoutError`, `NetworkConnectionError`, and any type not listed here): write no score. The run still shows with how it ended and Harbor's message. Unknown types are named in the command's output, so the list can be extended.
+`RunOutcome` gains `"infrastructure"`. In `summarizeRunDirectory`:
 
-### Skipping and re-running
+```ts
+score: ended === "ok" ? effectiveScore
+     : ended === "infrastructure" ? null
+     : (effectiveScore ?? 0),
+```
 
-- A trial with no `agent/statelog.jsonl` is skipped and counted in the output.
-- A trial whose run folder already has its `run` row and a complete grading pass is skipped. If a run folder has the `run` row but no pass, for example because an earlier import was cut off between the two writes, only the pass is added. Re-imports are therefore safe at any point.
-- The output ends with one line of counts: imported, already present, skipped with no trace, and unscored because of infrastructure, plus any unknown exception types.
+So a run that didn't end `ok` keeps the score it was given, an ungraded one is still 0, and an infrastructure failure is left out of accuracy. `eval run` is unaffected, because `gradeRun.ts:349` only grades `ok` runs and never writes `infrastructure`. Statelog validates uploaded annotations against agency-lang's schema, so it needs the agency-lang release with this change before imported runs are uploaded.
+
+### Re-running
+
+- A run folder that already has its `run` row is checked against the plan.
+  - If its `flags.harborJob` and `flags.harborTrial` differ from the planned trial, that's a failure naming both. That happens when the input changed order, or a trial was added or removed.
+  - If they match and it has a complete grading pass (`effectiveAnnotations[traceId].gradingPasses > 0`), or needs no scores, it's left alone.
+  - If they match but the pass is missing (an earlier import was cut off between the two writes), only the pass is added.
+- The output ends with one counts line (imported, already present, scored, infrastructure, failed), the uneven-trials report, and any unknown exception types. A failure, or a trial with a missing or broken `result.json`, sets exit code 1.
 
 ### Reading Harbor's files
 
-Harbor publishes no schema for `result.json`. The command reads only the fields in the table above, through one zod schema in one file. A trial that doesn't match is reported with the field that failed and the trial's path, and skipped. The rest of the job still converts.
+Harbor publishes no schema for `result.json`. The command reads only the fields above, through one zod schema in one file. A trial that doesn't match is reported with the field that failed and the trial's path, and skipped.
 
 ### Reasoning level
 
 - **Past jobs:** `--reasoning <level>` sets it for every trial in the import. Without the flag it's left blank.
-- **Future runs:** ADI-370 records the effort in the trace itself, so new runs don't need the flag.
-- If both are present, the flag wins, because it's what the owner said about that import.
+- **Future runs:** ADI-370 records the effort in the trace itself.
+- If both are present, the flag wins.
 
 ## Left to the builder
 
-- Where the command lives under `lib/cli/eval/`, and how it splits into a pure planner (trials → run drafts) and a thin writer.
-- Fixtures: small copied trials for a normal pass, a timeout with a reward, an infrastructure failure, an agent-fault failure with no reward, a missing trace, and a `result.json` with a missing field.
+- How the code under `lib/eval/harbor/` splits into a reader, a pure planner and a writer.
+- Fixtures: small copied trials for each case above.
 - How progress is printed while a 500-trial job converts.
 
 ## Depends on
 
-ADI-370 must land first: the `benchmark` and `reasoning` fields on the `run` row, `RunSummary`, and statelog.
+- ADI-370: the `benchmark` and `reasoning` fields on the `run` row, `RunSummary`, and statelog.
+- Statelog moving to the agency-lang release that adds `"infrastructure"`, before any imported run is uploaded.

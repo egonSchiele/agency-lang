@@ -206,6 +206,16 @@ describe("readHarborTrial", () => {
     });
   });
 
+  it("an empty statelog counts as no trace", () => {
+    const dir = writeHarborTrial(
+      tempDir("harbor-"),
+      trial({ name: "t", statelogLines: undefined }),
+    );
+    fs.mkdirSync(path.join(dir, "agent"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "agent", "statelog.jsonl"), "");
+    expect(readHarborTrial(dir)).toMatchObject({ ok: true, trial: { statelogPath: null } });
+  });
+
   it("statelogPath is null when the agent never started", () => {
     const dir = writeHarborTrial(
       tempDir("harbor-"),

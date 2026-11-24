@@ -175,6 +175,45 @@ describe("importHarbor", () => {
     expect(result.outcomes.map((outcome) => outcome.status)).toEqual(["failed", "imported"]);
   });
 
+  it("a silent trial planned into a folder holding another trial's trace fails and keeps the trace", () => {
+    const root = tempDir("harbor-");
+    const jobDir = path.join(root, "job");
+    writeHarborTrial(
+      jobDir,
+      harborTrial({ name: "a__1", rewards: null, statelogLines: undefined }),
+    );
+    const outDir = path.join(root, "out");
+    const runDir = path.join(outDir, "job", "astropy__astropy-12907", "1");
+    fs.mkdirSync(runDir, { recursive: true });
+    const statelog = path.join(runDir, "statelog.jsonl");
+    fs.writeFileSync(statelog, traceLines("other").join("\n") + "\n");
+    const before = fs.readFileSync(statelog, "utf8");
+    const result = importHarbor({ jobDirs: [jobDir], outDir });
+    expect(result.outcomes).toEqual([expect.objectContaining({ status: "failed" })]);
+    expect(fs.readFileSync(statelog, "utf8")).toBe(before);
+  });
+
+  it.each(["../x", "a/b", "", "."])("refuses --batch %j", (batch) => {
+    const root = tempDir("harbor-");
+    expect(() => importHarbor({ jobDirs: [root], outDir: root, batch })).toThrow(
+      "import-harbor: --batch must be one plain folder name",
+    );
+  });
+
+  it("reports progress once per trial", () => {
+    const root = tempDir("harbor-");
+    const jobDir = path.join(root, "job");
+    writeHarborTrial(jobDir, harborTrial({ name: "a__1" }));
+    writeHarborTrial(jobDir, harborTrial({ name: "b__1", taskName: "swe-bench/b" }));
+    const lines: string[] = [];
+    importHarbor({
+      jobDirs: [jobDir],
+      outDir: path.join(root, "out"),
+      reportProgress: (line) => lines.push(line),
+    });
+    expect(lines).toEqual(["[1/2] imported astropy__astropy-12907/1", "[2/2] imported b/1"]);
+  });
+
   it("--batch is required for several job folders or a trials file", () => {
     const root = tempDir("harbor-");
     const trialsFile = path.join(root, "trials.txt");

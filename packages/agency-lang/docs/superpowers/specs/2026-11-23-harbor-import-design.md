@@ -124,7 +124,7 @@ Harbor publishes no schema for `result.json`. The command reads only the fields 
 
 - **Past jobs:** `--reasoning <level>` sets it for every trial in the import. Without the flag it's left blank.
 - **Future runs:** ADI-370 records the effort in the trace itself.
-- If both are present, the flag wins.
+- If both are present, the trace wins: `--reasoning` only fills in calls whose trace records no level (ADI-370's rule in `modelUsage.ts`).
 
 ## Left to the builder
 

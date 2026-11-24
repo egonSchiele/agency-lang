@@ -198,7 +198,9 @@ function trialOf({
       exception === null
         ? null
         : { type: exception.exception_type, message: exception.exception_message },
-    statelogPath: fs.existsSync(statelogPath) ? statelogPath : null,
+    // An empty statelog means the agent never logged anything: no trace.
+    statelogPath:
+      fs.existsSync(statelogPath) && fs.statSync(statelogPath).size > 0 ? statelogPath : null,
   };
 }
 
@@ -212,8 +214,8 @@ function problemAt(problemPath: string, reason: string): ReadTrialResult {
   return { ok: false, problem: { path: problemPath, reason } };
 }
 
-/** A test id becomes a folder under the batch, so it must be one plain name. */
-function isSafeFolderName(testId: string): boolean {
+/** A test id or batch name becomes a folder, so it must be one plain name. */
+export function isSafeFolderName(testId: string): boolean {
   return testId !== "" && testId !== "." && !testId.includes("/") && !testId.includes("..");
 }
 

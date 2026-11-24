@@ -8,7 +8,7 @@ import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { readTracesOrThrow } from "@/runDirectory/traces.js";
 
 import { planHarborImport, type ImportPlan, type PlannedRun } from "./planImport.js";
-import { readHarborInputs, type HarborProblem } from "./readTrials.js";
+import { isSafeFolderName, readHarborInputs, type HarborProblem } from "./readTrials.js";
 
 export type ImportOutcome =
   | { status: "imported" | "present" | "scored"; dir: string }
@@ -33,20 +33,25 @@ export function importHarbor({
   outDir,
   batch,
   reasoning,
+  reportProgress = (): void => {},
 }: {
   jobDirs: string[];
   trialsFile?: string;
   outDir: string;
   batch?: string;
   reasoning?: string;
+  /** Called once per trial, as `[n/total] <status> <test>/<trial>`. */
+  reportProgress?: (line: string) => void;
 }): ImportResult {
   const batchName = batchNameOf({ jobDirs, trialsFile, batch });
   const { trials, problems } = readHarborInputs({ jobDirs, trialsFile });
   const plan = planHarborImport({ trials, batch: batchName, reasoning });
   const uploadPath = path.join(outDir, batchName);
-  const outcomes = plan.runs.map((run) =>
-    writeRun({ run, dir: path.join(uploadPath, run.relativeDir) }),
-  );
+  const outcomes = plan.runs.map((run, index) => {
+    const outcome = writeRun({ run, dir: path.join(uploadPath, run.relativeDir) });
+    reportProgress(`[${index + 1}/${plan.runs.length}] ${outcome.status} ${run.relativeDir}`);
+    return outcome;
+  });
   return { plan, outcomes, problems, uploadPath };
 }
 
@@ -60,6 +65,9 @@ function batchNameOf({
   batch?: string;
 }): string {
   if (batch !== undefined) {
+    if (!isSafeFolderName(batch)) {
+      throw new Error("import-harbor: --batch must be one plain folder name");
+    }
     return batch;
   }
   if (jobDirs.length === 1 && trialsFile === undefined) {
@@ -133,7 +141,8 @@ function writeRunRow({ run, dir }: { run: PlannedRun; dir: string }): string {
   if (run.trial.statelogPath === null) {
     // Discovery recognizes a run folder by its statelog, as `eval run`
     // writes for a run that never started (runSuite.ts).
-    fs.writeFileSync(runDirPaths(dir).statelog, "");
+    // Append mode: never empties a statelog an earlier, cut-off import left.
+    fs.writeFileSync(runDirPaths(dir).statelog, "", { flag: "a" });
   }
   recordCompletedRun({
     dir,

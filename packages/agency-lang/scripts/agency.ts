@@ -1394,6 +1394,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
             outDir: opts.out,
             batch: opts.batch,
             reasoning: opts.reasoning,
+            reportProgress: (line) => console.log(line),
           });
         } catch (error) {
           console.error(error instanceof Error ? error.message : String(error));

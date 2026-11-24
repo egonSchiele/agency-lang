@@ -44,6 +44,7 @@ const TRACKING_NAMES = [
   "batchUsage",
   "AnnotationSchema",
   "annotationId",
+  "TraceDigestSchema",
   "agentNameProblem",
   "AGENT_NAME_PATTERN",
   "AGENT_NAME_MAX_LENGTH",
@@ -58,6 +59,7 @@ import type {
   BatchUsage,
   ModelUsage,
   Annotation,
+  TraceDigest,
 } from "./public.js";
 type _TrackingTypesAreContract = [
   EvalRunInput,
@@ -67,6 +69,7 @@ type _TrackingTypesAreContract = [
   BatchUsage,
   ModelUsage,
   Annotation,
+  TraceDigest,
 ];
 
 describe("agency-lang/eval tracking contract", () => {
@@ -77,7 +80,13 @@ describe("agency-lang/eval tracking contract", () => {
   });
 
   it("does not export the run directory internals a consumer could rebuild a snapshot from", () => {
-    for (const name of ["readRunDirectory", "readTraces", "tracesFromText", "foldAnnotations"]) {
+    for (const name of [
+      "readRunDirectory",
+      "readTraces",
+      "tracesFromText",
+      "foldAnnotations",
+      "digestTrace",
+    ]) {
       expect(evalApi, `leaked internal: ${name}`).not.toHaveProperty(name);
     }
   });

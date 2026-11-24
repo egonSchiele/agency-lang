@@ -11,6 +11,7 @@ import type { Annotation } from "@/runDirectory/annotations.js";
 import { findRunDirectories, uniqueRunDirectories } from "@/runDirectory/findRuns.js";
 import { summarizeRunDirectory, type RunSummary } from "@/runDirectory/list.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
+import { digestTrace } from "@/runDirectory/traceDigest.js";
 import { mapInParallel } from "@/utils/parallelMap.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
@@ -18,13 +19,16 @@ import type { EventEnvelope } from "@/statelog/wireTypes.js";
  * `agency eval upload`: send finished run directories, with their grades, to
  * the linked statelog project. Per run: ask the server what it already holds
  * for the trace, send only what is safe (all of it, the missing tail of an
- * earlier bulk upload, or nothing), then upsert every annotation row. A run
+ * earlier bulk upload, or nothing), then upsert every annotation row. With
+ * `resultsOnly`, a run's trace digest goes up in place of its events. A run
  * that fails never stops the next one. Statelog dedupes per trace, so running
  * this twice is harmless.
  */
 export type EvalUploadTarget = { origin: string; projectSlug: string; apiKey: string };
 
-export type EvalUploadDependencies = {
+export type EvalUploadOptions = {
+  /** Send each run's trace digest instead of its events. */
+  resultsOnly?: boolean;
   client?: EvalUploadClient;
   reportWarning?: (message: string) => void;
   /** Called with one formatted line as each run finishes. */
@@ -49,6 +53,7 @@ export type UploadRunOutcome =
       events: number;
       annotations: number;
     }
+  | { dir: string; traceId: string; status: "results-only"; annotations: number }
   | { dir: string; traceId: string | null; status: "failed"; error: string };
 
 export type EvalUploadResult = {
@@ -63,18 +68,23 @@ const UPLOAD_PARALLELISM = 6;
 export async function evalUpload(
   targets: string[],
   target: EvalUploadTarget,
-  dependencies: EvalUploadDependencies = {},
+  options: EvalUploadOptions = {},
 ): Promise<EvalUploadResult> {
   const client =
-    dependencies.client ?? createEvalUploadClient(target.origin, target.projectSlug, target.apiKey);
-  const reportWarning = dependencies.reportWarning ?? ((message) => console.warn(message));
+    options.client ?? createEvalUploadClient(target.origin, target.projectSlug, target.apiKey);
+  const reportWarning = options.reportWarning ?? ((message) => console.warn(message));
   const dirs = uniqueRunDirectories(findRunDirectories(targets));
   // Runs are independent traces, so they upload through a bounded pool —
   // unbounded, a 69-run group is hundreds of concurrent requests and the
   // host sheds them with 429s. Results keep input order.
   const records = await mapInParallel(dirs, UPLOAD_PARALLELISM, async (dir) => {
-    const record = await uploadRun(dir, client, reportWarning);
-    dependencies.reportProgress?.(formatRunLine(record.outcome));
+    const record = await uploadRun({
+      dir,
+      client,
+      reportWarning,
+      resultsOnly: options.resultsOnly ?? false,
+    });
+    options.reportProgress?.(formatRunLine(record.outcome));
     return record;
   });
   return { runs: records.map((record) => record.outcome), batchUrl: batchUrlFor(records, target) };
@@ -124,26 +134,88 @@ export function eventPlan(state: RemoteTraceState, fileEvents: number): EventPla
   }
 }
 
-async function uploadRun(
-  dir: string,
-  client: EvalUploadClient,
-  reportWarning: (message: string) => void,
-): Promise<RunRecord> {
-  let summary: RunSummary | null;
-  let events: readonly EventEnvelope[];
-  let rows: Annotation[];
+/** What a results-only upload does, given what the server holds. A
+ *  results-only trace reads as `empty` (it has no events), so a rerun puts
+ *  the digest again; the server refuses a digest for a trace with events. */
+export type DigestPlan = { kind: "put-digest" } | { kind: "refuse"; reason: string };
+
+export function digestPlan(state: RemoteTraceState): DigestPlan {
+  switch (state.kind) {
+    case "missing":
+    case "empty":
+      return { kind: "put-digest" };
+    case "live":
+    case "bulk-prefix":
+    case "invalid":
+      return { kind: "refuse", reason: "already uploaded with its trace" };
+  }
+}
+
+/** One run directory, read for upload. */
+type LocalRun = {
+  dir: string;
+  summary: RunSummary;
+  events: readonly EventEnvelope[];
+  rows: Annotation[];
+};
+
+function readLocalRun(dir: string, reportWarning: (message: string) => void): LocalRun | RunRecord {
   try {
     const snapshot = readRunDirectory(dir, { reportWarning });
-    summary = summarizeRunDirectory(snapshot);
+    const summary = summarizeRunDirectory(snapshot);
     if (summary === null) {
       return failed(dir, null, null, "not a run: the directory has no trace and no run row");
     }
     const traceId = summary.traceId;
-    events = snapshot.traces.find((trace) => trace.traceId === traceId)?.events ?? [];
-    rows = snapshot.annotationRows.filter((row) => row.traceId === traceId);
+    return {
+      dir,
+      summary,
+      events: snapshot.traces.find((trace) => trace.traceId === traceId)?.events ?? [],
+      rows: snapshot.annotationRows.filter((row) => row.traceId === traceId),
+    };
   } catch (error) {
     return failed(dir, null, null, messageOf(error));
   }
+}
+
+async function uploadRun({
+  dir,
+  client,
+  reportWarning,
+  resultsOnly,
+}: {
+  dir: string;
+  client: EvalUploadClient;
+  reportWarning: (message: string) => void;
+  resultsOnly: boolean;
+}): Promise<RunRecord> {
+  const run = readLocalRun(dir, reportWarning);
+  if ("outcome" in run) {
+    return run;
+  }
+  return resultsOnly ? uploadDigest(run, client) : uploadEvents(run, client);
+}
+
+async function uploadDigest(run: LocalRun, client: EvalUploadClient): Promise<RunRecord> {
+  const { dir, summary, events, rows } = run;
+  const traceId = summary.traceId;
+  try {
+    const plan = digestPlan(await client.traceUploadState(traceId));
+    if (plan.kind === "refuse") {
+      return failed(dir, traceId, summary, plan.reason);
+    }
+    await client.putDigest(traceId, digestTrace({ events, source: dir }));
+    if (rows.length > 0) {
+      await client.postAnnotations(rows);
+    }
+    return { summary, outcome: { dir, traceId, status: "results-only", annotations: rows.length } };
+  } catch (error) {
+    return failed(dir, traceId, summary, messageOf(error));
+  }
+}
+
+async function uploadEvents(run: LocalRun, client: EvalUploadClient): Promise<RunRecord> {
+  const { dir, summary, events, rows } = run;
   const traceId = summary.traceId;
   try {
     const plan = eventPlan(await client.traceUploadState(traceId), events.length);
@@ -251,10 +323,18 @@ export function formatRunLine(run: UploadRunOutcome, cwd: string = process.cwd()
 }
 
 /** The closing lines: a count line, and the batch page when there is one. */
+const SUMMARY_COUNTS: { status: UploadRunOutcome["status"]; label: string }[] = [
+  { status: "uploaded", label: "uploaded" },
+  { status: "results-only", label: "uploaded results only" },
+  { status: "present", label: "present" },
+  { status: "resumed", label: "resumed" },
+  { status: "failed", label: "failed" },
+];
+
 export function formatUploadSummary(result: EvalUploadResult): string[] {
-  const counts = ["uploaded", "present", "resumed", "failed"].flatMap((status) => {
+  const counts = SUMMARY_COUNTS.flatMap(({ status, label }) => {
     const count = result.runs.filter((run) => run.status === status).length;
-    return count === 0 ? [] : [`${count} ${status}`];
+    return count === 0 ? [] : [`${count} ${label}`];
   });
   const lines = [counts.join(" · ")];
   if (result.batchUrl !== null) {
@@ -275,6 +355,8 @@ function describeOutcome(run: UploadRunOutcome): string {
   switch (run.status) {
     case "uploaded":
       return `uploaded ${run.events} events, ${run.annotations} annotations`;
+    case "results-only":
+      return `uploaded results only, ${run.annotations} annotations`;
     case "present":
       return `already present (${run.serverEvents} events); ${run.annotations} annotations upserted`;
     case "resumed":

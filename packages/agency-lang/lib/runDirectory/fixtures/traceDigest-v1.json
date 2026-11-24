@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "eventCount": 42,
+  "input": "Fix the failing date parser test.",
+  "agentName": "coder",
+  "startedAtMs": 1787443200000,
+  "lastEventAt": "2026-08-23T00:01:30.000Z",
+  "durationMs": 90000,
+  "llmCalls": 3,
+  "toolCalls": 5,
+  "traceEnding": "ok",
+  "codeHash": "abc123",
+  "models": [
+    {
+      "name": "jev",
+      "reasoning": null,
+      "calls": 1,
+      "inputTokens": 10,
+      "cachedInputTokens": 20,
+      "cacheCreationInputTokens": 1,
+      "outputTokens": 3,
+      "costUsd": 0.125
+    },
+    {
+      "name": "opus",
+      "reasoning": "high",
+      "calls": 2,
+      "inputTokens": 150,
+      "cachedInputTokens": 300,
+      "cacheCreationInputTokens": 2,
+      "outputTokens": 6,
+      "costUsd": 0.75
+    }
+  ]
+}

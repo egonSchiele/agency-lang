@@ -20,7 +20,7 @@ export type StatelogFailure =
   | { kind: "envelope-error"; status: number; serverError?: string };
 
 export type StatelogRequestOptions = {
-  method: "GET" | "POST" | "PATCH" | "DELETE";
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** Families build their own URLs; the core receives a finished one. */
   url: string;
   apiKey: string;

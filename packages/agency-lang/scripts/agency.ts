@@ -1355,11 +1355,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Upload finished runs and their grades to the statelog project in agency.json (log.host, log.projectId)",
     )
     .argument("<paths...>", "Run directories, or directories of run directories")
-    .action(async (paths: string[]) => {
+    .option(
+      "--results-only",
+      "Send each run's results and usage totals without its trace (much smaller; the trace can't be viewed in statelog)",
+    )
+    .action(async (paths: string[], opts: { resultsOnly?: boolean }) => {
       // The project in agency.json is the only target: no host or key flags here,
       // agency.json and $STATELOG_API_KEY own that.
       const target = resolveProjectTarget(getConfigContext(), {});
       const result = await evalUpload(paths, target, {
+        resultsOnly: opts.resultsOnly ?? false,
         reportProgress: (line) => console.log(line),
       }).catch(failProjectCommand);
       for (const line of formatUploadSummary(result)) console.log(line);

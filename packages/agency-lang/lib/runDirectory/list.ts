@@ -1,29 +1,26 @@
-import { extractEvalRecord } from "@/eval/extract.js";
-import type { EvalRecord } from "@/eval/types.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
 import { foldAnnotations, type Annotation, type EffectiveTraceAnnotations } from "./annotations.js";
 import { benchmarkFromSuite } from "./benchmark.js";
-import { traceEnding } from "./evalRecord.js";
-import { modelUsageOf, type ModelUsage } from "./modelUsage.js";
+import { withFallbackReasoning, type ModelUsage } from "./modelUsage.js";
 import type { RunDirectorySnapshot } from "./runDir.js";
-import { traceInputText } from "./traceText.js";
+import { digestTrace, type TraceDigest } from "./traceDigest.js";
 
 /**
  * The canonical rows one run is made of, wherever they are stored: the
- * trace's events in order and every annotation row about it. Statelog hands
- * its database rows to `summarizeEvalRun` in this shape; a run directory is
- * adapted by `summarizeRunDirectory`. A run that died before its first event
- * has no events and still summarizes: its harness `run` row is the evidence.
+ * trace's events in order (or, for a results-only upload, their digest) and
+ * every annotation row about it. Statelog hands its database rows to
+ * `summarizeEvalRun` in this shape; a run directory is adapted by
+ * `summarizeRunDirectory`. A run that died before its first event has no
+ * events and still summarizes: its harness `run` row is the evidence.
  */
 export type EvalRunInput = {
   traceId: string;
-  events: readonly EventEnvelope[];
   annotations: readonly Annotation[];
   /** Diagnostic identity only (a file path, a database id); never read. */
   source: string;
   notes?: string | null;
-};
+} & ({ events: readonly EventEnvelope[] } | { digest: TraceDigest });
 
 /** `ok`: the harness saw a clean finish. `killed`: the harness cut the run
  *  short (timeout, cost cap, signal) after it had produced events. `failed`:
@@ -93,25 +90,33 @@ export type RunSummary = {
 /** Summarize one run from its canonical rows. Every event and annotation
  *  must belong to `input.traceId`: a mismatch is a caller bug, not data. */
 export function summarizeEvalRun(input: EvalRunInput): RunSummary {
-  const strayEvent = input.events.find((event) => event.trace_id !== input.traceId);
-  if (strayEvent !== undefined) {
-    throw new Error(
-      `summarizeEvalRun: run ${input.traceId} was given an event of trace ${strayEvent.trace_id}`,
-    );
-  }
   const strayRow = input.annotations.find((row) => row.traceId !== input.traceId);
   if (strayRow !== undefined) {
     throw new Error(
       `summarizeEvalRun: run ${input.traceId} was given an annotation of trace ${strayRow.traceId}`,
     );
   }
-  return summarizeOne({
+  return summarizeDigest({
     traceId: input.traceId,
-    events: input.events,
+    digest:
+      "digest" in input ? input.digest : checkedDigest(input.traceId, input.events, input.source),
     effective: foldAnnotations(input.annotations)[input.traceId],
-    source: input.source,
     hasNotes: hasText(input.notes ?? null),
   });
+}
+
+function checkedDigest(
+  traceId: string,
+  events: readonly EventEnvelope[],
+  source: string,
+): TraceDigest {
+  const strayEvent = events.find((event) => event.trace_id !== traceId);
+  if (strayEvent !== undefined) {
+    throw new Error(
+      `summarizeEvalRun: run ${traceId} was given an event of trace ${strayEvent.trace_id}`,
+    );
+  }
+  return digestTrace({ events, source });
 }
 
 /** The run a directory holds: its trace, or, when the run never wrote one,
@@ -120,11 +125,10 @@ export function summarizeRunDirectory(snapshot: RunDirectorySnapshot): RunSummar
   const hasNotes = hasText(snapshot.notes);
   const [trace] = snapshot.traces;
   if (trace !== undefined) {
-    return summarizeOne({
+    return summarizeDigest({
       traceId: trace.traceId,
-      events: trace.events,
+      digest: digestTrace({ events: trace.events, source: snapshot.dir }),
       effective: snapshot.effectiveAnnotations[trace.traceId],
-      source: snapshot.dir,
       hasNotes,
     });
   }
@@ -140,11 +144,10 @@ export function summarizeRunDirectory(snapshot: RunDirectorySnapshot): RunSummar
         `a run directory holds one run.`,
     );
   }
-  return summarizeOne({
+  return summarizeDigest({
     traceId: silentIds[0],
-    events: [],
+    digest: digestTrace({ events: [], source: snapshot.dir }),
     effective: snapshot.effectiveAnnotations[silentIds[0]],
-    source: snapshot.dir,
     hasNotes,
   });
 }
@@ -156,44 +159,37 @@ export function summarizeRuns(snapshot: RunDirectorySnapshot): RunSummary[] {
 
 type RunParts = {
   traceId: string;
-  events: readonly EventEnvelope[];
+  digest: TraceDigest;
   effective: EffectiveTraceAnnotations | undefined;
-  source: string;
   hasNotes: boolean;
 };
 
 const CUT_SHORT_ENDINGS = ["timeout", "cost-cap", "killed"];
 
-function summarizeOne(parts: RunParts): RunSummary {
+/** Every summary is built here, from the trace's digest and the
+ *  annotations, so a stored digest summarizes exactly like its events. */
+function summarizeDigest(parts: RunParts): RunSummary {
+  const { digest } = parts;
   const runRow = runRowOf(parts.effective);
-  const record: EvalRecord | null =
-    parts.events.length === 0 ? null : extractEvalRecord([...parts.events], parts.source);
-  const start = parts.events.find((event) => event.data.type === "agentStart");
-  const startedAtMs =
-    record !== null && Number.isFinite(record.startedAtMs) ? record.startedAtMs : null;
-  const lastEvent = parts.events.at(-1);
-  const ended = runRow !== null ? runRow.ended : traceEnding({ events: parts.events });
+  const ended = runRow !== null ? runRow.ended : digest.traceEnding;
   const effectiveScore = latestScore(parts.effective);
-  const models = modelUsageOf({
-    events: parts.events,
-    fallbackReasoning: runRow?.reasoning ?? null,
-  });
+  const models = withFallbackReasoning(digest.models, runRow?.reasoning ?? null);
   return {
     traceId: parts.traceId,
     testId: testIdOf(runRow),
-    input: record === null ? null : traceInputText({ events: parts.events }, record),
-    agentName: record?.agentName ?? null,
+    input: digest.input,
+    agentName: digest.agentName,
     agentLabel: agentLabelOf(runRow),
-    startedAt: startedAtMs === null ? null : new Date(startedAtMs).toISOString(),
-    startedAtMs,
-    endedAt: runRow?.createdAt ?? lastEvent?.data.timestamp ?? null,
-    durationMs: record?.durationMs ?? 0,
+    startedAt: digest.startedAtMs === null ? null : new Date(digest.startedAtMs).toISOString(),
+    startedAtMs: digest.startedAtMs,
+    endedAt: runRow?.createdAt ?? digest.lastEventAt,
+    durationMs: digest.durationMs,
     // Summed over `models`, not taken from the eval record, so the run's
     // cost is exactly the sum of its entries' costs.
     costUsd: sumOf(models, "costUsd"),
-    llmCalls: record?.metrics.llmCalls ?? 0,
-    toolCalls: record?.metrics.toolEnds ?? 0,
-    eventCount: parts.events.length,
+    llmCalls: digest.llmCalls,
+    toolCalls: digest.toolCalls,
+    eventCount: digest.eventCount,
     models,
     inputTokens: sumOf(models, "inputTokens"),
     cachedInputTokens: sumOf(models, "cachedInputTokens"),
@@ -201,15 +197,14 @@ function summarizeOne(parts: RunParts): RunSummary {
     outputTokens: sumOf(models, "outputTokens"),
     benchmark: runRow?.benchmark ?? benchmarkFromSuite(runRow?.suite?.source),
     ended,
-    status: statusOf(runRow, parts.events.length),
+    status: statusOf(runRow, digest.eventCount),
     latestScore: effectiveScore,
     score: scoreOf(ended, effectiveScore),
     gradingPasses: parts.effective?.gradingPasses ?? 0,
     gatesPassed: gatesPassed(parts.effective),
     hasNotes: parts.hasNotes,
     labeled: Object.keys(parts.effective?.checklists ?? {}).length > 0,
-    codeHash:
-      typeof start?.data.code?.closureHash === "string" ? start.data.code.closureHash : null,
+    codeHash: digest.codeHash,
     batch: runRow?.batch ?? null,
     trial: runRow?.trial ?? null,
     suiteSource: runRow?.suite?.source ?? null,

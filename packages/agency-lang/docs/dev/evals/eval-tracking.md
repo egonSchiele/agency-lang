@@ -79,7 +79,10 @@ reads their usage from `batchUsage` instead of summing anything itself.
 ## One summary derivation, including silent runs
 
 `summarizeRunDirectory(snapshot)` and `summarizeEvalRun(input)` share one
-private derivation in `lib/runDirectory/list.ts`. The rules:
+private derivation in `lib/runDirectory/list.ts`, `summarizeDigest`: every
+event-derived field comes from the trace's digest (`digestTrace` in
+`traceDigest.ts`, see "Results-only uploads"), combined with the
+annotations. The rules:
 
 - A run with no events still summarizes: zero cost, calls, duration, and
   models; its identity, outcome, batch, trial, and suite come from the
@@ -161,13 +164,45 @@ next one still uploads. Running the command twice is safe: events skip,
 annotations upsert.
 
 Runs upload through a bounded pool, and each one prints its line as it
-finishes (`reportProgress` in `EvalUploadDependencies`). The result names
+finishes (`reportProgress` in `EvalUploadOptions`). The result names
 the statelog batch page (`/projects/evals/batch?id=<slug>&batch=<batch>`)
 only when every uploaded run shares one batch id; statelog keys the page
 by project and batch alone.
 
 The client, `lib/cli/statelog/evalUploadClient.ts`, is the seventh sealed
 statelog client (`docs/dev/hosting/statelog-clients.md`).
+
+## Results-only uploads
+
+`agency eval upload --results-only` sends each run's **trace digest**
+(`PUT /api/projects/:slug/traces/:traceId/digest`) and its annotations, and
+no events. For SWE-bench runs that is about 2 KB per run instead of about
+3.7 MB. Statelog summarizes from the digest plus the annotations, so its
+eval pages show the same numbers; the trace itself can't be viewed.
+
+- **The digest** (`TraceDigest` in `lib/runDirectory/traceDigest.ts`) is
+  the event half of `RunSummary`: input, agent name, start and last-event
+  times, duration, call counts, event count, code hash, the trace's own
+  ending, and per-model usage. Reasoning stays null where the trace
+  recorded none; `withFallbackReasoning` applies the run row's level when
+  the digest meets the annotations. Every summary goes through the digest,
+  so a digest and its events can't disagree (`traceDigest.test.ts` checks
+  both ways on every fixture).
+- **Plan:** the pure `digestPlan(state)` puts the digest when the server
+  says `missing` or `empty` (a results-only trace reads as `empty`, so a
+  rerun just puts it again), and refuses `live`, `bulk-prefix` and
+  `invalid`. Statelog refuses the mixed cases too, in both directions,
+  with a failure envelope the client reports as a failed run.
+- **Versioning.** A stored digest can't be recomputed, because its events
+  were never uploaded. So `TraceDigestSchema` only grows: new fields are
+  optional, a non-additive change bumps `version`, and every past version
+  must still parse and summarize (the frozen
+  `fixtures/traceDigest-v1.json` checks this; never edit it). The schema is
+  `.strict()`, so a statelog older than the uploading CLI refuses a field
+  it doesn't know rather than dropping it. Statelog must run an
+  agency-lang at least as new as the CLI that uploads to it.
+
+Design: `docs/superpowers/specs/2026-11-24-results-only-upload-design.md`.
 
 ## Importing Harbor jobs
 
@@ -207,11 +242,12 @@ brain, so runs group per brain.
 `summarizeEvalRun` with `EvalRunInput`, `RunSummary`, `RunStatus`, `ModelUsage`;
 `batchStatistics`, `batchStatisticsByBatch`, `batchUsage` and their types;
 `AnnotationSchema`, `annotationId` and the annotation types;
+`TraceDigestSchema` and `TraceDigest`;
 `EventEnvelope`; `agentNameProblem`, `AGENT_NAME_PATTERN`,
 `AGENT_NAME_MAX_LENGTH`. They all live in `lib/eval/public.ts`, alongside
 the unchanged grader-authoring exports.
 `lib/eval/public.test.ts` also checks that the run directory reader, the
-trace parser, and the annotation fold are not exported.
+trace parser, the annotation fold, and `digestTrace` are not exported.
 
 ## What the statelog pull request must provide
 

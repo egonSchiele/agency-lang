@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
-import { modelUsageOf, sumModelUsage, type ModelUsage } from "./modelUsage.js";
+import {
+  modelUsageOf,
+  sumModelUsage,
+  withFallbackReasoning,
+  type ModelUsage,
+} from "./modelUsage.js";
 import { statelogLine } from "./testFixtures.js";
 
 function event(type: string, extra: Record<string, unknown> = {}): EventEnvelope {
@@ -75,7 +80,7 @@ const mixedRun = [
 
 describe("modelUsageOf", () => {
   it("one entry per model and level, summed", () => {
-    expect(modelUsageOf({ events: mixedRun, fallbackReasoning: null })).toEqual([
+    expect(modelUsageOf({ events: mixedRun })).toEqual([
       entry({ name: "jev", calls: 1, inputTokens: 30, outputTokens: 3, costUsd: 0.0625 }),
       entry({
         name: "opus",
@@ -99,7 +104,7 @@ describe("modelUsageOf", () => {
   });
 
   it("a call with no level takes the fallback", () => {
-    const usage = modelUsageOf({ events: mixedRun, fallbackReasoning: "high" });
+    const usage = withFallbackReasoning(modelUsageOf({ events: mixedRun }), "high");
     expect(usage.find((item) => item.name === "jev")?.reasoning).toBe("high");
     expect(usage.filter((item) => item.name === "opus").map((item) => item.reasoning)).toEqual([
       "high",
@@ -107,16 +112,31 @@ describe("modelUsageOf", () => {
     ]);
   });
 
+  it("the fallback merges an unleveled entry into the one with the same level", () => {
+    const unleveled = event("promptCompletion", {
+      model: JSON.stringify("opus"),
+      usage: { inputTokens: 1 },
+    });
+    const usage = withFallbackReasoning(modelUsageOf({ events: [...mixedRun, unleveled] }), "high");
+    expect(usage.filter((item) => item.name === "opus")).toEqual([
+      expect.objectContaining({ reasoning: "high", calls: 3, inputTokens: 301 }),
+      expect.objectContaining({ reasoning: "low", calls: 1 }),
+    ]);
+  });
+
+  it("with no fallback, entries are unchanged", () => {
+    const usage = modelUsageOf({ events: mixedRun });
+    expect(withFallbackReasoning(usage, null)).toEqual(usage);
+  });
+
   it("a call with no usage or cost counts as a call with zeros", () => {
     const cutOff = event("promptCompletion", { model: JSON.stringify("opus") });
-    expect(modelUsageOf({ events: [cutOff], fallbackReasoning: null })).toEqual([
-      entry({ name: "opus", calls: 1 }),
-    ]);
+    expect(modelUsageOf({ events: [cutOff] })).toEqual([entry({ name: "opus", calls: 1 })]);
   });
 
   it("an empty model name is counted as unknown", () => {
     const noModel = event("promptCompletion", { usage: { inputTokens: 7 } });
-    expect(modelUsageOf({ events: [noModel], fallbackReasoning: null })).toEqual([
+    expect(modelUsageOf({ events: [noModel] })).toEqual([
       entry({ name: "unknown", calls: 1, inputTokens: 7 }),
     ]);
   });
@@ -126,7 +146,7 @@ describe("modelUsageOf", () => {
       event("promptStart", { model: JSON.stringify("opus") }),
       event("toolCall", { model: JSON.stringify("opus"), toolName: "read" }),
     ];
-    expect(modelUsageOf({ events: others, fallbackReasoning: null })).toEqual([]);
+    expect(modelUsageOf({ events: others })).toEqual([]);
   });
 });
 

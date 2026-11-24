@@ -6,10 +6,20 @@ on:
     branches: [ "main" ]
     # Prose no code or test reads. docs/site and skills/ are not here:
     # make copies docs/site into the stdlib, and `agency skills` ships skills/.
+    # The structural lint reads packages/agency-lang/CLAUDE.md, and lint.yml
+    # has no path filter, so a docs-only PR still gets that check.
+    # browser.yml and test-with-llm.yml keep a copy of this list.
     paths-ignore: &docs-only
       - "packages/agency-lang/docs/dev/**"
       - "packages/agency-lang/docs/misc/**"
       - "packages/agency-lang/docs/superpowers/**"
+      - "packages/agency-lang/CLAUDE.md"
+      - "packages/agency-lang/AGENTS.md"
+      - "packages/agency-lang/README.md"
+      - "docs/**"
+      - "CLAUDE.md"
+      - "AGENTS.md"
+      - "README.md"
       - "**/CHANGELOG.md"
   pull_request:
     branches: [ "main" ]

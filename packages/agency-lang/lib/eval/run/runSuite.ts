@@ -1,6 +1,5 @@
 import * as fs from "fs";
 import * as path from "path";
-import { fileURLToPath } from "url";
 
 import { nanoid } from "nanoid";
 
@@ -22,6 +21,7 @@ import { recordedClosureHashes } from "@/runDirectory/attachCode.js";
 import { isRunDirectory } from "@/runDirectory/findRuns.js";
 import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { recordCompletedRun } from "@/runDirectory/mutations.js";
+import { harnessVersion } from "@/eval/harnessVersion.js";
 import { graderSourceForPath } from "@/eval/grading/graderSources.js";
 import { gradersIdentityOf, type GradersSnapshot } from "@/eval/grading/gradingModule.js";
 import { snapshotHarness, type HarnessSnapshot } from "@/eval/grading/harnessSnapshot.js";
@@ -658,22 +658,4 @@ function removeIfEmpty(dir: string): void {
   } catch {
     // not empty, or already gone — either is fine
   }
-}
-
-/** The harness's own version, for the `run` row's annotator id. */
-function harnessVersion(): string {
-  let dir = path.dirname(fileURLToPath(import.meta.url));
-  for (let index = 0; index < 5; index += 1) {
-    const candidate = path.join(dir, "package.json");
-    if (fs.existsSync(candidate)) {
-      try {
-        const parsed = JSON.parse(fs.readFileSync(candidate, "utf8")) as { version?: string };
-        return parsed.version ?? "unknown";
-      } catch {
-        return "unknown";
-      }
-    }
-    dir = path.dirname(dir);
-  }
-  return "unknown";
 }

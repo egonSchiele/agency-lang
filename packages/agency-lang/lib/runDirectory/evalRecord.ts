@@ -11,7 +11,8 @@ export function evalRecordFor(trace: Trace, sourcePath: string): EvalRecord {
   return extractEvalRecord(trace.events, sourcePath);
 }
 
-export type TraceEnding = "ok" | "error" | "unknown";
+export const TRACE_ENDINGS = ["ok", "error", "unknown"] as const;
+export type TraceEnding = (typeof TRACE_ENDINGS)[number];
 
 /** How a trace ended, read from its own events: an `agentEnd` carrying a
  *  result is a clean finish; a result-less `agentEnd` after a `runtimeError`

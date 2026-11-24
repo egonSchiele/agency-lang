@@ -7,7 +7,7 @@ import { extractEvalRecord } from "@/eval/extract.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 import { z } from "zod";
 
-import { traceEnding, type TraceEnding } from "./evalRecord.js";
+import { TRACE_ENDINGS, traceEnding, type TraceEnding } from "./evalRecord.js";
 import { modelUsageOf, ModelUsageSchema, type ModelUsage } from "./modelUsage.js";
 import { traceInputText } from "./traceText.js";
 
@@ -41,7 +41,7 @@ export const TraceDigestSchema = z
     durationMs: z.number().finite(),
     llmCalls: z.number().int().nonnegative(),
     toolCalls: z.number().int().nonnegative(),
-    traceEnding: z.enum(["ok", "error", "unknown"]),
+    traceEnding: z.enum(TRACE_ENDINGS),
     codeHash: z.string().nullable(),
     models: z.array(ModelUsageSchema),
   })

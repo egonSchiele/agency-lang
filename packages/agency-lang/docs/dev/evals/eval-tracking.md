@@ -169,6 +169,26 @@ by project and batch alone.
 The client, `lib/cli/statelog/evalUploadClient.ts`, is the seventh sealed
 statelog client (`docs/dev/hosting/statelog-clients.md`).
 
+## Importing Harbor jobs
+
+`agency eval import-harbor` (hidden from `--help`) converts Harbor trials into run folders that `runs list` reads and `eval upload` sends. The code is in `lib/eval/harbor/`: a reader, a pure planner, and a writer that goes through `recordCompletedRun` and `recordGradingPass`. Design: `docs/superpowers/specs/2026-11-23-harbor-import-design.md`.
+
+```
+agency eval import-harbor [<job folder>...] [--trials <file>] --out <dir> [--batch <name>] [--reasoning <level>]
+```
+
+- **Input:** job folders (every trial, by `started_at`), a `--trials` file (one trial folder per line, in order), or both. The command never picks or drops trials: choosing which reruns replace which attempts is done by hand, in the `--trials` file.
+- **One call is one batch.** With one job folder and no `--trials`, the batch is the folder's name; otherwise `--batch` is required. Each test's trials are numbered 1, 2, 3… in input order. Uneven trial counts are reported, because batch statistics then give no accuracy.
+- **Examples:**
+  - `k1-agency-minimal` alone is batch `k1-agency-minimal`, trial 1 per test;
+  - `k1`…`k5` with `--batch k-agency-minimal` give trials 1–5;
+  - `--trials flash-high.txt --batch flash-high` imports a hand-picked list.
+- **Scoring:**
+  - a reward is the score, even after a timeout;
+  - no reward with `AgentTimeoutError` or `NonZeroAgentExitCodeError` (and a trace) scores 0;
+  - anything else with no reward, and every trial with no trace, ends `void` with no score. A void trial with no trace is a silent run with an empty `statelog.jsonl`.
+- **Re-running is safe:** a folder holding the same Harbor trial (`flags.harborJob`/`harborTrial`) is left alone or only gets its scores, and a folder holding a different one fails. Only planned folders are checked, so re-importing a smaller selection needs `<out>/<batch>` deleted first.
+
 ## Agent names are labels
 
 `setAgentName` (`std::statelog`) names the agent a trace belongs to.

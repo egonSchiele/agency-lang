@@ -76,6 +76,8 @@ import { runEvalEdit } from "@/cli/eval/edit.js";
 import { runEvalNew } from "@/cli/eval/new.js";
 import { evalRun } from "@/cli/eval/run.js";
 import { evalUpload, formatUploadSummary } from "@/cli/eval/upload.js";
+import { formatImportSummary, hasErrors } from "@/eval/harbor/formatImport.js";
+import { importHarbor, type ImportResult } from "@/eval/harbor/importHarbor.js";
 import { ttyColor } from "@/utils/termcolors.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
 import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
@@ -1365,6 +1367,45 @@ export function createProgram(deps: CliDependencies = {}): Command {
         process.exitCode = 1;
       }
     });
+
+  evalCmd
+    .command("import-harbor", { hidden: true }) // internal benchmarking tool
+    .description("Convert Harbor trials into Agency run folders, one batch per call")
+    .argument("[jobs...]", "Harbor job folders: every trial in each")
+    .option("--trials <file>", "A file listing trial folders, one per line, in trial order")
+    .requiredOption("--out <dir>", "Where to write <out>/<batch>/<test>/<trial>/")
+    .option("--batch <name>", "Batch name; required unless importing one job folder")
+    .option("--reasoning <level>", "Reasoning level for traces that don't record one")
+    .action(
+      (
+        jobs: string[],
+        opts: { trials?: string; out: string; batch?: string; reasoning?: string },
+      ) => {
+        if (jobs.length === 0 && opts.trials === undefined) {
+          console.error("import-harbor: give job folders, --trials, or both");
+          process.exitCode = 2;
+          return;
+        }
+        let result: ImportResult;
+        try {
+          result = importHarbor({
+            jobDirs: jobs,
+            trialsFile: opts.trials,
+            outDir: opts.out,
+            batch: opts.batch,
+            reasoning: opts.reasoning,
+          });
+        } catch (error) {
+          console.error(error instanceof Error ? error.message : String(error));
+          process.exitCode = 2;
+          return;
+        }
+        for (const line of formatImportSummary(result)) console.log(line);
+        if (hasErrors(result)) {
+          process.exitCode = 1;
+        }
+      },
+    );
 
   addLabelCommand(evalCmd, labelCommandDependencies());
   addLabelCommand(program, labelCommandDependencies());

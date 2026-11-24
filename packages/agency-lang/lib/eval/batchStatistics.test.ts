@@ -49,12 +49,12 @@ function run(overrides: Overrides): RunSummary {
   };
 }
 
-function infrastructureRun(testId: string): RunSummary {
+function voidRun(testId: string): RunSummary {
   const dir = writeRunDirectory({
     traceId: `silent-${testId}`,
     test: { id: testId, input: "t" },
     wroteStatelog: false,
-    ended: "infrastructure",
+    ended: "void",
     batch: "b1",
     trial: 1,
   });
@@ -64,11 +64,11 @@ function infrastructureRun(testId: string): RunSummary {
 }
 
 describe("batchStatistics", () => {
-  it("an infrastructure run is left out of accuracy", () => {
+  it("a void run is left out of accuracy", () => {
     const stats = batchStatistics([
       run({ testId: "fib", score: 1 }),
       run({ testId: "sum", score: 0 }),
-      infrastructureRun("max"),
+      voidRun("max"),
     ]);
     expect(stats.accuracy).toBe(0.5);
   });

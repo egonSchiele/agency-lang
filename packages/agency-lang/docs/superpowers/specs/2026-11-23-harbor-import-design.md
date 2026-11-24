@@ -72,10 +72,10 @@ The command doesn't check that the selection makes sense. It does report when te
 
 ### How a trial is scored (owner's decision: rule C)
 
-- **No trace (the agent never started):** an infrastructure failure. `ended: "infrastructure"`, no score.
+- **No trace (the agent never started):** an infrastructure failure. `ended: "void"`, no score.
 - **A reward:** that's the score, even after a timeout.
 - **A trace, no reward, and an agent-fault exception** (`AgentTimeoutError`, `NonZeroAgentExitCodeError`): one binary score of 0.
-- **A trace, no reward, and anything else** (`DaytonaError`, `CancelledError`, `VerifierTimeoutError`, `RewardFileNotFoundError`, `NetworkConnectionError`, or an unknown type): an infrastructure failure. `ended: "infrastructure"`, no score. Unknown types are named in the output.
+- **A trace, no reward, and anything else** (`DaytonaError`, `CancelledError`, `VerifierTimeoutError`, `RewardFileNotFoundError`, `NetworkConnectionError`, or an unknown type): an infrastructure failure. `ended: "void"`, no score. Unknown types are named in the output.
 
 ### One trial becomes one run folder
 
@@ -87,7 +87,7 @@ The command doesn't check that the selection makes sense. It does report when te
 | `source` | `run.benchmark` (new field, ADI-370) |
 | `--reasoning` | `run.reasoning` (new field, ADI-370). Absent when the flag isn't given. |
 | the batch, and the trial's number | `run.batch`, `run.trial` |
-| how it ended | `run.ended`: `infrastructure` (above), otherwise `ok` (no exception), `timeout` (`AgentTimeoutError`), `killed` (`CancelledError` with a reward), or `error`. Plus `run.error` as `<exception_type>: <exception_message>`. |
+| how it ended | `run.ended`: `void` (above), otherwise `ok` (no exception), `timeout` (`AgentTimeoutError`), `killed` (`CancelledError` with a reward), or `error`. Plus `run.error` as `<exception_type>: <exception_message>`. |
 | job folder name and trial name | `run.flags = { harborJob, harborTrial }`. Names, not paths, so a run's id doesn't depend on where the job lives and no local paths reach statelog. |
 | `verifier_result.rewards` | one `score` row per reward |
 
@@ -97,15 +97,15 @@ The command doesn't check that the selection makes sense. It does report when te
 
 ### Change to Agency's run summary
 
-`RunOutcome` gains `"infrastructure"`. In `summarizeRunDirectory`:
+`RunOutcome` gains `"void"`: the run doesn't count, because it failed for reasons outside the agent, like a voided match. In `summarizeRunDirectory`:
 
 ```ts
 score: ended === "ok" ? effectiveScore
-     : ended === "infrastructure" ? null
+     : ended === "void" ? null
      : (effectiveScore ?? 0),
 ```
 
-So a run that didn't end `ok` keeps the score it was given, an ungraded one is still 0, and an infrastructure failure is left out of accuracy. `eval run` is unaffected, because `gradeRun.ts:349` only grades `ok` runs and never writes `infrastructure`. Statelog validates uploaded annotations against agency-lang's schema, so it needs the agency-lang release with this change before imported runs are uploaded.
+So a run that didn't end `ok` keeps the score it was given, an ungraded one is still 0, and an infrastructure failure is left out of accuracy. `eval run` is unaffected, because `gradeRun.ts:349` only grades `ok` runs and never writes `void`. Statelog validates uploaded annotations against agency-lang's schema, so it needs the agency-lang release with this change before imported runs are uploaded.
 
 ### Re-running
 
@@ -114,7 +114,7 @@ So a run that didn't end `ok` keeps the score it was given, an ungraded one is s
   - If they match and it has a complete grading pass (`effectiveAnnotations[traceId].gradingPasses > 0`), or needs no scores, it's left alone.
   - If they match but the pass is missing (an earlier import was cut off between the two writes), only the pass is added.
 - Only planned folders are checked. Re-importing a smaller selection leaves the dropped trials' folders behind, so delete `<out>/<batch>` first.
-- The output ends with one counts line (imported, already present, scored, infrastructure, failed), the uneven-trials report, and any unknown exception types. A failure, or a trial with a missing or broken `result.json`, sets exit code 1.
+- The output ends with one counts line (imported, already present, scored, void, failed), the uneven-trials report, and any unknown exception types. A failure, or a trial with a missing or broken `result.json`, sets exit code 1.
 
 ### Reading Harbor's files
 
@@ -135,4 +135,4 @@ Harbor publishes no schema for `result.json`. The command reads only the fields 
 ## Depends on
 
 - ADI-370: the `benchmark` and `reasoning` fields on the `run` row, `RunSummary`, and statelog.
-- Statelog moving to the agency-lang release that adds `"infrastructure"`, before any imported run is uploaded.
+- Statelog moving to the agency-lang release that adds `"void"`, before any imported run is uploaded.

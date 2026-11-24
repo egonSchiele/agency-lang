@@ -81,7 +81,7 @@ is `notes.md`):
 |---|---|---|
 | `checklist` | human | one sign-off: `checklist`, `version`, `hash`, `answers`, `note` |
 | `score` | grader / judge | one grader's verdict in one pass: `passId`, `passSize`, `name`, `score`, `weight`, `mustPass` |
-| `run` | harness | which `test`, which `suite`, how it `ended` (`ok`, `error`, `timeout`, `cost-cap`, `killed`, or `infrastructure`: the run failed for reasons outside the agent, such as a sandbox that never started), `flags` |
+| `run` | harness | which `test`, which `suite`, how it `ended` (`ok`, `error`, `timeout`, `cost-cap`, `killed`, or `void`: the run failed for reasons outside the agent, such as a sandbox that never started), `flags` |
 
 Rules:
 
@@ -197,7 +197,7 @@ policy refused an action, which a test may be checking for, so the run is a
 success and the graders get the rejection as the output.
 `summarizeRuns(snapshot)` (`list.ts`) is one `RunSummary` per trace for
 listings. Its `score` is the effective score when the run ended `ok`, null
-when it ended `infrastructure` (so accuracy leaves it out), and otherwise
+when it ended `void` (so accuracy leaves it out), and otherwise
 the effective score or 0 if ungraded. Its `hasNotes` is true when `notes.md`
 has non-blank text, and is the same for every trace the directory holds,
 because the note is about the run. `annotationSummaryText` renders the

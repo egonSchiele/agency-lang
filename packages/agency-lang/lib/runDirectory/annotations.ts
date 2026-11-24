@@ -85,7 +85,7 @@ export type HarnessRecord = {
   mustPass?: boolean;
 };
 
-export type RunOutcome = "ok" | "error" | "timeout" | "cost-cap" | "killed" | "infrastructure";
+export type RunOutcome = "ok" | "error" | "timeout" | "cost-cap" | "killed" | "void";
 
 /** The eval harness's own row for a trace it launched: which test, which
  *  suite, how the run ended, which flags. The one place harness knowledge
@@ -237,7 +237,7 @@ const RunAnnotationSchema = z
       .string()
       .regex(/^[0-9a-f]{64}$/)
       .optional(),
-    ended: z.enum(["ok", "error", "timeout", "cost-cap", "killed", "infrastructure"]),
+    ended: z.enum(["ok", "error", "timeout", "cost-cap", "killed", "void"]),
     flags: z.record(z.string(), JsonValueSchema),
     error: z.string().optional(),
     batch: z.string().min(1).optional(),

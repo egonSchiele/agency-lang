@@ -421,15 +421,15 @@ describe("summarizeEvalRun and summarizeRunDirectory", () => {
     });
   });
 
-  it("an infrastructure failure has no score", () => {
+  it("a void run has no score", () => {
     const dir = writeRunDirectory({
       traceId: "silent-1",
       test: { id: "a", input: "t" },
       wroteStatelog: false,
-      ended: "infrastructure",
+      ended: "void",
     });
     expect(summarizeRunDirectory(readRunDirectory(dir, quiet))).toMatchObject({
-      ended: "infrastructure",
+      ended: "void",
       status: "failed",
       score: null,
     });

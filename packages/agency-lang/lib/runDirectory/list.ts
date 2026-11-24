@@ -59,8 +59,8 @@ export type RunSummary = {
   status: RunStatus;
   /** The weighted mean of the effective scores on record; null with none. */
   latestScore: number | null;
-  /** What this run counts as in a mean: `latestScore`, except null for an
-   *  `infrastructure` failure and 0 for any other unfinished run with no score. */
+  /** What this run counts as in a mean: `latestScore`, except null for a
+   *  `void` run and 0 for any other unfinished run with no score. */
   score: number | null;
   /** Complete grading passes on this trace; `latestScore` is from the last. */
   gradingPasses: number;
@@ -194,13 +194,14 @@ function summarizeOne(parts: RunParts): RunSummary {
   };
 }
 
-/** An infrastructure failure says nothing about the agent; any other run
- *  that didn't end ok scores what it was given, or 0 if it was never graded. */
+/** A void run (the sandbox or grader broke) says nothing about the agent;
+ *  any other run that didn't end ok scores what it was given, or 0 if it
+ *  was never graded. */
 function scoreOf(ended: string, effectiveScore: number | null): number | null {
   if (ended === "ok") {
     return effectiveScore;
   }
-  if (ended === "infrastructure") {
+  if (ended === "void") {
     return null;
   }
   return effectiveScore ?? 0;

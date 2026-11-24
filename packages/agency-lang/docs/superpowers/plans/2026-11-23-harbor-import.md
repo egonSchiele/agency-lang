@@ -5,7 +5,7 @@
 **Goal:** `agency eval import-harbor [<job>...] [--trials <file>] --out <dir> [--batch] [--reasoning]` converts the Harbor trials it's given into one batch of Agency run folders (ADI-372). Choosing which trials belong in a suite run is done by hand, and is not part of this plan.
 
 **Architecture:**
-- First, Agency's run summary learns an `infrastructure` outcome, and stops scoring every run that didn't end `ok` as 0.
+- First, Agency's run summary learns an `void` outcome, and stops scoring every run that didn't end `ok` as 0.
 - Then three small modules under `lib/eval/harbor/`:
   - a reader that parses `result.json` through one zod schema, and expands job folders and `--trials` files into trials,
   - a pure planner that numbers trials in input order, scores each one and builds its `run` row,
@@ -27,10 +27,10 @@
   - `run` row: `{ kind: "harness", id: "harbor-import@<harnessVersion()>" }`.
   - Scores: `{ kind: "grader", id: "harbor-verifier:<benchmark>" }`.
 - **Scoring (spec, rule C):**
-  - No trace means infrastructure.
+  - No trace means void.
   - A reward means the reward is the score.
   - No reward plus an exception in `AGENT_FAULT = ["AgentTimeoutError", "NonZeroAgentExitCodeError"]` means a binary score of 0.
-  - Anything else with no reward means infrastructure.
+  - Anything else with no reward means void.
 - **Silent run `traceId`:** `"harbor-" + sha256(`${harborJob}/${harborTrial}`).slice(0, 24)`.
 - Work in a worktree off `origin/main`. Run `pnpm run typecheck` (it includes `tsconfig.tests.json`) before every commit. Run `make` once in a fresh worktree before grading or upload tests.
 
@@ -44,7 +44,7 @@
 
 ---
 
-### Task 1: Score runs that didn't end `ok` by what they were given, and add `infrastructure`
+### Task 1: Score runs that didn't end `ok` by what they were given, and add `void`
 
 **Files:**
 - Modify: `lib/runDirectory/annotations.ts:88` (`RunOutcome`) and `:240` (the `ended` enum)
@@ -53,20 +53,20 @@
 - Modify: `docs/dev/evals/run-directory.md` (the `run` row's `ended` values, and the score rule, in one line each)
 
 **Interfaces:**
-- Produces: `RunOutcome = "ok" | "error" | "timeout" | "cost-cap" | "killed" | "infrastructure"`. `RunSummary.score` is `effectiveScore` when `ended` is `ok`, `null` when it's `infrastructure`, and otherwise `effectiveScore ?? 0`.
+- Produces: `RunOutcome = "ok" | "error" | "timeout" | "cost-cap" | "killed" | "void"`. `RunSummary.score` is `effectiveScore` when `ended` is `ok`, `null` when it's `void`, and otherwise `effectiveScore ?? 0`.
 
 - [ ] **Step 1: Write the failing tests** in `list.test.ts`. Build run folders with `recordCompletedRun`, then `recordGradingPass`.
   - `"a timed-out run keeps the score it was given"`: `ended: "timeout"` with a binary pass gives `score: 1`.
   - `"an ungraded run that didn't end ok still scores 0"`: `ended: "error"` with no scores gives `score: 0`. This is unchanged behavior.
-  - `"an infrastructure failure has no score"`: `ended: "infrastructure"` gives `score: null`.
+  - `"a void run has no score"`: `ended: "void"` gives `score: null`.
 
-  In `batchStatistics.test.ts`: `"an infrastructure run is left out of accuracy"`. Runs scoring 1 and 0, plus one infrastructure run, give `accuracy: 0.5`.
-- [ ] **Step 2: Run** `pnpm exec vitest run lib/runDirectory/list.test.ts lib/eval/batchStatistics.test.ts`. Expected: the timeout test fails (0 instead of 1), and the infrastructure tests fail on the schema.
-- [ ] **Step 3: Implement.** Add `"infrastructure"` to the type and the zod enum, and change the `score` line to the spec's expression.
-- [ ] **Step 4: Run** the two files, `pnpm exec vitest run lib/runDirectory lib/eval lib/runsExplorer`, and `pnpm run typecheck`. Expected: all pass. If `typecheck` reports a non-exhaustive switch on `RunOutcome`, handle `infrastructure` like `error`.
+  In `batchStatistics.test.ts`: `"a void run is left out of accuracy"`. Runs scoring 1 and 0, plus one void run, give `accuracy: 0.5`.
+- [ ] **Step 2: Run** `pnpm exec vitest run lib/runDirectory/list.test.ts lib/eval/batchStatistics.test.ts`. Expected: the timeout test fails (0 instead of 1), and the void tests fail on the schema.
+- [ ] **Step 3: Implement.** Add `"void"` to the type and the zod enum, and change the `score` line to the spec's expression.
+- [ ] **Step 4: Run** the two files, `pnpm exec vitest run lib/runDirectory lib/eval lib/runsExplorer`, and `pnpm run typecheck`. Expected: all pass. If `typecheck` reports a non-exhaustive switch on `RunOutcome`, handle `void` like `error`.
 
-  `statusOf` (`list.ts`) and `runsExplorer/rows.ts` show an `infrastructure` run as `failed`. That's intended; leave both alone.
-- [ ] **Step 5: Update `run-directory.md`, then commit** with the message `Runs keep their given score when they don't end ok; add an infrastructure outcome`.
+  `statusOf` (`list.ts`) and `runsExplorer/rows.ts` show an `void` run as `failed`. That's intended; leave both alone.
+- [ ] **Step 5: Update `run-directory.md`, then commit** with the message `Runs keep their given score when they don't end ok; add a void outcome`.
 
 ### Task 2: Share `harnessVersion`
 
@@ -157,7 +157,7 @@
     trialCounts: Record<number, string[]>; // trials per test -> test ids
     unknownExceptions: string[];           // distinct, sorted
   };
-  export function isInfrastructure(trial: HarborTrial): boolean;
+  export function isVoid(trial: HarborTrial): boolean;
   export function scoresOf(trial: HarborTrial): PlannedScore[];
   export function endedOf(trial: HarborTrial): RunOutcome;
   export function planHarborImport({ trials, batch, reasoning }: {
@@ -169,7 +169,7 @@
 - `payload` is `{ kind: "run", test: { id }, suite: null, ended, error?, flags: { harborJob: jobName, harborTrial: trialName }, batch, trial, benchmark, reasoning? }`. `trial` is the test's 1-based position among its trials in input order.
 
 - [ ] **Step 1: Write the failing tests:**
-  - `isInfrastructure`:
+  - `isVoid`:
     - no trace gives `true`, even with `NonZeroAgentExitCodeError`;
     - a trace with a reward gives `false`, even with `AgentTimeoutError`;
     - a trace, no reward and `AgentTimeoutError` or `NonZeroAgentExitCodeError` gives `false`;
@@ -178,9 +178,9 @@
     - `{reward: 1}` gives a binary pass, `{reward: 0}` a binary fail, and `{reward: 0.5}` a scalar 0.5;
     - two keys give two scores;
     - an agent-fault trial with no reward gives one binary fail named `reward`;
-    - an infrastructure trial gives `[]`.
+    - a void trial gives `[]`.
   - `endedOf`:
-    - infrastructure gives `"infrastructure"`;
+    - a void trial gives `"void"`;
     - no exception gives `"ok"`;
     - `AgentTimeoutError` gives `"timeout"`;
     - `CancelledError` with a reward gives `"killed"`;
@@ -249,9 +249,9 @@
 **Interfaces:**
 - Produces: `export function formatImportSummary(result: ImportResult): string[]`. It returns:
   1. one line per `failed` outcome and per problem;
-  2. `<n> imported · <n> present · <n> scored · <n> infrastructure · <n> failed`;
+  2. `<n> imported · <n> present · <n> scored · <n> void · <n> failed`;
   3. when `trialCounts` has more than one key, `uneven trials: 5 trials: 498 tests; 4 trials: 2 tests (A, B)`. Tests are listed only for the smaller groups, at most 10 per group, then `…`;
-  4. `unknown exception types (counted as infrastructure): A, B` when there are any;
+  4. `unknown exception types (counted as void): A, B` when there are any;
   5. `upload with: agency eval upload <uploadPath>`.
 - `hasErrors(result: ImportResult): boolean` is true when there's any `failed` outcome or any problem.
 

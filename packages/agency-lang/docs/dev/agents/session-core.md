@@ -1,21 +1,28 @@
 # The session core
 
-The agent's conversation loop as a program any front-end can run. It
-exists so a session can move between front-ends: start one with
-`agency agent` in a terminal, carry on in an app.
+The agent's conversation loop as a program a front-end runs. It draws
+nothing and asks no one: a front-end starts it, answers its pause and its
+approvals, and listens to its events.
 
 `agency agent` runs every session on it, interactive and `-p` alike,
 through the session driver (`docs/dev/agents/session-driver.md`, "The
-terminal"). Perry runs it too.
+terminal"). It is the only front-end of this program. Perry runs a
+session program of its own, which started as a copy of this one and
+imports the agent's other modules (see "The agent's modules, from outside
+the package").
 
 Design: `docs/superpowers/specs/2026-11-18-shared-session-core-design.md`.
 
-## Why a session can cross
+## Which sessions a front-end can resume
 
 A saved session is a paused program. It can be resumed only by a process
 that has the same compiled code for every file with a frame on the saved
-stack (`docs/dev/runtime/checkpoint-code-fingerprints.md`). So every
-front-end runs one program and loads the same compiled files:
+stack (`docs/dev/runtime/checkpoint-code-fingerprints.md`). So two
+front-ends can continue each other's sessions only when both run one
+program and load the same compiled files. A front-end with a program of
+its own, as Perry has, cannot resume a session this program saved.
+
+The program is these files:
 
 - **`lib/agents/agency-agent/program.agency`** is the program. `main`
   sets the session up from the data it is given, then goes to the core

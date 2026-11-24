@@ -4,8 +4,9 @@ An interactive `agency agent` session is a run of the session program
 (`program.agency`, `docs/dev/agents/session-core.md`), driven through the
 session driver (`docs/dev/agents/session-driver.md`). The driver saves it
 at every pause once it has a turn, and a later run picks it up with
-`--continue` or `--resume`. Perry saves its sessions the same way, in the
-same folders, so either front-end can go on with a session the other
+`--continue` or `--resume`. Perry saves its sessions in the same file
+layout, in a folder of its own (`perry-sessions/`). It runs a session
+program of its own, so neither front-end can resume a session the other
 saved.
 
 An `--incognito` session has no record, so nothing is saved, and `/rename`

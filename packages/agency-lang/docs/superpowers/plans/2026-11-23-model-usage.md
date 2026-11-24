@@ -9,7 +9,7 @@
 - **Part A (agency-lang):**
   - the runtime logs `reasoningEffort` on each LLM call;
   - a small `modelUsage.ts` sums `promptCompletion` events into `ModelUsage[]`;
-  - a small `benchmark.ts` derives the benchmark from the suite source;
+  - a small `benchmark.ts` derives the benchmark from the suite source, shared with the runs explorer's suite column;
   - `RunSummary` replaces `models` with the usage list and gains `benchmark` and token totals;
   - `batchUsage` sums usage over a batch.
 - **Part B (statelog):**
@@ -25,11 +25,12 @@
 ## Global Constraints
 
 - `RunSummary.models` is **replaced** by `ModelUsage[]`. No second list of model names on `RunSummary`.
-- `ModelUsage = { name: string; reasoning: string | null; calls: number; inputTokens: number; cachedInputTokens: number; outputTokens: number; costUsd: number }`. One entry per (name, reasoning) pair, sorted by name, then reasoning, with `null` before any string.
+- `ModelUsage = { name: string; reasoning: string | null; calls: number; inputTokens: number; cachedInputTokens: number; cacheCreationInputTokens: number; outputTokens: number; costUsd: number }`. Token field names match `TokenUsage` (`lib/statelogClient.ts`). One entry per (name, reasoning) pair, sorted by name, then reasoning, with `null` before any string.
 - **Reasoning rule:** the call's `reasoningEffort`, else the `run` row's `reasoning`, else `null`.
 - **Benchmark rule:** the `run` row's `benchmark`, else the name derived from `suite.source` (spec's table), else `null`.
 - `eval run` writes no new `run` row fields. Only the Harbor import (ADI-372 part 2) will write `benchmark` and `reasoning`.
-- `cacheCreationInputTokens` is not summed.
+- One suite-name parser: `benchmarkFromSuite` (Task 2). The runs explorer's `suiteFromSource` builds on it.
+- `reasoningEffort` is logged on `promptCompletion` only, not on `promptStart`.
 - Statelog never sums or derives usage, tokens or benchmarks. It stores `RunSummary` and calls `batchUsage`.
 - **Part B starts only after Part A is released.** Locally, point statelog at the Part A build to develop. Its PR must pin the published version.
 - **agency-lang:** absolute imports with `@/`. Run `pnpm run typecheck` and `pnpm run fmt:ts:check` before each commit. Run `make` once in a fresh worktree.
@@ -56,42 +57,42 @@
 ### Task 1: Log `reasoningEffort` on each LLM call
 
 **Files:**
-- Modify: `lib/statelogClient.ts` (`promptStart` ~:553, `promptCompletion` ~:638)
-- Modify: `lib/runtime/promptEvents.ts` (`emitPromptStart`, `emitPromptCompletion`)
+- Modify: `lib/statelogClient.ts` (`promptCompletion` ~:638)
+- Modify: `lib/runtime/promptEvents.ts` (`emitPromptCompletion`)
 - Modify: `lib/runtime/promptRequest.ts` (~:253, pass `clientConfig` to `emitPromptCompletion`)
 - Modify: `lib/statelog/wireAccessors.ts` (add `reasoningEffortOf`)
-- Test: `lib/statelogClient.test.ts`, `lib/statelog/wireAccessors.test.ts`, `lib/runtime/prompt.reasoningEffort.test.ts` (new; set up like `prompt.toolRounds.test.ts`, spying on `ctx.statelogClient.promptStart` and `promptCompletion`)
+- Test: `lib/statelogClient.test.ts`, `lib/statelog/wireAccessors.test.ts`, `lib/runtime/prompt.reasoningEffort.test.ts` (new; set up like `prompt.toolRounds.test.ts`, spying on `ctx.statelogClient.promptCompletion`)
 
 **Interfaces:**
 - Produces:
-  - `promptStart` and `promptCompletion` accept `reasoningEffort?: string | null` and post it, normalized to `null` when absent.
+  - `promptCompletion` accepts `reasoningEffort?: string | null` and posts it, normalized to `null` when absent.
   - `emitPromptCompletion` takes `reasoningEffort: string | null`.
   - `export function reasoningEffortOf(ev: EventEnvelope): string | null`, which returns `ev.data.reasoningEffort` when it's a non-empty string, else `null`.
 
 - [ ] **Step 1: Write the failing tests:**
   - `statelogClient.test.ts`:
-    - `"promptStart and promptCompletion post reasoningEffort"`: `reasoningEffort: "high"` appears in both posted payloads.
+    - `"promptCompletion posts reasoningEffort"`: `reasoningEffort: "high"` appears in the posted payload.
     - `"reasoningEffort is null when absent"`.
   - `prompt.reasoningEffort.test.ts`:
-    - `"a call with reasoningEffort logs it on both events"`: run a prompt whose client config has `reasoningEffort: "high"`, and assert both spies received `reasoningEffort: "high"`.
+    - `"a call with reasoningEffort logs it on its completion"`: run a prompt whose client config has `reasoningEffort: "high"`, and assert the spy received `reasoningEffort: "high"`.
     - `"a call without one logs null"`.
   - `wireAccessors.test.ts`: `reasoningEffortOf` returns `"low"` for `data.reasoningEffort: "low"`, and `null` for a missing field, `null`, or `""`.
 - [ ] **Step 2: Run** `pnpm exec vitest run lib/statelogClient.test.ts lib/runtime/prompt.reasoningEffort.test.ts lib/statelog/wireAccessors.test.ts`. Expected: the new tests FAIL.
-- [ ] **Step 3: Implement.** `emitPromptStart` reads `clientConfig.reasoningEffort ?? null`. `promptRequest.ts` passes `clientConfig.reasoningEffort ?? null` to `emitPromptCompletion`.
+- [ ] **Step 3: Implement.** `promptRequest.ts` passes `clientConfig.reasoningEffort ?? null` to `emitPromptCompletion`.
 - [ ] **Step 4: Run** the same command, plus `pnpm exec vitest run lib/runtime lib/logsViewer` and `pnpm run typecheck`. Expected: PASS.
 - [ ] **Step 5: Commit** with the message `Log each LLM call's reasoningEffort`.
 
-### Task 2: Derive a benchmark name from a suite source
+### Task 2: One suite-name parser for benchmark and the explorer
 
 **Files:**
-- Create: `lib/runDirectory/benchmark.ts`
-- Test: `lib/runDirectory/benchmark.test.ts`
+- Create: `lib/runDirectory/benchmark.ts` (the shared part moved out of `lib/runsExplorer/suite.ts`: `looksLikeGitUrl`, the repo-name step of `gitSuite`, and `dataBasename`)
+- Modify: `lib/runsExplorer/suite.ts` (`suiteFromSource` calls `benchmarkFromSuite`, and keeps its own handling of `null`/`""`/`"unspecified"` → `—`, `inline:…` shown as is, the `@<ref>` suffix, and `clip`)
+- Test: `lib/runDirectory/benchmark.test.ts` (new), `lib/runsExplorer/suite.test.ts` (existing, must still pass unchanged)
 
 **Interfaces:**
-- Consumes: `parseSource(raw, baseDir)` from `lib/eval/sources.ts`, which returns `{ kind: "git"; url; subdir?; ref?; display }` or a local result.
-- Produces: `export function benchmarkFromSuite(source: string | null): string | null`.
+- Produces: `export function benchmarkFromSuite(source: string | null | undefined): string | null`. It returns `null` for `null`, `undefined`, `""`, `"unspecified"`, `"optimize"` and any `inline:` source. It never returns a `?ref` fragment.
 
-- [ ] **Step 1: Write the failing test** `"derives the benchmark from the suite source"` with `it.each` over the spec's table plus Review Focus 3:
+- [ ] **Step 1: Write the failing test** `"derives the benchmark from the suite source"`, with `it.each` over the spec's table plus Review Focus 3:
 
   | input | expected |
   |---|---|
@@ -102,11 +103,12 @@
   | `"github.com/acme/plan-suites?ref=abc123"` | `"plan-suites"` |
   | `"https://github.com/acme/plan-suites.git"` | `"plan-suites"` |
   | `"inline:--input"` | `null` |
+  | `"unspecified"` | `null` |
   | `null` | `null` |
 - [ ] **Step 2: Run** `pnpm exec vitest run lib/runDirectory/benchmark.test.ts`. Expected: FAIL, module not found.
-- [ ] **Step 3: Implement.** For a git source, use `path.posix.basename(subdir)` when there's a subdir, else the URL's last part without `.git`. For a local path, use `path.basename` with the extension dropped. The `baseDir` passed to `parseSource` doesn't matter here; use `"/"`.
-- [ ] **Step 4: Run it again, then `pnpm run typecheck`.** Expected: PASS.
-- [ ] **Step 5: Commit** with the message `Derive a benchmark name from a suite source`.
+- [ ] **Step 3: Move the shared code into `benchmark.ts`, and rebuild `suiteFromSource` on it.**
+- [ ] **Step 4: Run** `pnpm exec vitest run lib/runDirectory/benchmark.test.ts lib/runsExplorer` and `pnpm run typecheck`. Expected: PASS, with `suite.test.ts` unchanged.
+- [ ] **Step 5: Commit** with the message `One suite-name parser for the benchmark and the runs explorer`.
 
 ### Task 3: Sum a run's LLM usage by model and reasoning level
 
@@ -115,11 +117,12 @@
 - Test: `lib/runDirectory/modelUsage.test.ts`
 
 **Interfaces:**
-- Consumes: `modelOf`, `tokensIn`, `tokensCached`, `tokensOut`, `cost` and `reasoningEffortOf` (Task 1) from `lib/statelog/wireAccessors.ts`.
+- Consumes: `modelOf`, `tokensIn`, `tokensCached`, `tokensCacheWrite`, `tokensOut`, `cost` and `reasoningEffortOf` (Task 1) from `lib/statelog/wireAccessors.ts`.
 - Produces:
   ```ts
   export type ModelUsage = { name: string; reasoning: string | null; calls: number;
-    inputTokens: number; cachedInputTokens: number; outputTokens: number; costUsd: number };
+    inputTokens: number; cachedInputTokens: number; cacheCreationInputTokens: number;
+    outputTokens: number; costUsd: number };
   export function modelUsageOf({ events, fallbackReasoning }: {
     events: readonly EventEnvelope[]; fallbackReasoning: string | null }): ModelUsage[];
   export function sumModelUsage(lists: readonly ModelUsage[][]): ModelUsage[];
@@ -129,7 +132,7 @@
 - [ ] **Step 1: Write the failing tests** (events built with `statelogLine` from `lib/runDirectory/testFixtures.ts`):
   - `"one entry per model and level, summed"`:
     - two `opus` calls at `high`, one `opus` call at `low`, and one `jev` call with no level;
-    - this gives three entries, with `calls` 2, 1 and 1, and the token and cost sums.
+    - this gives three entries, with `calls` 2, 1 and 1, and the sums of all four token fields and cost.
   - `"a call with no level takes the fallback"`: `fallbackReasoning: "high"` turns the `jev` entry's `reasoning` into `"high"`.
   - `"a call with no usage or cost counts as a call with zeros"` (Review Focus 1).
   - `"an empty model name is counted as unknown"` (Review Focus 2).
@@ -155,7 +158,7 @@
 - Produces:
   - `RunSummary.models: ModelUsage[]`;
   - `RunSummary.benchmark: string | null`;
-  - `RunSummary.inputTokens`, `cachedInputTokens` and `outputTokens: number` (sums over `models`).
+  - `RunSummary.inputTokens`, `cachedInputTokens`, `cacheCreationInputTokens` and `outputTokens: number` (sums over `models`).
 
 - [ ] **Step 1: Write the failing tests:**
   - `annotations.test.ts`: `"a run row may carry benchmark and reasoning"` (a row with both parses), and `"an empty benchmark is refused"`.
@@ -184,7 +187,8 @@
 - Produces:
   ```ts
   export type BatchUsage = { benchmark: string | null; inputTokens: number;
-    cachedInputTokens: number; outputTokens: number; models: ModelUsage[] };
+    cachedInputTokens: number; cacheCreationInputTokens: number; outputTokens: number;
+    models: ModelUsage[] };
   export function batchUsage(runs: readonly RunSummary[]): BatchUsage;
   ```
 
@@ -199,7 +203,7 @@
 - [ ] **Step 4: Run** `pnpm exec vitest run lib/eval`, `pnpm run typecheck` and `pnpm run fmt:ts:check`. Expected: PASS.
 - [ ] **Step 5: Write the doc paragraph, then commit** with the message `batchUsage: a batch's tokens, models and benchmark`.
 
-**Part A done:** open the agency-lang PR. Once merged, the owner publishes a release. Part B pins that version.
+**Part A done:** open the agency-lang PR. Once merged, the owner publishes a release. Its `CHANGELOG.md` entry lists under **Breaking**: "`RunSummary.models` (from `agency-lang/eval`) is now a list of usage entries, one per model and reasoning level, instead of model names." Part B pins that version.
 
 ---
 
@@ -213,12 +217,12 @@ Paths are relative to the statelog repo root. Work in a statelog worktree off `o
 - Modify: `package.json` (`agency-lang` to the Part A release), then run `pnpm install`
 - Create: `db/migrations/<timestamp after the newest on origin/main>_trace_summary_usage.ts`:
   - `benchmark text`;
-  - `input_tokens`, `cached_input_tokens` and `output_tokens` (`bigint not null default 0`);
+  - `input_tokens`, `cached_input_tokens`, `cache_creation_input_tokens` and `output_tokens` (`bigint not null default 0`);
   - an index `trace_summaries_project_benchmark_idx` on `(project_id, benchmark)`;
   - a `down` that drops all of these.
-- Modify: `src/backend/db/types.ts` (`TraceSummaryTable`: the four columns. The token columns are typed like `total_cost`: `ColumnType<string, number, number>`. `models` holds `ModelUsage[]`.)
-- Modify: `src/backend/db/trace_summary.ts` (`toTraceSummaryRow` and the upsert's `doUpdateSet` include the four columns)
-- Modify: `src/backend/lib/evals/evalQueries.ts` (`RunSummaryRowSchema`: a `ModelUsage` object schema for `models`, plus `benchmark`, `inputTokens`, `cachedInputTokens`, `outputTokens`)
+- Modify: `src/backend/db/types.ts` (`TraceSummaryTable`: the five columns. The token columns are typed like `total_cost`: `ColumnType<string, number, number>`. `models` holds `ModelUsage[]`.)
+- Modify: `src/backend/db/trace_summary.ts` (`toTraceSummaryRow` and the upsert's `doUpdateSet` include the five columns)
+- Modify: `src/backend/lib/evals/evalQueries.ts` (`RunSummaryRowSchema`: a `ModelUsage` object schema for `models`, plus `benchmark` and the four token totals)
 - Test: `src/backend/lib/evals/traceSummary.test.ts`, `src/backend/postgres-integration/evalTracking.migration.test.ts`
 
 **Interfaces:**
@@ -237,8 +241,8 @@ Paths are relative to the statelog repo root. Work in a statelog worktree off `o
 **Files:**
 - Modify: `src/common/apiTypes/evals.ts`:
   - add `ModelUsageDto` (same fields as `ModelUsage`);
-  - `EvalRunDto` gains `benchmark`, `inputTokens`, `cachedInputTokens`, `outputTokens`, and `models: ModelUsageDto[]`;
-  - `EvalBatchDto` gains `benchmark`, the three token totals, and `models: ModelUsageDto[]`.
+  - `EvalRunDto` gains `benchmark`, the four token totals, and `models: ModelUsageDto[]`;
+  - `EvalBatchDto` gains `benchmark`, the four token totals, and `models: ModelUsageDto[]`.
 - Modify: `src/backend/lib/evals/evalQueries.ts`:
   - `toEvalRunDto` copies the run's fields;
   - `sharedBatchFields` spreads `batchUsage(summaries)` in place of the name set.

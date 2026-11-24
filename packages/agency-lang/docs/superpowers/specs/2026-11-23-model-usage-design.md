@@ -53,7 +53,7 @@ How each new value is found was decided by the owner as follows.
 
 ### 1. Runtime: record the reasoning level on each call
 
-`emitPromptCompletion` gains `reasoningEffort`, from `clientConfig.reasoningEffort`, or `null` when the call didn't set one (the provider's default). It's logged on the `promptCompletion` event beside `model` and `usage`, so one event holds everything a usage entry needs. `promptStart` gets it too, for symmetry with `maxTokens`.
+`emitPromptCompletion` gains `reasoningEffort`, from `clientConfig.reasoningEffort`, or `null` when the call didn't set one (the provider's default). It's logged on the `promptCompletion` event beside `model` and `usage`, so one event holds everything a usage entry needs. `promptStart` doesn't get it: nothing reads it there.
 
 A call that turns on thinking through `thinking: { enabled, budgetTokens }` without a `reasoningEffort` records `null`. (My call: the ticket is about effort levels, and a budget isn't one.)
 
@@ -77,6 +77,7 @@ export type ModelUsage = {
   calls: number;
   inputTokens: number;
   cachedInputTokens: number;
+  cacheCreationInputTokens: number;
   outputTokens: number;
   costUsd: number;
 };
@@ -88,13 +89,13 @@ export type ModelUsage = {
 
   ```ts
   models: [
-    { name: "claude-opus-5-5", reasoning: "high", calls: 12, inputTokens: 3200, cachedInputTokens: 41000, outputTokens: 420, costUsd: 0.61 },
-    { name: "claude-opus-5-5", reasoning: "low",  calls: 3,  inputTokens: 800,  cachedInputTokens: 9000,  outputTokens: 80,  costUsd: 0.09 },
-    { name: "jev",             reasoning: null,   calls: 5,  inputTokens: 3000, cachedInputTokens: 0,     outputTokens: 50,  costUsd: 0.01 },
+    { name: "claude-opus-5-5", reasoning: "high", calls: 12, inputTokens: 3200, cachedInputTokens: 41000, cacheCreationInputTokens: 0, outputTokens: 420, costUsd: 0.61 },
+    { name: "claude-opus-5-5", reasoning: "low",  calls: 3,  inputTokens: 800,  cachedInputTokens: 9000,  cacheCreationInputTokens: 0, outputTokens: 80,  costUsd: 0.09 },
+    { name: "jev",             reasoning: null,   calls: 5,  inputTokens: 3000, cachedInputTokens: 0,     cacheCreationInputTokens: 0, outputTokens: 50,  costUsd: 0.01 },
   ]
   ```
 - New `benchmark: string | null` (rule below).
-- New run totals `inputTokens`, `cachedInputTokens` and `outputTokens`: the sums over `models`. `costUsd` already exists.
+- New run totals `inputTokens`, `cachedInputTokens`, `cacheCreationInputTokens` and `outputTokens`: the sums over `models`. `costUsd` already exists.
 
 **The benchmark rule:** the `run` row's `benchmark` when it has one (Harbor imports). Otherwise the summary works it out from `suite.source`:
 
@@ -108,9 +109,11 @@ export type ModelUsage = {
 
 (My call to work it out in the summary rather than have `eval run` write it. It's the owner's folder-name rule, kept in one place. Runs already stored get a benchmark when they're summarized again. And `eval run`'s `run` rows stay unchanged, so there's no window where uploads are rejected. Git sources are parsed with the existing `parseSource`.)
 
+**One parser for suite names.** The runs explorer already turns `suite.source` into a short name for its "suite" column (`lib/runsExplorer/suite.ts`, `suiteFromSource`). The shared part (the folder or file name without its data extension, or the repo name for a git source) moves into one function that the summary uses for `benchmark`. The explorer keeps its display extras on top of it: the `@<ref>` suffix, clipping, `—` for unknown, and showing `inline:…` as is. So the explorer and statelog always agree on a run's name.
+
 **The reasoning rule:** a call's own `reasoningEffort` wins. When the call recorded none, the `run` row's `reasoning` fills it in. Old Harbor traces record none, so `--reasoning high` gives every entry `reasoning: "high"`. When neither says, it's `null`.
 
-**Token fields** mean what the trace's `usage` means. `cacheCreationInputTokens` isn't summed: the ticket asks for input, cached input and output, and cost already covers what cache writes are billed. (My call. It's easy to add later as one more field.)
+**Token fields** mean what the trace's `usage` means, with the same names as agency-lang's other token breakdowns (`TokenUsage` in `statelogClient.ts`, `TokenBreakdown` in `spendTypes.ts`): `inputTokens` is fresh input, `cachedInputTokens` is cache reads, `cacheCreationInputTokens` is cache writes.
 
 **Readers in agency-lang:** the runs explorer's per-test and per-run model lists use `.name`, deduplicated.
 
@@ -119,7 +122,7 @@ export type ModelUsage = {
 A new agency-lang function, `batchUsage(runs: RunSummary[])` (exported beside `batchStatisticsByBatch`), returns a batch's:
 
 - `benchmark: string | null`: the runs' shared value. When they differ, it's the distinct non-null values, sorted and joined with ", ". It's null when no run has one.
-- `inputTokens`, `cachedInputTokens` and `outputTokens`: summed over the runs;
+- `inputTokens`, `cachedInputTokens`, `cacheCreationInputTokens` and `outputTokens`: summed over the runs;
 - `models: ModelUsage[]`: the runs' entries summed per (name, reasoning), in the same order as a run's.
 
 It's a separate function rather than new `BatchStatistics` fields, because `batchStatistics` refuses a batch whose trial grid is incomplete, and statelog still shows those batches. (My call, following the anti-goal: statelog reads these instead of summing anything itself.)
@@ -129,12 +132,12 @@ It's a separate function rather than new `BatchStatistics` fields, because `batc
 - **Dependency:** move to the agency-lang release with this change (it also brings `void`, from ADI-372 part 1).
 - **Migration:** add to `trace_summaries`:
   - `benchmark text` (nullable, indexed);
-  - `input_tokens`, `cached_input_tokens` and `output_tokens` (bigint, not null, default 0).
+  - `input_tokens`, `cached_input_tokens`, `cache_creation_input_tokens` and `output_tokens` (bigint, not null, default 0).
 
   `models` stays a JSON column and now holds the usage entries.
 - **`toTraceSummaryRow`** writes the new columns. **`RunSummaryRowSchema`** gains `ModelUsage` and the new fields.
 - **Endpoints**, with no new query parameters (ADI-374):
-  - **Test endpoint:** each run returns `benchmark`, the three token totals, and `models` (usage entries).
+  - **Test endpoint:** each run returns `benchmark`, the four token totals, and `models` (usage entries).
   - **Batch list and batch page:** each batch returns `benchmark`, the token totals and `models` from agency-lang's `batchUsage`.
 - **Pages:** where a page lists model names today, it lists each entry's name, with its level when there is one (`claude-opus-5-5 (high)`). The trace page's fallback for traces with no summary keeps listing plain names from the events. The design-guide fixtures move to the new shape. Anything more is ADI-374.
 - **Existing rows:** summaries already stored have the old `models` shape and no tokens or benchmark. A one-off script re-runs the existing summary refresh for every trace in `trace_summaries`. Run it once after deploying. (My call: this is cheaper than making the schema accept both shapes, and the prototype has few rows.)

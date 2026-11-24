@@ -1,3 +1,35 @@
+## Nov 23 2026 — v0.45.0
+
+safeBash can use a judge model to refuse complex lines, globs ask narrow questions, and the agent gets a scratch folder.
+
+### Breaking
+
+- **`RunSummary.models` (from `agency-lang/eval`) is now a list of usage entries,** one per model and reasoning level, instead of a list of model names.
+- **A resumed agent session that has its own policy no longer picks up the reject rules from your saved `policy.json`.** It now runs under exactly the policy it started with, as its first sitting did.
+- **`modelOptions` moved from `std::agents/brains/settings` to `std::llm`.**
+
+### safeBash
+
+- **An optional command judge can refuse a broad line as too complex to review,** before its `std::bash` question is asked. Turn it on in `agency agent` with `--model judge=openrouter/jev-1.14`, or from code with `safeBash(cmd, commandJudge: {...})`. The judge never approves anything, and it is skipped when a policy rule already answers the line.
+- **A glob in a file name asks the command's narrow question about its folder,** instead of `std::bash`. For example, `grep -rn hello lib/*.ts` asks `std::grep` for `lib`. A command with a glob runs with `--` before its paths, and a verb like `uniq` that limits its file count refuses a glob.
+- **`grep -rn x lib/missing.ts` asks `std::grep` for the missing file,** the same question `grep -n` already asked, instead of `std::bash`.
+
+### Policies
+
+- **A reject or propagate rule now also matches a value that, read as a bash glob, could name the rule's text.** So a reject rule for `secrets.json` still catches `cat config/*.json`. Approve rules match as before.
+- **New `runPolicy()` in `std::policy`** returns the run's root policy.
+
+### Agent
+
+- **Each agent run gets a scratch folder for temporary files** under the agent home, named in its project context. The `recommended` and `with-writes` policies approve file writes in it, so `pnpm test > <scratch>/out.log; tail <scratch>/out.log` asks only `std::exec`.
+- **`agency agent -p --max-time` exits right after its reply,** instead of waiting until the time limit runs out. The same fix stops `agency serve` from keeping a timer alive after each invocation with a time limit.
+
+### Evals
+
+- **Eval run summaries report tokens and cost per model and reasoning level, plus the benchmark name.** Each LLM call now logs its reasoning level, and `batchUsage(runs)` sums a batch.
+- **A run can end `void`,** meaning it failed for reasons outside the agent and is left out of accuracy. A run that ends some other way than `ok` now keeps its graded score instead of always counting as 0.
+- **`agency eval upload` splits requests to stay under statelog's 5 MiB limit,** and refuses a run with a single oversized event before sending anything. Before, large runs failed with HTTP 413 and left a partial trace.
+
 ## Nov 22 2026 — v0.44.2
 
 "Always approve when" for a `std::exec` question now asks how much of the command to cover and which folder.

@@ -4,6 +4,7 @@ import { findRunDirectories } from "@/runDirectory/findRuns.js";
 import {
   buildRunsListing,
   displayAgent,
+  summarizeRuns,
   type RunsListing,
   type RunSummary,
 } from "@/runDirectory/list.js";
@@ -19,10 +20,12 @@ export function runsList(
   paths: string[],
   dependencies: RunsListDependencies = { report: (message) => console.log(message) },
 ): RunSummary[] {
-  const snapshots = findRunDirectories(paths).map((dir) =>
-    readRunDirectory(dir, { reportWarning: (message) => console.warn(message) }),
+  // One run at a time: each snapshot is dropped once summarized, so memory
+  // stays flat however many runs are listed.
+  const summaries = findRunDirectories(paths).flatMap((dir) =>
+    summarizeRuns(readRunDirectory(dir, { reportWarning: (message) => console.warn(message) })),
   );
-  const listing = buildRunsListing(snapshots);
+  const listing = buildRunsListing(summaries);
   dependencies.report(formatRunsList(listing));
   return listing.summaries;
 }

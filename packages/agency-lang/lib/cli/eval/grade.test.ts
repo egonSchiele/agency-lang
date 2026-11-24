@@ -4,7 +4,7 @@ import * as path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
-import { buildRunsListing } from "@/runDirectory/list.js";
+import { buildRunsListing, summarizeRuns } from "@/runDirectory/list.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 
 import { evalGrade, graderSourceFor, validateGradeTarget } from "./grade.js";
@@ -233,8 +233,8 @@ describe("evalGrade", () => {
 
     expect(result.mean).toBeCloseTo(0.5 / 2);
     const listing = buildRunsListing(
-      [path.join(group, "a"), path.join(group, "b")].map((dir) =>
-        readRunDirectory(dir, { reportWarning: () => {} }),
+      [path.join(group, "a"), path.join(group, "b")].flatMap((dir) =>
+        summarizeRuns(readRunDirectory(dir, { reportWarning: () => {} })),
       ),
     );
     expect(listing.gradedCount).toBe(1);

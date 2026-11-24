@@ -109,6 +109,13 @@ export type RunPayload = {
   batch?: string;
   /** This test's 1-based repetition within the batch. */
   trial?: number;
+  /** The benchmark, for an imported run whose suite source doesn't name
+   *  one. `eval run` leaves it out; the run summary derives it from
+   *  `suite.source` instead. */
+  benchmark?: string;
+  /** The reasoning level for calls whose trace records none, for imported
+   *  runs from before the trace logged it. */
+  reasoning?: string;
 };
 
 export type AnnotationPayload = ChecklistPayload | ScorePayload | RunPayload;
@@ -242,6 +249,8 @@ const RunAnnotationSchema = z
     error: z.string().optional(),
     batch: z.string().min(1).optional(),
     trial: z.number().int().positive().optional(),
+    benchmark: z.string().min(1).optional(),
+    reasoning: z.string().min(1).optional(),
   })
   .strict();
 

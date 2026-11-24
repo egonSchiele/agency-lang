@@ -69,6 +69,13 @@ reported.
 tests × k trials, $total`). Several selected batches are grouped by their
 batch id and headed `batch <id>`, never merged.
 
+`batchUsage` (same file) sums a batch's token totals and per-model usage
+entries over its runs, and gives its benchmark: the runs' shared value, or
+the distinct values sorted and joined with ", " when they differ. It is a
+separate function because it applies to any batch, including one whose trial
+grid `batchStatistics` refuses. Statelog still shows those batches, and it
+reads their usage from `batchUsage` instead of summing anything itself.
+
 ## One summary derivation, including silent runs
 
 `summarizeRunDirectory(snapshot)` and `summarizeEvalRun(input)` share one
@@ -177,8 +184,8 @@ brain, so runs group per brain.
 
 ## What `agency-lang/eval` exports for statelog
 
-`summarizeEvalRun` with `EvalRunInput`, `RunSummary`, `RunStatus`;
-`batchStatistics`, `batchStatisticsByBatch` and their types;
+`summarizeEvalRun` with `EvalRunInput`, `RunSummary`, `RunStatus`, `ModelUsage`;
+`batchStatistics`, `batchStatisticsByBatch`, `batchUsage` and their types;
 `AnnotationSchema`, `annotationId` and the annotation types;
 `EventEnvelope`; `agentNameProblem`, `AGENT_NAME_PATTERN`,
 `AGENT_NAME_MAX_LENGTH`. They all live in `lib/eval/public.ts`, alongside

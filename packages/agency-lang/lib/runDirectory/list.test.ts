@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { completeAnnotation } from "./annotations.js";
+import { completeAnnotation, type Annotation, type AnnotationDraft } from "./annotations.js";
+import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
 import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
 
@@ -476,5 +477,118 @@ describe("summarizeEvalRun and summarizeRunDirectory", () => {
         source: "x",
       }),
     ).toThrow(/run t2 was given an annotation of trace t1/);
+  });
+});
+
+describe("usage and benchmark on the run summary", () => {
+  const traceId = "usage-1";
+
+  function completion(
+    model: string,
+    reasoningEffort: string | null,
+    input: number,
+    cost: number,
+  ): string {
+    return statelogLine(traceId, "promptCompletion", {
+      model: JSON.stringify(model),
+      reasoningEffort,
+      usage: {
+        inputTokens: input,
+        cachedInputTokens: 2 * input,
+        cacheCreationInputTokens: 1,
+        outputTokens: 3,
+      },
+      cost: { totalCost: cost },
+    });
+  }
+
+  const events: EventEnvelope[] = [
+    agentStartLine(traceId),
+    completion("opus", "high", 100, 0.5),
+    completion("opus", "high", 50, 0.25),
+    completion("jev", null, 10, 0.125),
+  ].map((line) => JSON.parse(line) as EventEnvelope);
+
+  function runRow(fields: Partial<AnnotationDraft> = {}): Annotation {
+    return completeAnnotation(
+      {
+        traceId,
+        annotator: { kind: "harness", id: "agency-eval@1" },
+        kind: "run",
+        test: { id: "a" },
+        suite: null,
+        ended: "ok",
+        flags: {},
+        ...fields,
+      } as AnnotationDraft,
+      "2026-08-18T00:00:09Z",
+    );
+  }
+
+  function summarize(fields: Partial<AnnotationDraft> = {}) {
+    return summarizeEvalRun({ traceId, events, annotations: [runRow(fields)], source: "x" });
+  }
+
+  it("models is the run's usage by model and level, with token totals", () => {
+    const summary = summarize();
+    expect(summary.models.map((item) => [item.name, item.reasoning, item.calls])).toEqual([
+      ["jev", null, 1],
+      ["opus", "high", 2],
+    ]);
+    expect(summary.inputTokens).toBe(160);
+    expect(summary.cachedInputTokens).toBe(320);
+    expect(summary.cacheCreationInputTokens).toBe(3);
+    expect(summary.outputTokens).toBe(9);
+  });
+
+  it("the run's totals add up", () => {
+    const summary = summarize();
+    const calls = summary.models.reduce((total, item) => total + item.calls, 0);
+    const cost = summary.models.reduce((total, item) => total + item.costUsd, 0);
+    expect(calls).toBe(summary.llmCalls);
+    expect(cost).toBe(summary.costUsd);
+  });
+
+  it("the run's cost is exactly the sum over models, whatever order the calls came in", () => {
+    // Costs that are not exact in binary: adding them in call order and in
+    // per-model order gives different last digits.
+    const unevenEvents = [
+      agentStartLine(traceId),
+      completion("opus", "high", 1, 0.3),
+      completion("jev", null, 1, 0.6),
+      completion("opus", "high", 1, 0.1),
+    ].map((line) => JSON.parse(line) as EventEnvelope);
+    const summary = summarizeEvalRun({
+      traceId,
+      events: unevenEvents,
+      annotations: [runRow()],
+      source: "x",
+    });
+    const cost = summary.models.reduce((total, item) => total + item.costUsd, 0);
+    expect(cost).toBe(summary.costUsd);
+  });
+
+  it("benchmark comes from the suite source", () => {
+    expect(summarize({ suite: { source: "/x/evals/plan-easy" } }).benchmark).toBe("plan-easy");
+  });
+
+  it("the run row's benchmark wins over the suite source", () => {
+    const summary = summarize({
+      suite: { source: "/x/evals/plan-easy" },
+      benchmark: "swe-bench-verified",
+    });
+    expect(summary.benchmark).toBe("swe-bench-verified");
+  });
+
+  it("the run row's reasoning fills calls with no level", () => {
+    const summary = summarize({ reasoning: "medium" });
+    expect(summary.models.map((item) => [item.name, item.reasoning])).toEqual([
+      ["jev", "medium"],
+      ["opus", "high"],
+    ]);
+  });
+
+  it("an --input run has no benchmark", () => {
+    expect(summarize({ suite: { source: "inline:--input" } }).benchmark).toBeNull();
   });
 });

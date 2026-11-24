@@ -3,7 +3,9 @@ import type { EvalRecord } from "@/eval/types.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
 import { foldAnnotations, type Annotation, type EffectiveTraceAnnotations } from "./annotations.js";
+import { benchmarkFromSuite } from "./benchmark.js";
 import { traceEnding } from "./evalRecord.js";
+import { modelUsageOf, type ModelUsage } from "./modelUsage.js";
 import type { RunDirectorySnapshot } from "./runDir.js";
 import { traceInputText } from "./traceText.js";
 
@@ -53,7 +55,17 @@ export type RunSummary = {
   llmCalls: number;
   toolCalls: number;
   eventCount: number;
-  models: string[];
+  /** The run's LLM usage, one entry per (model, reasoning level) pair,
+   *  sorted by name, then reasoning. */
+  models: ModelUsage[];
+  /** Token totals: the sums over `models`. */
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheCreationInputTokens: number;
+  outputTokens: number;
+  /** The `run` row's `benchmark`, else the suite's folder or file name
+   *  (`benchmarkFromSuite`), else null. */
+  benchmark: string | null;
   /** The harness's verdict when it recorded one, else read from the trace. */
   ended: string;
   status: RunStatus;
@@ -162,6 +174,10 @@ function summarizeOne(parts: RunParts): RunSummary {
   const lastEvent = parts.events.at(-1);
   const ended = runRow !== null ? runRow.ended : traceEnding({ events: parts.events });
   const effectiveScore = latestScore(parts.effective);
+  const models = modelUsageOf({
+    events: parts.events,
+    fallbackReasoning: runRow?.reasoning ?? null,
+  });
   return {
     traceId: parts.traceId,
     testId: testIdOf(runRow),
@@ -172,11 +188,18 @@ function summarizeOne(parts: RunParts): RunSummary {
     startedAtMs,
     endedAt: runRow?.createdAt ?? lastEvent?.data.timestamp ?? null,
     durationMs: record?.durationMs ?? 0,
-    costUsd: record?.metrics.costUsdTotal ?? 0,
+    // Summed over `models`, not taken from the eval record, so the run's
+    // cost is exactly the sum of its entries' costs.
+    costUsd: sumOf(models, "costUsd"),
     llmCalls: record?.metrics.llmCalls ?? 0,
     toolCalls: record?.metrics.toolEnds ?? 0,
     eventCount: parts.events.length,
-    models: record === null ? [] : [...record.metrics.models],
+    models,
+    inputTokens: sumOf(models, "inputTokens"),
+    cachedInputTokens: sumOf(models, "cachedInputTokens"),
+    cacheCreationInputTokens: sumOf(models, "cacheCreationInputTokens"),
+    outputTokens: sumOf(models, "outputTokens"),
+    benchmark: runRow?.benchmark ?? benchmarkFromSuite(runRow?.suite?.source),
     ended,
     status: statusOf(runRow, parts.events.length),
     latestScore: effectiveScore,
@@ -249,6 +272,13 @@ export function annotationSummaries(snapshot: RunDirectorySnapshot): Record<stri
 }
 
 type RunRow = Annotation & { kind: "run" };
+
+type SummedField =
+  "inputTokens" | "cachedInputTokens" | "cacheCreationInputTokens" | "outputTokens" | "costUsd";
+
+function sumOf(models: readonly ModelUsage[], field: SummedField): number {
+  return models.reduce((total, item) => total + item[field], 0);
+}
 
 function runRowOf(effective: EffectiveTraceAnnotations | undefined): RunRow | null {
   const run = effective?.run;

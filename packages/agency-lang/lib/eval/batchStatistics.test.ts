@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
 import { summarizeRunDirectory, type RunSummary } from "@/runDirectory/list.js";
+import type { ModelUsage } from "@/runDirectory/modelUsage.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 
 import {
   batchStatistics,
   batchStatisticsByBatch,
   batchStatisticsByBatchTolerant,
+  batchUsage,
 } from "./batchStatistics.js";
 
 type Overrides = Partial<RunSummary>;
@@ -32,6 +34,11 @@ function run(overrides: Overrides): RunSummary {
     toolCalls: 0,
     eventCount: 3,
     models: [],
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    outputTokens: 0,
+    benchmark: null,
     ended: "ok",
     status: "ok",
     latestScore: 1,
@@ -238,5 +245,78 @@ describe("batchStatisticsByBatch", () => {
         reason: expect.stringMatching(/incomplete trial grid: a has 2 trials, b has 1/),
       },
     ]);
+  });
+});
+
+describe("batchUsage", () => {
+  function usage(fields: Partial<ModelUsage> & { name: string }): ModelUsage {
+    return {
+      reasoning: null,
+      calls: 1,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      outputTokens: 0,
+      costUsd: 0,
+      ...fields,
+    };
+  }
+
+  it("sums tokens and models over the runs", () => {
+    const first = run({
+      inputTokens: 10,
+      cachedInputTokens: 100,
+      cacheCreationInputTokens: 1,
+      outputTokens: 5,
+      models: [usage({ name: "opus", reasoning: "high", inputTokens: 10, costUsd: 0.5 })],
+    });
+    const second = run({
+      inputTokens: 20,
+      cachedInputTokens: 200,
+      cacheCreationInputTokens: 2,
+      outputTokens: 7,
+      models: [
+        usage({ name: "jev" }),
+        usage({ name: "opus", reasoning: "high", inputTokens: 20, costUsd: 0.25 }),
+      ],
+    });
+    expect(batchUsage([first, second])).toEqual({
+      benchmark: null,
+      inputTokens: 30,
+      cachedInputTokens: 300,
+      cacheCreationInputTokens: 3,
+      outputTokens: 12,
+      models: [
+        usage({ name: "jev" }),
+        usage({ name: "opus", reasoning: "high", calls: 2, inputTokens: 30, costUsd: 0.75 }),
+      ],
+    });
+  });
+
+  it("one shared benchmark", () => {
+    const runs = [run({ benchmark: "plan-easy" }), run({ benchmark: "plan-easy" })];
+    expect(batchUsage(runs).benchmark).toBe("plan-easy");
+  });
+
+  it("different benchmarks are sorted and joined", () => {
+    const runs = [run({ benchmark: "swe-bench" }), run({ benchmark: "plan-easy" })];
+    expect(batchUsage(runs).benchmark).toBe("plan-easy, swe-bench");
+  });
+
+  it("null benchmarks are left out", () => {
+    expect(batchUsage([run({ benchmark: null }), run({ benchmark: "plan-easy" })]).benchmark).toBe(
+      "plan-easy",
+    );
+    expect(batchUsage([run({ benchmark: null }), run({ benchmark: null })]).benchmark).toBeNull();
+  });
+
+  it("works for a batch batchStatistics refuses", () => {
+    const uneven = [
+      run({ testId: "a", trial: 1, inputTokens: 1 }),
+      run({ testId: "a", trial: 2, inputTokens: 2 }),
+      run({ testId: "b", trial: 1, inputTokens: 4 }),
+    ];
+    expect(() => batchStatistics(uneven)).toThrow();
+    expect(batchUsage(uneven).inputTokens).toBe(7);
   });
 });

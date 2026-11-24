@@ -5,6 +5,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { readRunDirectory } from "@/runDirectory/runDir.js";
+import { statelogLine } from "@/runDirectory/testFixtures.js";
 
 import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
 
@@ -36,6 +37,18 @@ describe("buildRunRowFromDirectory", () => {
     expect(row.costUsd).toBeCloseTo(2.0);
     expect(row.models).toEqual(["test-model"]);
     expect(row.warnings).toEqual([]);
+  });
+
+  it("lists a model used at two reasoning levels once", () => {
+    const dir = writeGradedRun(tmpDir);
+    const atHigh = statelogLine("t1", "promptCompletion", {
+      model: JSON.stringify("test-model"),
+      reasoningEffort: "high",
+    });
+    fs.appendFileSync(path.join(dir, "statelog.jsonl"), `${atHigh}\n`);
+    const row = rowFor(dir);
+    expect(row.tests[0].models).toEqual(["test-model"]);
+    expect(row.models).toEqual(["test-model"]);
   });
 
   it("per-test rows carry the test id, trace id, and the effective scores", () => {

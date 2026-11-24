@@ -108,6 +108,7 @@ export function emitPromptCompletion({
   stream,
   usageKind,
   decision,
+  reasoningEffort,
 }: {
   run: Run;
   messages: MessageThread;
@@ -120,6 +121,9 @@ export function emitPromptCompletion({
   stream: boolean;
   usageKind: ProviderUsageKind;
   decision?: DecisionLog;
+  /** The reasoning level the call asked for, or null for the provider's
+   *  default. */
+  reasoningEffort: string | null;
 }): void {
   run.log.promptCompletion({
     messages: withMessageLabels(messages),
@@ -149,5 +153,6 @@ export function emitPromptCompletion({
     threadLabel: messages.label,
     usageKind,
     decision,
+    reasoningEffort,
   });
 }

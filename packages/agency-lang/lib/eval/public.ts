@@ -41,8 +41,9 @@ export type { InputBreakdown, GradeRow } from "./grading/gradeBreakdown.js";
 // definition of score, status, cost, or timestamps.
 export { summarizeEvalRun } from "../runDirectory/list.js";
 export type { EvalRunInput, RunSummary, RunStatus } from "../runDirectory/list.js";
-export { batchStatistics, batchStatisticsByBatch } from "./batchStatistics.js";
-export type { BatchStatistics, TestStatistics } from "./batchStatistics.js";
+export type { ModelUsage } from "../runDirectory/modelUsage.js";
+export { batchStatistics, batchStatisticsByBatch, batchUsage } from "./batchStatistics.js";
+export type { BatchStatistics, BatchUsage, TestStatistics } from "./batchStatistics.js";
 export { AnnotationSchema, annotationId } from "../runDirectory/annotations.js";
 export type {
   Annotation,

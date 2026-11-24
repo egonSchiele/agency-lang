@@ -1,4 +1,5 @@
 import type { RunSummary } from "@/runDirectory/list.js";
+import { sumModelUsage, type ModelUsage } from "@/runDirectory/modelUsage.js";
 
 /**
  * Statistics over one batch: one suite invocation where every test ran the
@@ -32,6 +33,39 @@ export type BatchStatistics = {
   totalCostUsd: number;
   totalDurationMs: number;
 };
+
+/** A batch's LLM usage and benchmark, summed over its runs. */
+export type BatchUsage = {
+  /** The runs' shared benchmark; when they differ, the distinct non-null
+   *  values sorted and joined with ", "; null when no run has one. */
+  benchmark: string | null;
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheCreationInputTokens: number;
+  outputTokens: number;
+  /** The runs' entries summed per (model, reasoning level). */
+  models: ModelUsage[];
+};
+
+/** Sums usage over a batch's runs. Separate from `batchStatistics` because
+ *  it applies to any batch, including one whose trial grid is incomplete,
+ *  which `batchStatistics` refuses and statelog still shows. */
+export function batchUsage(runs: readonly RunSummary[]): BatchUsage {
+  const benchmarks: string[] = [];
+  for (const run of runs) {
+    if (run.benchmark !== null && !benchmarks.includes(run.benchmark)) {
+      benchmarks.push(run.benchmark);
+    }
+  }
+  return {
+    benchmark: benchmarks.length === 0 ? null : benchmarks.toSorted().join(", "),
+    inputTokens: sumOf(runs.map((run) => run.inputTokens)),
+    cachedInputTokens: sumOf(runs.map((run) => run.cachedInputTokens)),
+    cacheCreationInputTokens: sumOf(runs.map((run) => run.cacheCreationInputTokens)),
+    outputTokens: sumOf(runs.map((run) => run.outputTokens)),
+    models: sumModelUsage(runs.map((run) => run.models)),
+  };
+}
 
 /** Split runs into batches by their batch id (a run without one is a batch
  *  of its own), in first-seen order, and compute each batch's statistics. */

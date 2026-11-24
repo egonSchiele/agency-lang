@@ -207,6 +207,19 @@ checklist sign-off's note. `traceInputText` / `traceOutputText`
 (`traceText.ts`) are the one rule for what "the input" and "the output" of a
 trace are when shown to a person (listings, the labeling screen).
 
+A `RunSummary`'s `models` is the run's LLM usage, one entry per model and
+reasoning level, with calls, token counts and cost (`modelUsageOf` in
+`modelUsage.ts`, summed over the `promptCompletion` events). A call's level is
+the `reasoningEffort` its event logged, else the `run` row's `reasoning`, else
+null. The run's `costUsd`, `inputTokens`, `cachedInputTokens`,
+`cacheCreationInputTokens` and `outputTokens` are the sums over `models`, so a
+run's cost always equals the sum of its entries' costs exactly. Its `benchmark` is the `run`
+row's `benchmark`, else the suite's folder or file name from `suite.source`
+(`benchmarkFromSuite` in `benchmark.ts`, the same parser the runs explorer's
+suite column uses), else null. `eval run` writes neither `benchmark` nor
+`reasoning` on its `run` row; an importer of runs from another harness sets
+them when the trace doesn't say.
+
 ## Durable writes (`durableWrite.ts`)
 
 `appendDurably` (append + fsync) and `atomicWriteValidated` (validate, write a

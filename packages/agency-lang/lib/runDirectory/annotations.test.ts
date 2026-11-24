@@ -346,4 +346,16 @@ describe("run rows: batch and trial", () => {
       expect(() => row({ ...base, batch: "batch-1", trial })).toThrow();
     }
   });
+
+  it("a run row may carry benchmark and reasoning", () => {
+    expect(row({ ...base, benchmark: "swe-bench-verified", reasoning: "high" })).toMatchObject({
+      benchmark: "swe-bench-verified",
+      reasoning: "high",
+    });
+  });
+
+  it("an empty benchmark is refused", () => {
+    expect(() => row({ ...base, benchmark: "" })).toThrow();
+    expect(() => row({ ...base, reasoning: "" })).toThrow();
+  });
 });

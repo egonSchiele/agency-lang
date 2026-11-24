@@ -9,6 +9,7 @@ import * as path from "path";
 import type { Annotation, Score } from "@/runDirectory/annotations.js";
 import { evalRecordFor } from "@/runDirectory/evalRecord.js";
 import { summarizeRuns } from "@/runDirectory/list.js";
+import type { ModelUsage } from "@/runDirectory/modelUsage.js";
 import type { RunDirectorySnapshot } from "@/runDirectory/runDir.js";
 import { runDirPaths } from "@/runDirectory/runDir.js";
 import { traceInputText, traceOutputText, type TraceOutputText } from "@/runDirectory/traceText.js";
@@ -108,7 +109,7 @@ export function buildRunRowFromDirectory(snapshot: RunDirectorySnapshot, source:
       costUsd: summary.costUsd,
       durationMs: summary.durationMs,
       startedAtMs: summary.startedAtMs,
-      models: summary.models,
+      models: namesOf(summary.models),
     };
     // A run the harness cut short (timeout, cost cap, kill) is the explorer's
     // "killed": events exist, but nothing finished. An error is a plain failure.
@@ -179,6 +180,18 @@ function graderVerdict(key: string, row: Annotation): GraderVerdict[] {
       annotator: row.annotator.id,
     },
   ];
+}
+
+/** The distinct model names in a run's usage, in order: the explorer lists
+ *  a model once even when it ran at several reasoning levels. */
+function namesOf(models: readonly ModelUsage[]): string[] {
+  const names: string[] = [];
+  for (const { name } of models) {
+    if (!names.includes(name)) {
+      names.push(name);
+    }
+  }
+  return names;
 }
 
 /** False if any test failed a gate, true if any passed and none failed,

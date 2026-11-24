@@ -1,0 +1,13 @@
+// Imports one of the agent's compiled modules the way a program outside
+// the package does. See docs/dev/agents/session-core.md.
+import { applyEffortAnswer, askedEffort } from "pkg::agency-lang/dist/lib/agents/agency-agent/lib/session"
+
+node main() {
+  const before = askedEffort()
+  const applied = applyEffortAnswer("low")
+  return {
+    before: before,
+    applied: isSuccess(applied),
+    after: askedEffort()
+  }
+}

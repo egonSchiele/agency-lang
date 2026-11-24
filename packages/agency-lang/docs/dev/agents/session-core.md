@@ -26,8 +26,32 @@ front-end runs one program and loads the same compiled files:
   `agency-lang/agent-session`. A front-end imports it in TypeScript and
   calls `main` and `respondToInterrupts`.
 
-The export is the one public thing. The modules behind it are the agent's
-own and can change.
+## The agent's modules, from outside the package
+
+The package also exports every compiled module of the agent, by its real
+path:
+
+    import { askedEffort } from "pkg::agency-lang/dist/lib/agents/agency-agent/lib/session"
+
+A program outside the package can import them to build a session program
+of its own. The path must be the real folder, because a `pkg::` import
+resolves the part after the package name to a file in the package.
+
+These modules are the agent's own, with the same standing as the files
+under `agency-lang/stdlib-lib/`. They have no generated docs, and any
+release can rename or remove a function in them. The importing program
+learns of it at its next compile. Moving the agent's folder, in the
+source or in `dist/`, breaks every such import.
+
+Perry imports these modules from its own copy of the core. The import
+list at the top of `src/agency/core.agency` in the Perry repo shows
+which functions it uses.
+
+Import only the modules the program needs. Loading one of the terminal's
+modules, such as `lib/trace.agency`, registers callbacks that print to the
+terminal for every run in the process.
+
+`tests/agency-js/agent-modules-import` imports one of them this way.
 
 ## The interface
 

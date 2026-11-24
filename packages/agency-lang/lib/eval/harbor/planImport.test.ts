@@ -156,6 +156,7 @@ describe("planHarborImport", () => {
         unknown,
         { ...unknown, trialName: "again" },
         trial({ rewards: null, exception: failingWith("DaytonaError") }),
+        trial({ rewards: null, exception: failingWith("RuntimeError") }),
       ],
       batch: "k",
     });

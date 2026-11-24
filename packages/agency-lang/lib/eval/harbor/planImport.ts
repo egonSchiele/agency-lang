@@ -15,6 +15,8 @@ const KNOWN_VOID = [
   "VerifierTimeoutError",
   "RewardFileNotFoundError",
   "NetworkConnectionError",
+  // Harbor's own failures, such as "Agent install failed".
+  "RuntimeError",
 ];
 
 export type PlannedScore = Pick<ScoreDraft, "name" | "score">;

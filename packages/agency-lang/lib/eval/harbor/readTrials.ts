@@ -23,8 +23,7 @@ export type HarborTrial = {
 export type HarborProblem = { path: string; reason: string };
 
 export type ReadTrialResult =
-  | { ok: true; trial: HarborTrial }
-  | { ok: false; problem: HarborProblem };
+  { ok: true; trial: HarborTrial } | { ok: false; problem: HarborProblem };
 
 /** Harbor publishes no schema; these are the only fields the import reads. */
 const HarborResultSchema = z.looseObject({
@@ -111,14 +110,20 @@ function readJob(jobDir: string): TrialRead[] {
 function byStartThenName(left: TrialRead, right: TrialRead): number {
   const leftKey = sortKeyOf(left);
   const rightKey = sortKeyOf(right);
-  if (leftKey < rightKey) return -1;
-  if (leftKey > rightKey) return 1;
+  if (leftKey < rightKey) {
+    return -1;
+  }
+  if (leftKey > rightKey) {
+    return 1;
+  }
   return 0;
 }
 
 /** Problems sort first, by folder; trials by start time, then folder name. */
 function sortKeyOf(read: TrialRead): string {
-  if (!read.result.ok) return `0 ${path.basename(read.dir)}`;
+  if (!read.result.ok) {
+    return `0 ${path.basename(read.dir)}`;
+  }
   return `1 ${read.result.trial.startedAt} ${read.result.trial.trialName}`;
 }
 
@@ -127,7 +132,9 @@ function readTrialsFile(trialsFile: string): TrialRead[] {
   const lines = fs.readFileSync(trialsFile, "utf8").split("\n");
   return lines.flatMap((line, index) => {
     const text = line.trim();
-    if (text === "" || text.startsWith("#")) return [];
+    if (text === "" || text.startsWith("#")) {
+      return [];
+    }
     const label = `${trialsFile}:${index + 1}`;
     const dir = path.resolve(base, text);
     return [{ label, dir, result: readListedTrial({ label, dir }) }];
@@ -140,7 +147,9 @@ function readListedTrial({ label, dir }: { label: string; dir: string }): ReadTr
     return problemAt(label, `${dir} is not a folder`);
   }
   const result = readHarborTrial(dir);
-  if (result.ok) return result;
+  if (result.ok) {
+    return result;
+  }
   return problemAt(label, `${dir}: ${result.problem.reason}`);
 }
 

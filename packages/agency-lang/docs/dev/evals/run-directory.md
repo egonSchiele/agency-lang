@@ -194,8 +194,11 @@ and the entry node returns it. The trace ends `ok`, and `runAgent`
 message, so it grades 0 and its graders never see the failure as an output.
 A rejected interrupt (a failure with `rejected: true`) is not an error: a
 policy refused an action, which a test may be checking for, so the run is a
-success and the graders get the rejection as the output. `summarizeRuns(snapshot)` (`list.ts`) is one
-`RunSummary` per trace for listings. Its `score` is the effective score when the run ended `ok`, null when it ended `infrastructure` (so accuracy leaves it out), and otherwise the effective score or 0 if ungraded. Its `hasNotes` is true when `notes.md`
+success and the graders get the rejection as the output.
+`summarizeRuns(snapshot)` (`list.ts`) is one `RunSummary` per trace for
+listings. Its `score` is the effective score when the run ended `ok`, null
+when it ended `infrastructure` (so accuracy leaves it out), and otherwise
+the effective score or 0 if ungraded. Its `hasNotes` is true when `notes.md`
 has non-blank text, and is the same for every trace the directory holds,
 because the note is about the run. `annotationSummaryText` renders the
 viewer's per-trace line ("notes · score 0.70 · labeled"). `humanFeedbackFor`

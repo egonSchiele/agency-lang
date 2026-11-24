@@ -6,7 +6,10 @@ import { describe, expect, it } from "vitest";
 
 import { harnessVersion } from "./harnessVersion.js";
 
-const packageJson = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../package.json");
+const packageJson = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../package.json",
+);
 
 describe("harnessVersion", () => {
   it("returns this package's version", () => {

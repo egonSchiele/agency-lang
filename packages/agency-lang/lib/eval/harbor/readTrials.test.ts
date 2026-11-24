@@ -48,12 +48,26 @@ describe("readHarborInputs", () => {
     ]);
   });
 
+  it("a job folder that doesn't exist is a problem, and the other jobs still read", () => {
+    const root = tempDir("harbor-");
+    writeHarborTrial(path.join(root, "job"), trial({ name: "x" }));
+    const missing = path.join(root, "no-such-job");
+    const { trials, problems } = readHarborInputs({ jobDirs: [missing, path.join(root, "job")] });
+    expect(trials.map((each) => each.trialName)).toEqual(["x"]);
+    expect(problems).toEqual([{ path: missing, reason: "not a folder" }]);
+  });
+
   it("a trials file gives its trials in line order, skipping blanks and comments", () => {
     const root = tempDir("harbor-");
     const jobDir = path.join(root, "job");
     writeHarborTrial(jobDir, trial({ name: "x", startedAt: "2026-11-13T12:00:00Z" }));
     writeHarborTrial(jobDir, trial({ name: "y", startedAt: "2026-11-13T09:00:00Z" }));
-    const file = writeLines(path.join(root, "trials.txt"), ["# picked by hand", "job/x", "", "job/y"]);
+    const file = writeLines(path.join(root, "trials.txt"), [
+      "# picked by hand",
+      "job/x",
+      "",
+      "job/y",
+    ]);
     const { trials, problems } = readHarborInputs({ jobDirs: [], trialsFile: file });
     expect(problems).toEqual([]);
     expect(trials.map((each) => each.trialName)).toEqual(["x", "y"]);
@@ -149,6 +163,15 @@ describe("readHarborTrial", () => {
     expect(result).toMatchObject({
       ok: false,
       problem: { path: dir, reason: expect.stringContaining("task_name") },
+    });
+  });
+
+  it("reports a result.json that isn't valid JSON", () => {
+    const dir = writeHarborTrial(tempDir("harbor-"), trial({ name: "t" }));
+    fs.writeFileSync(path.join(dir, "result.json"), "{ cut off");
+    expect(readHarborTrial(dir)).toMatchObject({
+      ok: false,
+      problem: { path: dir, reason: expect.stringContaining("not valid JSON") },
     });
   });
 

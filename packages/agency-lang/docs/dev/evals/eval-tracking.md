@@ -85,10 +85,16 @@ private derivation in `lib/runDirectory/list.ts`. The rules:
   never returns it.
 - `endedAt`: the `run` row's `createdAt`, else the last event's timestamp.
 - `latestScore` is the weighted mean of the scores on record; `score` is
-  what the run counts as in a mean, by grading's own rule (`gradeRun.ts`:
-  a run that did not finish scores zero). Grading writes no score row for
-  such a run, so without this field a batch mean would quietly skip its
-  crashes.
+  what the run counts as in a mean: the effective score when the run ended
+  `ok`, null when it ended `infrastructure` (so accuracy leaves it out), and
+  otherwise the effective score or 0 if ungraded. Grading writes no score
+  row for a run that did not finish, so without this field a batch mean
+  would quietly skip its crashes.
+- `agency eval grade` doesn't follow this rule for `infrastructure` runs: it
+  counts every run it can't grade as 0. On an imported Harbor batch with one
+  pass, one fail and one infrastructure run, `runs list` gives 0.5 and
+  `eval grade` gives 0.33. Imported batches aren't graded today, so the two
+  are left to differ.
 
 `summarizeEvalRun` takes canonical rows (`traceId`, the trace's events in
 order, its annotation rows) and checks every row belongs to that trace.

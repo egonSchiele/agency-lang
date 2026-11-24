@@ -197,8 +197,12 @@ function summarizeOne(parts: RunParts): RunSummary {
 /** An infrastructure failure says nothing about the agent; any other run
  *  that didn't end ok scores what it was given, or 0 if it was never graded. */
 function scoreOf(ended: string, effectiveScore: number | null): number | null {
-  if (ended === "ok") return effectiveScore;
-  if (ended === "infrastructure") return null;
+  if (ended === "ok") {
+    return effectiveScore;
+  }
+  if (ended === "infrastructure") {
+    return null;
+  }
   return effectiveScore ?? 0;
 }
 

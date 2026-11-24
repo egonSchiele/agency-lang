@@ -1,0 +1,162 @@
+import * as fs from "fs";
+import * as path from "path";
+
+import { describe, expect, it } from "vitest";
+
+import { tempDir } from "@/runDirectory/testFixtures.js";
+
+import { readHarborInputs, readHarborTrial } from "./readTrials.js";
+import { writeHarborJobFiles, writeHarborTrial, type FakeHarborTrial } from "./testFixtures.js";
+
+function trial(overrides: Partial<FakeHarborTrial> & { name: string }): FakeHarborTrial {
+  return {
+    taskName: "swe-bench/astropy__astropy-12907",
+    source: "swe-bench-verified",
+    startedAt: "2026-11-13T10:00:00Z",
+    rewards: { reward: 1 },
+    statelogLines: ["{}"],
+    ...overrides,
+  };
+}
+
+function writeLines(file: string, lines: string[]): string {
+  fs.writeFileSync(file, lines.join("\n") + "\n");
+  return file;
+}
+
+describe("readHarborInputs", () => {
+  it("a job folder gives its trials ordered by start time, ignoring job-level files", () => {
+    const jobDir = path.join(tempDir("harbor-"), "k1-agency-minimal");
+    writeHarborJobFiles(jobDir);
+    writeHarborTrial(jobDir, trial({ name: "a__late", startedAt: "2026-11-13T12:00:00Z" }));
+    writeHarborTrial(jobDir, trial({ name: "b__early", startedAt: "2026-11-13T09:00:00Z" }));
+    writeHarborTrial(jobDir, trial({ name: "c__tie", startedAt: "2026-11-13T12:00:00Z" }));
+    const { trials, problems } = readHarborInputs({ jobDirs: [jobDir] });
+    expect(problems).toEqual([]);
+    expect(trials.map((each) => each.trialName)).toEqual(["b__early", "a__late", "c__tie"]);
+    expect(trials[0].jobName).toBe("k1-agency-minimal");
+  });
+
+  it("a job's subfolder without result.json is a problem, and the rest still read", () => {
+    const jobDir = path.join(tempDir("harbor-"), "job");
+    writeHarborTrial(jobDir, trial({ name: "good" }));
+    fs.mkdirSync(path.join(jobDir, "crashed", "agent"), { recursive: true });
+    const { trials, problems } = readHarborInputs({ jobDirs: [jobDir] });
+    expect(trials.map((each) => each.trialName)).toEqual(["good"]);
+    expect(problems).toEqual([
+      { path: path.join(jobDir, "crashed"), reason: expect.stringContaining("result.json") },
+    ]);
+  });
+
+  it("a trials file gives its trials in line order, skipping blanks and comments", () => {
+    const root = tempDir("harbor-");
+    const jobDir = path.join(root, "job");
+    writeHarborTrial(jobDir, trial({ name: "x", startedAt: "2026-11-13T12:00:00Z" }));
+    writeHarborTrial(jobDir, trial({ name: "y", startedAt: "2026-11-13T09:00:00Z" }));
+    const file = writeLines(path.join(root, "trials.txt"), ["# picked by hand", "job/x", "", "job/y"]);
+    const { trials, problems } = readHarborInputs({ jobDirs: [], trialsFile: file });
+    expect(problems).toEqual([]);
+    expect(trials.map((each) => each.trialName)).toEqual(["x", "y"]);
+  });
+
+  it("job folders come before the trials file, in argument order", () => {
+    const root = tempDir("harbor-");
+    writeHarborTrial(path.join(root, "job2"), trial({ name: "j2" }));
+    writeHarborTrial(path.join(root, "job1"), trial({ name: "j1" }));
+    writeHarborTrial(path.join(root, "extra"), trial({ name: "e" }));
+    const file = writeLines(path.join(root, "trials.txt"), ["extra/e"]);
+    const { trials } = readHarborInputs({
+      jobDirs: [path.join(root, "job2"), path.join(root, "job1")],
+      trialsFile: file,
+    });
+    expect(trials.map((each) => `${each.jobName}/${each.trialName}`)).toEqual([
+      "job2/j2",
+      "job1/j1",
+      "extra/e",
+    ]);
+  });
+
+  it("a trial listed twice is a problem and is read once", () => {
+    const root = tempDir("harbor-");
+    const jobDir = path.join(root, "job");
+    writeHarborTrial(jobDir, trial({ name: "x" }));
+    const file = writeLines(path.join(root, "trials.txt"), ["./job/x"]);
+    const { trials, problems } = readHarborInputs({ jobDirs: [jobDir], trialsFile: file });
+    expect(trials).toHaveLength(1);
+    expect(problems).toEqual([
+      { path: `${file}:1`, reason: expect.stringContaining("listed twice") },
+    ]);
+  });
+
+  it("a trials line that isn't a trial folder is a problem naming the line", () => {
+    const root = tempDir("harbor-");
+    const jobDir = path.join(root, "job");
+    writeHarborTrial(jobDir, trial({ name: "x" }));
+    fs.mkdirSync(path.join(jobDir, "empty"));
+    const file = writeLines(path.join(root, "trials.txt"), ["job/missing", "job/empty", "job/x"]);
+    const { trials, problems } = readHarborInputs({ jobDirs: [], trialsFile: file });
+    expect(trials.map((each) => each.trialName)).toEqual(["x"]);
+    expect(problems.map((problem) => problem.path)).toEqual([`${file}:1`, `${file}:2`]);
+  });
+});
+
+describe("readHarborTrial", () => {
+  it("strips the source prefix from the task name", () => {
+    const dir = writeHarborTrial(tempDir("harbor-"), trial({ name: "t" }));
+    const result = readHarborTrial(dir);
+    expect(result).toMatchObject({ ok: true, trial: { testId: "astropy__astropy-12907" } });
+  });
+
+  it("reads rewards, the exception and the source", () => {
+    const dir = writeHarborTrial(
+      tempDir("harbor-"),
+      trial({
+        name: "t",
+        rewards: null,
+        exception: { type: "AgentTimeoutError", message: "took too long" },
+      }),
+    );
+    const result = readHarborTrial(dir);
+    expect(result).toMatchObject({
+      ok: true,
+      trial: {
+        benchmark: "swe-bench-verified",
+        rewards: null,
+        exception: { type: "AgentTimeoutError", message: "took too long" },
+        statelogPath: path.join(dir, "agent", "statelog.jsonl"),
+      },
+    });
+  });
+
+  it("refuses a task name containing / or ..", () => {
+    const root = tempDir("harbor-");
+    for (const taskName of ["swe-bench/a/b", "swe-bench/..", "swe-bench/a..b"]) {
+      const dir = writeHarborTrial(root, trial({ name: `t-${taskName.length}`, taskName }));
+      const result = readHarborTrial(dir);
+      expect(result).toMatchObject({ ok: false, problem: { path: dir } });
+    }
+  });
+
+  it("reports a result.json missing a field, naming it", () => {
+    const dir = writeHarborTrial(tempDir("harbor-"), trial({ name: "t" }));
+    const file = path.join(dir, "result.json");
+    const { task_name: _dropped, ...rest } = JSON.parse(fs.readFileSync(file, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    fs.writeFileSync(file, JSON.stringify(rest));
+    const result = readHarborTrial(dir);
+    expect(result).toMatchObject({
+      ok: false,
+      problem: { path: dir, reason: expect.stringContaining("task_name") },
+    });
+  });
+
+  it("statelogPath is null when the agent never started", () => {
+    const dir = writeHarborTrial(
+      tempDir("harbor-"),
+      trial({ name: "t", statelogLines: undefined }),
+    );
+    expect(readHarborTrial(dir)).toMatchObject({ ok: true, trial: { statelogPath: null } });
+  });
+});

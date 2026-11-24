@@ -59,9 +59,8 @@ export type RunSummary = {
   status: RunStatus;
   /** The weighted mean of the effective scores on record; null with none. */
   latestScore: number | null;
-  /** What this run counts as in a mean, by grading's rule (`gradeRun.ts`):
-   *  `latestScore` when the run ended ok, 0 when it did not finish (a crash
-   *  earns no points, graded or not), null when it ended ok but has no score. */
+  /** What this run counts as in a mean: `latestScore`, except null for an
+   *  `infrastructure` failure and 0 for any other unfinished run with no score. */
   score: number | null;
   /** Complete grading passes on this trace; `latestScore` is from the last. */
   gradingPasses: number;

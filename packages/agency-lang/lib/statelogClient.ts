@@ -651,6 +651,7 @@ export class StatelogClient {
     threadLabel,
     usageKind,
     decision,
+    reasoningEffort,
   }: {
     messages: any[];
     completion: any;
@@ -681,6 +682,9 @@ export class StatelogClient {
     /** What a decision model was sent and what it answered. Only on a
      *  decision call. */
     decision?: DecisionLog;
+    /** The reasoning level the call asked for, such as "high". Null when
+     *  it asked for none, which means the provider's default. */
+    reasoningEffort?: string | null;
   }): Promise<void> {
     await this.post({
       type: "promptCompletion",
@@ -709,6 +713,7 @@ export class StatelogClient {
       threadIdentity: threadIdentity ?? null,
       threadLabel: threadLabel ?? null,
       usageKind: usageKind ?? null,
+      reasoningEffort: reasoningEffort ?? null,
       ...(decision === undefined ? {} : { decision }),
     });
   }

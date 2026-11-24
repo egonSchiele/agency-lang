@@ -9,6 +9,7 @@ import {
   decisionOf,
   groupByType,
   modelOf,
+  reasoningEffortOf,
   threadIdOf,
   threadIdentityOf,
   threadLabelOf,
@@ -357,5 +358,17 @@ describe("usageKindOf / decisionOf", () => {
     expect(decisionOf(ev({ type: "promptCompletion", decision: unknownType }))).toBeUndefined();
     const noInstructions = { ...decision, questions: { answer: { type: "choice", criteria: {} } } };
     expect(decisionOf(ev({ type: "promptCompletion", decision: noInstructions }))).toBeUndefined();
+  });
+});
+
+describe("reasoningEffortOf", () => {
+  it("returns the call's requested reasoning level", () => {
+    expect(reasoningEffortOf(ev({ type: "promptCompletion", reasoningEffort: "low" }))).toBe("low");
+  });
+
+  it("returns null for a missing, null, or empty level", () => {
+    expect(reasoningEffortOf(ev({ type: "promptCompletion" }))).toBeNull();
+    expect(reasoningEffortOf(ev({ type: "promptCompletion", reasoningEffort: null }))).toBeNull();
+    expect(reasoningEffortOf(ev({ type: "promptCompletion", reasoningEffort: "" }))).toBeNull();
   });
 });

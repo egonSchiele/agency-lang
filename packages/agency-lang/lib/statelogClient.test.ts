@@ -855,6 +855,22 @@ describe("StatelogClient", () => {
       expect(toolsOf(evt)).toEqual(["read", "grep"]);
     });
 
+    it("promptCompletion posts reasoningEffort", async () => {
+      const file = newLogFile("prompt-reasoning-effort");
+      const client = fileClient(file);
+      await client.promptCompletion({ messages: [], completion: {}, reasoningEffort: "high" });
+      const [evt] = readEvents(file);
+      expect(evt.data.reasoningEffort).toBe("high");
+    });
+
+    it("reasoningEffort is null when absent", async () => {
+      const file = newLogFile("prompt-no-reasoning-effort");
+      const client = fileClient(file);
+      await client.promptCompletion({ messages: [], completion: {} });
+      const [evt] = readEvents(file);
+      expect(evt.data.reasoningEffort).toBeNull();
+    });
+
     it("promptCompletion writes null thread metadata when absent", async () => {
       const file = newLogFile("prompt-no-thread-metadata");
       const client = fileClient(file);

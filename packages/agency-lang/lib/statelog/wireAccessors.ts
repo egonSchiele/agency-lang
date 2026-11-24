@@ -194,6 +194,14 @@ export function reasoningOf(ev: EventEnvelope): string | undefined {
   return nonEmptyString(ev.data.completion?.reasoning);
 }
 
+/** The reasoning level a promptCompletion's call asked for, such as
+ *  "high". This is the requested level, not the reasoning text that
+ *  `reasoningOf` returns. Null when the call asked for none, and on logs
+ *  from before the field was recorded. */
+export function reasoningEffortOf(ev: EventEnvelope): string | null {
+  return nonEmptyString(ev.data.reasoningEffort) ?? null;
+}
+
 /** The tools the provider ran during a promptCompletion, such as OpenAI's
  *  or Anthropic's built-in web search. An entry without a tool name is
  *  dropped. */

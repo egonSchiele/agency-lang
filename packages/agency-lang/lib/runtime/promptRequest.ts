@@ -262,6 +262,7 @@ export async function _runPrompt({
     stream,
     usageKind,
     decision,
+    reasoningEffort: clientConfig.reasoningEffort ?? null,
   });
 
   const reply = buildReplyMessage(completion, toolCalls, ctx.logLevel, ctx.host.settings);

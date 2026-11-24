@@ -14,10 +14,18 @@ on:
     branches: [ "main" ]
     # Prose no code or test reads. docs/site and skills/ are not here:
     # make copies docs/site into the stdlib, and `agency skills` ships skills/.
+    # A copy of the list in test.yml; change both together.
     paths-ignore:
       - "packages/agency-lang/docs/dev/**"
       - "packages/agency-lang/docs/misc/**"
       - "packages/agency-lang/docs/superpowers/**"
+      - "packages/agency-lang/CLAUDE.md"
+      - "packages/agency-lang/AGENTS.md"
+      - "packages/agency-lang/README.md"
+      - "docs/**"
+      - "CLAUDE.md"
+      - "AGENTS.md"
+      - "README.md"
       - "**/CHANGELOG.md"
 
 permissions:

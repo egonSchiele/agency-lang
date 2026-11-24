@@ -9,7 +9,7 @@ We want to compare eval results by benchmark, agent, model and reasoning level, 
 ## Goals
 
 - Every run summary carries its benchmark, and a breakdown of its LLM usage by model and reasoning level, with token counts and cost.
-- Batch statistics carry the same things summed over the batch.
+- Agency sums the same things over a batch, so statelog never has to.
 - Statelog stores them, so runs can be filtered and sorted by them, and its batch and test endpoints return them.
 - Harbor imports (ADI-372 part 2) can set the benchmark and the reasoning level of old jobs, whose traces don't record it.
 
@@ -114,15 +114,15 @@ export type ModelUsage = {
 
 **Readers in agency-lang:** the runs explorer's per-test and per-run model lists use `.name`, deduplicated.
 
-### 4. Batch statistics
+### 4. Batch usage
 
-`BatchStatistics` (`lib/eval/batchStatistics.ts`) gains:
+A new agency-lang function, `batchUsage(runs: RunSummary[])` (exported beside `batchStatisticsByBatch`), returns a batch's:
 
-- `benchmark: string | null`: the runs' shared value, or the distinct values joined with ", " when they differ;
-- `inputTokens`, `cachedInputTokens` and `outputTokens`: summed over the batch's runs;
+- `benchmark: string | null`: the runs' shared value. When they differ, it's the distinct non-null values, sorted and joined with ", ". It's null when no run has one.
+- `inputTokens`, `cachedInputTokens` and `outputTokens`: summed over the runs;
 - `models: ModelUsage[]`: the runs' entries summed per (name, reasoning), in the same order as a run's.
 
-(My call, following the anti-goal: statelog reads these instead of summing anything itself.)
+It's a separate function rather than new `BatchStatistics` fields, because `batchStatistics` refuses a batch whose trial grid is incomplete, and statelog still shows those batches. (My call, following the anti-goal: statelog reads these instead of summing anything itself.)
 
 ### 5. Statelog
 
@@ -135,7 +135,7 @@ export type ModelUsage = {
 - **`toTraceSummaryRow`** writes the new columns. **`RunSummaryRowSchema`** gains `ModelUsage` and the new fields.
 - **Endpoints**, with no new query parameters (ADI-374):
   - **Test endpoint:** each run returns `benchmark`, the three token totals, and `models` (usage entries).
-  - **Batch list and batch page:** each batch returns `benchmark`, the token totals and `models` from agency-lang's `BatchStatistics`.
+  - **Batch list and batch page:** each batch returns `benchmark`, the token totals and `models` from agency-lang's `batchUsage`.
 - **Pages:** where a page lists model names today, it lists each entry's name, with its level when there is one (`claude-opus-5-5 (high)`). The trace page's fallback for traces with no summary keeps listing plain names from the events. The design-guide fixtures move to the new shape. Anything more is ADI-374.
 - **Existing rows:** summaries already stored have the old `models` shape and no tokens or benchmark. A one-off script re-runs the existing summary refresh for every trace in `trace_summaries`. Run it once after deploying. (My call: this is cheaper than making the schema accept both shapes, and the prototype has few rows.)
 

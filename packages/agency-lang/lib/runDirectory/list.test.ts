@@ -179,7 +179,7 @@ describe("buildRunsListing", () => {
     );
   }
 
-  it("counts rows, silent runs, total runs, and the mean over the graded rows, from the snapshots", () => {
+  it("counts rows, silent runs, total runs, and the mean over the graded rows, from the summaries", () => {
     const one = tempDir();
     writeStatelog(one, agentStartLine("t1"));
     const two = tempDir();
@@ -209,7 +209,7 @@ describe("buildRunsListing", () => {
     });
 
     const listing = buildRunsListing(
-      [one, two, graded, silent].map((dir) => readRunDirectory(dir, quiet)),
+      [one, two, graded, silent].flatMap((dir) => summarizeRuns(readRunDirectory(dir, quiet))),
     );
     expect(listing.summaries.map((summary) => summary.traceId)).toEqual(["t1", "t2", "t3", "t4"]);
     expect(listing.silentRunCount).toBe(1);
@@ -221,7 +221,7 @@ describe("buildRunsListing", () => {
   it("no graded rows: null mean and zero graded", () => {
     const dir = tempDir();
     writeStatelog(dir, agentStartLine("t1"));
-    const listing = buildRunsListing([readRunDirectory(dir, quiet)]);
+    const listing = buildRunsListing(summarizeRuns(readRunDirectory(dir, quiet)));
     expect(listing).toMatchObject({
       runCount: 1,
       silentRunCount: 0,
@@ -341,7 +341,7 @@ describe("summarizeEvalRun and summarizeRunDirectory", () => {
       endedAt: snapshot.effectiveAnnotations["silent-1"].run?.createdAt,
     });
     expect(summarizeRuns(snapshot)).toEqual([summary]);
-    const listing = buildRunsListing([snapshot]);
+    const listing = buildRunsListing(summarizeRuns(snapshot));
     expect(listing.runCount).toBe(1);
     expect(listing.silentRunCount).toBe(1);
     expect(

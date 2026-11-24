@@ -313,8 +313,9 @@ export type RunsListing = {
   meanScore: number | null;
 };
 
-export function buildRunsListing(snapshots: RunDirectorySnapshot[]): RunsListing {
-  const summaries = snapshots.flatMap(summarizeRuns);
+/** Takes summaries, not snapshots: a snapshot holds every event of its
+ *  trace, so callers summarize each run as they read it (#1559). */
+export function buildRunsListing(summaries: RunSummary[]): RunsListing {
   const silentRunCount = summaries.filter(
     (summary) => summary.eventCount === 0 && summary.status !== "trace",
   ).length;

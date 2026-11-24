@@ -1,3 +1,8 @@
+## Nov 24 2026 — v0.45.1
+
+- Tools to import Harbor results as Agency eval results.
+- Export the agent's compiled modules to programs outside the package
+
 ## Nov 23 2026 — v0.45.0
 
 safeBash can use a judge model to refuse complex lines, globs ask narrow questions, and the agent gets a scratch folder.

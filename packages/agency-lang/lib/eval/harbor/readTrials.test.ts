@@ -90,6 +90,29 @@ describe("readHarborInputs", () => {
     ]);
   });
 
+  it("a trials file that doesn't exist is a problem, and the job folders still read", () => {
+    const root = tempDir("harbor-");
+    writeHarborTrial(path.join(root, "job"), trial({ name: "x" }));
+    const missing = path.join(root, "no-such-list.txt");
+    const { trials, problems } = readHarborInputs({
+      jobDirs: [path.join(root, "job")],
+      trialsFile: missing,
+    });
+    expect(trials.map((each) => each.trialName)).toEqual(["x"]);
+    expect(problems).toEqual([{ path: missing, reason: "no such file" }]);
+  });
+
+  it("the same trial twice within one trials file is a problem", () => {
+    const root = tempDir("harbor-");
+    writeHarborTrial(path.join(root, "job"), trial({ name: "x" }));
+    const file = writeLines(path.join(root, "trials.txt"), ["job/x", "./job/x"]);
+    const { trials, problems } = readHarborInputs({ jobDirs: [], trialsFile: file });
+    expect(trials).toHaveLength(1);
+    expect(problems).toEqual([
+      { path: `${file}:2`, reason: expect.stringContaining("listed twice") },
+    ]);
+  });
+
   it("a trial listed twice is a problem and is read once", () => {
     const root = tempDir("harbor-");
     const jobDir = path.join(root, "job");
@@ -142,6 +165,14 @@ describe("readHarborTrial", () => {
     });
   });
 
+  it("refuses a task name that leaves an empty or dot test id", () => {
+    const root = tempDir("harbor-");
+    for (const taskName of ["swe-bench/", "swe-bench/."]) {
+      const dir = writeHarborTrial(root, trial({ name: `t-${taskName.length}`, taskName }));
+      expect(readHarborTrial(dir)).toMatchObject({ ok: false, problem: { path: dir } });
+    }
+  });
+
   it("refuses a task name containing / or ..", () => {
     const root = tempDir("harbor-");
     for (const taskName of ["swe-bench/a/b", "swe-bench/..", "swe-bench/a..b"]) {
@@ -173,6 +204,16 @@ describe("readHarborTrial", () => {
       ok: false,
       problem: { path: dir, reason: expect.stringContaining("not valid JSON") },
     });
+  });
+
+  it("an empty statelog counts as no trace", () => {
+    const dir = writeHarborTrial(
+      tempDir("harbor-"),
+      trial({ name: "t", statelogLines: undefined }),
+    );
+    fs.mkdirSync(path.join(dir, "agent"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "agent", "statelog.jsonl"), "");
+    expect(readHarborTrial(dir)).toMatchObject({ ok: true, trial: { statelogPath: null } });
   });
 
   it("statelogPath is null when the agent never started", () => {

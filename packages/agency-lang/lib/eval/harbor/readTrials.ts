@@ -50,10 +50,10 @@ export function readHarborTrial(trialDir: string): ReadTrialResult {
     return problemAt(trialDir, parsed.reason);
   }
   const testId = testIdOf(parsed.result.task_name);
-  if (testId.includes("/") || testId.includes("..")) {
+  if (!isSafeFolderName(testId)) {
     return problemAt(
       trialDir,
-      `task name "${parsed.result.task_name}" can't be used as a folder name: it contains / or ..`,
+      `task name "${parsed.result.task_name}" can't be used as a folder name`,
     );
   }
   return { ok: true, trial: trialOf({ trialDir, result: parsed.result, testId }) };
@@ -128,6 +128,9 @@ function sortKeyOf(read: TrialRead): string {
 }
 
 function readTrialsFile(trialsFile: string): TrialRead[] {
+  if (!fs.existsSync(trialsFile)) {
+    return [{ label: trialsFile, dir: trialsFile, result: problemAt(trialsFile, "no such file") }];
+  }
   const base = path.dirname(path.resolve(trialsFile));
   const lines = fs.readFileSync(trialsFile, "utf8").split("\n");
   return lines.flatMap((line, index) => {
@@ -195,7 +198,9 @@ function trialOf({
       exception === null
         ? null
         : { type: exception.exception_type, message: exception.exception_message },
-    statelogPath: fs.existsSync(statelogPath) ? statelogPath : null,
+    // An empty statelog means the agent never logged anything: no trace.
+    statelogPath:
+      fs.existsSync(statelogPath) && fs.statSync(statelogPath).size > 0 ? statelogPath : null,
   };
 }
 
@@ -207,6 +212,11 @@ function testIdOf(taskName: string): string {
 
 function problemAt(problemPath: string, reason: string): ReadTrialResult {
   return { ok: false, problem: { path: problemPath, reason } };
+}
+
+/** A test id or batch name becomes a folder, so it must be one plain name. */
+export function isSafeFolderName(testId: string): boolean {
+  return testId !== "" && testId !== "." && !testId.includes("/") && !testId.includes("..");
 }
 
 function isDirectory(dir: string): boolean {

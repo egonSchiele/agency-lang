@@ -22,6 +22,7 @@
 - All writes go through `recordCompletedRun` and `recordGradingPass` (`lib/runDirectory/mutations.ts`).
 - Run folder path: always `<out>/<batch>/<testId>/<trial>/`.
 - **The command never chooses or drops trials.** It converts every trial it's given, numbers each test's trials 1, 2, 3… in input order, and only reports uneven trial counts.
+- **Re-importing a smaller selection needs a fresh output folder.** The command only checks the folders it plans, so a trial dropped from the end of the input leaves its old folder behind. Delete `<out>/<batch>` first; the dev doc says so.
 - **Annotators:**
   - `run` row: `{ kind: "harness", id: "harbor-import@<harnessVersion()>" }`.
   - Scores: `{ kind: "grader", id: "harbor-verifier:<benchmark>" }`.
@@ -63,6 +64,8 @@
 - [ ] **Step 2: Run** `pnpm exec vitest run lib/runDirectory/list.test.ts lib/eval/batchStatistics.test.ts`. Expected: the timeout test fails (0 instead of 1), and the infrastructure tests fail on the schema.
 - [ ] **Step 3: Implement.** Add `"infrastructure"` to the type and the zod enum, and change the `score` line to the spec's expression.
 - [ ] **Step 4: Run** the two files, `pnpm exec vitest run lib/runDirectory lib/eval lib/runsExplorer`, and `pnpm run typecheck`. Expected: all pass. If `typecheck` reports a non-exhaustive switch on `RunOutcome`, handle `infrastructure` like `error`.
+
+  `statusOf` (`list.ts`) and `runsExplorer/rows.ts` show an `infrastructure` run as `failed`. That's intended; leave both alone.
 - [ ] **Step 5: Update `run-directory.md`, then commit** with the message `Runs keep their given score when they don't end ok; add an infrastructure outcome`.
 
 ### Task 2: Share `harnessVersion`
@@ -101,7 +104,8 @@
     statelogPath: string | null; // <trial>/agent/statelog.jsonl when it exists
   };
   export type HarborProblem = { path: string; reason: string };
-  export function readHarborTrial(trialDir: string): HarborTrial | HarborProblem;
+  export type ReadTrialResult = { ok: true; trial: HarborTrial } | { ok: false; problem: HarborProblem };
+  export function readHarborTrial(trialDir: string): ReadTrialResult;
   export function readHarborInputs({ jobDirs, trialsFile }: {
     jobDirs: string[];
     trialsFile?: string;
@@ -110,7 +114,7 @@
 - **Input order:**
   1. Job folders in argument order. Within a job, its trials are sorted by `startedAt`, then `trialName`. A trial is a subfolder holding `result.json`.
   2. Then the `--trials` lines in file order. Each line is a trial folder path, resolved against the file's own folder. Blank lines and `#` comments are skipped.
-  3. A trial seen a second time is a problem: `listed twice`.
+  3. A trial seen a second time is a problem: `listed twice`. Trials are compared by `fs.realpathSync` of the trial folder, so `x`, `./x`, an absolute path and a symlink are the same trial.
 - `HarborResultSchema` is private, a `z.looseObject`. It reads `task_name`, `source`, `started_at`, `verifier_result: { rewards: record<number> | null } | null`, and `exception_info: { exception_type, exception_message } | null`.
 - Test helper: `writeHarborTrial(jobDir, { name, taskName, source, startedAt, rewards, exception?, statelogLines? }): string`.
 
@@ -118,7 +122,7 @@
   - `"a job folder gives its trials ordered by start time"`: job-level `config.json`, `job.log`, `lock.json` and `result.json` are ignored.
   - `"a trials file gives its trials in line order, skipping blanks and comments"`.
   - `"job folders come before the trials file, in argument order"`.
-  - `"a trial listed twice is a problem and is read once"` (Review Focus 1).
+  - `"a trial listed twice is a problem and is read once"` (Review Focus 1): once from its job folder and once as a relative `--trials` line.
   - `"a trials line that isn't a trial folder is a problem naming the line"` (Review Focus 2).
   - `"strips the source prefix from the task name"`.
   - `"refuses a task name containing / or .."` (Review Focus 4).
@@ -240,14 +244,14 @@
 - Modify: `scripts/agency.ts` (beside `evalCmd.command("upload")`, around `:1350`)
 - Create: `lib/eval/harbor/formatImport.ts`
 - Test: `lib/eval/harbor/formatImport.test.ts`
-- Modify: `docs/dev/evals/eval-tracking.md` (a short "Importing Harbor jobs" section: the inputs, that the command never picks trials, how trials are numbered and scored, and the spec's three examples). Dev docs only.
+- Modify: `docs/dev/evals/eval-tracking.md` (a short "Importing Harbor jobs" section: the inputs, that the command never picks trials, how trials are numbered and scored, the spec's three examples, and that re-importing a smaller selection needs `<out>/<batch>` deleted first). Dev docs only.
 
 **Interfaces:**
 - Produces: `export function formatImportSummary(result: ImportResult): string[]`. It returns:
   1. one line per `failed` outcome and per problem;
   2. `<n> imported · <n> present · <n> scored · <n> infrastructure · <n> failed`;
   3. when `trialCounts` has more than one key, `uneven trials: 5 trials: 498 tests; 4 trials: 2 tests (A, B)`. Tests are listed only for the smaller groups, at most 10 per group, then `…`;
-  4. `unknown exception types (scored as infrastructure): A, B` when there are any;
+  4. `unknown exception types (counted as infrastructure): A, B` when there are any;
   5. `upload with: agency eval upload <uploadPath>`.
 - `hasErrors(result: ImportResult): boolean` is true when there's any `failed` outcome or any problem.
 
@@ -272,6 +276,6 @@ No code. This proves the ticket's "Done when".
 
 - [ ] **Step 1: Import one job.** `node dist/scripts/agency.js eval import-harbor ~/bench-agency/jobs/k1-agency-minimal --out $TMPDIR/harbor`. Expected: 500 trials written, `failed` 0, and no uneven-trials line.
 - [ ] **Step 2: Import five jobs as one batch.** `k1-agency-minimal` … `k5-agency-minimal` with `--batch k-agency-minimal`. Expected: no uneven-trials line, and `node dist/scripts/agency.js runs list $TMPDIR/harbor/k-agency-minimal` shows the batch with an accuracy.
-- [ ] **Step 3: Import a hand-picked list.** Write a `--trials` file with three trial folders: one from `full-agency-6e9db1438-flash-high`, one from its `-fixup`, and a second attempt of the first trial's test. Expected: that test gets trials 1 and 2, the uneven-trials line names it, and the counts match.
+- [ ] **Step 3: Import a hand-picked list.** Write a `--trials` file with three lines: test A's trial from `full-agency-6e9db1438-flash-high`, test A's rerun from `-flash-high-fixup`, and test B's trial from `full-agency-6e9db1438-flash-high`. Expected: A gets trials 1 and 2, B gets trial 1, and the uneven-trials line names B.
 - [ ] **Step 4: Re-import steps 1 and 2.** Expected: `diff -r` against a copy shows nothing, and every trial is `present`.
 - [ ] **Step 5: Upload `$TMPDIR/harbor/k-agency-minimal` to a local statelog**, following statelog `docs/dev/eval-tracking.md`, "Testing an upload locally". This requires statelog on an agency-lang build that includes Task 1. Point statelog at the local build if it isn't released yet. Expected: everything uploads, and the batch page shows an accuracy.

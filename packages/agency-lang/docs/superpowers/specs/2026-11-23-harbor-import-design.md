@@ -113,6 +113,7 @@ So a run that didn't end `ok` keeps the score it was given, an ungraded one is s
   - If its `flags.harborJob` and `flags.harborTrial` differ from the planned trial, that's a failure naming both. That happens when the input changed order, or a trial was added or removed.
   - If they match and it has a complete grading pass (`effectiveAnnotations[traceId].gradingPasses > 0`), or needs no scores, it's left alone.
   - If they match but the pass is missing (an earlier import was cut off between the two writes), only the pass is added.
+- Only planned folders are checked. Re-importing a smaller selection leaves the dropped trials' folders behind, so delete `<out>/<batch>` first.
 - The output ends with one counts line (imported, already present, scored, infrastructure, failed), the uneven-trials report, and any unknown exception types. A failure, or a trial with a missing or broken `result.json`, sets exit code 1.
 
 ### Reading Harbor's files

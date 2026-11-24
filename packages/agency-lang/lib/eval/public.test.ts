@@ -41,6 +41,7 @@ const TRACKING_NAMES = [
   "summarizeEvalRun",
   "batchStatistics",
   "batchStatisticsByBatch",
+  "batchUsage",
   "AnnotationSchema",
   "annotationId",
   "agentNameProblem",
@@ -49,8 +50,24 @@ const TRACKING_NAMES = [
 ];
 
 // Type-level contract for the same consumer; erased at runtime, guarded by typecheck.
-import type { EvalRunInput, RunSummary, RunStatus, BatchStatistics, Annotation } from "./public.js";
-type _TrackingTypesAreContract = [EvalRunInput, RunSummary, RunStatus, BatchStatistics, Annotation];
+import type {
+  EvalRunInput,
+  RunSummary,
+  RunStatus,
+  BatchStatistics,
+  BatchUsage,
+  ModelUsage,
+  Annotation,
+} from "./public.js";
+type _TrackingTypesAreContract = [
+  EvalRunInput,
+  RunSummary,
+  RunStatus,
+  BatchStatistics,
+  BatchUsage,
+  ModelUsage,
+  Annotation,
+];
 
 describe("agency-lang/eval tracking contract", () => {
   it("exports the run summary, batch statistics, annotation schema, and agent-name rule", () => {

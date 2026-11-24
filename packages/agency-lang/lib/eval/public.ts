@@ -42,6 +42,10 @@ export type { InputBreakdown, GradeRow } from "./grading/gradeBreakdown.js";
 export { summarizeEvalRun } from "../runDirectory/list.js";
 export type { EvalRunInput, RunSummary, RunStatus } from "../runDirectory/list.js";
 export type { ModelUsage } from "../runDirectory/modelUsage.js";
+// A results-only upload's stored stand-in for its events. Only the schema is
+// exported: computing a digest stays here, like every other trace reading.
+export { TraceDigestSchema } from "../runDirectory/traceDigest.js";
+export type { TraceDigest } from "../runDirectory/traceDigest.js";
 export { batchStatistics, batchStatisticsByBatch, batchUsage } from "./batchStatistics.js";
 export type { BatchStatistics, BatchUsage, TestStatistics } from "./batchStatistics.js";
 export { AnnotationSchema, annotationId } from "../runDirectory/annotations.js";

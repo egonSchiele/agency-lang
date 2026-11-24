@@ -12,6 +12,7 @@ import {
   tokensOut,
 } from "@/statelog/wireAccessors.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
+import { z } from "zod";
 
 /** The name a call with no model on record is counted under, so a run's
  *  totals still equal the sum of its entries. */
@@ -33,20 +34,26 @@ export type ModelUsage = {
   costUsd: number;
 };
 
+export const ModelUsageSchema = z
+  .object({
+    name: z.string(),
+    reasoning: z.string().nullable(),
+    calls: z.number().int().nonnegative(),
+    inputTokens: z.number().nonnegative(),
+    cachedInputTokens: z.number().nonnegative(),
+    cacheCreationInputTokens: z.number().nonnegative(),
+    outputTokens: z.number().nonnegative(),
+    costUsd: z.number().finite(),
+  })
+  .strict();
+
 /** Sums a run's `promptCompletion` events into entries sorted by name,
- *  then reasoning (null first). `fallbackReasoning` is the level for a
- *  call that recorded none: the `run` row's `reasoning`, for imported
- *  traces that never logged one. */
-export function modelUsageOf({
-  events,
-  fallbackReasoning,
-}: {
-  events: readonly EventEnvelope[];
-  fallbackReasoning: string | null;
-}): ModelUsage[] {
+ *  then reasoning (null first). A call that recorded no level stays null;
+ *  `withFallbackReasoning` fills it from the run row. */
+export function modelUsageOf({ events }: { events: readonly EventEnvelope[] }): ModelUsage[] {
   const entries = byType([...events], "promptCompletion").map((event): ModelUsage => ({
     name: modelOf(event) || UNKNOWN_MODEL,
-    reasoning: reasoningEffortOf(event) ?? fallbackReasoning,
+    reasoning: reasoningEffortOf(event) ?? null,
     calls: 1,
     inputTokens: tokensIn(event),
     cachedInputTokens: tokensCached(event),
@@ -55,6 +62,18 @@ export function modelUsageOf({
     costUsd: cost(event),
   }));
   return sumModelUsage([entries]);
+}
+
+/** Gives entries with no level the run row's `reasoning` (imported traces
+ *  never logged one), merging any that then share a model and level. */
+export function withFallbackReasoning(
+  models: readonly ModelUsage[],
+  fallbackReasoning: string | null,
+): ModelUsage[] {
+  const filled = models.map((item) =>
+    item.reasoning === null ? { ...item, reasoning: fallbackReasoning } : item,
+  );
+  return sumModelUsage([filled]);
 }
 
 /** Merges several lists of entries, summing the ones with the same name

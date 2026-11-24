@@ -13,25 +13,36 @@ import type { Annotation } from "@/runDirectory/annotations.js";
 import { recordGradingPass } from "@/runDirectory/mutations.js";
 import { statelogLine, tempDir } from "@/runDirectory/testFixtures.js";
 
-import { eventPlan, evalUpload, formatUploadResult } from "./upload.js";
+import type { TraceDigest } from "@/runDirectory/traceDigest.js";
+
+import { digestPlan, eventPlan, evalUpload, formatUploadResult } from "./upload.js";
 
 const target = { origin: "https://h", projectSlug: "proj", apiKey: "k" };
 
 type Posted = { traceId: string; events: SequencedEvent[] };
 
-/** A client that answers upload-state from a table and records every post. */
+/** A client that answers upload-state from a table and records every post.
+ *  `refuseDigestWith` stands in for the server's failure envelope, which the
+ *  real client turns into an error carrying the server's message. */
 function fakeClient(
   states: Record<string, RemoteTraceState>,
-  options: { failAnnotationsFor?: string } = {},
+  options: { failAnnotationsFor?: string; refuseDigestWith?: string } = {},
 ) {
   const posted: Posted[] = [];
   const annotations: Annotation[][] = [];
+  const digests: { traceId: string; digest: TraceDigest }[] = [];
   const client: EvalUploadClient = {
     async traceUploadState(traceId) {
       return states[traceId] ?? { kind: "missing" };
     },
     async postEvents(traceId, events) {
       posted.push({ traceId, events: [...events] });
+    },
+    async putDigest(traceId, digest) {
+      if (options.refuseDigestWith !== undefined) {
+        throw new Error(options.refuseDigestWith);
+      }
+      digests.push({ traceId, digest });
     },
     async postAnnotations(rows) {
       if (rows.some((row) => row.traceId === options.failAnnotationsFor)) {
@@ -40,7 +51,7 @@ function fakeClient(
       annotations.push([...rows]);
     },
   };
-  return { client, posted, annotations };
+  return { client, posted, annotations, digests };
 }
 
 /** A run directory whose trace has `count` events and names its agent.
@@ -86,6 +97,80 @@ describe("eventPlan", () => {
       kind: "refuse",
       reason: "the server reports an unusable trace: gap after 0",
     });
+  });
+});
+
+describe("digestPlan", () => {
+  it("puts the digest for a new or event-less trace and refuses one with events", () => {
+    expect(digestPlan({ kind: "missing" })).toEqual({ kind: "put-digest" });
+    expect(digestPlan({ kind: "empty" })).toEqual({ kind: "put-digest" });
+    for (const state of [
+      { kind: "live", eventCount: 3 },
+      { kind: "bulk-prefix", eventCount: 3, nextSequence: 3 },
+      { kind: "invalid", eventCount: 2, reason: "gap" },
+    ] satisfies RemoteTraceState[]) {
+      expect(digestPlan(state)).toEqual({
+        kind: "refuse",
+        reason: "already uploaded with its trace",
+      });
+    }
+  });
+});
+
+describe("evalUpload --results-only", () => {
+  function gradedRun(): string {
+    return writeRunDirectory({ test: { id: "a", input: "t" }, output: "x", costUsd: 0.5 });
+  }
+
+  it("puts the trace's digest and its annotations, and never posts events", async () => {
+    const dir = gradedRun();
+    const { client, posted, annotations, digests } = fakeClient({});
+    const result = await evalUpload([dir], target, { client, resultsOnly: true });
+    expect(result.runs).toEqual([
+      { dir: fs.realpathSync(dir), traceId: "trace-1", status: "results-only", annotations: 1 },
+    ]);
+    expect(posted).toEqual([]);
+    expect(digests).toHaveLength(1);
+    expect(digests[0]).toMatchObject({ traceId: "trace-1", digest: { version: 1, eventCount: 4 } });
+    expect(annotations.flat().map((row) => row.kind)).toEqual(["run"]);
+    const realDir = fs.realpathSync(dir);
+    expect(formatUploadResult(result, path.dirname(realDir))).toEqual([
+      `${path.basename(realDir)}: uploaded results only, 1 annotations`,
+      "1 uploaded results only",
+    ]);
+  });
+
+  it("puts the digest again for a trace the server already holds results-only", async () => {
+    const { client, digests } = fakeClient({ "trace-1": { kind: "empty" } });
+    const result = await evalUpload([gradedRun()], target, { client, resultsOnly: true });
+    expect(result.runs[0].status).toBe("results-only");
+    expect(digests).toHaveLength(1);
+  });
+
+  it("refuses a trace already uploaded with its events, sending nothing", async () => {
+    const { client, annotations, digests } = fakeClient({
+      "trace-1": { kind: "bulk-prefix", eventCount: 4, nextSequence: 4 },
+    });
+    const result = await evalUpload([gradedRun()], target, { client, resultsOnly: true });
+    expect(result.runs[0]).toMatchObject({
+      status: "failed",
+      error: "already uploaded with its trace",
+    });
+    expect(digests).toEqual([]);
+    expect(annotations).toEqual([]);
+  });
+
+  it("reports the server's refusal as a failed run, and the next run still uploads", async () => {
+    const { client, annotations } = fakeClient(
+      {},
+      { refuseDigestWith: "already uploaded with its trace" },
+    );
+    const result = await evalUpload([gradedRun()], target, { client, resultsOnly: true });
+    expect(result.runs[0]).toMatchObject({
+      status: "failed",
+      error: "already uploaded with its trace",
+    });
+    expect(annotations).toEqual([]);
   });
 });
 

@@ -1,5 +1,6 @@
 // The statelog eval-upload API, sealed here: one trace's upload state, bulk
-// event ingest with source order, and annotation upsert. This is the only
+// event ingest with source order, the results-only digest, and annotation
+// upsert. This is the only
 // file that knows the routes, body shapes, and response envelopes. The
 // server owns the classification of a trace's state; the client only parses
 // it into `RemoteTraceState`, and `eval upload` decides what is safe to do.
@@ -7,6 +8,7 @@
 import { z } from "zod";
 
 import type { Annotation } from "@/runDirectory/annotations.js";
+import type { TraceDigest } from "@/runDirectory/traceDigest.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
 import { statelogRequest, type StatelogFailure } from "./statelogRequest.js";
@@ -37,6 +39,9 @@ export type EvalUploadClient = {
    *  `MAX_REQUEST_BYTES` (split with `requestChunks`). An empty list creates
    *  the trace. */
   postEvents(traceId: string, events: readonly SequencedEvent[]): Promise<void>;
+  /** Stores the trace's digest in place of its events (an upsert). The
+   *  server refuses a trace that already has events. */
+  putDigest(traceId: string, digest: TraceDigest): Promise<void>;
   /** Upsert by deterministic id; the server recomputes the id before writing. */
   postAnnotations(rows: readonly Annotation[]): Promise<void>;
 };
@@ -192,7 +197,7 @@ export function createEvalUploadClient(
   }
 
   async function request(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "PUT",
     segments: string[],
     body?: Record<string, unknown>,
   ): Promise<unknown> {
@@ -228,6 +233,9 @@ export function createEvalUploadClient(
         );
       }
       await request("POST", ["logs", "bulk"], body);
+    },
+    async putDigest(traceId, digest) {
+      await request("PUT", ["traces", traceId, "digest"], { digest });
     },
     async postAnnotations(rows) {
       await request("POST", ["annotations"], { annotations: rows });

@@ -107,7 +107,7 @@ export type ModelUsage = {
 | a git source with no subfolder | the repo's name |
 | `inline:--input`, or no suite | `null` |
 
-(My call to work it out in the summary rather than have `eval run` write it. It's the owner's folder-name rule, kept in one place. Runs already stored get a benchmark when they're summarized again. And `eval run`'s `run` rows stay unchanged, so there's no window where uploads are rejected. Git sources are parsed with the existing `parseSource`.)
+(My call to work it out in the summary rather than have `eval run` write it. It's the owner's folder-name rule, kept in one place. Runs already stored get a benchmark when they're summarized again. And `eval run`'s `run` rows stay unchanged, so there's no window where uploads are rejected. Git sources are parsed with the runs explorer's parser, described next. `parseSource` in `lib/eval/sources.ts` isn't used, because it needs a base directory and throws on some source strings, and a summary of a stored run must never throw on its source.)
 
 **One parser for suite names.** The runs explorer already turns `suite.source` into a short name for its "suite" column (`lib/runsExplorer/suite.ts`, `suiteFromSource`). The shared part (the folder or file name without its data extension, or the repo name for a git source) moves into one function that the summary uses for `benchmark`. The explorer keeps its display extras on top of it: the `@<ref>` suffix, clipping, `—` for unknown, and showing `inline:…` as is. So the explorer and statelog always agree on a run's name.
 
@@ -140,7 +140,7 @@ It's a separate function rather than new `BatchStatistics` fields, because `batc
   - **Test endpoint:** each run returns `benchmark`, the four token totals, and `models` (usage entries).
   - **Batch list and batch page:** each batch returns `benchmark`, the token totals and `models` from agency-lang's `batchUsage`.
 - **Pages:** where a page lists model names today, it lists each entry's name, with its level when there is one (`claude-opus-5-5 (high)`). The trace page's fallback for traces with no summary keeps listing plain names from the events. The design-guide fixtures move to the new shape. Anything more is ADI-374.
-- **Existing rows:** summaries already stored have the old `models` shape and no tokens or benchmark. A one-off script re-runs the existing summary refresh for every trace in `trace_summaries`. Run it once after deploying. (My call: this is cheaper than making the schema accept both shapes, and the prototype has few rows.)
+- **Existing rows:** summaries already stored have the old `models` shape and no tokens or benchmark. A one-off script re-runs the existing summary refresh for every trace in `trace_summaries`. Run it once after deploying. (My call: this is cheaper than making the schema accept both shapes, and the prototype has few rows.) When a trace can't be re-summarized, the script deletes that trace's `trace_summaries` row and reports it. An old-shape row fails the new schema, and one failing row makes its project's whole batch list fail. The row is derived data, and the trace's next log or annotation change rebuilds it.
 
 ## Left to the builder
 

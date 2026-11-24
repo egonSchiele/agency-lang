@@ -48,7 +48,8 @@
 2. **A `promptCompletion` with an empty model string** is counted under the name `unknown`, so run totals still equal the sum of `models`. Test in Task 3.
 3. **A suite source with a trailing slash, or a git source with `?ref=` and no subdir**, gives the folder name or the repo name, never `""` or a `?ref` fragment. Test in Task 2.
 4. **A batch where some runs have a benchmark and some don't** gives only the non-null values. It never gives `"null"` or a leading ", ". Test in Task 5.
-5. **The refresh script on a trace whose events no longer summarize** logs that trace and carries on, then prints how many traces succeeded and how many failed. Test in Task 9.
+5. **The refresh script on a trace whose events no longer summarize** deletes that trace's `trace_summaries` row (an old-shape row would make its project's whole batch list fail), reports it, and carries on. It then prints how many traces succeeded and how many failed. Test in Task 9.
+6. **A run's totals add up:** the sum of `models[].calls` is `llmCalls`, and the sum of `models[].costUsd` is `costUsd`. These come from two pieces of code (`modelUsageOf` and `computeMetrics`) summing the same events. Test in Task 4.
 
 ---
 
@@ -67,7 +68,8 @@
 - Produces:
   - `promptCompletion` accepts `reasoningEffort?: string | null` and posts it, normalized to `null` when absent.
   - `emitPromptCompletion` takes `reasoningEffort: string | null`.
-  - `export function reasoningEffortOf(ev: EventEnvelope): string | null`, which returns `ev.data.reasoningEffort` when it's a non-empty string, else `null`.
+  - `export function reasoningEffortOf(ev: EventEnvelope): string | null`, which returns `ev.data.reasoningEffort` when it's a non-empty string, else `null`. It uses the file's existing `nonEmptyString` helper. Its doc comment says it is the requested level (such as `high`), unlike `reasoningOf`, which returns the model's reasoning text.
+- Not changed: `lib/runtime/memory/manager.ts:307` also logs `promptCompletion`, for the memory manager's own LLM calls. It passes no `reasoningEffort`, so its events record `null`. That's deliberate: memory calls don't set a reasoning level.
 
 - [ ] **Step 1: Write the failing tests:**
   - `statelogClient.test.ts`:
@@ -86,11 +88,13 @@
 
 **Files:**
 - Create: `lib/runDirectory/benchmark.ts` (the shared part moved out of `lib/runsExplorer/suite.ts`: `looksLikeGitUrl`, the repo-name step of `gitSuite`, and `dataBasename`)
-- Modify: `lib/runsExplorer/suite.ts` (`suiteFromSource` calls `benchmarkFromSuite`, and keeps its own handling of `null`/`""`/`"unspecified"` → `—`, `inline:…` shown as is, the `@<ref>` suffix, and `clip`)
+- Modify: `lib/runsExplorer/suite.ts` (`suiteFromSource` calls `benchmarkFromSuite`, and keeps its own handling of `null`/`""`/`"unspecified"` → `—`, `"optimize"` shown as is, `inline:…` shown as is, the `@<ref>` suffix, and `clip`. It imports `looksLikeGitUrl` from `benchmark.ts` to know when to add the `@<ref>` suffix.)
 - Test: `lib/runDirectory/benchmark.test.ts` (new), `lib/runsExplorer/suite.test.ts` (existing, must still pass unchanged)
 
 **Interfaces:**
-- Produces: `export function benchmarkFromSuite(source: string | null | undefined): string | null`. It returns `null` for `null`, `undefined`, `""`, `"unspecified"`, `"optimize"` and any `inline:` source. It never returns a `?ref` fragment.
+- Produces:
+  - `export function benchmarkFromSuite(source: string | null | undefined): string | null`. It returns `null` for `null`, `undefined`, `""`, `"unspecified"`, `"optimize"` and any `inline:` source. It never returns a `?ref` fragment.
+  - `export function looksLikeGitUrl(candidate: string): boolean`, moved from `suite.ts`.
 
 - [ ] **Step 1: Write the failing test** `"derives the benchmark from the suite source"`, with `it.each` over the spec's table plus Review Focus 3:
 
@@ -104,6 +108,7 @@
   | `"https://github.com/acme/plan-suites.git"` | `"plan-suites"` |
   | `"inline:--input"` | `null` |
   | `"unspecified"` | `null` |
+  | `"optimize"` | `null` |
   | `null` | `null` |
 - [ ] **Step 2: Run** `pnpm exec vitest run lib/runDirectory/benchmark.test.ts`. Expected: FAIL, module not found.
 - [ ] **Step 3: Move the shared code into `benchmark.ts`, and rebuild `suiteFromSource` on it.**
@@ -168,6 +173,7 @@
     - `"the run row's benchmark wins over the suite source"`.
     - `"the run row's reasoning fills calls with no level"`.
     - `"an --input run has no benchmark"`.
+    - `"the run's totals add up"` (Review Focus 6): a trace with several models, where the sum of `models[].calls` equals `llmCalls` and the sum of `models[].costUsd` equals `costUsd`.
   - `rows.test.ts`: an existing assertion on `models` keeps passing with names, and two entries for one model at two levels give that name once.
 - [ ] **Step 2: Run** `pnpm exec vitest run lib/runDirectory lib/runsExplorer`. Expected: the new tests FAIL, and so do existing tests that build `RunSummary` with `models: string[]`. Update those fixtures to `[]` or entries.
 - [ ] **Step 3: Implement.** `summarizeOne` calls `modelUsageOf({ events, fallbackReasoning: runRow?.reasoning ?? null })` and `benchmarkFromSuite`. Other summary fields are unchanged.
@@ -203,7 +209,7 @@
 - [ ] **Step 4: Run** `pnpm exec vitest run lib/eval`, `pnpm run typecheck` and `pnpm run fmt:ts:check`. Expected: PASS.
 - [ ] **Step 5: Write the doc paragraph, then commit** with the message `batchUsage: a batch's tokens, models and benchmark`.
 
-**Part A done:** open the agency-lang PR. Once merged, the owner publishes a release. Its `CHANGELOG.md` entry lists under **Breaking**: "`RunSummary.models` (from `agency-lang/eval`) is now a list of usage entries, one per model and reasoning level, instead of model names." Part B pins that version.
+**Part A done:** open the agency-lang PR. Once merged, the owner publishes a release. The builder does not edit `CHANGELOG.md`; the PR description gives the owner this line for the release's **Breaking** section: "`RunSummary.models` (from `agency-lang/eval`) is now a list of usage entries, one per model and reasoning level, instead of model names." Part B pins that version.
 
 ---
 
@@ -223,7 +229,9 @@ Paths are relative to the statelog repo root. Work in a statelog worktree off `o
 - Modify: `src/backend/db/types.ts` (`TraceSummaryTable`: the five columns. The token columns are typed like `total_cost`: `ColumnType<string, number, number>`. `models` holds `ModelUsage[]`.)
 - Modify: `src/backend/db/trace_summary.ts` (`toTraceSummaryRow` and the upsert's `doUpdateSet` include the five columns)
 - Modify: `src/backend/lib/evals/evalQueries.ts` (`RunSummaryRowSchema`: a `ModelUsage` object schema for `models`, plus `benchmark` and the four token totals)
+- Modify: `src/common/apiTypes/logEvents.ts` (`LogPromptCompletionSchema` gains `reasoningEffort: z.string().nullable().optional()`. The schema is loose, so this documents the field rather than unblocking it.)
 - Test: `src/backend/lib/evals/traceSummary.test.ts`, `src/backend/postgres-integration/evalTracking.migration.test.ts`
+- Fixtures that build a `RunSummary` or a summary row with string `models`, updated to entries in this task: `src/backend/lib/evals/evalQueries.test.ts`, `src/backend/lib/evals/traceSummary.test.ts` (:242, :275), `src/backend/postgres-integration/evalTraceSummary.test.ts` (:140, :223, :232).
 
 **Interfaces:**
 - Consumes: `RunSummary` and `ModelUsage` from `agency-lang/eval`.
@@ -268,7 +276,13 @@ Paths are relative to the statelog repo root. Work in a statelog worktree off `o
   - `src/frontend/components/evals/BatchesTable.tsx:155`;
   - `src/frontend/pages/Projects/Evals/Batch.tsx:71`;
   - `src/frontend/pages/Traces/traceModel.ts:395` (`summary.models.map(formatModelUsage)`; the `eventModels(events)` fallback is unchanged).
-- Modify: `src/frontend/designGuide/projectFixtures.ts` and `src/frontend/pages/Projects/Evals/testSupport.tsx` (fixtures in the new shape)
+- Modify: fixtures in the new shape:
+  - `src/frontend/designGuide/projectFixtures.ts`;
+  - `src/frontend/pages/Projects/Evals/testSupport.tsx`;
+  - `src/frontend/components/evals/tables.test.tsx` (:32, :46, :145, :156);
+  - `src/frontend/lib/evalViewModels.test.ts` (:23);
+  - `src/frontend/components/projects/TracesTable.test.tsx` (:47);
+  - `src/frontend/pages/Traces/traceModel.test.ts` (:119, :128).
 - Test: `src/frontend/pages/Projects/Evals/Batch.test.tsx`, `src/frontend/pages/Traces/traceModel.test.ts`
 
 - [ ] **Step 1: Write the failing tests:**
@@ -283,22 +297,31 @@ Paths are relative to the statelog repo root. Work in a statelog worktree off `o
 
 **Files:**
 - Create: `src/backend/scripts/refresh-trace-summaries.ts`
-- Create: `src/backend/lib/evals/refreshAllTraceSummaries.ts` (the testable part)
+- Create: `src/backend/lib/evals/refreshTraceSummaries.ts` (the loop, with no database access of its own)
+- Modify: `src/backend/db/trace_summary.ts` (add `findAllTraceSummaryIds()` and `deleteTraceSummary({ traceId })`)
 - Modify: `src/backend/scripts/README.md` (an entry: what it does, and to run it once after deploying this change)
 - Modify: `docs/dev/eval-tracking.md`:
   - the `trace_summaries` column list;
-  - remove "Keep this wire contract paired with … 0.44.2" or update its version;
+  - the agency-lang version it names, at line 6 and at line 134;
   - one line pointing at the script.
-- Test: `src/backend/lib/evals/refreshAllTraceSummaries.test.ts`
+- Test: `src/backend/lib/evals/refreshTraceSummaries.test.ts`
 
 **Interfaces:**
 - Consumes: `summarizeTrace({ traceId })` from `src/backend/lib/evals/traceSummary.ts`.
-- Produces: `export async function refreshAllTraceSummaries(): Promise<Result<{ refreshed: number; failed: { traceId: string; error: string }[] }>>`. It reads every `trace_id` in `trace_summaries` and calls `summarizeTrace` on each in turn. The script prints the counts and each failure.
+- Produces:
+  ```ts
+  export async function refreshTraceSummaries({ traceIds, summarize, deleteSummary }: {
+    traceIds: string[];
+    summarize: (args: { traceId: string }) => Promise<Result<unknown>>;
+    deleteSummary: (args: { traceId: string }) => Promise<Result<void>>;
+  }): Promise<{ refreshed: number; failed: { traceId: string; error: string; deleted: boolean }[] }>;
+  ```
+  It calls `summarize` on each trace in turn. When one fails, it calls `deleteSummary` for that trace, because the old-shape row would make its project's whole batch list fail. The script reads the ids with `findAllTraceSummaryIds`, passes the real `summarizeTrace` and `deleteTraceSummary`, and prints the counts and each failure.
 
-- [ ] **Step 1: Write the failing test** `"refreshes every stored trace and reports the ones that fail"` (Review Focus 5). Stub `summarizeTrace` to fail for one id, and expect `refreshed: 2` and one failure naming it.
+- [ ] **Step 1: Write the failing test** `"refreshes every stored trace, and deletes the row of one that fails"` (Review Focus 5). Pass three ids and a `summarize` that fails for one of them. Expect `refreshed: 2`, one failure naming it with `deleted: true`, and `deleteSummary` called only for that id. A second test: when `deleteSummary` fails too, the failure is still reported, with `deleted: false`.
 - [ ] **Step 2: Run** it. Expected: FAIL, module not found.
 - [ ] **Step 3: Implement both files and the docs.**
 - [ ] **Step 4: Run** the green gate, then `pnpm run build` and `node dist/backend/scripts/refresh-trace-summaries.js` against a local database seeded with one uploaded batch. Expected: `refreshed: N, failed: 0`, and the batch page shows models with their levels.
 - [ ] **Step 5: Commit** with the message `Script: re-summarize stored traces after a summary change`.
 
-**Part B done:** open the statelog PR. After deploy, run the script once in production.
+**Part B done:** open the statelog PR. After deploy, run the script once in production, straight away: until it runs, stored rows have the old shape and the eval pages refuse them.

@@ -188,7 +188,9 @@ function summarizeOne(parts: RunParts): RunSummary {
     startedAtMs,
     endedAt: runRow?.createdAt ?? lastEvent?.data.timestamp ?? null,
     durationMs: record?.durationMs ?? 0,
-    costUsd: record?.metrics.costUsdTotal ?? 0,
+    // Summed over `models`, not taken from the eval record, so the run's
+    // cost is exactly the sum of its entries' costs.
+    costUsd: sumOf(models, "costUsd"),
     llmCalls: record?.metrics.llmCalls ?? 0,
     toolCalls: record?.metrics.toolEnds ?? 0,
     eventCount: parts.events.length,
@@ -271,9 +273,10 @@ export function annotationSummaries(snapshot: RunDirectorySnapshot): Record<stri
 
 type RunRow = Annotation & { kind: "run" };
 
-type TokenField = "inputTokens" | "cachedInputTokens" | "cacheCreationInputTokens" | "outputTokens";
+type SummedField =
+  "inputTokens" | "cachedInputTokens" | "cacheCreationInputTokens" | "outputTokens" | "costUsd";
 
-function sumOf(models: readonly ModelUsage[], field: TokenField): number {
+function sumOf(models: readonly ModelUsage[], field: SummedField): number {
   return models.reduce((total, item) => total + item[field], 0);
 }
 

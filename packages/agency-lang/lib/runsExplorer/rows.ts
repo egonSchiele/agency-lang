@@ -182,8 +182,6 @@ function graderVerdict(key: string, row: Annotation): GraderVerdict[] {
   ];
 }
 
-/** False if any test failed a gate, true if any passed and none failed,
- *  null when no test has a verdict. */
 /** The distinct model names in a run's usage, in order: the explorer lists
  *  a model once even when it ran at several reasoning levels. */
 function namesOf(models: readonly ModelUsage[]): string[] {
@@ -196,6 +194,8 @@ function namesOf(models: readonly ModelUsage[]): string[] {
   return names;
 }
 
+/** False if any test failed a gate, true if any passed and none failed,
+ *  null when no test has a verdict. */
 function runGatesPassed(tests: TestRow[]): boolean | null {
   if (tests.some((test) => test.gatesPassed === false)) return false;
   if (tests.some((test) => test.gatesPassed === true)) return true;

@@ -549,6 +549,25 @@ describe("usage and benchmark on the run summary", () => {
     expect(cost).toBe(summary.costUsd);
   });
 
+  it("the run's cost is exactly the sum over models, whatever order the calls came in", () => {
+    // Costs that are not exact in binary: adding them in call order and in
+    // per-model order gives different last digits.
+    const unevenEvents = [
+      agentStartLine(traceId),
+      completion("opus", "high", 1, 0.3),
+      completion("jev", null, 1, 0.6),
+      completion("opus", "high", 1, 0.1),
+    ].map((line) => JSON.parse(line) as EventEnvelope);
+    const summary = summarizeEvalRun({
+      traceId,
+      events: unevenEvents,
+      annotations: [runRow()],
+      source: "x",
+    });
+    const cost = summary.models.reduce((total, item) => total + item.costUsd, 0);
+    expect(cost).toBe(summary.costUsd);
+  });
+
   it("benchmark comes from the suite source", () => {
     expect(summarize({ suite: { source: "/x/evals/plan-easy" } }).benchmark).toBe("plan-easy");
   });

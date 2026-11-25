@@ -7,7 +7,7 @@ import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
 import { buildRunsListing, summarizeRuns } from "@/runDirectory/list.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 
-import { evalGrade, graderSourceFor, validateGradeTarget } from "./grade.js";
+import { evalGrade, graderSourceFor, missingWorkdirNotice, validateGradeTarget } from "./grade.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -372,5 +372,17 @@ describe("evalGrade", () => {
     const source = graderSourceFor({ suite }, {});
     expect(source.kind).toBe("suite");
     if (source.kind === "suite") expect(source.tests.map((test) => test.id)).toEqual(["a"]);
+  });
+});
+
+describe("missingWorkdirNotice", () => {
+  it("speaks up for a run that has a trace and no stored workdir, and only then", () => {
+    const test = { id: "a", goal: "g", input: "t" };
+    const withWorkdir = writeRunDirectory({ test, output: "x", workdirFiles: { "a.txt": "a" } });
+    const without = writeRunDirectory({ test, output: "x" });
+    expect(missingWorkdirNotice(withWorkdir)).toBeUndefined();
+    expect(missingWorkdirNotice(without)).toBe(
+      `${without}: no workdir was stored with this run; graders that read it will fail`,
+    );
   });
 });

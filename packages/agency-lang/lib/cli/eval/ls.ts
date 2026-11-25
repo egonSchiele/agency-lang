@@ -12,6 +12,8 @@ export type EvalLsOptions = {
   test?: string[];
   /** `--tags` values. */
   tags?: string[];
+  /** Print the selected tests as one JSON array, for a program to read. */
+  json?: boolean;
   config?: AgencyConfig;
 };
 
@@ -31,7 +33,19 @@ export function evalLs(opts: EvalLsOptions): string[] {
   });
   const filter: TestFilter = { ids: opts.test, tags: opts.tags };
   const selected = selectTests(suite.tests, filter);
+  if (opts.json === true) {
+    return [JSON.stringify(selected.map(listedTest))];
+  }
   return [...selected.flatMap(formatTest), summaryLine(selected, suite.tests, filter)];
+}
+
+/** What `eval ls --json` says about a test: enough for a tool that runs the
+ *  tests one at a time to name each and know how long it may take. */
+function listedTest(test: Test): { id: string; timeoutSec?: number } {
+  return {
+    id: test.id ?? "",
+    ...(test.timeoutSec === undefined ? {} : { timeoutSec: test.timeoutSec }),
+  };
 }
 
 function formatTest(test: Test): string[] {

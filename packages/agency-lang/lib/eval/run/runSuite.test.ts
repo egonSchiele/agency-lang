@@ -903,6 +903,77 @@ describe("runSuite", () => {
     expect(process.listeners("SIGINT")).toEqual(before);
   });
 
+  describe("batch, trialNumber and workdirSnapshot", () => {
+    const options = (name: string) => ({
+      agent: path.join(proj, "agent.agency"),
+      inputs: [
+        { id: "a", goal: "g", input: "first" },
+        { id: "b", goal: "g", input: "second" },
+      ],
+      out: path.join(proj, "runs", name),
+      config: {},
+      perRun: { pipeOutput: false },
+    });
+    const runRow = (test: { runDir: string; traceId: string }) => {
+      const row = readRunDirectory(test.runDir, quiet).effectiveAnnotations[test.traceId].run;
+      return row?.kind === "run" ? row : undefined;
+    };
+
+    it("records the runs under a given batch id", async () => {
+      const result = await runSuite(
+        { ...options("batch"), batch: "nightly-abc" },
+        { runner: traceWritingRunner("done") },
+      );
+      expect(result.tests.map((test) => runRow(test)).map((row) => row?.batch)).toEqual([
+        "nightly-abc",
+        "nightly-abc",
+      ]);
+    });
+
+    it("refuses an empty batch id", async () => {
+      await expect(
+        runSuite({ ...options("batch-empty"), batch: "" }, { runner: traceWritingRunner("done") }),
+      ).rejects.toThrow("batch must not be empty");
+    });
+
+    it("records a given trial number, and writes that one trial flat", async () => {
+      const out = options("trial-3");
+      const result = await runSuite(
+        { ...out, trialNumber: 3 },
+        { runner: traceWritingRunner("done") },
+      );
+      expect(result.tests.map((test) => [test.testId, test.trial, test.runDir])).toEqual([
+        ["a", 3, path.join(out.out, "a")],
+        ["b", 3, path.join(out.out, "b")],
+      ]);
+      expect(runRow(result.tests[0])?.trial).toBe(3);
+    });
+
+    it("refuses a trial number together with more than one trial, or one that is not a positive integer", async () => {
+      const runner = traceWritingRunner("done");
+      await expect(
+        runSuite({ ...options("t1"), trialNumber: 2, trials: 2 }, { runner }),
+      ).rejects.toThrow("--trial-number runs one trial; it cannot be combined with --trials");
+      for (const bad of [0, 1.5, Number.NaN]) {
+        await expect(runSuite({ ...options("t2"), trialNumber: bad }, { runner })).rejects.toThrow(
+          "trial number must be a positive integer",
+        );
+      }
+      expect(runner).not.toHaveBeenCalled();
+    });
+
+    it("stores no workdir when workdirSnapshot is false", async () => {
+      const result = await runSuite(
+        { ...options("no-workdir"), workdirSnapshot: false },
+        { runner: traceWritingRunner("done") },
+      );
+      const paths = runDirPaths(result.tests[0].runDir);
+      expect(fs.existsSync(paths.workdirDir)).toBe(false);
+      expect(fs.existsSync(paths.workdirSidecar)).toBe(false);
+      expect(readRunDirectory(result.tests[0].runDir, quiet).traces).toHaveLength(1);
+    });
+  });
+
   describe("gradeInPlace", () => {
     const scoreRows = (runDir: string): { name: string; pass: boolean }[] =>
       readRunDirectory(runDir, quiet).annotationRows.flatMap((row) =>
@@ -995,6 +1066,19 @@ describe("runSuite", () => {
       );
       expect(readRunDirectory(result.tests[0].runDir, quiet).traces).toHaveLength(1);
       expect(scoreRows(result.tests[0].runDir)).toEqual([]);
+    });
+
+    it("still grades in the live workdir when no workdir is stored", async () => {
+      const result = await runSuite(
+        {
+          ...suiteWith("live-only", { "touched-it": "test -f touched.txt" }),
+          gradeInPlace: true,
+          workdirSnapshot: false,
+        },
+        { runner: traceWritingRunner("done") },
+      );
+      expect(fs.existsSync(runDirPaths(result.tests[0].runDir).workdirDir)).toBe(false);
+      expect(scoreRows(result.tests[0].runDir)).toEqual([{ name: "touched-it", pass: true }]);
     });
 
     it("does not grade without gradeInPlace", async () => {

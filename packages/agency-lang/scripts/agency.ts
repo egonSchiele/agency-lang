@@ -1192,6 +1192,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
       parsePositiveInt,
     )
     .option("--grade", "Grade each test as soon as its agent finishes, in the workdir it worked in")
+    .option(
+      "--no-workdir-snapshot",
+      "Do not copy the workdir into the run directory; its workdir cannot be graded later",
+    )
+    .option("--batch <id>", "Record these runs under this batch id instead of a new one")
+    .option(
+      "--trial-number <n>",
+      "Record each run as trial n; runs each test once (not with --trials)",
+      parsePositiveInt,
+    )
     .action(
       async (
         agent: string | undefined,
@@ -1205,6 +1215,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
           parallel?: number;
           trials?: number;
           grade?: boolean;
+          workdirSnapshot?: boolean;
+          batch?: string;
+          trialNumber?: number;
         },
       ) => {
         // Every test in the suite always runs, whatever the others did: an
@@ -1264,7 +1277,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       collectCommaSeparated,
       [] as string[],
     )
-    .action((opts: { suite?: string; test?: string[]; tags?: string[] }) => {
+    .option("--json", "Print the selected tests as JSON: [{ id, timeoutSec? }]")
+    .action((opts: { suite?: string; test?: string[]; tags?: string[]; json?: boolean }) => {
       let lines: string[];
       try {
         lines = evalLs({ ...opts, config: getConfig() });

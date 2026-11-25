@@ -43,6 +43,12 @@ export type EvalRunCliOptions = {
   /** `--grade`: grade each test as soon as its agent finishes, in the
    *  workdir it worked in. */
   grade?: boolean;
+  /** `--batch`: record the runs under this batch id instead of a new one. */
+  batch?: string;
+  /** `--trial-number`: record each run as this trial; runs each test once. */
+  trialNumber?: number;
+  /** `--no-workdir-snapshot` sets this false: store no copy of the workdir. */
+  workdirSnapshot?: boolean;
 };
 
 /** `--suite` runs a suite; otherwise the run is one inline test, with
@@ -96,6 +102,9 @@ export async function evalRun(
       parallel: opts.parallel,
       trials: opts.trials,
       gradeInPlace: opts.grade,
+      batch: opts.batch,
+      trialNumber: opts.trialNumber,
+      workdirSnapshot: opts.workdirSnapshot,
     },
     { runner: deps.runner },
   );

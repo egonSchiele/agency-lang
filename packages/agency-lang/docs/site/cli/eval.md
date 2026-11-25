@@ -64,6 +64,14 @@ If the command exits with an error, or runs for more than 30 minutes, the test i
 
 To grade as part of the run, add `--grade`. Each test is then graded as soon as its agent finishes, in the workdir the agent worked in. Use it when that workdir cannot be graded later, for example because it holds a large built project.
 
+Three more flags exist for tools that run each test as its own `eval run`:
+
+- `--batch <id>` records the runs under a batch id you choose. You can also use it to add tests you ran again to an earlier batch.
+- `--trial-number <n>` records each run as trial `n`. It runs each test once and cannot be combined with `--trials`.
+- `--no-workdir-snapshot` leaves the workdir out of the run directory. Use it when the workdir is too large to copy. Graders that read the workdir cannot grade such a run later, so pair it with `--grade`.
+
+`agency eval ls --json` prints the selected tests as JSON for such a tool to read.
+
 For a single ad-hoc run, use `--input` instead of `--suite` (grade it afterwards with `eval grade --goal`):
 
 ```bash

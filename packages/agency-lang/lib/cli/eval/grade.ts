@@ -11,7 +11,7 @@ import type { EvalRunGrading, SuiteTestResult } from "@/eval/runTypes.js";
 import { shellInterrupted } from "@/eval/shellCommand.js";
 import { findRunDirectories, uniqueRunDirectories } from "@/runDirectory/findRuns.js";
 import { summarizeRunDirectory } from "@/runDirectory/list.js";
-import { readRunDirectory } from "@/runDirectory/runDir.js";
+import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 
 import type { GraderSource } from "@/eval/grading/gradeRun.js";
 
@@ -125,6 +125,10 @@ export async function evalGrade(
   let doneCount = 0;
   const graded = await mapInParallel(runDirs, opts.parallel ?? 1, async (dir) => {
     const startedAt = Date.now();
+    const notice = missingWorkdirNotice(dir);
+    if (notice !== undefined) {
+      console.warn(`grading: ${notice}`);
+    }
     const { grading, judgeCostUsd } = await gradeSuite(dir, graders, config, {
       defaultGoal: opts.goal,
     });
@@ -146,6 +150,18 @@ export async function evalGrade(
     fs.writeFileSync(opts.out, JSON.stringify(result, null, 2));
   }
   return result;
+}
+
+/** What to tell the user about a run that has a trace and no stored
+ *  workdir (`eval run --no-workdir-snapshot`): graders that read the workdir
+ *  are about to fail for that reason, not because of the agent's work. */
+export function missingWorkdirNotice(runDir: string): string | undefined {
+  const paths = runDirPaths(runDir);
+  const hasTrace = fs.existsSync(paths.statelog) && fs.statSync(paths.statelog).size > 0;
+  if (!hasTrace || fs.existsSync(paths.workdirDir)) {
+    return undefined;
+  }
+  return `${runDir}: no workdir was stored with this run; graders that read it will fail`;
 }
 
 /** The report for a set of graded run directories. Shared by `eval grade`

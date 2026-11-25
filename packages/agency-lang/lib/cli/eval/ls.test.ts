@@ -26,6 +26,17 @@ describe("eval ls", () => {
     return file;
   }
 
+  it("--json prints exactly the selected tests, with each one's time limit when it has one", () => {
+    const suite = writeSuite([
+      { id: "a", input: "x", tags: ["easy"], timeoutSec: 7200 },
+      { id: "b", input: "x", tags: ["hard"] },
+      { id: "c", input: "x", tags: ["easy"] },
+    ]);
+    const lines = evalLs({ suite, tags: ["easy"], json: true });
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0])).toEqual([{ id: "a", timeoutSec: 7200 }, { id: "c" }]);
+  });
+
   it("lists every test with its tags and description, then a count", () => {
     const suite = writeSuite([
       { id: "a", input: "x", tags: ["easy", "coding"], description: "why a exists" },

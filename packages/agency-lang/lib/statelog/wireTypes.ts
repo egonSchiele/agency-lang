@@ -52,6 +52,21 @@ export type DecisionLog = {
   answers: Record<string, DecisionAnswer>;
 };
 
+/** A whole message list on a `promptCompletion`, logged as it was before
+ *  change events existed. See "Messages: full copies and changes" in
+ *  docs/dev/hosting/statelog.md. */
+export type FullCopyFields = { messages: unknown[]; logWriter: string; threadCall: number };
+
+/** The messages that changed since this writer's previous call on the
+ *  thread: the first `keptMessages` are the same as in that call, and
+ *  `newMessages` follow them. */
+export type ChangeFields = {
+  keptMessages: number;
+  newMessages: unknown[];
+  logWriter: string;
+  threadCall: number;
+};
+
 export type EventData = {
   type: string;
   timestamp: string;

@@ -62,6 +62,32 @@ export async function _setAgentName(name: string): Promise<void> {
   await frame.log.agentName({ name: String(name) });
 }
 
+const TRACE_TITLE_MAX_LENGTH = 200;
+
+/** One line, control characters and whitespace runs as single spaces,
+ *  cut to TRACE_TITLE_MAX_LENGTH. */
+function cleanTraceTitle(raw: string): string {
+  return String(raw)
+    .replace(/[\x00-\x1f\x7f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, TRACE_TITLE_MAX_LENGTH);
+}
+
+/** Never throws: a title is never worth failing a run over. A blank title
+ *  logs nothing. */
+export async function _setTraceTitle(title: string): Promise<void> {
+  const clean = cleanTraceTitle(title);
+  if (clean === "") {
+    return;
+  }
+  const frame = currentRunOrNone();
+  if (!frame) {
+    return;
+  }
+  await frame.log.traceTitle({ title: clean });
+}
+
 /** Whether this run's statelog records anything. False when `observability`
  *  is off, which makes every statelog client a no-op, and outside an Agency
  *  frame. */

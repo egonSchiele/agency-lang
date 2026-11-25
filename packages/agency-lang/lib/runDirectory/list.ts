@@ -178,7 +178,7 @@ function summarizeDigest(parts: RunParts): RunSummary {
     traceId: parts.traceId,
     testId: testIdOf(runRow),
     input: digest.input,
-    agentName: digest.agentName,
+    agentName: runRow?.agentName ?? digest.agentName,
     agentLabel: agentLabelOf(runRow),
     startedAt: digest.startedAtMs === null ? null : new Date(digest.startedAtMs).toISOString(),
     startedAtMs: digest.startedAtMs,

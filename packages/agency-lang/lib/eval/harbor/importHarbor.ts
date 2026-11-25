@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { harnessVersion } from "@/eval/harnessVersion.js";
+import { agentNameProblem } from "@/statelog/agentName.js";
 import type { Annotation, Annotator } from "@/runDirectory/annotations.js";
 import { recordCompletedRun, recordGradingPass } from "@/runDirectory/mutations.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
@@ -41,12 +42,16 @@ export function importHarbor({
   outDir: string;
   batch?: string;
   reasoning?: string;
-  /** Names every run's agent; without it, each trial's `agent_info.name`. */
+  /** Names every run's agent, over the trace's own name. */
   agent?: string;
   /** Called once per trial, as `[n/total] <status> <test>/<trial>`. */
   reportProgress?: (line: string) => void;
 }): ImportResult {
   const batchName = batchNameOf({ jobDirs, trialsFile, batch });
+  const agentProblem = agent === undefined ? null : agentNameProblem(agent);
+  if (agentProblem !== null) {
+    throw new Error(`import-harbor: --agent ${agentProblem}`);
+  }
   const { trials, problems } = readHarborInputs({ jobDirs, trialsFile });
   const plan = planHarborImport({ trials, batch: batchName, reasoning, agent });
   const uploadPath = path.join(outDir, batchName);
@@ -134,8 +139,8 @@ function finishExisting({
         `The input changed order or contents; delete the batch folder and import again.`,
     );
   }
-  const oldAgent = existing.row.flags.agent;
-  const newAgent = run.payload.flags.agent;
+  const oldAgent = existing.row.agentName ?? existing.row.flags.agent;
+  const newAgent = run.payload.agentName ?? run.payload.flags.agent;
   if (oldAgent !== newAgent) {
     throw new Error(
       `${dir} was imported with agent ${String(oldAgent ?? "(none)")}; this import names ` +

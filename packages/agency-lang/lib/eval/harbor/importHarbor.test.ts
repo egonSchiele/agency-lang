@@ -299,4 +299,29 @@ describe("importHarbor", () => {
       }),
     ]);
   });
+
+  it("--agent beats the trace's own agent name", () => {
+    const root = tempDir("harbor-");
+    const jobDir = path.join(root, "flash-high");
+    const lines = [
+      ...traceLines("trace-a__1"),
+      statelogLine("trace-a__1", "agentName", { name: "agency-agent/coordinator" }),
+    ];
+    writeHarborTrial(jobDir, harborTrial({ name: "a__1", statelogLines: lines }));
+    const outDir = path.join(root, "out");
+    importHarbor({ jobDirs: [jobDir], outDir, agent: "agency-main" });
+    const runDir = path.join(outDir, "flash-high", "astropy__astropy-12907", "1");
+    expect(summaryAt(runDir)?.agentName).toBe("agency-main");
+  });
+
+  it("refuses an --agent that breaks the agent-name rules, before writing anything", () => {
+    const root = tempDir("harbor-");
+    const jobDir = path.join(root, "job");
+    writeHarborTrial(jobDir, harborTrial({ name: "a__1" }));
+    const outDir = path.join(root, "out");
+    expect(() => importHarbor({ jobDirs: [jobDir], outDir, agent: "agency main" })).toThrow(
+      /--agent/,
+    );
+    expect(fs.existsSync(outDir)).toBe(false);
+  });
 });

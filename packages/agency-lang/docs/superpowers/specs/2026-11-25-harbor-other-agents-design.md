@@ -92,13 +92,15 @@ The zod schema reuses `ModelUsageSchema` and the matching `TraceDigestSchema` fi
 
 ### Name the agent
 
-`planHarborImport` puts the agent name in the run row's `flags.agent`. That field already exists: `agentLabelOf` reads it, and `displayAgent` shows it when the trace has no `agentName`. The `--agent` flag wins over `agent_info.name`.
+Every Agency trace names itself: `agency-agent/coordinator` for the five full runs and `agency-agent/minimal` for the `k` runs. Those names don't tell builds apart, and a trace's own name beats a run row's label. So, by the owner's choice on 2026-11-25, `--agent` sets a new optional `agentName` on the run row, which beats the trace's own name. It follows the same rules as `setAgentName`, and the importer refuses a bad name before writing anything.
+
+Each run also keeps Harbor's agent family, `agent_info.name`, as its `flags.agent` label. That field already exists: `agentLabelOf` reads it, and `displayAgent` shows it when nothing else names the run. Pi imported without `--agent` shows as `pi`.
 
 `displayAgent` moves into the public `agency-lang/eval` exports, so statelog shows the same name `runs list` does.
 
 ### Count Pi trials as real runs
 
-`isVoid` (`lib/eval/harbor/planImport.ts`) treats "no trace" as "the agent never ran". The new rule is that the agent never ran when the trial has neither a trace nor reported tokens. Everything after that check stays the same. All 500 trials in `k1-pi` report tokens. 499 have a reward, including 7 where the agent timed out. One is void because the verifier timed out.
+`isVoid` (`lib/eval/harbor/planImport.ts`) treats "no trace" as "the agent never ran". The new rule is that the agent never ran when the trial has neither a trace nor reported tokens. Everything after that check stays the same. In `k1-pi`, 499 of 500 trials report tokens. Two are void: one whose verifier timed out, and `django__django-11734`, which timed out with no tokens and an empty Pi log. That second one looks like a trial that hung before the agent started, the same pattern as three Agency trials ADI-375 treated as void and replaced with reruns.
 
 The same idea decides two things in the run summary. Today both require events:
 
@@ -137,7 +139,6 @@ The `full2` jobs ran 15 trials at a time each, three jobs together, and Harbor's
 - **A "no trace" label in the runs table.** A Pi run's trace page already says that no events were uploaded.
 - **Pi's call count and tool calls.** They show as 0. Counting them means parsing Pi's own log format.
 - **A per-batch agent field in statelog.** It would name the six batches without a re-upload, but it would be a second source for the agent name.
-- **A trace's own agent name hides `--agent`.** `displayAgent` prefers the trace's `agentName` to the run row's label. The six batches' traces emit none, so their names show. If a future Harbor run's trace emits one, its `--agent` name won't show. Putting the label first would break `eval run`, whose label is a command line.
 
 ## Documentation
 

@@ -211,9 +211,10 @@ describe("Pi trials and agent names", () => {
     );
   });
 
-  it("the agent flag wins over the trial's own agent name", () => {
+  it("the agent flag names the run, and Harbor's agent family stays its label", () => {
     const [run] = planHarborImport({ trials: [piTrial()], batch: "k", agent: "pi-1.5.2" }).runs;
-    expect(run.payload.flags.agent).toBe("pi-1.5.2");
+    expect(run.payload.agentName).toBe("pi-1.5.2");
+    expect(run.payload.flags.agent).toBe("pi");
   });
 
   it("without the flag, each run takes its own trial's agent name", () => {
@@ -224,8 +225,9 @@ describe("Pi trials and agent names", () => {
     expect(plan.runs.map((run) => run.payload.flags.agent)).toEqual(["pi", "agency-agent"]);
   });
 
-  it("a trial with no agent name and no flag has no agent flag", () => {
+  it("a trial with no agent name and no flag has no agent flag and no agentName", () => {
     const [run] = planHarborImport({ trials: [trial()], batch: "k" }).runs;
     expect(run.payload.flags).not.toHaveProperty("agent");
+    expect(run.payload).not.toHaveProperty("agentName");
   });
 });

@@ -95,7 +95,8 @@ export function planHarborImport({
   trials: HarborTrial[];
   batch: string;
   reasoning?: string;
-  /** Names every run's agent; without it, each trial's `agent_info.name`. */
+  /** Names every run's agent, over the trace's own name. Each trial's
+   *  `agent_info.name` is kept as its `flags.agent` label either way. */
   agent?: string;
 }): ImportPlan {
   const trialsPerTest: Record<string, number> = {};
@@ -131,7 +132,6 @@ function payloadOf({
   reasoning?: string;
   agent?: string;
 }): RunPayload {
-  const agentName = agent ?? trial.agentName;
   const payload: RunPayload = {
     kind: "run",
     test: { id: trial.testId },
@@ -140,7 +140,7 @@ function payloadOf({
     flags: {
       harborJob: trial.jobName,
       harborTrial: trial.trialName,
-      ...(agentName === null ? {} : { agent: agentName }),
+      ...(trial.agentName === null ? {} : { agent: trial.agentName }),
     },
     batch,
     trial: number,
@@ -154,6 +154,9 @@ function payloadOf({
   }
   if (trial.reported !== null) {
     payload.reported = trial.reported;
+  }
+  if (agent !== undefined) {
+    payload.agentName = agent;
   }
   return payload;
 }

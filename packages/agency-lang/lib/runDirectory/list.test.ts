@@ -698,6 +698,15 @@ describe("reported usage, end times and the record rule", () => {
     expect(summarize([], { ended: "timeout" }).status).toBe("failed");
   });
 
+  it("the run row's agentName beats the trace's own name", () => {
+    const named = [
+      ...eventsEndingAt("2026-11-13T23:36:29.379Z"),
+      JSON.parse(statelogLine(traceId, "agentName", { name: "agency-agent/coordinator" })),
+    ] as EventEnvelope[];
+    expect(summarize(named).agentName).toBe("agency-agent/coordinator");
+    expect(summarize(named, { agentName: "agency-main" }).agentName).toBe("agency-main");
+  });
+
   it("counts a run as silent only when the agent left no record", () => {
     expect(buildRunsListing([summarize([], { ended: "error" })]).silentRunCount).toBe(1);
     expect(buildRunsListing([summarize([], { reported: PI_REPORTED })]).silentRunCount).toBe(0);

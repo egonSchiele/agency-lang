@@ -213,6 +213,26 @@ describe("foldAnnotations", () => {
     expect(parses({ ...reported, eventCount: 0 })).toBe(false);
   });
 
+  it("a run row's agentName follows the agent-name rules", () => {
+    const parses = (agentName: string) =>
+      AnnotationSchema.safeParse({
+        traceId: "t1",
+        annotator: { kind: "harness", id: "harbor-import@1" },
+        kind: "run",
+        test: { id: "fib" },
+        suite: null,
+        ended: "ok",
+        flags: {},
+        v: 1,
+        id: `ann_${"0".repeat(64)}`,
+        createdAt: "now",
+        agentName,
+      }).success;
+    expect(parses("agency-main")).toBe(true);
+    expect(parses("agency agent")).toBe(false);
+    expect(parses("a/../b")).toBe(false);
+  });
+
   it("a run row names exactly one stored graders file: a bundle or a JSON file", () => {
     const base = {
       traceId: "t1",

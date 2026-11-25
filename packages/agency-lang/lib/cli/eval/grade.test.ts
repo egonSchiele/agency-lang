@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,7 +8,7 @@ import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
 import { buildRunsListing, summarizeRuns } from "@/runDirectory/list.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 
-import { evalGrade, graderSourceFor, missingWorkdirNotice, validateGradeTarget } from "./grade.js";
+import { evalGrade, graderSourceFor, madeWithoutWorkdir, validateGradeTarget } from "./grade.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -375,14 +376,39 @@ describe("evalGrade", () => {
   });
 });
 
-describe("missingWorkdirNotice", () => {
-  it("speaks up for a run that has a trace and no stored workdir, and only then", () => {
-    const test = { id: "a", goal: "g", input: "t" };
-    const withWorkdir = writeRunDirectory({ test, output: "x", workdirFiles: { "a.txt": "a" } });
-    const without = writeRunDirectory({ test, output: "x" });
-    expect(missingWorkdirNotice(withWorkdir)).toBeUndefined();
-    expect(missingWorkdirNotice(without)).toBe(
-      `${without}: no workdir was stored with this run; graders that read it will fail`,
-    );
+describe("runs made with --no-workdir-snapshot", () => {
+  const flagged = (dir: string): void => {
+    const file = path.join(dir, "annotations.jsonl");
+    const rows = fs
+      .readFileSync(file, "utf8")
+      .trimEnd()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    rows[0].flags = { ...rows[0].flags, workdirSnapshot: false };
+    fs.writeFileSync(file, rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
+  };
+
+  it("are skipped, and the others in the group are still graded", async () => {
+    const group = fs.mkdtempSync(path.join(os.tmpdir(), "grade-noworkdir-"));
+    writeRunDirectory({ test: lenTest("kept"), output: "hello" }, path.join(group, "kept"));
+    writeRunDirectory({ test: lenTest("gone"), output: "hello" }, path.join(group, "gone"));
+    flagged(path.join(group, "gone"));
+    expect(madeWithoutWorkdir(path.join(group, "gone"))).toBe(true);
+    expect(madeWithoutWorkdir(path.join(group, "kept"))).toBe(false);
+
+    const result = await evalGrade([group], {});
+
+    expect(result.runs.map((run) => path.basename(run.dir))).toEqual(["kept"]);
+    const kinds = (name: string) =>
+      readRunDirectory(path.join(group, name), { reportWarning: () => {} }).annotationRows.map(
+        (row) => row.kind,
+      );
+    expect(kinds("gone")).toEqual(["run"]);
+  });
+
+  it("is an error when nothing else is left to grade", async () => {
+    const dir = writeRunDirectory({ test: lenTest("gone"), output: "hello" });
+    flagged(dir);
+    await expect(evalGrade([dir], {})).rejects.toThrow("Nothing to grade");
   });
 });

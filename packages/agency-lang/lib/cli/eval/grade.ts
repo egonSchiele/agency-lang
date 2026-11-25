@@ -117,7 +117,7 @@ export async function evalGrade(
   opts: EvalGradeOptions,
 ): Promise<EvalGradeResult> {
   const config = opts.config ?? {};
-  const runDirs = validateGradeTarget(targets, opts);
+  const runDirs = gradableRunDirs(validateGradeTarget(targets, opts));
   const graders = graderSourceFor(opts, config);
 
   // Each directory is one gradeSuite call (its own grading pass id and its
@@ -125,10 +125,6 @@ export async function evalGrade(
   let doneCount = 0;
   const graded = await mapInParallel(runDirs, opts.parallel ?? 1, async (dir) => {
     const startedAt = Date.now();
-    const notice = missingWorkdirNotice(dir);
-    if (notice !== undefined) {
-      console.warn(`grading: ${notice}`);
-    }
     const { grading, judgeCostUsd } = await gradeSuite(dir, graders, config, {
       defaultGoal: opts.goal,
     });
@@ -152,16 +148,35 @@ export async function evalGrade(
   return result;
 }
 
-/** What to tell the user about a run that has a trace and no stored
- *  workdir (`eval run --no-workdir-snapshot`): graders that read the workdir
- *  are about to fail for that reason, not because of the agent's work. */
-export function missingWorkdirNotice(runDir: string): string | undefined {
-  const paths = runDirPaths(runDir);
-  const hasTrace = fs.existsSync(paths.statelog) && fs.statSync(paths.statelog).size > 0;
-  if (!hasTrace || fs.existsSync(paths.workdirDir)) {
-    return undefined;
+/** The run directories `eval grade` will grade: all but those made with
+ *  `--no-workdir-snapshot`, each of which is named on stderr. An error when
+ *  that leaves nothing. */
+function gradableRunDirs(runDirs: string[]): string[] {
+  const skipped = runDirs.filter(madeWithoutWorkdir);
+  for (const dir of skipped) {
+    console.warn(
+      `grading: skipping ${dir}: it was run with --no-workdir-snapshot, so its workdir is gone; ` +
+        "the grades from `eval run --grade` stand",
+    );
   }
-  return `${runDir}: no workdir was stored with this run; graders that read it will fail`;
+  const kept = runDirs.filter((dir) => !skipped.includes(dir));
+  if (kept.length === 0) {
+    throw new Error(
+      "Nothing to grade: every run here was made with --no-workdir-snapshot and cannot be graded again.",
+    );
+  }
+  return kept;
+}
+
+/** True for a run made with `eval run --no-workdir-snapshot`. Its workdir
+ *  was graded where the agent left it and then removed. Grading it again
+ *  would fail every grader that reads the workdir and record those failures
+ *  as the run's newest grades, over the real ones. */
+export function madeWithoutWorkdir(runDir: string): boolean {
+  const snapshot = readRunDirectory(runDir, { reportWarning: () => {} });
+  return snapshot.annotationRows.some(
+    (row) => row.kind === "run" && row.flags.workdirSnapshot === false,
+  );
 }
 
 /** The report for a set of graded run directories. Shared by `eval grade`
@@ -187,7 +202,12 @@ export function inPlaceGradeReport(tests: SuiteTestResult[]): string[] {
       ? []
       : [{ dir: test.runDir, grading: test.grading, judgeCostUsd: test.judgeCostUsd ?? 0 }],
   );
-  return graded.length === 0 ? [] : formatGradeResult(gradeResultOf(graded));
+  if (graded.length === 0) {
+    return [];
+  }
+  // One invocation may hold only part of a batch (`--trial-number`), so a
+  // "batch has no statistics" line here would be noise, not news.
+  return formatGradeResult({ ...gradeResultOf(graded), incompleteBatches: [] });
 }
 
 /**

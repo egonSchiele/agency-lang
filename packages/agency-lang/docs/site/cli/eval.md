@@ -68,7 +68,7 @@ Three more flags exist for tools that run each test as its own `eval run`:
 
 - `--batch <id>` records the runs under a batch id you choose. You can also use it to add tests you ran again to an earlier batch.
 - `--trial-number <n>` records each run as trial `n`. It runs each test once and cannot be combined with `--trials`.
-- `--no-workdir-snapshot` leaves the workdir out of the run directory. Use it when the workdir is too large to copy. Graders that read the workdir cannot grade such a run later, so pair it with `--grade`.
+- `--no-workdir-snapshot` leaves the workdir out of the run directory. Use it when the workdir is too large to copy. Pair it with `--grade`: such a run cannot be graded later, and `agency eval grade` skips it.
 
 `agency eval ls --json` prints the selected tests as JSON for such a tool to read.
 

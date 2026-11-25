@@ -44,8 +44,10 @@ add up to one batch. `--batch <id>` records the runs under a given batch id
 batch. `--trial-number <n>` runs each test once, records it as trial `n`,
 and writes it flat at `<out>/<testId>/` (`trialNumberOf`); it is refused
 together with `--trials`. `--no-workdir-snapshot` stores no `workdir/`, for a
-workdir too large to copy; `eval grade` says so when it meets such a run
-(`missingWorkdirNotice`), since graders that read the workdir then fail.
+workdir too large to copy. The run row records it (`flags.workdirSnapshot:
+false`), and `eval grade` skips such a run with a line on stderr
+(`gradableRunDirs`): grading it again would fail every grader that reads
+the workdir and record those failures over the real grades.
 `eval ls --json` prints the selected tests as `[{ id, timeoutSec? }]`, so
 the wrapper selects exactly what `eval run` would. The run row's
 `flags.trials` is the inner run's count, 1; nothing reads it (statelog

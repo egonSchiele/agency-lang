@@ -175,6 +175,9 @@ export async function runSuite(
     parallel,
     agent: target.label,
     trials,
+    // Recorded so `eval grade` can tell this run from one that merely has
+    // no workdir, and leave its grades alone.
+    ...(opts.workdirSnapshot === false ? { workdirSnapshot: false } : {}),
   };
   const harness = { kind: "harness" as const, id: `agency-eval@${harnessVersion()}` };
   // One id per suite invocation, carried by every run row it writes.

@@ -114,7 +114,7 @@ Six small changes, none of which mention containers.
 - `--trial-number <n>` records this run as trial `n`. It runs each selected test once and writes it flat at `<out>/<testId>/`. It cannot be combined with `--trials`.
 - *Why:* the wrapper starts one inner run per test and trial. Left alone, each would invent its own batch id and call itself trial 1.
 
-**1e. `agency eval run --no-workdir-snapshot`.** Do not copy the workdir into the run directory. Graded later with `agency eval grade`, such a run fails every grader that reads the workdir, and `eval grade` prints one line saying no workdir was stored. Graders that read only the trace still work.
+**1e. `agency eval run --no-workdir-snapshot`.** Do not copy the workdir into the run directory. The run's row records that, and `agency eval grade` skips such a run with a line saying why. Found while building it: grading such a run again fails every grader that reads the workdir, and those failures would be recorded as the run's newest grades, over the real ones.
 
 - *Why:* the wrapper never brings the copy back. Copying a built monorepo for every test costs time, and two copies press on a 10 GB container disk.
 

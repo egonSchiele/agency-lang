@@ -122,6 +122,8 @@ The old order came in with eval tracking's first PR (#890), with no stated reaso
 
 The `full2` jobs ran 15 trials at a time each, three jobs together, and Harbor's agent times for them were wrong. The `k` jobs ran 25 at a time each, with several jobs together. Before importing, I'll compare `agent_execution` with the first and last timestamps in `agent/pi.txt`, on 20 trials from `k1-pi` and 5 from `full-pi152-flash-high`. If they disagree by more than a few seconds, I'll stop and ask the owner.
 
+**Result (2026-11-25):** Harbor's agent time ran 7 to 24 seconds longer than `pi.txt`, 13 seconds on average. Agency trials show the same gap against their traces, 12.5 seconds on average. So Harbor's time is the agent's own time plus harness work. Agency's durations come from its trace, so the owner chose to take Pi's times from `pi.txt` too: the earliest and latest timestamps in it. Harbor's `agent_execution` is the fallback when the log has fewer than two timestamps.
+
 ## Changes in statelog
 
 1. **Move to the new agency-lang version.**

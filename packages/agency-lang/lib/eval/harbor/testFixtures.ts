@@ -18,6 +18,8 @@ export type FakeHarborTrial = {
   };
   agentExecution?: { startedAt: string; finishedAt: string };
   finishedAt?: string;
+  /** Lines of `agent/pi.txt`, Pi's own event log. */
+  piLogLines?: string[];
 };
 
 /** Write one Harbor trial folder under `jobDir`, the way Harbor lays it out;
@@ -71,6 +73,10 @@ export function writeHarborTrial(jobDir: string, trial: FakeHarborTrial): string
           },
   };
   fs.writeFileSync(path.join(trialDir, "result.json"), JSON.stringify(result, null, 2));
+  if (trial.piLogLines !== undefined) {
+    fs.mkdirSync(path.join(trialDir, "agent"), { recursive: true });
+    fs.writeFileSync(path.join(trialDir, "agent", "pi.txt"), trial.piLogLines.join("\n") + "\n");
+  }
   if (trial.statelogLines !== undefined) {
     fs.mkdirSync(path.join(trialDir, "agent"), { recursive: true });
     fs.writeFileSync(

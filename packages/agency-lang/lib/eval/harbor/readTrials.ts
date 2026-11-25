@@ -230,13 +230,19 @@ function trialOf({
     statelogPath:
       fs.existsSync(statelogPath) && fs.statSync(statelogPath).size > 0 ? statelogPath : null,
     agentName: result.agent_info?.name ?? null,
-    reported: reportedOf(result),
+    reported: reportedOf({ result, trialDir }),
   };
 }
 
 /** Null unless the agent reported its tokens. `n_input_tokens` includes the
  *  cached tokens, so fresh input is the difference. */
-function reportedOf(result: HarborResult): RunReported | null {
+function reportedOf({
+  result,
+  trialDir,
+}: {
+  result: HarborResult;
+  trialDir: string;
+}): RunReported | null {
   const usage = result.agent_result;
   const input = usage?.n_input_tokens;
   const output = usage?.n_output_tokens;
@@ -244,7 +250,7 @@ function reportedOf(result: HarborResult): RunReported | null {
     return null;
   }
   const cached = usage?.n_cache_tokens ?? 0;
-  const times = timesOf(result);
+  const times = piLogTimes(trialDir) ?? harborTimes(result);
   return {
     models: [
       {
@@ -264,9 +270,51 @@ function reportedOf(result: HarborResult): RunReported | null {
   };
 }
 
-/** The agent's own run, else the whole trial's; ISO strings with
- *  milliseconds, like trace timestamps. */
-function timesOf(result: HarborResult): { startedAt: string; finishedAt: string } {
+type AgentTimes = { startedAt: string; finishedAt: string };
+
+/** The first and last timestamps in Pi's own log, `agent/pi.txt`. Harbor's
+ *  agent time adds about 12 seconds of harness work; an Agency run's time
+ *  comes from its trace, so Pi's comes from its log. Null without at least
+ *  two timestamps. */
+function piLogTimes(trialDir: string): AgentTimes | null {
+  const logPath = path.join(trialDir, "agent", "pi.txt");
+  if (!fs.existsSync(logPath)) {
+    return null;
+  }
+  const stamps = fs
+    .readFileSync(logPath, "utf8")
+    .split("\n")
+    .flatMap((line) => timestampOf(line));
+  if (stamps.length < 2) {
+    return null;
+  }
+  return {
+    startedAt: new Date(Math.min(...stamps)).toISOString(),
+    finishedAt: new Date(Math.max(...stamps)).toISOString(),
+  };
+}
+
+/** A Pi log line's time in milliseconds: the session line's ISO `timestamp`,
+ *  or a message's epoch-millisecond `message.timestamp`. */
+function timestampOf(line: string): number[] {
+  let row: unknown;
+  try {
+    row = JSON.parse(line);
+  } catch {
+    return [];
+  }
+  if (typeof row !== "object" || row === null) {
+    return [];
+  }
+  const record = row as { timestamp?: unknown; message?: { timestamp?: unknown } };
+  const value = record.timestamp ?? record.message?.timestamp;
+  const ms = typeof value === "string" ? Date.parse(value) : value;
+  return typeof ms === "number" && Number.isFinite(ms) ? [ms] : [];
+}
+
+/** The agent's run as Harbor timed it, else the whole trial's; ISO strings
+ *  with milliseconds, like trace timestamps. */
+function harborTimes(result: HarborResult): AgentTimes {
   const startedAt = result.agent_execution?.started_at ?? result.started_at;
   const finishedAt = result.agent_execution?.finished_at ?? result.finished_at ?? startedAt;
   return {

@@ -227,7 +227,7 @@ agency eval import-harbor [<job folder>...] [--trials <file>] --out <dir> [--bat
   - a reward is the score, even after a timeout;
   - no reward with `AgentTimeoutError` or `NonZeroAgentExitCodeError` (and a trace) scores 0;
   - anything else with no reward, and every trial with neither a trace nor reported tokens, ends `void` with no score. A void trial with no trace is a silent run with an empty `statelog.jsonl`.
-- **Agents that write no trace,** such as Pi, report their tokens and cost in `result.json`. The importer stores them, with the agent's start and finish times, as the run row's `reported` field. Fresh input is `n_input_tokens - n_cache_tokens`.
+- **Agents that write no trace,** such as Pi, report their tokens and cost in `result.json`. The importer stores them, with the agent's start and finish times, as the run row's `reported` field. Fresh input is `n_input_tokens - n_cache_tokens`. Pi's times come from its own log, `agent/pi.txt`, because Harbor's agent time adds about 12 seconds of harness work that an Agency trace leaves out.
 - **Agent name:** `--agent` names every run's agent, as `flags.agent`. Without it, each run takes `agent_info.name` from its own `result.json`, such as `pi` or `agency-agent`. A trace's own `agentName` still wins, as `displayAgent` says.
 - **Re-running is safe:** a folder holding the same Harbor trial (`flags.harborJob`/`harborTrial`) under the same agent name is left alone or only gets its scores. A folder holding a different trial, or the same trial under another agent name, fails. Only planned folders are checked, so re-importing a smaller selection needs `<out>/<batch>` deleted first.
 

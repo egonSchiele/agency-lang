@@ -296,4 +296,39 @@ describe("readHarborTrial: the agent and its reported usage", () => {
     expect(old.agentName).toBeNull();
     expect(old.reported).toBeNull();
   });
+
+  it("takes a Pi trial's times from its own log, without Harbor's overhead", () => {
+    const lastMessageMs = Date.parse("2026-11-13T23:35:26.504Z");
+    const pi = read({
+      ...PI,
+      statelogLines: undefined,
+      agentExecution: {
+        startedAt: "2026-11-13T23:34:26.015034Z",
+        finishedAt: "2026-11-13T23:35:34.868438Z",
+      },
+      piLogLines: [
+        JSON.stringify({ type: "session", timestamp: "2026-11-13T23:34:28.716Z" }),
+        JSON.stringify({ type: "turn_start" }),
+        JSON.stringify({ type: "message_end", message: { timestamp: lastMessageMs - 1000 } }),
+        "not json",
+        JSON.stringify({ type: "turn_end", message: { timestamp: lastMessageMs } }),
+      ],
+    });
+    expect(pi.reported?.startedAtMs).toBe(Date.parse("2026-11-13T23:34:28.716Z"));
+    expect(pi.reported?.lastEventAt).toBe("2026-11-13T23:35:26.504Z");
+    expect(pi.reported?.durationMs).toBe(57_788);
+  });
+
+  it("uses Harbor's times when Pi's log has fewer than two timestamps", () => {
+    const pi = read({
+      ...PI,
+      statelogLines: undefined,
+      agentExecution: {
+        startedAt: "2026-11-13T23:34:26.015034Z",
+        finishedAt: "2026-11-13T23:35:34.868438Z",
+      },
+      piLogLines: [JSON.stringify({ type: "session", timestamp: "2026-11-13T23:34:28.716Z" })],
+    });
+    expect(pi.reported?.durationMs).toBe(68_853);
+  });
 });

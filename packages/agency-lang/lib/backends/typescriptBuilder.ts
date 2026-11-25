@@ -28,7 +28,7 @@ import {
 import path from "path";
 import { formatTypeHint, formatTypeHintTs } from "@/utils/formatType.js";
 import {
-  BUILTIN_FUNCTIONS,
+  builtinFunctionName,
   BUILTIN_TOOLS,
   BUILTIN_VARIABLES,
   TYPES_THAT_DONT_TRIGGER_NEW_PART,
@@ -2340,7 +2340,7 @@ export class TypeScriptBuilder {
 
     // Builtin tools: wrap as AgencyFunction instances
     for (const toolName of BUILTIN_TOOLS) {
-      const internalName = BUILTIN_FUNCTIONS[toolName] || toolName;
+      const internalName = builtinFunctionName(toolName) || toolName;
       stmts.push(
         ts.raw(
           renderBuiltinToolRegistration.default({

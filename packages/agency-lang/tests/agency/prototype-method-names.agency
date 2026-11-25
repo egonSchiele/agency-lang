@@ -1,0 +1,15 @@
+// A def may be named like a method every JavaScript object has. The
+// compiler once looked such a name up in its table of built-ins, found the
+// object method there, and crashed.
+
+def valueOf(x: number): number {
+  return x + 1
+}
+
+def toString(x: number): string {
+  return "number ${x}"
+}
+
+node main() {
+  return [valueOf(1), toString(2)]
+}

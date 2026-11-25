@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "defs named valueOf and toString compile and run as the user's own functions",
+      "input": "",
+      "expectedOutput": "[2,\"number 2\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -256,12 +256,11 @@ Everything before the cut is kept whole. A real key named `__truncated`
 cannot be told from the marker.
 
 Each field has its own budget, so a large `args` cannot push `usage` or
-`cost` out of an event. `promptCompletion.messages` has no budget: a budget
-keeps the start of a list, and for a conversation the newest messages are the
-ones worth reading. Cutting the list would also make the logs viewer show a
-rewritten history. Its strings are still capped. Logging only the messages a
-round added would shrink these events properly; that needs its own spec,
-since every reader of `promptCompletion` changes.
+`cost` out of an event. `promptCompletion.messages` and
+`promptCompletion.newMessages` have no budget: a budget keeps the start of a
+list, and for a conversation the newest messages are the ones worth reading.
+Cutting the list would also make the logs viewer show a rewritten history.
+Their strings are still capped.
 
 **Order of work.** The event is serialized once, as before, with strings
 capped on the way. If no string was cut and the text is no longer than the
@@ -271,16 +270,16 @@ field, and the event is written again with `truncated: true` on `data`. If
 nothing was cut after all, the original text is returned, because a parse and
 stringify can reorder integer-like keys.
 
-One event type often takes the slow path for nothing. A `promptCompletion`
-logs the whole conversation, so in a long session its text is over 100,000
-characters on most rounds. It is parsed and walked, nothing is cut (its
-`messages` are exempt), and the original text is returned. That is one
-`JSON.parse` of up to a few megabytes per model call. Next to the model call
-itself it is small, so there is no guard for it. A guard would have to learn
-each top-level field's serialized length during the one stringify, and skip
-the parse when the only field over the cap is exempt. The text, not the live value, is
-trimmed so redaction keeps working: redact tags live on the original objects,
-and a trimmed copy would not carry them.
+A `promptCompletion` that logs a full copy of a long conversation can take
+the slow path for nothing: its text is over the cap, it is parsed and walked,
+nothing is cut (its messages are exempt), and the original text is returned.
+Most calls log only the messages they added (see "Messages: full copies and
+changes"), so this happens on a thread's first call and on every
+`FULL_COPY_EVERY_CALLS`th call after it. There is no guard for it. A guard
+would have to learn each top-level field's serialized length during the one
+stringify, and skip the parse when the only field over the cap is exempt. The
+text, not the live value, is trimmed so redaction keeps working: redact tags
+live on the original objects, and a trimmed copy would not carry them.
 
 `truncated` is one flag per event. Eval copies it onto the value it reads
 from `agentEnd`, `evalOutputRecorded`, and `evalValueRecorded`
@@ -495,6 +494,101 @@ or `thread(continue:)`. See the [cross-thread context guide](../../site/guide/cr
 Older logs lack `threadIdentity`; the rounds viewer keeps their conversations
 separate across spans because registry keys alone cannot establish identity.
 
+### Messages: full copies and changes
+
+A `promptCompletion` logs its messages in one of two shapes. A thread's
+first call logs `messages`, the whole list. A later call logs `keptMessages`,
+how many messages at the start are the same as in this thread's previous
+call, and `newMessages`, the messages after those. Three calls that ask
+"one", "two", and "three" log:
+
+```json
+{"type":"promptCompletion","messages":[{"role":"user","content":"one"}],"logWriter":"Xk3_a9QpL2mZ","threadCall":1, ...}
+{"type":"promptCompletion","keptMessages":1,"newMessages":[{"role":"assistant","content":"r1"},{"role":"user","content":"two"}],"logWriter":"Xk3_a9QpL2mZ","threadCall":2, ...}
+{"type":"promptCompletion","keptMessages":3,"newMessages":[{"role":"assistant","content":"r2"},{"role":"user","content":"three"}],"logWriter":"Xk3_a9QpL2mZ","threadCall":3, ...}
+```
+
+Logging the whole list on every call would put a session's history in the
+log once per call, so the log would grow with the square of the session's
+length.
+
+Both shapes carry `logWriter` and `threadCall`. `logWriter` is a random
+12-character id for one writer: a `StatelogClient`, or the clients a resume
+in the same process joins (below). A subprocess logs into its parent's trace
+and file with its own writer. `threadCall` is 1 for the first call a writer
+logs on a thread, then 2, 3, and so on. A change event rebuilds as "the first
+`keptMessages` messages of call `threadCall - 1` from the same writer on the
+same thread, then `newMessages`". A thread with no identity is logged whole,
+with neither field.
+
+**The writer** (`lib/statelog/threadMessages/write.ts`, `messageFieldsFor`)
+keeps, per thread identity, the last `threadCall` and one string per message
+it logged: `canonicalize(message)`, JSON with keys sorted at every depth. On
+each call it counts how many strings at the start of the new list match.
+That count is `keptMessages`. After compaction or an expiring message
+rewrote history, the count stops at the first changed message, so a rewrite
+needs no separate shape. A count of 0 gives a full copy. Calls 1, 51, 101,
+and so on are full copies too (`FULL_COPY_EVERY_CALLS`), so a lost remote
+upload leaves a gap that ends at the next full copy. The keys are sorted
+because a message restored from a checkpoint can come back with its keys in
+another order. The strings are made before `post()` redacts the event, and
+they stay in memory, only compared.
+
+The writer's comparison differs from the viewer's `messageKey`
+(`lib/logsViewer/messageDelta.ts`) on purpose. The viewer compares what the
+model saw, and treats a tool result saved as a value and the same result as
+JSON text as one message. A reader copies kept messages from the earlier
+event, so the writer's rule must be exact, or a reader would get an earlier
+version of a message back.
+
+**The record** lives in a `LogWriterState` (`writers.ts`) on the client.
+Branch loggers made by `forBranch` read it through the prototype, so code
+changes `writer.threads` in place and never assigns a new object to the
+field. An assignment would give that branch its own record under the same
+`logWriter`, and its events could not be rebuilt. `promptCompletion` updates
+the record and `post()` appends the line with no `await` between them, so
+one writer's lines reach the file in `threadCall` order. The branches of a
+fork hold threads with the same identity that grow apart, so when two
+branches alternate on one thread, each event holds that branch's messages
+since the fork. Every event still rebuilds to the right list.
+
+**A resume** in a process that is still running (a TypeScript caller
+answering with `respondToInterrupts`, which is how Perry and `agency agent`
+work) continues its run's writer. The base `RuntimeContext` keeps the writers
+of the `MAX_KEPT_LOG_WRITERS` most recently used run ids, and
+`createExecutionContext` hands the one for its run id to the new client. So
+the first call after the resume is a change from the last call before the
+interrupt. A resume in another process (`agency resume`, or a served agent
+whose `/resume` reaches a fresh process) gets a new writer, and its first
+call on each thread is a full copy. The kept writer is a cache: when it is
+missing, the cost is one full copy per thread. It is in no checkpoint,
+because a checkpoint can be resumed in another process after other writers
+logged to the trace.
+
+**Readers** get the whole list back from `lib/statelog/threadMessages/read.ts`.
+A rebuilt event has `messages` with the whole list, keeps `keptMessages`,
+`logWriter`, and `threadCall`, and drops `newMessages`, so code that reads
+`data.messages` works unchanged. `parse.ts` rebuilds as it parses, in file
+order (`rebuildMessages`, with a `RebuildState` the caller keeps across
+chunks). `parseStatelogRecords` and eval's `normalize` rebuild a whole batch
+in `threadCall` order (`rebuildAllMessages`), because the statelog server
+returns live uploads in the order they arrived and hands eval its rows
+directly. Rebuilding twice changes nothing. When a change event's previous
+call is missing, the reader cannot rebuild it: `messages` holds only the new
+messages and `missingMessages` says how many are not in the log, and every
+later change on that thread is marked the same way until the next full copy.
+
+The rules that follow from this:
+
+- Read a log through `parse.ts`. A raw `promptCompletion` line may hold only
+  its new messages.
+- A parsed line has `event`, rebuilt, for showing a log, and `stored`, as the
+  file holds it, for sending it somewhere. `Trace` has `events` and
+  `storedEvents` the same way, and `agency eval upload` posts `storedEvents`,
+  so the server stores each message once.
+- Keep the writer's comparison separate from the viewer's `messageKey`, for
+  the reason above.
+
 Tools: `toolCallStart` → `toolCall` (share the `toolExecution` span; OTEL
 start+end mergeable).
 
@@ -511,8 +605,15 @@ Emitted at bootstrap when config names the provider, and from
 Memory: `memoryRemember`, `memoryRecall`, `memoryForget`, `memoryCompaction`.
 
 Interrupts: `interruptThrown`, `handlerDecision`, `interruptResolved`.
+`handlerDecision` carries the interrupt's `effect` and `message`, and
+`interruptResolved` carries its whole summary, with `data`. Every handler in
+the chain logs a `handlerDecision`, and every interrupt the chain sees logs an
+`interruptResolved`, so the data is in the log once. It can be large: an
+edit's interrupt carries the whole file before and after the edit. Eval
+extraction takes the summary from `interruptResolved`, and from
+`handlerDecision` in older logs that carried it there.
 
-Checkpoints: `checkpointCreated`, `checkpointRestored`. When the prompt runner's step bailout, a batch (tool calls, fork, race), or the guard gate takes a checkpoint for interrupts, the event lists them in `interrupts`: each one's `interruptId`, `origin`, and the same `effect`, `message`, and `data` summary the interrupt events carry, with `debugger: true` on a debugger stop. The handler chain logs every interrupt raised through it (`handlerDecision`, `interruptResolved`, and `interruptThrown` for one that goes to a person). Two kinds are made outside the chain and appear only here: a debugger stop, and a guard question re-asked on a resume (`guardTripInterrupt.ts`). The checkpoint an `interrupt` statement takes for itself (`agencyInterrupt.ts`, and the `interruptReturn` and `interruptAssignment` templates) logs no `checkpointCreated` event yet.
+Checkpoints: `checkpointCreated`, `checkpointRestored`. When the prompt runner's step bailout, a batch (tool calls, fork, race), or the guard gate takes a checkpoint for interrupts, the event lists them in `interrupts`: each one's `interruptId`, `origin`, and the same `effect`, `message`, and `data` summary `interruptResolved` carries, with `debugger: true` on a debugger stop. The handler chain logs every interrupt raised through it (`handlerDecision`, `interruptResolved`, and `interruptThrown` for one that goes to a person). Two kinds are made outside the chain and appear only here: a debugger stop, and a guard question re-asked on a resume (`guardTripInterrupt.ts`). The checkpoint an `interrupt` statement takes for itself (`agencyInterrupt.ts`, and the `interruptReturn` and `interruptAssignment` templates) logs no `checkpointCreated` event yet.
 
 ### A resumed run opens its span before it restores
 
@@ -602,3 +703,7 @@ given.
   once, before the process exits.
 - **Format versioning** — bump `STATELOG_FORMAT_VERSION` when the wire format
   changes in a way a viewer must notice; viewers should reject a higher version.
+  An additive field, such as a `promptCompletion`'s `newMessages`, does not
+  bump it: an older reader still reads every other event. The statelog
+  server refuses an upload whose version it does not support, so a bump
+  drops every event until the server is redeployed.

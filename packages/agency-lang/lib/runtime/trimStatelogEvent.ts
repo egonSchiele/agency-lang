@@ -17,7 +17,7 @@ export const TRUNCATED_KEY = "__truncated";
  *  worth reading, and a budget keeps the start. Each message's strings are
  *  still capped. */
 const UNBUDGETED_FIELDS: Record<string, string[]> = {
-  promptCompletion: ["messages"],
+  promptCompletion: ["messages", "newMessages"],
 };
 
 /**

@@ -155,7 +155,12 @@ export function digestPlan(state: RemoteTraceState): DigestPlan {
 type LocalRun = {
   dir: string;
   summary: RunSummary;
+  /** The trace's events with message lists rebuilt, for the results-only
+   *  digest. */
   events: readonly EventEnvelope[];
+  /** The trace's events as the file holds them, which is what gets posted,
+   *  so the server stores each message once. */
+  storedEvents: readonly EventEnvelope[];
   rows: Annotation[];
 };
 
@@ -167,10 +172,12 @@ function readLocalRun(dir: string, reportWarning: (message: string) => void): Lo
       return failed(dir, null, null, "not a run: the directory has no trace and no run row");
     }
     const traceId = summary.traceId;
+    const trace = snapshot.traces.find((candidate) => candidate.traceId === traceId);
     return {
       dir,
       summary,
-      events: snapshot.traces.find((trace) => trace.traceId === traceId)?.events ?? [],
+      events: trace?.events ?? [],
+      storedEvents: trace?.storedEvents ?? [],
       rows: snapshot.annotationRows.filter((row) => row.traceId === traceId),
     };
   } catch (error) {
@@ -215,7 +222,7 @@ async function uploadDigest(run: LocalRun, client: EvalUploadClient): Promise<Ru
 }
 
 async function uploadEvents(run: LocalRun, client: EvalUploadClient): Promise<RunRecord> {
-  const { dir, summary, events, rows } = run;
+  const { dir, summary, storedEvents: events, rows } = run;
   const traceId = summary.traceId;
   try {
     const plan = eventPlan(await client.traceUploadState(traceId), events.length);

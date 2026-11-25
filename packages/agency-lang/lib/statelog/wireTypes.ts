@@ -1,4 +1,5 @@
 import type { DecisionAnswer, DecisionQuestion, DecisionState } from "smoltalk";
+import { z } from "zod";
 
 // Wire format produced by StatelogClient.post(). Mirrors the envelope
 // shape we read from the JSONL file; do NOT depend on the runtime
@@ -51,6 +52,29 @@ export type DecisionLog = {
   questions: Record<string, DecisionQuestion>;
   answers: Record<string, DecisionAnswer>;
 };
+
+/** The writer fields a `promptCompletion` on a thread with an identity
+ *  carries. See "Messages: full copies and changes" in
+ *  docs/dev/hosting/statelog.md. */
+export const WriterFieldsSchema = z.object({
+  logWriter: z.string(),
+  threadCall: z.number().int().positive(),
+});
+
+/** A `promptCompletion` that logs its thread's whole message list. */
+export const FullCopyFieldsSchema = WriterFieldsSchema.extend({
+  messages: z.array(z.unknown()),
+});
+export type FullCopyFields = z.infer<typeof FullCopyFieldsSchema>;
+
+/** A `promptCompletion` whose first `keptMessages` messages are the same as
+ *  in this writer's previous call on the thread, and `newMessages` follow
+ *  them. A change always keeps at least one message. */
+export const ChangeFieldsSchema = WriterFieldsSchema.extend({
+  keptMessages: z.number().int().positive(),
+  newMessages: z.array(z.unknown()),
+});
+export type ChangeFields = z.infer<typeof ChangeFieldsSchema>;
 
 export type EventData = {
   type: string;

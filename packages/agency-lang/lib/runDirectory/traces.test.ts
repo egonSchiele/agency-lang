@@ -4,6 +4,7 @@ import * as path from "path";
 
 import { describe, expect, it } from "vitest";
 
+import { threeCallLines } from "@/statelog/threadMessages/testFixtures.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
 import {
@@ -45,6 +46,13 @@ describe("readTraces", () => {
     expect(traces[0].events).toHaveLength(2);
     expect(traces[0].lines).toHaveLength(2);
     expect(traces[1].events).toHaveLength(1);
+  });
+
+  it("keeps a trace's stored events next to the rebuilt ones", () => {
+    const { traces } = readTraces(writeLog(threeCallLines().join("\n") + "\n"));
+    expect(traces[0].events[2].data.messages).toHaveLength(5);
+    expect(traces[0].storedEvents[2].data.newMessages).toHaveLength(2);
+    expect(traces[0].storedEvents[2].data.messages).toBeUndefined();
   });
 
   it("drops a duplicated identical line", () => {

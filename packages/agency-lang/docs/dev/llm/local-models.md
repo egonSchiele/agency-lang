@@ -198,6 +198,17 @@ file, or split into parts, as described below. Every load goes through
 `_downloadModel` too, and it downloads nothing when the model is already on
 disk.
 
+### A tag or a file
+
+A catalog URI usually names a quant tag, `hf:unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_M`,
+and Hugging Face picks the file. That pick can be wrong. In
+`prism-ml/Ternary-Bonsai-2.5-27B-GGUF` the tag `Q2_0` resolves to the
+`PQ2_0` file, which stock llama.cpp cannot load. When a tag is ambiguous
+like that, the URI names the file instead:
+`hf:prism-ml/Ternary-Bonsai-2.5-27B-GGUF/Ternary-Bonsai-2.5-27B-Q2_0.gguf`.
+Both forms download, verify, and find their sampling the same way, and
+`scripts/genModelHashes.ts` mints a pin for both.
+
 ### One folder per model
 
 Each URI downloads into a folder of its own, named by `ggufModelDirName` in

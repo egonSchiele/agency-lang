@@ -208,6 +208,14 @@ function extractInterrupts(n: Normalized): WithWarnings<InterruptEntry[]> {
   return { result, warnings: [] };
 }
 
+/** The interrupt summary on the first event of this type that has one. */
+function summaryOn(events: NormalizedEnvelope[], type: string): any {
+  const event = events.find(
+    (e) => e.type === type && e.raw.data.interrupt && typeof e.raw.data.interrupt === "object",
+  );
+  return event?.raw.data.interrupt;
+}
+
 function buildInterruptEntry(interruptId: string, group: NormalizedEnvelope[]): InterruptEntry {
   const sorted = [...group].sort((a, b) => a.tMs - b.tMs || a.seq - b.seq);
   const thrown = sorted.find((e) => e.type === "interruptThrown");
@@ -215,15 +223,11 @@ function buildInterruptEntry(interruptId: string, group: NormalizedEnvelope[]): 
   // ("propagated"/"passed") and may then be decided by the user — the later
   // event supersedes.
   const resolved = sorted.filter((e) => e.type === "interruptResolved").at(-1);
-  // `interrupt: {kind, message, data}` summary is attached to
-  // handlerDecision / interruptResolved by the runtime.
+  // The runtime logs the interrupt's summary with its `data` on
+  // interruptResolved, and without it on handlerDecision. Older logs carry
+  // the data on handlerDecision too, so it is the fallback.
   const summary =
-    sorted.find(
-      (e) =>
-        (e.type === "handlerDecision" || e.type === "interruptResolved") &&
-        e.raw.data.interrupt &&
-        typeof e.raw.data.interrupt === "object",
-    )?.raw.data.interrupt ?? null;
+    summaryOn(sorted, "interruptResolved") ?? summaryOn(sorted, "handlerDecision") ?? null;
   const outcomeRaw = resolved?.raw.data.outcome;
   const outcome: InterruptEntry["outcome"] =
     outcomeRaw === "approved" ||
@@ -242,7 +246,7 @@ function buildInterruptEntry(interruptId: string, group: NormalizedEnvelope[]): 
       : null;
   return {
     interruptId,
-    kind: summary?.kind ?? null,
+    kind: summary?.effect ?? summary?.kind ?? null,
     message: summary?.message ?? null,
     data: summary?.data ?? null,
     outcome,

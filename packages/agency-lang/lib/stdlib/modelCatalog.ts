@@ -306,6 +306,24 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "1bce504dfecd84153666928a41d8a66706f0158d3a317bc5196b72819d7dc529",
     sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
+  // The URI names the file, not the tag. Hugging Face resolves the tag
+  // `Q2_0` in this repo to the PQ2_0 file, which only PrismML's llama.cpp
+  // fork can load. The Q2_0 file runs on llama.cpp b11556 and later; an
+  // older build loads it with no warning and writes garbage.
+  "bonsai-2.5-27b": {
+    backend: "llama-cpp",
+    uri: "hf:prism-ml/Ternary-Bonsai-2.5-27B-GGUF/Ternary-Bonsai-2.5-27B-Q2_0.gguf",
+    params: "27B",
+    sizeBytes: 7673194848,
+    kind: "chat",
+    tags: [],
+    contextWindow: 262144,
+    license: "apache-2.0",
+    description:
+      "PrismML's ternary qwen3.8-27b, about 2 bits a weight. A 7.7 GB file, near the full model on coding tests. Needs smoltalk-llama-cpp with llama.cpp b11556 or later; an older one writes garbage.",
+    sha256: "84496171ca79d4d33fb45612a2afd8303ec494baf916281023b7dc9cb3b3b9fa",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
+  },
   "granite-4.2-30b": {
     backend: "llama-cpp",
     uri: "hf:ibm-granite/granite-4.2-30b-GGUF:Q4_K_M",
@@ -1021,19 +1039,24 @@ export function localSamplingFor(model: string): Sampling | undefined {
 
 /** Whether a catalog URI is the model a local call names. An `mlx:` URI
  *  names the repo the server serves, with any pinned revision dropped. An
- *  `hf:` URI names any file in the folder Agency downloads it into. A
- *  file downloaded before those folders is matched by the name
- *  node-llama-cpp gave it, `hf_<owner>_<repo without -GGUF>.<quant>.gguf`. */
+ *  `hf:` URI, by tag (`hf:owner/repo:Q4_K_M`) or by file
+ *  (`hf:owner/repo/file.gguf`), names any file in the folder Agency
+ *  downloads it into. A file downloaded by tag before those folders is
+ *  matched by the name node-llama-cpp gave it,
+ *  `hf_<owner>_<repo without -GGUF>.<quant>.gguf`. */
 function servesAs(uri: string, model: string): boolean {
   if (uri.startsWith("mlx:")) {
     return uri.slice("mlx:".length).split("@")[0] === model;
   }
-  const gguf = /^hf:([^/]+)\/([^:]+):([^:]+)$/.exec(uri);
-  if (gguf === null) {
+  if (!uri.startsWith("hf:")) {
     return false;
   }
   if (isInGgufModelDir(model, uri)) {
     return true;
+  }
+  const gguf = /^hf:([^/]+)\/([^:]+):([^:]+)$/.exec(uri);
+  if (gguf === null) {
+    return false;
   }
   const legacyFile = `hf_${gguf[1]}_${gguf[2].replace(/-GGUF$/i, "")}.${gguf[3]}.gguf`;
   return model === legacyFile || model.endsWith(`/${legacyFile}`);

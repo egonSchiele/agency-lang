@@ -1,3 +1,4 @@
+import { rebuildAllMessages } from "../statelog/threadMessages/read.js";
 import type { EventEnvelope } from "../statelog/wireTypes.js";
 import { threadIdOf, timestampMs } from "../statelog/wireAccessors.js";
 import type { ThreadEntry } from "./types.js";
@@ -37,11 +38,16 @@ export type Normalized = {
 /** One pass over the raw envelopes that hoists relative timestamps,
  *  resolves thread ids, and builds the span/byType indices. Every
  *  later helper consumes the result; no helper re-reads `data.foo`
- *  for these fields. */
-export function normalize(events: EventEnvelope[]): Normalized {
-  if (events.length === 0) {
+ *  for these fields.
+ *
+ *  The message lists are rebuilt first, because a caller can hand in
+ *  events that never went through `parse.ts`: the statelog server builds
+ *  them from its database rows. A list rebuilt already is left as it is. */
+export function normalize(stored: EventEnvelope[]): Normalized {
+  if (stored.length === 0) {
     return { events: [], spanIndex: {}, byType: {}, warnings: [] };
   }
+  const events = rebuildAllMessages(stored);
   const t0 = timestampMs(events[0]);
   const normalized: NormalizedEnvelope[] = events.map((raw, seq) => ({
     raw,

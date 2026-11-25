@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { THREE_CALLS, writtenEvents } from "../statelog/threadMessages/testFixtures.js";
 import type { EventEnvelope } from "../statelog/wireTypes.js";
 import { extractEvalRecord } from "./extract.js";
 
@@ -38,6 +39,14 @@ describe("extractEvalRecord", () => {
     const a = ev("promptCompletion", { threadId: "0" });
     const b: EventEnvelope = { ...ev("promptCompletion", { threadId: "0" }), trace_id: "trace-B" };
     expect(() => extractEvalRecord([a, b], "src")).toThrow(/multiple trace_ids/i);
+  });
+
+  it("rebuilds the message lists of events it is handed directly", () => {
+    // The statelog server hands eval its rows in arrival order, which can put
+    // a change event before the full copy it builds on.
+    const [first, second] = writtenEvents(THREE_CALLS.slice(0, 2));
+    const record = extractEvalRecord([second, first], "src", { warnMissingValue: false });
+    expect(record.evalValues[0].value).toBe("two");
   });
 
   it("adds up the time spent waiting at approval prompts", () => {
@@ -368,13 +377,13 @@ describe("extractEvalRecord", () => {
         interruptId: "i-1",
         handlerIndex: 0,
         decision: "approve",
-        interrupt: { kind: "approval", message: "Run grep?", data: { tool: "grep" } },
+        interrupt: { effect: "std::grep", message: "Run grep?" },
       }),
       ev("interruptResolved", {
         interruptId: "i-1",
         outcome: "approved",
         resolvedBy: "handler",
-        interrupt: { kind: "approval", message: "Run grep?", data: { tool: "grep" } },
+        interrupt: { effect: "std::grep", message: "Run grep?", data: { tool: "grep" } },
       }),
     ];
     const rec = extractEvalRecord(events, "test:interrupts");
@@ -385,7 +394,8 @@ describe("extractEvalRecord", () => {
       expect(i.interruptId).toBe("i-1");
       expect(i.outcome).toBe("approved");
       expect(i.resolvedBy).toBe("handler");
-      expect(i.kind).toBe("approval");
+      // The runtime logs the interrupt's effect, and the entry calls it `kind`.
+      expect(i.kind).toBe("std::grep");
       expect(i.message).toBe("Run grep?");
       expect(i.data).toEqual({ tool: "grep" });
       expect(i.thrownAtMs).not.toBeNull();
@@ -408,6 +418,51 @@ describe("extractEvalRecord", () => {
       // is the absence of one. Old records that say "unresolved" stay valid.
       expect(outcomes).toContainEqual(["i-p", "passed"]);
       expect(outcomes).toContainEqual(["i-u", "unresolved"]);
+    });
+
+    it("takes an interrupt's data from interruptResolved", () => {
+      const events: EventEnvelope[] = [
+        ev("handlerDecision", {
+          interruptId: "i-d",
+          handlerIndex: 0,
+          decision: "approve",
+          interrupt: { effect: "std::write", message: "Write a.txt?" },
+        }),
+        ev("interruptResolved", {
+          interruptId: "i-d",
+          outcome: "approved",
+          resolvedBy: "handler",
+          interrupt: { effect: "std::write", message: "Write a.txt?", data: { filename: "a.txt" } },
+        }),
+      ];
+      const [entry] = extractEvalRecord(events, "test:data-from-resolved").interrupts;
+      expect(entry.data).toEqual({ filename: "a.txt" });
+    });
+
+    it("reads the effect from `kind` in a log from before the field was renamed", () => {
+      const events: EventEnvelope[] = [
+        ev("interruptResolved", {
+          interruptId: "i-k",
+          outcome: "approved",
+          resolvedBy: "handler",
+          interrupt: { kind: "std::read", message: "Read a.txt?", data: { filename: "a.txt" } },
+        }),
+      ];
+      const [entry] = extractEvalRecord(events, "test:old-kind").interrupts;
+      expect(entry.kind).toBe("std::read");
+    });
+
+    it("falls back to handlerDecision for an old log", () => {
+      const events: EventEnvelope[] = [
+        ev("handlerDecision", {
+          interruptId: "i-o",
+          handlerIndex: 0,
+          decision: "approve",
+          interrupt: { effect: "std::write", message: "Write a.txt?", data: { filename: "a.txt" } },
+        }),
+      ];
+      const [entry] = extractEvalRecord(events, "test:old-log").interrupts;
+      expect(entry.data).toEqual({ filename: "a.txt" });
     });
 
     it("takes the LAST interruptResolved: a user decision supersedes the chain outcome", () => {

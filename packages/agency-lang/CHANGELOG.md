@@ -1,3 +1,7 @@
+## Nov 24 2026 — v0.45.4
+
+Harbor import: agent names, Pi runs, and end times from the trace.
+
 ## Nov 24 2026 — v0.45.3
 
 ### Breaking

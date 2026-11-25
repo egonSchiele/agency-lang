@@ -6,6 +6,12 @@ import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
 import type { DecisionLog, StatelogErrorType, StatelogWarnType } from "./statelog/wireTypes.js";
+import { conformTokenUsage, type TokenCost, type TokenUsage } from "./statelog/tokenUsage.js";
+import {
+  messageFieldsFromWriter,
+  newLogWriter,
+  type LogWriterState,
+} from "./statelog/threadMessages/writers.js";
 import type { ProviderUsageKind } from "./runtime/invocationUsage.js";
 import { statelogScrubRules, stringifyStatelogEvent } from "./runtime/redactForStatelog.js";
 import type { GlobalStore } from "./runtime/state/globalStore.js";
@@ -103,6 +109,10 @@ export type StatelogConfig = {
   /** The most characters a logged string or a top-level event field may
    *  hold. Default `DEFAULT_MAX_VALUE_CHARS`; `0` turns the cap off. */
   maxValueChars?: number;
+  /** The writer whose `promptCompletion` events this client continues. The
+   *  execution context passes the one its run used before a resume in the
+   *  same process; anything else gets a new writer. */
+  writer?: LogWriterState;
 };
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 1500;
@@ -121,41 +131,7 @@ export type CheckpointInterrupt = InterruptSummary & {
   debugger?: boolean;
 };
 
-// === Token / cost types ===
-
-// `cachedInputTokens` are tokens READ from an existing cache entry;
-// `cacheCreationInputTokens` are tokens WRITTEN to a new one. Providers bill
-// them at different rates (a write costs more than ordinary input, a read
-// costs far less), so a breakdown that omits either cannot explain its own
-// total.
-export type TokenUsage = {
-  inputTokens?: number;
-  outputTokens?: number;
-  cachedInputTokens?: number;
-  cacheCreationInputTokens?: number;
-  totalTokens?: number;
-};
-
-export type TokenCost = {
-  inputCost?: number;
-  outputCost?: number;
-  cachedInputCost?: number;
-  cacheCreationInputCost?: number;
-  totalCost?: number;
-};
-
-/** Keep only the declared `TokenUsage` fields — drops any extra runtime field a
- *  provider tacks on (e.g. audio-token counters) so it can't be serialized into
- *  a sink through an echoed `completion.usage`. */
-function conformTokenUsage(usage: Record<string, unknown>): TokenUsage {
-  return {
-    inputTokens: usage.inputTokens as number | undefined,
-    outputTokens: usage.outputTokens as number | undefined,
-    cachedInputTokens: usage.cachedInputTokens as number | undefined,
-    cacheCreationInputTokens: usage.cacheCreationInputTokens as number | undefined,
-    totalTokens: usage.totalTokens as number | undefined,
-  };
-}
+export type { TokenCost, TokenUsage } from "./statelog/tokenUsage.js";
 
 // === Client ===
 
@@ -213,9 +189,17 @@ export class StatelogClient {
   // has neither, and logs with the root stack and the fallback globals.
   private boundStack: SpanContext[] | null = null;
   private boundGlobals: GlobalStore | null = null;
+  // What this client last logged for each thread, so a `promptCompletion`
+  // logs only the messages that changed. Branch loggers made by `forBranch`
+  // read this object through the prototype, so code changes
+  // `writer.threads` in place and never assigns a new object to the field:
+  // an assignment would give that branch its own record under the same
+  // `logWriter`, and readers could no longer rebuild its events.
+  private readonly writer: LogWriterState;
 
   constructor(config: StatelogConfig) {
     const { host, apiKey, projectId, traceId, debugMode } = config;
+    this.writer = config.writer ?? newLogWriter();
     this.host = host;
     this.apiKey = apiKey;
     this.projectId = projectId;
@@ -686,9 +670,15 @@ export class StatelogClient {
      *  it asked for none, which means the provider's default. */
     reasoningEffort?: string | null;
   }): Promise<void> {
+    if (!this.willPost()) {
+      return;
+    }
+    // The writer's record is updated here, and `post()` appends the line
+    // before its first `await`, so one writer's lines reach the file in
+    // `threadCall` order. An `await` between the two would break that.
     await this.post({
       type: "promptCompletion",
-      messages,
+      ...messageFieldsFromWriter(this.writer, threadIdentity, messages),
       // The echoed completion carries its own `usage`; conform it to statelog's
       // declared TokenUsage shape so a provider's extra runtime fields (e.g. the
       // audio-token counters) never ride along into a sink through this nested
@@ -1242,11 +1232,10 @@ export class StatelogClient {
     handlerIndex: number;
     decision: "approve" | "reject" | "propagate" | "pass" | "none";
     value?: any;
-    /** Optional summary of the interrupt being decided on. Carries
-     *  `effect`, `message`, and `data` so log consumers can see *what*
-     *  was being approved/rejected without having to correlate with
-     *  a separate `interruptThrown` event (which doesn't fire for
-     *  synchronously-resolved interrupts like `with approve`). */
+    /** Optional summary of the interrupt being decided on. Only its
+     *  `effect` and `message` are logged, because every handler in the chain
+     *  logs a `handlerDecision`. The `data` is logged once, on the
+     *  `interruptResolved` event the chain logs when it finishes. */
     interrupt?: InterruptSummary;
   }): Promise<void> {
     await this.post({
@@ -1255,7 +1244,7 @@ export class StatelogClient {
       handlerIndex,
       decision,
       value,
-      interrupt,
+      interrupt: interrupt && { effect: interrupt.effect, message: interrupt.message },
     });
   }
 
@@ -1272,8 +1261,9 @@ export class StatelogClient {
      *  surfacing interrupt records ("propagated"/"passed"). */
     resolvedBy: "handler" | "user" | "policy" | "ipc" | null;
     timeTaken?: number;
-    /** Optional summary of the interrupt being resolved. See
-     *  `handlerDecision.interrupt` for rationale. */
+    /** Optional summary of the interrupt being resolved, with its `data`.
+     *  This is the one event that logs the data; see
+     *  `handlerDecision.interrupt`. */
     interrupt?: InterruptSummary;
   }): Promise<void> {
     await this.post({
@@ -1678,6 +1668,12 @@ export class StatelogClient {
 
   // === Post (wire format) ===
 
+  /** Whether `post()` would write an event anywhere: the client is enabled,
+   *  and it has a host (remote or stdout) or a log file. */
+  private willPost(): boolean {
+    return this.enabled && (Boolean(this.host) || this.logFileSink !== null);
+  }
+
   async post(
     body: Record<string, any>,
     options?: {
@@ -1692,12 +1688,7 @@ export class StatelogClient {
       noWait?: boolean;
     },
   ): Promise<void> {
-    if (!this.enabled) {
-      return;
-    }
-
-    // We need either a host (remote / stdout) or a logFile to do anything.
-    if (!this.host && this.logFileSink === null) {
+    if (!this.willPost()) {
       return;
     }
 

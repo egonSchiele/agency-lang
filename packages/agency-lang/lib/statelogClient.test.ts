@@ -6,6 +6,7 @@ import { StatelogClient, StatelogConfig, getStatelogClient } from "./statelogCli
 import { flushPendingStatelogPosts } from "./statelogSender.js";
 import { GlobalStore } from "./runtime/state/globalStore.js";
 import { toolsOf } from "./statelog/wireAccessors.js";
+import { newLogWriter } from "./statelog/threadMessages/writers.js";
 
 /** Make a unique temp file path for a logFile-based test. The file is NOT
  *  created — the client should create the parent dir and append on first
@@ -839,6 +840,94 @@ describe("StatelogClient", () => {
       expect(evt.data.threadLabel).toBe("worker");
     });
 
+    it("logs the first call on a thread whole and later calls as changes", async () => {
+      const file = newLogFile("prompt-changes");
+      const client = fileClient(file);
+      const one = { role: "user", content: "one" };
+      const two = { role: "user", content: "two" };
+      await client.promptCompletion({ messages: [one], completion: {}, threadIdentity: "th" });
+      await client.promptCompletion({ messages: [one, two], completion: {}, threadIdentity: "th" });
+      const [first, second] = readEvents(file);
+      expect(first.data.messages).toEqual([one]);
+      expect(first.data.threadCall).toBe(1);
+      expect(first.data.logWriter).toMatch(/^[A-Za-z0-9_-]{12}$/);
+      expect(second.data.messages).toBeUndefined();
+      expect(second.data.keptMessages).toBe(1);
+      expect(second.data.newMessages).toEqual([two]);
+      expect(second.data.threadCall).toBe(2);
+      expect(second.data.logWriter).toBe(first.data.logWriter);
+    });
+
+    it("two branch loggers share one record per thread", async () => {
+      const file = newLogFile("prompt-branches");
+      const client = fileClient(file);
+      const one = { role: "user", content: "one" };
+      const two = { role: "user", content: "two" };
+      const branchA = client.forBranch(new GlobalStore(), []);
+      const branchB = client.forBranch(new GlobalStore(), []);
+      await branchA.promptCompletion({ messages: [one], completion: {}, threadIdentity: "th" });
+      await branchB.promptCompletion({
+        messages: [one, two],
+        completion: {},
+        threadIdentity: "th",
+      });
+      const [first, second] = readEvents(file);
+      expect(second.data.threadCall).toBe(2);
+      expect(second.data.keptMessages).toBe(1);
+      expect(second.data.logWriter).toBe(first.data.logWriter);
+    });
+
+    it("a thread with no identity is always logged whole", async () => {
+      const file = newLogFile("prompt-no-identity");
+      const client = fileClient(file);
+      const one = { role: "user", content: "one" };
+      await client.promptCompletion({ messages: [one], completion: {}, threadIdentity: null });
+      await client.promptCompletion({ messages: [one], completion: {}, threadIdentity: null });
+      for (const evt of readEvents(file)) {
+        expect(evt.data.messages).toEqual([one]);
+        expect(evt.data.logWriter).toBeUndefined();
+        expect(evt.data.threadCall).toBeUndefined();
+      }
+    });
+
+    it("two clients get different writer ids", async () => {
+      const file = newLogFile("prompt-two-clients");
+      const message = { role: "user", content: "one" };
+      await fileClient(file).promptCompletion({
+        messages: [message],
+        completion: {},
+        threadIdentity: "th",
+      });
+      await fileClient(file).promptCompletion({
+        messages: [message],
+        completion: {},
+        threadIdentity: "th",
+      });
+      const [first, second] = readEvents(file);
+      expect(second.data.logWriter).not.toBe(first.data.logWriter);
+    });
+
+    it("a client given a writer continues it", async () => {
+      const file = newLogFile("prompt-given-writer");
+      const writer = newLogWriter();
+      const one = { role: "user", content: "one" };
+      const two = { role: "user", content: "two" };
+      await fileClient(file, { writer }).promptCompletion({
+        messages: [one],
+        completion: {},
+        threadIdentity: "th",
+      });
+      await fileClient(file, { writer }).promptCompletion({
+        messages: [one, two],
+        completion: {},
+        threadIdentity: "th",
+      });
+      const [first, second] = readEvents(file);
+      expect(second.data.threadCall).toBe(2);
+      expect(second.data.keptMessages).toBe(1);
+      expect(second.data.logWriter).toBe(first.data.logWriter);
+    });
+
     it("promptCompletion logs the offered tools by name only", async () => {
       const file = newLogFile("prompt-tool-names");
       const client = fileClient(file);
@@ -964,6 +1053,37 @@ describe("StatelogClient", () => {
       expect(evt.data.type).toBe("handlerDecision");
       expect(evt.data.decision).toBe("approve");
       expect(evt.data.value).toBe(42);
+    });
+
+    it("handlerDecision logs the interrupt's effect and message without its data", async () => {
+      const file = newLogFile("handler-no-data");
+      const client = fileClient(file);
+      await client.handlerDecision({
+        interruptId: "i1",
+        handlerIndex: 0,
+        decision: "approve",
+        interrupt: {
+          effect: "std::edit",
+          message: "Edit a.txt?",
+          data: { before: "x", after: "y" },
+        },
+      });
+      const [evt] = readEvents(file);
+      expect(evt.data.interrupt).toEqual({ effect: "std::edit", message: "Edit a.txt?" });
+    });
+
+    it("interruptResolved logs the whole interrupt", async () => {
+      const file = newLogFile("resolved-with-data");
+      const client = fileClient(file);
+      const interrupt = { effect: "std::edit", message: "Edit a.txt?", data: { before: "x" } };
+      await client.interruptResolved({
+        interruptId: "i1",
+        outcome: "approved",
+        resolvedBy: "handler",
+        interrupt,
+      });
+      const [evt] = readEvents(file);
+      expect(evt.data.interrupt).toEqual(interrupt);
     });
 
     it("interruptResolved emits outcome + resolvedBy", async () => {

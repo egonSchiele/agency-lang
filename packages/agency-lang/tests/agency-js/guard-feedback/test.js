@@ -1,5 +1,6 @@
 import { main, __setLLMClient } from "./agent.js";
 import { readFileSync, writeFileSync, unlinkSync } from "fs";
+import { parseStatelogJsonl } from "../../../dist/lib/statelog/parse.js";
 
 // approve({message}) feedback delivery (resumable guards PR 4). The
 // program (see agent.agency) produces three approvals with messages:
@@ -53,10 +54,9 @@ try {
 
 const result = await main();
 
-const events = readFileSync("statelog.log", "utf-8")
-  .split("\n")
-  .filter((l) => l.trim() !== "")
-  .map((l) => JSON.parse(l));
+// Through the parser, which rebuilds each request's whole message list: the
+// log holds only the messages each request added.
+const events = parseStatelogJsonl(readFileSync("statelog.log", "utf-8")).events;
 
 // One promptCompletion per request, in request order.
 const requests = events

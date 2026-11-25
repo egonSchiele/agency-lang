@@ -4,13 +4,40 @@
  * docs/dev/hosting/statelog.md.
  */
 import { nanoid } from "nanoid";
-import type { LoggedThread } from "./write.js";
+import type { ChangeFields, FullCopyFields } from "../wireTypes.js";
+import { messageFieldsFor, type LoggedThread } from "./write.js";
 
 /** One writer of change events: its id, and what it last logged per thread. */
 export type LogWriterState = { logWriter: string; threads: Record<string, LoggedThread> };
 
 export function newLogWriter(): LogWriterState {
   return { logWriter: nanoid(12), threads: {} };
+}
+
+/**
+ * A `promptCompletion`'s message fields from this writer. A thread with an
+ * identity is logged as a change from the writer's previous call on it, and
+ * the writer's record for the thread is updated. A thread without one is
+ * logged whole.
+ *
+ * Changes `writer.threads` in place. Branch loggers share one writer through
+ * the prototype, so replacing the object would split their records.
+ */
+export function messageFieldsFromWriter(
+  writer: LogWriterState,
+  threadIdentity: string | null | undefined,
+  messages: unknown[],
+): FullCopyFields | ChangeFields | { messages: unknown[] } {
+  if (typeof threadIdentity !== "string") {
+    return { messages };
+  }
+  const { fields, logged } = messageFieldsFor({
+    previous: writer.threads[threadIdentity],
+    logWriter: writer.logWriter,
+    messages,
+  });
+  writer.threads[threadIdentity] = logged;
+  return fields;
 }
 
 /** How many runs' writers a base context keeps, so a resume in the same

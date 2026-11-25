@@ -5,15 +5,13 @@ import { openLineSink } from "#platform";
 import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
-import type {
-  ChangeFields,
-  DecisionLog,
-  FullCopyFields,
-  StatelogErrorType,
-  StatelogWarnType,
-} from "./statelog/wireTypes.js";
-import { messageFieldsFor } from "./statelog/threadMessages/write.js";
-import { newLogWriter, type LogWriterState } from "./statelog/threadMessages/writers.js";
+import type { DecisionLog, StatelogErrorType, StatelogWarnType } from "./statelog/wireTypes.js";
+import { conformTokenUsage, type TokenCost, type TokenUsage } from "./statelog/tokenUsage.js";
+import {
+  messageFieldsFromWriter,
+  newLogWriter,
+  type LogWriterState,
+} from "./statelog/threadMessages/writers.js";
 import type { ProviderUsageKind } from "./runtime/invocationUsage.js";
 import { statelogScrubRules, stringifyStatelogEvent } from "./runtime/redactForStatelog.js";
 import type { GlobalStore } from "./runtime/state/globalStore.js";
@@ -133,41 +131,7 @@ export type CheckpointInterrupt = InterruptSummary & {
   debugger?: boolean;
 };
 
-// === Token / cost types ===
-
-// `cachedInputTokens` are tokens READ from an existing cache entry;
-// `cacheCreationInputTokens` are tokens WRITTEN to a new one. Providers bill
-// them at different rates (a write costs more than ordinary input, a read
-// costs far less), so a breakdown that omits either cannot explain its own
-// total.
-export type TokenUsage = {
-  inputTokens?: number;
-  outputTokens?: number;
-  cachedInputTokens?: number;
-  cacheCreationInputTokens?: number;
-  totalTokens?: number;
-};
-
-export type TokenCost = {
-  inputCost?: number;
-  outputCost?: number;
-  cachedInputCost?: number;
-  cacheCreationInputCost?: number;
-  totalCost?: number;
-};
-
-/** Keep only the declared `TokenUsage` fields — drops any extra runtime field a
- *  provider tacks on (e.g. audio-token counters) so it can't be serialized into
- *  a sink through an echoed `completion.usage`. */
-function conformTokenUsage(usage: Record<string, unknown>): TokenUsage {
-  return {
-    inputTokens: usage.inputTokens as number | undefined,
-    outputTokens: usage.outputTokens as number | undefined,
-    cachedInputTokens: usage.cachedInputTokens as number | undefined,
-    cacheCreationInputTokens: usage.cacheCreationInputTokens as number | undefined,
-    totalTokens: usage.totalTokens as number | undefined,
-  };
-}
+export type { TokenCost, TokenUsage } from "./statelog/tokenUsage.js";
 
 // === Client ===
 
@@ -709,9 +673,12 @@ export class StatelogClient {
     if (!this.willPost()) {
       return;
     }
+    // The writer's record is updated here, and `post()` appends the line
+    // before its first `await`, so one writer's lines reach the file in
+    // `threadCall` order. An `await` between the two would break that.
     await this.post({
       type: "promptCompletion",
-      ...this.messageFields(threadIdentity, messages),
+      ...messageFieldsFromWriter(this.writer, threadIdentity, messages),
       // The echoed completion carries its own `usage`; conform it to statelog's
       // declared TokenUsage shape so a provider's extra runtime fields (e.g. the
       // audio-token counters) never ride along into a sink through this nested
@@ -1279,10 +1246,7 @@ export class StatelogClient {
       handlerIndex,
       decision,
       value,
-      interrupt:
-        interrupt === undefined
-          ? undefined
-          : { effect: interrupt.effect, message: interrupt.message },
+      interrupt: interrupt && { effect: interrupt.effect, message: interrupt.message },
     });
   }
 
@@ -1700,32 +1664,6 @@ export class StatelogClient {
 
   /** Wire the out-of-frame redaction fallback (see the field's docstring).
    *  Called by the execution context right after this client is created. */
-  /**
-   * A `promptCompletion`'s message fields. A thread with an identity is
-   * logged as a change from this writer's previous call on it, and a thread
-   * without one is logged whole.
-   *
-   * The record is updated here, and `post()` appends the line before its
-   * first `await`, so no other event can land between the two. That keeps
-   * the lines of one writer in the order of their `threadCall`. An `await`
-   * between this call and the append would break that.
-   */
-  private messageFields(
-    threadIdentity: string | null | undefined,
-    messages: unknown[],
-  ): FullCopyFields | ChangeFields | { messages: unknown[] } {
-    if (typeof threadIdentity !== "string") {
-      return { messages };
-    }
-    const { fields, logged } = messageFieldsFor({
-      previous: this.writer.threads[threadIdentity],
-      logWriter: this.writer.logWriter,
-      messages,
-    });
-    this.writer.threads[threadIdentity] = logged;
-    return fields;
-  }
-
   setFallbackGlobals(fn: () => GlobalStore | undefined): void {
     this.fallbackGlobals = fn;
   }

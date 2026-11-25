@@ -35,6 +35,16 @@ describe("localSamplingFor", () => {
     ).toBeUndefined();
   });
 
+  it("finds an entry whose URI names a file instead of a tag, by its model folder", () => {
+    const folder =
+      "/models/gguf/prism-ml--Ternary-Bonsai-2.5-27B-GGUF--Ternary-Bonsai-2.5-27B-Q2_0.gguf";
+    expect(localSamplingFor(`${folder}/Ternary-Bonsai-2.5-27B-Q2_0.gguf`)).toEqual({
+      temperature: 1.0,
+      topP: 0.95,
+      topK: 20,
+    });
+  });
+
   it("knows nothing about a model outside the catalog, or one whose entry names no sampling", () => {
     expect(localSamplingFor("/models/my-finetune.gguf")).toBeUndefined();
     expect(localSamplingFor("mlx-community/Qwen3-Embedding-4B-4bit-DWQ")).toBeUndefined();

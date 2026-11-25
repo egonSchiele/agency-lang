@@ -35,7 +35,7 @@
     "zod": "^4.3.5"
   },
   "peerDependencies": {
-    "agency-lang": ">=0.45.0"
+    "agency-lang": ">=0.46.0"
   },
   "devDependencies": {
     "agency-lang": "workspace:*",

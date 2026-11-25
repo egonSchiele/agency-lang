@@ -192,3 +192,25 @@ it("runs each trial of each test as its own job", async () => {
   await main(cli({ trials: 2 }), deps());
   expect(started.map((job) => job.label)).toEqual(["a-1", "b-1", "a-2", "b-2"]);
 });
+
+it("returns 1 when a run came back with a problem, such as ungraded at the time limit", async () => {
+  const problem = "stopped at the wrapper's time limit; not graded";
+  const code = await main(cli(), deps({}, { a: { cameBack: true, problem } }));
+  expect(code).toBe(1);
+  expect(started.map((job) => job.label)).toEqual(["a", "b"]);
+});
+
+it("passes the fixed values of the options file to the containers", async () => {
+  fs.writeFileSync(path.join(projectDir, "eval-daytona.json"), JSON.stringify({ set: { CI: "true" } }));
+  let passed: Record<string, string> = {};
+  await main(
+    cli(),
+    deps({
+      runJob: async (job, args) => {
+        passed = args.env;
+        return { cameBack: true };
+      },
+    }),
+  );
+  expect(passed).toEqual({ CI: "true" });
+});

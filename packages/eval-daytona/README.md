@@ -54,7 +54,8 @@ Put these in `eval-daytona.json` in your project's top folder. All are optional.
 ```json
 {
   "image": "node:22-bookworm",
-  "env": ["OPENROUTER_API_KEY"]
+  "env": ["OPENROUTER_API_KEY"],
+  "set": { "CI": "true" }
 }
 ```
 
@@ -63,10 +64,11 @@ Put these in `eval-daytona.json` in your project's top folder. All are optional.
 | `image` | `node:22-bookworm` | The container image. |
 | `cpu`, `memory`, `disk` | 4, 8, 10 | Cores, GB of memory, GB of disk. |
 | `env` | `[]` | Names of your environment variables to pass into the containers, such as API keys. A name that is not set is left out, and the command says so once. |
+| `set` | `{}` | Fixed values to set in the containers. They are never read from your environment, so every run gets the same ones. |
 | `agency` | `"same"` | Which agency to install in the container: the one in your project, or `{ "tarball": "path/to/agency-lang.tgz" }`. |
 | `graceSec` | 7200 | Seconds allowed for grading, on top of the test's own time limit and the 30 minutes its `setup` may take. |
 
-`--env NAME=VALUE` is for a switch that must never leak in from your shell. A name given that way is never read from your environment.
+`--env NAME=VALUE` is for a switch that belongs to one invocation and must never leak in from your shell. A name given that way is never read from your environment. It wins over `set`, which wins over `env`.
 
 ## What your suite has to do
 
@@ -87,6 +89,14 @@ Graders run as root, in the workdir.
 Inside each container, `agency eval run` applies your `agency.json` as usual: `eval.limits.wallClockSec`, a test's own `timeoutSec`, and `eval.limits.maxCostUsd`. The command reads the same two time limits to decide how long a container may live. The command adds one check of its own: once the runs that have come back cost more than `eval.limits.maxBatchCostUsd`, it starts no more containers.
 
 A container gets the test's time limit, plus 30 minutes for `setup`, plus `graceSec` for grading. If that runs out, the run directory is still downloaded when one exists; it will have no grades.
+
+## Exit code
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Every run came back, graded, with nothing to report. |
+| 1 | Something needs a look: a run did not come back, came back with a problem (stopped at the time limit and not graded, say), or was never started. The summary says which. |
+| 130 | Interrupted with Ctrl-C. |
 
 ## Ctrl-C
 

@@ -21,6 +21,7 @@ it("gives the defaults when the project has no options file", () => {
     memory: 8,
     disk: 10,
     env: [],
+    set: {},
     agency: "same",
     graceSec: 7200,
   });
@@ -41,28 +42,28 @@ it("refuses a file that is not JSON, naming it", () => {
 });
 
 it("passes the named host variables that are set, and lists the ones that are not", () => {
-  expect(containerEnv({ names: ["A", "B"], pairs: [], hostEnv: { A: "1", C: "3" } })).toEqual({
+  expect(containerEnv({ fixed: {}, names: ["A", "B"], pairs: [], hostEnv: { A: "1", C: "3" } })).toEqual({
     values: { A: "1" },
     missing: ["B"],
   });
 });
 it("puts --env pairs on top, splitting at the first =", () => {
-  expect(containerEnv({ names: ["A"], pairs: ["A=2", "C=x=y", "EMPTY="], hostEnv: { A: "1" } })).toEqual({
+  expect(containerEnv({ fixed: {}, names: ["A"], pairs: ["A=2", "C=x=y", "EMPTY="], hostEnv: { A: "1" } })).toEqual({
     values: { A: "2", C: "x=y", EMPTY: "" },
     missing: [],
   });
 });
 it("never looks up a pair's name on the host", () => {
-  const result = containerEnv({ names: [], pairs: ["ORACLE=1"], hostEnv: { ORACLE: "leaked" } });
+  const result = containerEnv({ fixed: {}, names: [], pairs: ["ORACLE=1"], hostEnv: { ORACLE: "leaked" } });
   expect(result.values).toEqual({ ORACLE: "1" });
 });
 it("does not read a host variable that only a pair could have set", () => {
-  expect(containerEnv({ names: [], pairs: [], hostEnv: { ORACLE: "leaked" } }).values).toEqual({});
+  expect(containerEnv({ fixed: {}, names: [], pairs: [], hostEnv: { ORACLE: "leaked" } }).values).toEqual({});
 });
 it("refuses a pair with no = or no name, naming it", () => {
-  expect(() => containerEnv({ names: [], pairs: ["NOEQUALS"], hostEnv: {} })).toThrow('--env NOEQUALS');
-  expect(() => containerEnv({ names: [], pairs: ["=x"], hostEnv: {} })).toThrow("--env =x");
-  expect(() => containerEnv({ names: [], pairs: ["BAD-NAME=x"], hostEnv: {} })).toThrow("--env BAD-NAME=x");
+  expect(() => containerEnv({ fixed: {}, names: [], pairs: ["NOEQUALS"], hostEnv: {} })).toThrow('--env NOEQUALS');
+  expect(() => containerEnv({ fixed: {}, names: [], pairs: ["=x"], hostEnv: {} })).toThrow("--env =x");
+  expect(() => containerEnv({ fixed: {}, names: [], pairs: ["BAD-NAME=x"], hostEnv: {} })).toThrow("--env BAD-NAME=x");
 });
 
 it("refuses an env name that is not a variable name, naming it", () => {
@@ -74,4 +75,20 @@ it("reads the eval settings the wrapper needs from the config agency prints", ()
     evalSettings({ eval: { runsDir: "out", limits: { maxBatchCostUsd: 5, wallClockSec: 7200 } } }),
   ).toEqual({ runsDir: "out", maxBatchCostUsd: 5, wallClockSec: 7200 });
   expect(evalSettings({})).toEqual({ runsDir: "runs" });
+});
+
+it("reads fixed values from set, and refuses a bad name there", () => {
+  expect(readOptions(project({ set: { CI: "true" } })).set).toEqual({ CI: "true" });
+  expect(readOptions(project({})).set).toEqual({});
+  expect(() => readOptions(project({ set: { "MY KEY": "x" } }))).toThrow(/eval-daytona\.json[\s\S]*set/);
+});
+
+it("puts fixed values over host variables and under --env pairs, never reading the host for them", () => {
+  const result = containerEnv({
+    names: ["A"],
+    fixed: { A: "fixed", CI: "true", B: "fixed" },
+    pairs: ["B=pair"],
+    hostEnv: { A: "host", CI: "leaked" },
+  });
+  expect(result).toEqual({ values: { A: "fixed", CI: "true", B: "pair" }, missing: [] });
 });

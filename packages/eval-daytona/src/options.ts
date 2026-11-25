@@ -24,6 +24,11 @@ const OptionsSchema = z
     env: z
       .array(z.string().regex(ENV_NAME, "must be a variable name: letters, digits and _"))
       .default([]),
+    /** Fixed values to set in the containers, such as `CI`. Never read from
+     *  the host, so every run of the project gets the same ones. */
+    set: z
+      .record(z.string().regex(ENV_NAME, "must be a variable name: letters, digits and _"), z.string())
+      .default({}),
     /** Which agency to install inside: the one installed in the project, or
      *  a tarball. */
     agency: z
@@ -61,11 +66,14 @@ export function readOptions(projectDir: string): WrapperOptions {
 }
 
 /** The environment for the containers: the named host variables that are
- *  set, then the `--env NAME=VALUE` pairs on top. A pair's name is never
- *  looked up on the host: pairs are for switches that must not leak in from
- *  a shell, such as a suite's "start from the solution" mode. */
+ *  set, then the options file's fixed values, then the `--env NAME=VALUE`
+ *  pairs on top. Neither a fixed value's name nor a pair's is looked up on
+ *  the host. Pairs are for switches that must not leak in from a shell and
+ *  belong to one invocation, such as a suite's "start from the solution"
+ *  mode. */
 export function containerEnv(args: {
   names: string[];
+  fixed: Record<string, string>;
   pairs: string[];
   hostEnv: Record<string, string | undefined>;
 }): { values: Record<string, string>; missing: string[] } {
@@ -79,6 +87,7 @@ export function containerEnv(args: {
       values[name] = value;
     }
   }
+  Object.assign(values, args.fixed);
   for (const pair of args.pairs) {
     const at = pair.indexOf("=");
     const name = at < 0 ? "" : pair.slice(0, at);

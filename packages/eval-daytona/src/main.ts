@@ -83,7 +83,12 @@ export async function main(cli: CliArgs, deps: MainDeps): Promise<number> {
     log("no test in the suite matches; nothing to run");
     return EXIT_FAILED;
   }
-  const env = containerEnv({ names: options.env, pairs: cli.env, hostEnv: deps.env });
+  const env = containerEnv({
+    names: options.env,
+    fixed: options.set,
+    pairs: cli.env,
+    hostEnv: deps.env,
+  });
   if (env.missing.length > 0) {
     log(`not set, so not passed to the containers: ${env.missing.join(", ")}`);
   }
@@ -157,8 +162,14 @@ export async function main(cli: CliArgs, deps: MainDeps): Promise<number> {
   if (deps.signal.aborted) {
     return EXIT_INTERRUPTED;
   }
-  const everyJobCameBackReadable = rows.every(
-    (row) => row.result !== "not started" && row.result.cameBack && row.run !== undefined,
+  // A run that came back with a problem (stopped at the time limit and not
+  // graded, say) is not a clean result, and a script must be able to tell.
+  const everyJobCameBackClean = rows.every(
+    (row) =>
+      row.result !== "not started" &&
+      row.result.cameBack &&
+      row.result.problem === undefined &&
+      row.run !== undefined,
   );
-  return everyJobCameBackReadable ? EXIT_OK : EXIT_FAILED;
+  return everyJobCameBackClean ? EXIT_OK : EXIT_FAILED;
 }

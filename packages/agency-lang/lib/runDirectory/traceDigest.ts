@@ -17,7 +17,7 @@ export type TraceDigest = {
   input: string | null;
   agentName: string | null;
   startedAtMs: number | null;
-  /** The last event's timestamp: a run's `endedAt` when it has no run row. */
+  /** The last event's timestamp: a run's `endedAt` whenever it has one. */
   lastEventAt: string | null;
   durationMs: number;
   llmCalls: number;

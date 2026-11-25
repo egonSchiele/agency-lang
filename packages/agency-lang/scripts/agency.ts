@@ -1381,7 +1381,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .requiredOption("--out <dir>", "Where to write <out>/<batch>/<test>/<trial>/")
     .option("--batch <name>", "Batch name; required unless importing one job folder")
     .option("--reasoning <level>", "Reasoning level for traces that don't record one")
-    .option("--agent <name>", "Agent name for every run; defaults to each trial's agent_info.name")
+    .option("--agent <name>", "Agent name for every run, over the name a trace gives itself")
     .action(
       (
         jobs: string[],

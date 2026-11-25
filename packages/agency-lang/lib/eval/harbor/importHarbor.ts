@@ -139,12 +139,12 @@ function finishExisting({
         `The input changed order or contents; delete the batch folder and import again.`,
     );
   }
-  const oldAgent = existing.row.agentName ?? existing.row.flags.agent;
-  const newAgent = run.payload.agentName ?? run.payload.flags.agent;
-  if (oldAgent !== newAgent) {
+  const oldAgent = existing.row.agentName;
+  const newAgent = run.payload.agentName;
+  if (oldAgent !== newAgent || existing.row.flags.agent !== run.payload.flags.agent) {
     throw new Error(
-      `${dir} was imported with agent ${String(oldAgent ?? "(none)")}; this import names ` +
-        `${String(newAgent ?? "(none)")}. Delete the batch folder and import again.`,
+      `${dir} was imported with agent ${oldAgent ?? "(no --agent)"}; this import names ` +
+        `${newAgent ?? "(no --agent)"}. Delete the batch folder and import again.`,
     );
   }
   if (existing.gradingPasses > 0 || run.scores.length === 0) {

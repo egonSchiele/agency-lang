@@ -88,8 +88,8 @@ annotations. The rules:
   models; its identity, outcome, batch, trial, and suite come from the
   `run` row. A directory with neither a trace nor a run row is not a run.
 - `status`: `ok` when the harness saw a clean finish. `killed` when it cut
-  the run short after the agent left a record (events, or usage the
-  harness reported), meaning a timeout, cost cap, or signal. `failed` for every other harness outcome, including a silent run.
+  the run short after the agent left a record, meaning events or usage the
+  harness reported. A cut is a timeout, cost cap, or signal. `failed` for every other harness outcome, including a silent run.
   `trace` when there is no harness row at all, which means an ad-hoc
   directory. The `RunStatus` type also declares `partial`, but `statusOf`
   never returns it.
@@ -225,9 +225,9 @@ agency eval import-harbor [<job folder>...] [--trials <file>] --out <dir> [--bat
   - `--trials flash-high.txt --batch flash-high` imports a hand-picked list.
 - **Scoring:**
   - a reward is the score, even after a timeout;
-  - no reward with `AgentTimeoutError` or `NonZeroAgentExitCodeError` (and a trace) scores 0;
+  - no reward with `AgentTimeoutError` or `NonZeroAgentExitCodeError` (and a trace or reported tokens) scores 0;
   - anything else with no reward, and every trial with neither a trace nor reported tokens, ends `void` with no score. A void trial with no trace is a silent run with an empty `statelog.jsonl`.
-- **Agents that write no trace,** such as Pi, report their tokens and cost in `result.json`. The importer stores them, with the agent's start and finish times, as the run row's `reported` field. Fresh input is `n_input_tokens - n_cache_tokens`. Pi's times come from its own log, `agent/pi.txt`, because Harbor's agent time adds about 12 seconds of harness work that an Agency trace leaves out.
+- **Agents that write no trace,** such as Pi, report their tokens and cost in `result.json`. The importer stores them, with the agent's start and finish times, as the run row's `reported` field. Fresh input is `n_input_tokens - n_cache_tokens`. Pi's times come from its own log, `agent/pi.txt`, because Harbor's agent time adds about 12 seconds of harness work that an Agency trace leaves out. Pi stamps a message when it starts, so the log misses a long final message or a hang until the timeout. When Harbor's time is more than a minute longer than the log's, the importer uses Harbor's.
 - **Agent name:** `--agent` sets the run row's `agentName`, which beats the trace's own name. Agency traces name themselves by brain (`agency-agent/coordinator`), which doesn't tell builds apart. Each run also keeps `agent_info.name` from its `result.json`, such as `pi`, as its `flags.agent` label.
 - **Re-running is safe:** a folder holding the same Harbor trial (`flags.harborJob`/`harborTrial`) under the same agent name is left alone or only gets its scores. A folder holding a different trial, or the same trial under another agent name, fails. Only planned folders are checked, so re-importing a smaller selection needs `<out>/<batch>` deleted first.
 
@@ -247,6 +247,7 @@ brain, so runs group per brain.
 ## What `agency-lang/eval` exports for statelog
 
 `summarizeEvalRun` with `EvalRunInput`, `RunSummary`, `RunStatus`, `ModelUsage`;
+`displayAgent`, the name a listing shows for a run's agent;
 `batchStatistics`, `batchStatisticsByBatch`, `batchUsage` and their types;
 `AnnotationSchema`, `annotationId` and the annotation types;
 `TraceDigestSchema` and `TraceDigest`;

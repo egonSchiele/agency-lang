@@ -37,7 +37,8 @@ export type RunSummary = {
   /** The test id from the harness's `run` row; null for an ad-hoc trace. */
   testId: string | null;
   input: string | null;
-  /** The trace's own `agentName` event, when it emitted one. */
+  /** The `run` row's `agentName` when it has one (an importer's
+   *  `--agent`), else the trace's own `agentName` event. */
   agentName: string | null;
   /** The harness's agent label from the `run` row (`flags.agent`: an agent
    *  file target or a command line), unchanged; null for an ad-hoc trace. */
@@ -302,8 +303,8 @@ function agentLabelOf(runRow: RunRow | null): string | null {
   return label;
 }
 
-/** What a listing shows for "which agent": the trace's own name when it
- *  emitted one, else the harness label unchanged (a command line is not
+/** What a listing shows for "which agent": `agentName` (the run row's, else
+ *  the trace's own), else the harness label unchanged (a command line is not
  *  shortened: its basename could be any argument), else null. */
 export function displayAgent(summary: RunSummary): string | null {
   return summary.agentName ?? summary.agentLabel;

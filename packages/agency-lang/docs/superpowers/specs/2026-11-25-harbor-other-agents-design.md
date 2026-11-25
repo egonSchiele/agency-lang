@@ -126,6 +126,8 @@ The `full2` jobs ran 15 trials at a time each, three jobs together, and Harbor's
 
 **Result (2026-11-25):** Harbor's agent time ran 7 to 24 seconds longer than `pi.txt`, 13 seconds on average. Agency trials show the same gap against their traces, 12.5 seconds on average. So Harbor's time is the agent's own time plus harness work. Agency's durations come from its trace, so the owner chose to take Pi's times from `pi.txt` too: the earliest and latest timestamps in it. Harbor's `agent_execution` is the fallback when the log has fewer than two timestamps.
 
+The final review found a gap in the log. Pi stamps a message when it starts, so the log misses a long final message, or a hang until the timeout. Across 3,062 Pi trials the median gap to Harbor's time is 14.5 seconds. But 75 trials are over 2 minutes, including 31 timeouts that would have shown about 1.5 minutes instead of 68. So the importer uses Harbor's time whenever it is more than a minute longer than the log's.
+
 ## Changes in statelog
 
 1. **Move to the new agency-lang version.**

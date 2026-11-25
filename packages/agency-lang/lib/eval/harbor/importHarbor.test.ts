@@ -324,4 +324,22 @@ describe("importHarbor", () => {
     );
     expect(fs.existsSync(outDir)).toBe(false);
   });
+
+  it("naming a run with --agent after importing it unnamed fails, even when the name equals its label", () => {
+    const root = tempDir("harbor-");
+    const jobDir = path.join(root, "flash-high");
+    writeHarborTrial(
+      jobDir,
+      harborTrial({ name: "a__1", agentInfo: { name: "agency-agent", model: "glm" } }),
+    );
+    const outDir = path.join(root, "out");
+    importHarbor({ jobDirs: [jobDir], outDir });
+    const named = importHarbor({ jobDirs: [jobDir], outDir, agent: "agency-agent" });
+    expect(named.outcomes).toEqual([
+      expect.objectContaining({
+        status: "failed",
+        error: expect.stringContaining("Delete the batch folder"),
+      }),
+    ]);
+  });
 });

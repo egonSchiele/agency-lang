@@ -250,7 +250,7 @@ function reportedOf({
     return null;
   }
   const cached = usage?.n_cache_tokens ?? 0;
-  const times = piLogTimes(trialDir) ?? harborTimes(result);
+  const times = agentTimes({ log: piLogTimes(trialDir), harbor: harborTimes(result) });
   return {
     models: [
       {
@@ -271,6 +271,24 @@ function reportedOf({
 }
 
 type AgentTimes = { startedAt: string; finishedAt: string };
+
+/** Beyond this, Pi's log missed the end of the run rather than Harbor adding
+ *  its usual overhead of about 12 seconds. */
+const PI_LOG_MAX_GAP_MS = 60_000;
+
+/** Pi's log, the same basis as an Agency trace, unless it missed the end:
+ *  Pi stamps a message when it starts, so a final long message or a hang
+ *  until the timeout is invisible in it. */
+function agentTimes({ log, harbor }: { log: AgentTimes | null; harbor: AgentTimes }): AgentTimes {
+  if (log === null || durationOf(harbor) - durationOf(log) > PI_LOG_MAX_GAP_MS) {
+    return harbor;
+  }
+  return log;
+}
+
+function durationOf(times: AgentTimes): number {
+  return Date.parse(times.finishedAt) - Date.parse(times.startedAt);
+}
 
 /** The first and last timestamps in Pi's own log, `agent/pi.txt`. Harbor's
  *  agent time adds about 12 seconds of harness work; an Agency run's time

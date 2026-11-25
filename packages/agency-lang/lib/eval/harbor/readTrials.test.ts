@@ -331,4 +331,25 @@ describe("readHarborTrial: the agent and its reported usage", () => {
     });
     expect(pi.reported?.durationMs).toBe(68_853);
   });
+
+  it("uses Harbor's times when Pi's log misses the end of the run by more than a minute", () => {
+    const pi = read({
+      ...PI,
+      statelogLines: undefined,
+      exception: { type: "AgentTimeoutError", message: "timed out" },
+      agentExecution: {
+        startedAt: "2026-11-13T23:00:00.000000Z",
+        finishedAt: "2026-11-14T00:08:00.000000Z",
+      },
+      piLogLines: [
+        JSON.stringify({ type: "session", timestamp: "2026-11-13T23:00:03.000Z" }),
+        JSON.stringify({
+          type: "message_start",
+          message: { timestamp: Date.parse("2026-11-13T23:01:30.000Z") },
+        }),
+      ],
+    });
+    expect(pi.reported?.durationMs).toBe(68 * 60_000);
+    expect(pi.reported?.lastEventAt).toBe("2026-11-14T00:08:00.000Z");
+  });
 });

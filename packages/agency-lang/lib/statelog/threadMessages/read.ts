@@ -89,6 +89,10 @@ export function rebuildAllMessages(events: readonly EventEnvelope[]): EventEnvel
 }
 
 function trackedOf(event: EventEnvelope): Tracked | null {
+  // Most events are not a promptCompletion; skip the schema for them.
+  if (event.data.type !== "promptCompletion") {
+    return null;
+  }
   const parsed = TrackedSchema.safeParse(event.data);
   if (!parsed.success) {
     return null;

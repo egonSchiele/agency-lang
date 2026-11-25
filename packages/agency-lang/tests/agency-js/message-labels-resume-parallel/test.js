@@ -7,6 +7,7 @@ import {
 } from "./agent.js";
 import { readFileSync, writeFileSync, unlinkSync } from "fs";
 import { ToolCall } from "smoltalk";
+import { parseStatelogJsonl } from "../../../dist/lib/statelog/parse.js";
 
 // Labels must survive interrupt/resume through the PARALLEL tool path.
 //
@@ -68,10 +69,9 @@ if (!hasInterrupts(initial.data)) {
 }
 const final = await respondToInterrupts(initial.data, [approve()]);
 
-const events = readFileSync("statelog.log", "utf-8")
-  .split("\n")
-  .filter((l) => l.trim() !== "")
-  .map((l) => JSON.parse(l));
+// Through the parser, which rebuilds each round's whole message list: the
+// round after resume logs only the messages that changed.
+const events = parseStatelogJsonl(readFileSync("statelog.log", "utf-8")).events;
 
 const completions = events.filter((e) => e.data?.type === "promptCompletion");
 // The round AFTER resume — the one that had to survive the round-trip.

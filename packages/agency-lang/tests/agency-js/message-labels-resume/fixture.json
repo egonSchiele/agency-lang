@@ -14,5 +14,7 @@
       "content": null,
       "label": "coder"
     }
-  ]
+  ],
+  "resumeKeepsWriter": true,
+  "resumeIsChange": true
 }

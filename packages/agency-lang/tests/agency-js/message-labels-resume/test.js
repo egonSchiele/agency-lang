@@ -7,6 +7,7 @@ import {
 } from "./agent.js";
 import { readFileSync, writeFileSync, unlinkSync } from "fs";
 import { ToolCall } from "smoltalk";
+import { parseStatelogJsonl } from "../../../dist/lib/statelog/parse.js";
 
 // Labels must survive interrupt/resume.
 //
@@ -68,14 +69,19 @@ if (!hasInterrupts(initial.data)) {
 }
 const final = await respondToInterrupts(initial.data, [approve()]);
 
-const events = readFileSync("statelog.log", "utf-8")
+const text = readFileSync("statelog.log", "utf-8");
+const isCompletion = (e) => e.data?.type === "promptCompletion";
+// The lines as written: the round after resume logs only what changed.
+const written = text
   .split("\n")
   .filter((l) => l.trim() !== "")
-  .map((l) => JSON.parse(l));
-
-const completions = events.filter((e) => e.data?.type === "promptCompletion");
+  .map((l) => JSON.parse(l))
+  .filter(isCompletion);
+// Through the parser, which rebuilds every round's whole message list.
+const completions = parseStatelogJsonl(text).events.filter(isCompletion);
 // The round AFTER resume — the one that had to survive the round-trip.
 const afterResume = completions[completions.length - 1];
+const [writtenBefore, writtenAfter] = written;
 
 const labeled = (afterResume?.data?.messages ?? [])
   .map((m) => ({
@@ -91,6 +97,11 @@ writeFileSync(
       finalData: final.data,
       promptCompletionCount: completions.length,
       labeledAfterResume: labeled,
+      // A resume in the same process continues the run's log writer, so the
+      // first round after it is a change from the last round before it.
+      resumeKeepsWriter: writtenAfter?.data?.logWriter === writtenBefore?.data?.logWriter,
+      resumeIsChange:
+        Array.isArray(writtenAfter?.data?.newMessages) && writtenAfter?.data?.messages === undefined,
     },
     null,
     2,

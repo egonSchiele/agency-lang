@@ -55,11 +55,12 @@ export type TestRow = {
   durationMs: number | null;
   startedAtMs: number | null;
   models: string[];
-  /** The trace's `agentName` event; feeds run identity. */
+  /** `RunSummary.agentName`: the run row's `agentName`, else the trace's
+   *  own. Feeds run identity through `resolveAgentName`. */
   agentName?: string;
   detail?: TestDetail;
-  /** The trace produced events but the run was cut short (timeout, cost
-   *  cap, kill) — the signature of a killed run. */
+  /** The agent left a record (events, or usage its harness reported) but
+   *  the run was cut short (timeout, cost cap, kill): a killed run. */
   statelogHadEvents?: boolean;
 };
 

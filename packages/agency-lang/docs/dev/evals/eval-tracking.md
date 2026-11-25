@@ -233,10 +233,23 @@ agency eval import-harbor [<job folder>...] [--trials <file>] --out <dir> [--bat
 
 ## Agent names are labels
 
+A run's agent can come from three places. They rank in this order:
+
+1. the `run` row's `agentName`, which an importer's `--agent` sets;
+2. the trace's own `agentName` event, from `setAgentName`;
+3. the `run` row's `flags.agent` label: an agent file, a command line, or
+   Harbor's agent family.
+
+The summary folds the first two into `RunSummary.agentName`. Two functions
+then add the label. `displayAgent` (`lib/runDirectory/list.ts`), which
+`runs list` and statelog use, shows the label as it is. `resolveAgentName`
+(`lib/runsExplorer/identity.ts`), which the runs explorer uses, shortens it
+to its file name or command.
+
 `setAgentName` (`std::statelog`) names the agent a trace belongs to.
 Statelog treats the name as a filterable label on a batch, not a URL key:
-its evals pages are keyed by project and batch, and a batch whose runs
-carry no name shows no agent. The rule in `lib/statelog/agentName.ts` —
+its evals pages are keyed by project and batch, and a batch shows an agent
+only when every run shows the same one by `displayAgent`. The rule in `lib/statelog/agentName.ts` —
 letters, digits, `.`, `_`, `-`, and `/` between segments; at most 200
 characters; no empty, `.`, or `..` segment — keeps a name one clean token
 that stays intact wherever a URL carries it. An invalid name throws at

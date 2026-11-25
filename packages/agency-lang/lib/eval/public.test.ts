@@ -48,6 +48,7 @@ const TRACKING_NAMES = [
   "agentNameProblem",
   "AGENT_NAME_PATTERN",
   "AGENT_NAME_MAX_LENGTH",
+  "displayAgent",
 ];
 
 // Type-level contract for the same consumer; erased at runtime, guarded by typecheck.

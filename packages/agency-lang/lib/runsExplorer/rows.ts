@@ -8,7 +8,7 @@ import * as path from "path";
 
 import type { Annotation, Score } from "@/runDirectory/annotations.js";
 import { evalRecordFor } from "@/runDirectory/evalRecord.js";
-import { summarizeRuns } from "@/runDirectory/list.js";
+import { agentLeftRecord, summarizeRuns } from "@/runDirectory/list.js";
 import type { ModelUsage } from "@/runDirectory/modelUsage.js";
 import type { RunDirectorySnapshot } from "@/runDirectory/runDir.js";
 import { runDirPaths } from "@/runDirectory/runDir.js";
@@ -112,8 +112,8 @@ export function buildRunRowFromDirectory(snapshot: RunDirectorySnapshot, source:
       models: namesOf(summary.models),
     };
     // A run the harness cut short (timeout, cost cap, kill) is the explorer's
-    // "killed": events exist, but nothing finished. An error is a plain failure.
-    if (summary.eventCount > 0 && CUT_SHORT_ENDINGS.includes(summary.ended)) {
+    // "killed": the agent left a record, but nothing finished. An error is a plain failure.
+    if (agentLeftRecord(summary) && CUT_SHORT_ENDINGS.includes(summary.ended)) {
       test.statelogHadEvents = true;
     }
     if (summary.agentName !== null) {

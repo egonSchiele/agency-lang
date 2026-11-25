@@ -177,6 +177,42 @@ describe("foldAnnotations", () => {
     ).toBe(false);
   });
 
+  it("a run row may carry what the harness reported, strictly shaped", () => {
+    const reported = {
+      models: [
+        {
+          name: "z-ai/glm-5.3-flash",
+          reasoning: null,
+          calls: 0,
+          inputTokens: 6296,
+          cachedInputTokens: 50944,
+          cacheCreationInputTokens: 0,
+          outputTokens: 1404,
+          costUsd: 0.00317472,
+        },
+      ],
+      startedAtMs: 1,
+      durationMs: 68_853,
+      lastEventAt: "2026-11-13T23:35:34.868Z",
+    };
+    const parses = (value: unknown) =>
+      AnnotationSchema.safeParse({
+        traceId: "t1",
+        annotator: { kind: "harness", id: "harbor-import@1" },
+        kind: "run",
+        test: { id: "fib" },
+        suite: null,
+        ended: "ok",
+        flags: {},
+        v: 1,
+        id: `ann_${"0".repeat(64)}`,
+        createdAt: "now",
+        reported: value,
+      }).success;
+    expect(parses(reported)).toBe(true);
+    expect(parses({ ...reported, eventCount: 0 })).toBe(false);
+  });
+
   it("a run row names exactly one stored graders file: a bundle or a JSON file", () => {
     const base = {
       traceId: "t1",

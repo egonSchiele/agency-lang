@@ -169,8 +169,8 @@ const CUT_SHORT_ENDINGS = ["timeout", "cost-cap", "killed"];
 /** Every summary is built here, from the trace's digest and the
  *  annotations, so a stored digest summarizes exactly like its events. */
 function summarizeDigest(parts: RunParts): RunSummary {
-  const { digest } = parts;
   const runRow = runRowOf(parts.effective);
+  const digest = withReported(parts.digest, runRow);
   const ended = runRow !== null ? runRow.ended : digest.traceEnding;
   const effectiveScore = latestScore(parts.effective);
   const models = withFallbackReasoning(digest.models, runRow?.reasoning ?? null);
@@ -182,7 +182,7 @@ function summarizeDigest(parts: RunParts): RunSummary {
     agentLabel: agentLabelOf(runRow),
     startedAt: digest.startedAtMs === null ? null : new Date(digest.startedAtMs).toISOString(),
     startedAtMs: digest.startedAtMs,
-    endedAt: runRow?.createdAt ?? digest.lastEventAt,
+    endedAt: digest.lastEventAt ?? runRow?.createdAt ?? null,
     durationMs: digest.durationMs,
     // Summed over `models`, not taken from the eval record, so the run's
     // cost is exactly the sum of its entries' costs.
@@ -197,7 +197,7 @@ function summarizeDigest(parts: RunParts): RunSummary {
     outputTokens: sumOf(models, "outputTokens"),
     benchmark: runRow?.benchmark ?? benchmarkFromSuite(runRow?.suite?.source),
     ended,
-    status: statusOf(runRow, digest.eventCount),
+    status: statusOf(runRow, digest),
     latestScore: effectiveScore,
     score: scoreOf(ended, effectiveScore),
     gradingPasses: parts.effective?.gradingPasses ?? 0,
@@ -225,14 +225,28 @@ function scoreOf(ended: string, effectiveScore: number | null): number | null {
   return effectiveScore ?? 0;
 }
 
-function statusOf(runRow: RunRow | null, eventCount: number): RunStatus {
+/** A run with no events takes its usage and times from what the harness
+ *  reported, when it reported any. */
+function withReported(digest: TraceDigest, runRow: RunRow | null): TraceDigest {
+  if (digest.eventCount > 0 || runRow?.reported === undefined) {
+    return digest;
+  }
+  return { ...digest, ...runRow.reported };
+}
+
+/** Whether the agent left a record: events, or usage its harness reported. */
+export function agentLeftRecord(run: Pick<TraceDigest, "eventCount" | "models">): boolean {
+  return run.eventCount > 0 || run.models.length > 0;
+}
+
+function statusOf(runRow: RunRow | null, digest: TraceDigest): RunStatus {
   if (runRow === null) {
     return "trace";
   }
   if (runRow.ended === "ok") {
     return "ok";
   }
-  if (eventCount > 0 && CUT_SHORT_ENDINGS.includes(runRow.ended)) {
+  if (agentLeftRecord(digest) && CUT_SHORT_ENDINGS.includes(runRow.ended)) {
     return "killed";
   }
   return "failed";
@@ -299,7 +313,7 @@ export function displayAgent(summary: RunSummary): string | null {
 export type RunsListing = {
   /** One row per run found. */
   summaries: RunSummary[];
-  /** Runs whose statelog holds no event: the harness recorded a run that died before its first event. */
+  /** Runs where the agent left no record: no events and no reported usage. */
   silentRunCount: number;
   /** summaries.length. */
   runCount: number;
@@ -312,7 +326,7 @@ export type RunsListing = {
  *  trace, so callers summarize each run as they read it (#1559). */
 export function buildRunsListing(summaries: RunSummary[]): RunsListing {
   const silentRunCount = summaries.filter(
-    (summary) => summary.eventCount === 0 && summary.status !== "trace",
+    (summary) => !agentLeftRecord(summary) && summary.status !== "trace",
   ).length;
   const scores = summaries.flatMap((summary) =>
     summary.latestScore === null ? [] : [summary.latestScore],

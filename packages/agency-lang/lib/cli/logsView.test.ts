@@ -431,8 +431,8 @@ describe("--trace-id", () => {
 
   it("resolves a full id or a unique prefix, and names the traces on a miss", () => {
     const traces = [
-      { traceId: "k3Pq9abc", events: [], lines: [], digest: "" },
-      { traceId: "k3Pzzzzz", events: [], lines: [], digest: "" },
+      { traceId: "k3Pq9abc", events: [], storedEvents: [], lines: [], digest: "" },
+      { traceId: "k3Pzzzzz", events: [], storedEvents: [], lines: [], digest: "" },
     ];
     const errors: string[] = [];
     const onError = (message: string): void => {
@@ -448,7 +448,7 @@ describe("--trace-id", () => {
     expect(errors[0]).toContain("ambiguous");
     expect(resolveFocusTrace(traces, "nope", onError)).toEqual({ kind: "missing" });
     // A trace named like the old failure word is a trace like any other.
-    const named = [{ traceId: "missing", events: [], lines: [], digest: "" }];
+    const named = [{ traceId: "missing", events: [], storedEvents: [], lines: [], digest: "" }];
     expect(resolveFocusTrace(named, "missing", onError)).toEqual({ kind: "trace", id: "missing" });
     expect(errors[1]).toContain("k3Pq9abc, k3Pzzzzz");
   });

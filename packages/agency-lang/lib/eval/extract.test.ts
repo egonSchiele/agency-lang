@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { THREE_CALLS, writtenEvents } from "../statelog/threadMessages/testFixtures.js";
 import type { EventEnvelope } from "../statelog/wireTypes.js";
 import { extractEvalRecord } from "./extract.js";
 
@@ -38,6 +39,14 @@ describe("extractEvalRecord", () => {
     const a = ev("promptCompletion", { threadId: "0" });
     const b: EventEnvelope = { ...ev("promptCompletion", { threadId: "0" }), trace_id: "trace-B" };
     expect(() => extractEvalRecord([a, b], "src")).toThrow(/multiple trace_ids/i);
+  });
+
+  it("rebuilds the message lists of events it is handed directly", () => {
+    // The statelog server hands eval its rows in arrival order, which can put
+    // a change event before the full copy it builds on.
+    const [first, second] = writtenEvents(THREE_CALLS.slice(0, 2));
+    const record = extractEvalRecord([second, first], "src", { warnMissingValue: false });
+    expect(record.evalValues[0].value).toBe("two");
   });
 
   it("adds up the time spent waiting at approval prompts", () => {

@@ -1,38 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { EventEnvelope } from "../wireTypes.js";
 import { rebuildAllMessages, rebuildMessages, type RebuildState } from "./read.js";
-import { messageFieldsFor, type LoggedThread } from "./write.js";
-
-const user = (content: string) => ({ role: "user", content });
-const reply = (content: string) => ({ role: "assistant", content });
-
-type WriteOptions = { trace?: string; writer?: string; thread?: string };
-
-/** The events one writer logs for these message lists, one call each. */
-function written(lists: unknown[][], opts: WriteOptions = {}): EventEnvelope[] {
-  let previous: LoggedThread | undefined;
-  return lists.map((messages) => {
-    const { fields, logged } = messageFieldsFor({
-      previous,
-      logWriter: opts.writer ?? "w",
-      messages,
-    });
-    previous = logged;
-    return {
-      format_version: 1,
-      trace_id: opts.trace ?? "t",
-      project_id: "",
-      span_id: null,
-      parent_span_id: null,
-      data: {
-        type: "promptCompletion",
-        timestamp: "",
-        threadIdentity: opts.thread ?? "th",
-        ...fields,
-      },
-    };
-  });
-}
+import { reply, user, writtenEvents as written } from "./testFixtures.js";
 
 function inOrder(events: EventEnvelope[]): EventEnvelope[] {
   const state: RebuildState = {};

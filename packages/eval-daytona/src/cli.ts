@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "child_process";
 import * as fs from "fs";
-import { createRequire } from "module";
 import * as os from "os";
 import * as path from "path";
 
@@ -11,7 +10,7 @@ import { createDaytonaSandbox } from "./daytona.js";
 import type { CliArgs } from "./jobs.js";
 import { main, type MainDeps } from "./main.js";
 import type { WrapperOptions } from "./options.js";
-import { packInstalledAgency } from "./packAgency.js";
+import { installedAgencyDir, packInstalledAgency } from "./packAgency.js";
 import { runJob } from "./runJob.js";
 import { onSignals } from "./signals.js";
 import type { ListedRun } from "./summary.js";
@@ -27,15 +26,11 @@ const log = (line: string): void => {
 /** How to start the agency installed in the project: the same one that is
  *  packed into each container, so both read a suite the same way. */
 function projectAgency(projectDir: string): string[] {
-  const require = createRequire(path.join(projectDir, "package.json"));
-  let packageJson: string;
-  try {
-    packageJson = require.resolve("agency-lang/package.json");
-  } catch {
-    throw new Error(`agency-lang is not installed in ${projectDir}; run this from a project that has it`);
-  }
-  const manifest = JSON.parse(fs.readFileSync(packageJson, "utf8")) as { bin?: { agency?: string } };
-  return [process.execPath, path.join(path.dirname(packageJson), manifest.bin?.agency ?? "")];
+  const packageDir = installedAgencyDir(projectDir);
+  const manifest = JSON.parse(fs.readFileSync(path.join(packageDir, "package.json"), "utf8")) as {
+    bin?: { agency?: string };
+  };
+  return [process.execPath, path.join(packageDir, manifest.bin?.agency ?? "")];
 }
 
 /** Runs the project's agency and parses the JSON it prints on its last line. */

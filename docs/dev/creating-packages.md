@@ -10,6 +10,10 @@ Use `packages/web-fetch/` as the canonical reference. It is minimal and well str
 
 The other published packages are `email`, `github`, `kokoro`, `mcp`, `tesseract-local`, and `whisper-local`. Read one of those when you need a richer example. `tesseract-local` and `kokoro` show a package that downloads a pinned model and imports helpers from `agency-lang/stdlib-lib/*`.
 
+## Tool packages
+
+Most packages here are Agency libraries, and the rest of this page is about those. A few are tools: they add a command, and Agency code does not import them. `packages/eval-daytona/` is one. A tool package has a `bin` in its `package.json` and TypeScript under `src/`. It has no `index.agency`, no `agency` field, and no compiled `index.js`, and its build is plain `tsc`.
+
 ## Directory Structure
 
 ```

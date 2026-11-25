@@ -1,0 +1,4 @@
+[
+  { "kind": "command", "name": "setup-ran", "command": "test -f setup-ran" },
+  { "kind": "command", "name": "seeded", "command": "test -f hello.txt" }
+]

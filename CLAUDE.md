@@ -19,6 +19,8 @@ This is a pnpm workspace. Nearly all the code is in one package:
 
 - `packages/agency-lang/` — the language: compiler, runtime, stdlib, CLI, and agent. **Almost all work happens here**, and it has its own `CLAUDE.md` with the commands, conventions, and architecture notes for it.
 - `packages/{email,github,kokoro,lora,mcp,tesseract-local,web-fetch,whisper-local}/` — published Agency packages, each a thin Agency wrapper over a TypeScript implementation. See `docs/dev/creating-packages.md`.
+- `packages/eval-daytona/` — a tool package, not an Agency library: the `agency-eval-daytona` command, which runs each eval test in its own Daytona container.
+- `packages/eval-daytona/` — a tool package, not an Agency library: the `agency-eval-daytona` command, which runs each eval test in its own Daytona container.
 - `packages/examples/` — example programs.
 
 ## Creating worktrees

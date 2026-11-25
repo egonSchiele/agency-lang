@@ -1,0 +1,1 @@
+{ "input": "do nothing", "timeoutSec": 300, "setup": "echo ready > setup-ran" }

@@ -1233,11 +1233,9 @@ export class StatelogClient {
     decision: "approve" | "reject" | "propagate" | "pass" | "none";
     value?: any;
     /** Optional summary of the interrupt being decided on. Only its
-     *  `effect` and `message` are logged, so a reader sees what was being
-     *  approved or rejected. The `data` is logged once, on the
-     *  `interruptResolved` event every interrupt gets. Every handler in the
-     *  chain logs a `handlerDecision`, and an edit's data holds the whole
-     *  file before and after, so logging it here repeated it per handler. */
+     *  `effect` and `message` are logged, because every handler in the chain
+     *  logs a `handlerDecision`. The `data` is logged once, on the
+     *  `interruptResolved` event the chain logs when it finishes. */
     interrupt?: InterruptSummary;
   }): Promise<void> {
     await this.post({

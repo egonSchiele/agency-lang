@@ -18,10 +18,7 @@ export function newLogWriter(): LogWriterState {
  * A `promptCompletion`'s message fields from this writer. A thread with an
  * identity is logged as a change from the writer's previous call on it, and
  * the writer's record for the thread is updated. A thread without one is
- * logged whole.
- *
- * Changes `writer.threads` in place. Branch loggers share one writer through
- * the prototype, so replacing the object would split their records.
+ * logged whole. Changes `writer.threads` in place.
  */
 export function messageFieldsFromWriter(
   writer: LogWriterState,

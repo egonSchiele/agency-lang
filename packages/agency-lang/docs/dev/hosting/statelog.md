@@ -270,16 +270,10 @@ field, and the event is written again with `truncated: true` on `data`. If
 nothing was cut after all, the original text is returned, because a parse and
 stringify can reorder integer-like keys.
 
-A `promptCompletion` that logs a full copy of a long conversation can take
-the slow path for nothing: its text is over the cap, it is parsed and walked,
-nothing is cut (its messages are exempt), and the original text is returned.
-Most calls log only the messages they added (see "Messages: full copies and
-changes"), so this happens on a thread's first call and on every
-`FULL_COPY_EVERY_CALLS`th call after it. There is no guard for it. A guard
-would have to learn each top-level field's serialized length during the one
-stringify, and skip the parse when the only field over the cap is exempt. The
-text, not the live value, is trimmed so redaction keeps working: redact tags
-live on the original objects, and a trimmed copy would not carry them.
+A `promptCompletion` that logs a full copy of a long conversation takes the
+slow path and comes out unchanged, because its messages are exempt. The text,
+not the live value, is trimmed so redaction keeps working: redact tags live
+on the original objects, and a trimmed copy would not carry them.
 
 `truncated` is one flag per event. Eval copies it onto the value it reads
 from `agentEnd`, `evalOutputRecorded`, and `evalValueRecorded`
@@ -586,8 +580,6 @@ The rules that follow from this:
   file holds it, for sending it somewhere. `Trace` has `events` and
   `storedEvents` the same way, and `agency eval upload` posts `storedEvents`,
   so the server stores each message once.
-- Keep the writer's comparison separate from the viewer's `messageKey`, for
-  the reason above.
 
 Tools: `toolCallStart` → `toolCall` (share the `toolExecution` span; OTEL
 start+end mergeable).
@@ -611,8 +603,8 @@ the chain logs a `handlerDecision`, and every interrupt whose chain finishes
 logs an `interruptResolved`, so the data is in the log once. A chain that
 throws partway (a handler aborted, or returned something that is not a
 response) logs no `interruptResolved`, so that interrupt's data is not in the
-log; the run is failing at that point anyway. The data can be large: an
-edit's interrupt carries the whole file before and after the edit. Eval
+log. The data can be large: an edit's interrupt carries the whole file
+before and after the edit. Eval
 extraction takes the summary from `interruptResolved`, and from
 `handlerDecision` in older logs that carried it there.
 

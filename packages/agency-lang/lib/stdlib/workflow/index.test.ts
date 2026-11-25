@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { _pickSignatures, _signatureSources, compileWorkflowSource } from "./index.js";
 import { problemsFromDiagnostics } from "./problems.js";
-import { eachPlan, mealPlan, mealRefs, mealSignatures, withFields } from "./testFixtures.js";
+import {
+  eachPlan,
+  edited,
+  mealPlan,
+  mealRefs,
+  mealSignatures,
+  withFields,
+} from "./testFixtures.js";
 
 const MEAL_PLAN_SOURCE = [
   'import { Json } from "std::validation"',
@@ -200,16 +207,17 @@ describe("compileWorkflowSource with blocks", () => {
       tool: "addListItems",
       args: { listId: { $ref: "inputs.listId" }, items: ["x"], section: "Saved" },
     };
-    const wf = JSON.parse(JSON.stringify(eachPlan));
-    wf.steps[1].steps = [
-      {
-        id: "kind",
-        kind: "match",
-        on: { $ref: "each.note.title" },
-        cases: [{ is: "keep", steps: [save] }],
-        otherwise: [],
-      },
-    ];
+    const wf = edited(eachPlan, (copy) => {
+      copy.steps[1].steps = [
+        {
+          id: "kind",
+          kind: "match",
+          on: { $ref: "each.note.title" },
+          cases: [{ is: "keep", steps: [save] }],
+          otherwise: [],
+        },
+      ];
+    });
     const result = compileWorkflowSource(wf, mealRefs, mealSignatures);
     expect(result.problems).toEqual([]);
     const { source, ranges, typeOwners } = result.compiled!;

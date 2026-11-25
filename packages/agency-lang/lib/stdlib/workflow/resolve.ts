@@ -258,10 +258,17 @@ function listProblems(
   list: Step[],
   scope: Scope,
 ): { problems: Problem[]; visible: string[] } {
-  let visible = scope.visible;
+  /** What the steps before position `index` add: the tool and LLM steps among them. */
+  const visibleAt = (index: number) => [
+    ...scope.visible,
+    ...list
+      .slice(0, index)
+      .filter((step) => !isBlockStep(step))
+      .map((step) => step.id),
+  ];
   const problems = list.flatMap((step, index): Problem[] => {
     const later = [...list.slice(index + 1).map((other) => other.id), ...scope.later];
-    const here = { visible, loops: scope.loops, later };
+    const here = { visible: visibleAt(index), loops: scope.loops, later };
     const own = stepFields(step).flatMap(([field, value]) =>
       refProblems(context, step.id, field, value, here),
     );
@@ -269,12 +276,9 @@ function listProblems(
     const inner = stepChildren(step).flatMap(
       (child) => listProblems(context, child, { ...here, loops }).problems,
     );
-    if (!isBlockStep(step)) {
-      visible = [...visible, step.id];
-    }
     return [...own, ...inner];
   });
-  return { problems, visible };
+  return { problems, visible: visibleAt(list.length) };
 }
 
 const referenceRule: Rule = (context) => {

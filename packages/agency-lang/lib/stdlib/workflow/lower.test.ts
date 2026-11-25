@@ -5,6 +5,7 @@ import { resolveWorkflow } from "./resolve.js";
 import { isLine, type Fragment, type ResolvedWorkflow, type Workflow } from "./types.js";
 import {
   eachPlan,
+  edited,
   matchPlan,
   mealPlan,
   mealRefs,
@@ -25,13 +26,6 @@ const lines = (body: Fragment[]) =>
 /** The statement whose print starts with `text`. */
 const fragmentFor = (body: Fragment[], text: string) =>
   body.find((f) => !isLine(f) && textOf(f).startsWith(text))!;
-
-/** A deep copy of `wf`, changed by `change`. */
-function edited(wf: unknown, change: (copy: any) => void): Record<string, any> {
-  const copy = JSON.parse(JSON.stringify(wf));
-  change(copy);
-  return copy;
-}
 
 describe("lowerWorkflow", () => {
   it("lowers the meal plan to fragments", () => {

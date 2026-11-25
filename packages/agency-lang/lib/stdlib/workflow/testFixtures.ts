@@ -80,6 +80,14 @@ export function withArg(
   return next;
 }
 
+/** A deep copy of `wf`, changed by `change`: for a field deep inside a
+ *  nested step, such as `copy.steps[1].cases[0].is`. */
+export function edited(wf: unknown, change: (copy: any) => void): Record<string, any> {
+  const next = copy(wf) as Record<string, any>;
+  change(next);
+  return next;
+}
+
 /** A deep copy of `wf` with top-level fields replaced by `patch`. */
 export function withFields(wf: unknown, patch: Record<string, unknown>): Record<string, any> {
   return { ...copy(wf as Record<string, unknown>), ...patch };

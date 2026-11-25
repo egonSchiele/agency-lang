@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { _workflowNameProblem, parseWorkflow } from "./parse.js";
 import { isIdentifier, refsIn } from "./types.js";
-import { eachPlan, matchPlan, mealPlan, withArg, withFields, withStep } from "./testFixtures.js";
+import {
+  eachPlan,
+  edited,
+  matchPlan,
+  mealPlan,
+  withArg,
+  withFields,
+  withStep,
+} from "./testFixtures.js";
 
 describe("parseWorkflow", () => {
   it("accepts the meal plan", () => {
@@ -337,13 +345,6 @@ describe("parseWorkflow", () => {
     expect(parseWorkflow(wf).problems.map((p) => p.step)).toEqual(["a b", "c d"]);
   });
 });
-
-/** A deep copy of `wf`, changed by `change`. */
-function edited(wf: unknown, change: (copy: any) => void): Record<string, any> {
-  const copy = JSON.parse(JSON.stringify(wf));
-  change(copy);
-  return copy;
-}
 
 describe("parseWorkflow match and each", () => {
   it("accepts the each and match fixtures", () => {

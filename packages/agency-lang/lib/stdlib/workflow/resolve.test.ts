@@ -9,6 +9,7 @@ import type {
 } from "./types.js";
 import {
   eachPlan,
+  edited,
   matchPlan,
   mealPlan,
   mealRefs,
@@ -488,13 +489,6 @@ describe("resolveWorkflow raises", () => {
     expect(problemsWith(["std::read", "test::lists::add"], signatures)).toEqual([]);
   });
 });
-
-/** A deep copy of `wf`, changed by `change`. */
-function edited(wf: unknown, change: (copy: any) => void): Record<string, any> {
-  const copy = JSON.parse(JSON.stringify(wf));
-  change(copy);
-  return copy;
-}
 
 /** A copy of mealSignatures with one tool's signature changed. */
 function withSignature(key: string, patch: Partial<Signature>): Record<string, Signature> {

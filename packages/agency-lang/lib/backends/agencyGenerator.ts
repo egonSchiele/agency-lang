@@ -1535,8 +1535,10 @@ export class AgencyGenerator {
       : `${this.addQuotesToKey(kv.key)}: ${valueCode}`;
   }
 
+  /** A key is written bare only when it is an identifier. Anything else,
+   *  such as `$ref` or `b-c`, keeps its quotes, or it would not parse back. */
   private addQuotesToKey(key: string): string {
-    if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)) {
+    if (LEGAL_IDENTIFIER.test(key)) {
       return key;
     }
     return `"${key}"`;

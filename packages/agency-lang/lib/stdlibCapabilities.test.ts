@@ -192,6 +192,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "currentThreadId",
     "getThread",
     "setAgentName",
+    "setTraceTitle",
     "evalValue",
     "evalOutput",
     "turnStart",

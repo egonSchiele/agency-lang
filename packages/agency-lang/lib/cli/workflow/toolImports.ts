@@ -18,7 +18,7 @@ import type { TrustedModules } from "../../compiler/trustedModules.js";
 import { _pickSignatures } from "../../stdlib/workflow/index.js";
 import { MODULE_PATH } from "../../stdlib/workflow/tools.js";
 import {
-  isObject,
+  locatedSteps,
   signatureKey,
   type Problem,
   type Signature,
@@ -151,14 +151,12 @@ function planFor(wanted: Wanted[], modules: Record<string, DescribedModule>): Im
   return plan;
 }
 
-/** The tool steps of a workflow that is not yet known to be well formed.
- *  A step with the wrong shape is skipped; parse reports it. */
+/** The tool steps of a workflow that is not yet known to be well formed,
+ *  nested ones included. A step with the wrong shape is skipped; parse
+ *  reports it. */
 function toolSteps(workflow: unknown): { id: string; module: string; tool: string }[] {
-  if (!isObject(workflow) || !Array.isArray(workflow.steps)) {
-    return [];
-  }
-  return workflow.steps.flatMap((step) => {
-    if (!isObject(step) || step.kind !== "tool") {
+  return locatedSteps(workflow).flatMap(({ step }) => {
+    if (step.kind !== "tool") {
       return [];
     }
     const { id, module, tool } = step;

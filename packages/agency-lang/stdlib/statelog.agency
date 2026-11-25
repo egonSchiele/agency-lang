@@ -48,9 +48,8 @@ import { dirname, basename } from "std::path"
   ```
 
   `setAgentName` groups runs by agent, and `setTraceTitle` names one run.
-  `turnStart` marks messages from a
-  person for the logs viewer. `emit` sends custom data to the host's
-  `onEmit` callback.
+  `turnStart` marks messages from a person for the logs viewer. `emit`
+  sends custom data to the host's `onEmit` callback.
 
   ## Reading a log
 
@@ -145,11 +144,10 @@ export def setAgentName(name: string) {
 }
 
 /**
-  Give this trace a short title, such as the topic of a chat. The title is
-  logged as a `traceTitle` event for tools that read the log, such as
-  statelog, to show. The last nonblank call wins, and a blank call does
-  nothing. Whitespace is folded to one line and the title is cut to 200
-  characters.
+  Give this trace a short title, such as the topic of a chat. Tools that
+  read the log, such as Statelog, show it as the trace's heading. The last
+  nonblank call wins, and a blank call does nothing. Whitespace is folded
+  to one line and the title is cut to 200 characters.
 */
 export def setTraceTitle(title: string) {
   """

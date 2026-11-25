@@ -226,7 +226,8 @@ export def recordTurn(userMsg: string): SaveTarget | null {
       source = userMsg
     }
     const title = titleFor(source)
-    if (title != "") {
+    // An unchanged title would only log a repeat event.
+    if (title != "" && title != record.title) {
       titleSession(record, title)
     }
   }

@@ -421,14 +421,36 @@ async function gradeInput(
     }
   }
 
-  const advisoryGrades = await Promise.all(
-    advisory.map(async (grader) => ({
-      grader,
-      grade: await runGrader(grader, input, test),
-    })),
+  // Most graders only read, so they run together. A grader that works in
+  // the workdir (a command that builds or runs tests there) would collide
+  // with another doing the same, so those take turns, in the order listed.
+  const inTurn = advisory.filter((grader) => grader.needsWorkdirToItself());
+  const together = advisory.filter((grader) => !grader.needsWorkdirToItself());
+  const [turnGrades, togetherGrades] = await Promise.all([
+    runInTurn(inTurn, input, test),
+    Promise.all(
+      together.map(async (grader) => ({ grader, grade: await runGrader(grader, input, test) })),
+    ),
+  ]);
+  // Reported in the order the graders were listed, whichever way they ran.
+  const finished = [...turnGrades, ...togetherGrades];
+  const advisoryGrades = advisory.map(
+    (grader) => finished.find((entry) => entry.grader === grader) as GraderGrade,
   );
 
   return { test, run, grades: [...gateGrades, ...advisoryGrades], gatesPassed: true };
+}
+
+async function runInTurn(
+  graders: BaseGrader[],
+  input: GraderInput,
+  test: Test,
+): Promise<GraderGrade[]> {
+  const grades: GraderGrade[] = [];
+  for (const grader of graders) {
+    grades.push({ grader, grade: await runGrader(grader, input, test) });
+  }
+  return grades;
 }
 
 /** Ask the gate for its verdict. A gate that cannot decide (a scalar grade

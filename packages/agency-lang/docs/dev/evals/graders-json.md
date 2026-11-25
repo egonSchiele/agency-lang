@@ -99,6 +99,12 @@ grader's name.
 - `repeated` compares `tool` and `argsPreview`, the 200-character preview
   of the arguments. No row in the record carries the full arguments, so two
   calls that differ only after the preview count as one.
+- Command graders of one run take turns: they execute one after another,
+  in file order, because two builds or test runs in one workdir collide.
+  The other kinds still run together, beside them. The rule is in
+  `gradeInput` (`lib/eval/grading/gradeRun.ts`): a grader that reports
+  `needsWorkdirToItself()` runs in turn, and the command grader does. A
+  must-pass command still runs before everything else.
 - A command grader runs inside the run directory's stored workdir, the same
   place the agent suite's pytest runner runs. Whatever it writes
   (`__pycache__`, `.pytest_cache`) lands there, so a command must not depend

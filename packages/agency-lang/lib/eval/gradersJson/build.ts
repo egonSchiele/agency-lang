@@ -174,7 +174,8 @@ function commandGrader(spec: CommandSpec): BaseGrader {
   const timeoutSec = spec.timeoutSec ?? DEFAULT_COMMAND_TIMEOUT_SEC;
   return grader(
     ({ workdir, graderFiles }) => runCommand(spec.command, workdir, graderFiles, timeoutSec),
-    optionsOf(spec),
+    // A command builds, tests or writes in the workdir. Two at once collide.
+    { ...optionsOf(spec), needsWorkdirToItself: true },
   );
 }
 

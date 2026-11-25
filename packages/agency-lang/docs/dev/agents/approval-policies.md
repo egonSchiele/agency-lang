@@ -700,7 +700,7 @@ const rules = currentPolicy()
 - **The run's policy, not the handler's file.** `runPolicy` is the policy
   the other run uses, and `runPolicyFile` is where its "always" answers
   belong: for a session with a policy of its own, that session's policy
-  file (`session-driver.md`). `askAbout` makes them the handler's state
+  file (`agent-sessions.md`). `askAbout` makes them the handler's state
   first (`useRunPolicy`), after saving any answer still pending to the
   old file. So the check, the prompt's re-check, the new rule and its
   save all use them, and so does the handler at its own next interrupt:

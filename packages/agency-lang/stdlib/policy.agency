@@ -1635,7 +1635,7 @@ export def deferUndecided(defers: boolean) {
 /**
 The policy the run's root handler answers with: the one `agency run
 --policy` (or `--approve` and `--reject`) gave the run, or the `policy`
-option a host passed, as the agent's session driver does. An empty policy
+option a host passed. An empty policy
 when the run has none. This is not the policy `cliPolicyHandler` holds;
 `currentPolicy()` returns that one. A question either policy decides is
 answered without asking anyone. The result is a copy, so changing it

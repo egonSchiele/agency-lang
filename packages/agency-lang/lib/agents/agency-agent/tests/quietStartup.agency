@@ -1,7 +1,7 @@
 /*
  * Startup and /model, for a caller that is not a terminal: a failure
  * comes back as a value. Nothing is printed and the process is not ended,
- * so the session core can run them inside an app's engine.
+ * so a session program can run them inside an app's engine.
  */
 import { _setLocalModelsAllowed } from "agency-lang/stdlib-lib/agentProcess.js"
 import { setEnv } from "std::system"

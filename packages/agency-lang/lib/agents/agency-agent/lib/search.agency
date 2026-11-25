@@ -333,8 +333,7 @@ def unavailableReason(b: BackendDescriptor): string {
 
 /** Switch to the backend named `backend` and save it to settings.json, as
   `/search` does. A name that is no backend, or a backend this session
-  cannot use, is a failure, and nothing changes. The session core's
-  `search` answer. */
+  cannot use, is a failure, and nothing changes. */
 export def switchSearchBackend(backend: string): Result<SearchBackend> {
   const found: BackendDescriptor | null = findBackend(backend)
   if (found == null) {

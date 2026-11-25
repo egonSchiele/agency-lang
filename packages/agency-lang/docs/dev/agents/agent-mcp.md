@@ -9,7 +9,7 @@ How agency-lang finds the optional `@agency-lang/mcp` package is in `docs/dev/st
 Starting a stdio server runs its `command`, so it raises `mcp::connect { server, command, env }` first (see "Starting a stdio server" below). The session's policy answers that question, or the person is asked. So the agent connects in two steps:
 
 1. **Startup** (`maybeLoadMcp` in `agent.agency`'s `main`): read the config and store it in the package with `configureMcpServers`. Nothing connects, and nothing is asked. The servers are process state, so the session run, which `main` starts after, uses them too.
-2. **Each turn**, in the session run: `getMcpTools()` first calls `startPendingMcpServers()`, which connects every stored server the package has no record for (`connectPendingMcpServers`), and prints a line for each one that needs a login or failed. The connect's `mcp::connect` leaves the run as an approval like any other, and the terminal asks about it (`docs/dev/agents/session-driver.md`, "The terminal"). After the first turn, nothing is pending, so later turns connect nothing.
+2. **Each turn**: `getMcpTools()` first calls `startPendingMcpServers()`, which connects every stored server the package has no record for (`connectPendingMcpServers`), and prints a line for each one that needs a login or failed. The connect's `mcp::connect` is an approval like any other, and the session's policy handler asks about it (`docs/dev/agents/agent-sessions.md`). After the first turn, nothing is pending, so later turns connect nothing.
 
 A turn always runs fresh, in every process, so a resumed session connects on its first turn too. The stored config lives in the package, which a checkpoint does not hold.
 

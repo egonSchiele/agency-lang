@@ -7,8 +7,8 @@
   The agent's working folder (`getAgentCwd`) starts here too, but a coder
   moves it during a session, and these reads do not follow it. In a
   terminal this is the process's folder, and nothing sets it. An app's
-  engine runs sessions from many folders, and the session core sets each
-  one's.
+  engine runs sessions from many folders, and its session program sets
+  each one's.
 */
 import { cwd } from "std::system"
 

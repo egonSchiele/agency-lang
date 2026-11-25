@@ -105,9 +105,6 @@
       "import": "./dist/lib/serve/public.js",
       "require": "./dist/lib/serve/public.js"
     },
-    "./agent-session": {
-      "import": "./dist/lib/agents/agency-agent/program.js"
-    },
     "./local": {
       "types": "./dist/lib/local/public.d.ts",
       "import": "./dist/lib/local/public.js",

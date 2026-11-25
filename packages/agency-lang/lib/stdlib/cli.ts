@@ -19,9 +19,8 @@ import { buildCompleter, listDirUnder } from "./cliCompleter.js";
 import { editInEditor, installEditorKey, type EditorKey } from "./cliEditor.js";
 import { watchTypedLine, type TypedLine } from "./cliTypedLine.js";
 import { watchHeldJobs } from "../runtime/jobs/jobEndWatcher.js";
-import { jobEndLines, watchedJobs, type JobEndLines } from "./cliJobLine.js";
-import { tokenSnapshot, type TokenSnapshot } from "./cliTokens.js";
-export { setReplJobsSource } from "./cliJobLine.js";
+import { jobEndLines, type JobEndLines } from "./cliJobLine.js";
+import { readTokenSnapshot, type TokenSnapshot } from "./cliTokens.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::ui/cli` — the line-mode REPL.
 //
@@ -1387,7 +1386,6 @@ export async function _runLineRepl(
   historyMax: number,
   paletteCommands: unknown,
   herdrName: string,
-  tokens: unknown = null,
 ): Promise<void> {
   const run = currentRun();
   const { entries: initialHistory, expansions } = loadHistory(historyFile, historyMax);
@@ -1472,11 +1470,10 @@ export async function _runLineRepl(
   // Text the next prompt opens with: a command filled in from the palette.
   let prefill = "";
   // The list is read on every poll, so a job started in any branch, or one
-  // that came back from a checkpoint, gets its line. A REPL whose turns run
-  // in another run reads that run's jobs (`setReplJobsSource`).
+  // that came back from a checkpoint, gets its line.
   const stopWatchingJobs = watchHeldJobs({
     host: replCtx.host,
-    held: () => watchedJobs(replCtx.heldJobs),
+    held: () => replCtx.heldJobs,
     ended: jobLines.jobEnded,
   });
   try {
@@ -1551,7 +1548,7 @@ export async function _runLineRepl(
       // it returns zeros if the runtime context or token-stats slot
       // is missing, so the footer never breaks a working turn.
       const turnStartMs = Date.now();
-      const tokensBefore = await tokenSnapshot(run, tokens);
+      const tokensBefore = readTokenSnapshot(run.ctx);
       activeStopSpinner = startSpinner(useTTY);
       herdr.report("working");
       jobLines.setOwner("turn");
@@ -1577,7 +1574,7 @@ export async function _runLineRepl(
         reply = await callBridgeFn(run, onSubmit, line);
       } catch (err: any) {
         stopActiveSpinner();
-        const tokensAfter = await tokenSnapshot(run, tokens);
+        const tokensAfter = readTokenSnapshot(run.ctx);
         if (isAbortError(err)) {
           // User pressed Esc: the turn was cancelled, not a real failure.
           // The thread was already repaired in runPrompt; the abort
@@ -1606,7 +1603,7 @@ export async function _runLineRepl(
       if (reply === false) break;
       const shown = replyOutput(reply);
       if (shown !== undefined) process.stdout.write(shown + "\n");
-      const tokensAfter = await tokenSnapshot(run, tokens);
+      const tokensAfter = readTokenSnapshot(run.ctx);
       // Per-turn footer (WL2). Reads the same `status` callback the
       // TUI's status bar uses, plus our locally-tracked turn stats
       // (elapsed + tokens up/down), so a future "the agent stopped

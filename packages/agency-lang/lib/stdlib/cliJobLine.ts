@@ -1,40 +1,10 @@
-// The line the REPL prints when a background job ends, how it prints it
-// without breaking whatever owns the terminal, and which jobs it watches.
+// The line the REPL prints when a background job ends, and how it prints
+// it without breaking whatever owns the terminal.
 // See docs/dev/stdlib/jobs.md.
 import * as readline from "readline";
-import type { HeldJob } from "../runtime/jobs/heldJobs.js";
 import { describeJobState, type JobRecord } from "../runtime/jobs/jobRecord.js";
-import { processSlot } from "../runtime/processSlot.js";
 import { formatElapsed } from "../utils/formatElapsed.js";
 import { RESET, styles } from "../utils/termcolors.js";
-
-/** Where the REPL's job watch reads the jobs to watch, for a REPL whose
- *  turns run in another run: the agent's terminal sets it to the session
- *  run's jobs. Kept for the process, outside Agency code, because each job
- *  carries its token and the watch reads the list synchronously. Null
- *  reads the REPL's own run. */
-const replJobsSource = processSlot<(() => HeldJob[]) | null>("agency.replJobsSource", () => null);
-
-/** Makes the REPL watch the jobs `source` returns, read on every poll, in
- *  place of the jobs its own run holds. Null goes back to its own run's. */
-export function setReplJobsSource(source: (() => HeldJob[]) | null): void {
-  replJobsSource.set(source);
-}
-
-/** The jobs the REPL's watch reads now: the source's, or `ownJobs` when
- *  none is set. A source that throws gives none this poll: it must not
- *  stop the watch. */
-export function watchedJobs(ownJobs: HeldJob[]): HeldJob[] {
-  const source = replJobsSource.get();
-  if (source === null) {
-    return ownJobs;
-  }
-  try {
-    return source();
-  } catch {
-    return [];
-  }
-}
 
 /** "job-3fa9c1 finished after 41m 8s (exit 0): ./run-comparison.sh" */
 export function jobEndedLine(job: JobRecord): string {

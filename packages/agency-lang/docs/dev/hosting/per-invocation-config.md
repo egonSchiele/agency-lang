@@ -115,9 +115,9 @@ await respondToInterrupts(interrupts, responses, { invocation: options });
 
 `InvocationOptions.onJobStarted` is a function the run calls with each
 background job it starts (`_launchJob` in `lib/stdlib/jobs.ts`), right after
-it adds the job to its held jobs. The agent's session driver uses it, since a
-leg that is aborted gives back nothing else (see "Background jobs" in
-`docs/dev/agents/session-driver.md`).
+it adds the job to its held jobs. A front-end that runs each turn as a run
+of its own uses it, since a run that is aborted gives back nothing else
+(see "What stops a job" in `docs/dev/stdlib/jobs.md`).
 
 - **It is TypeScript, never an Agency callback.** The job it is given
   carries the job's token, which Agency code never sees.

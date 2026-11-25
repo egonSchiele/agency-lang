@@ -137,15 +137,15 @@ one concept answers "what does a new chat start with".
   chat models are kept as `provider/model` from what they resolved to
   (`portableChoices`, using `/preset save`'s `qualified`): a bare name
   could be read against another provider at the next start.
-- **Only a person writes it.** The core calls `rememberSettings` after a
-  `model`, `effort` or `preset` answer that worked. A front-end sends
-  those; the model can't. A session with no record (incognito, one-shot)
+- **Only a person writes it.** `changeModel` and `changePreset` in
+  `lib/sessionChanges.agency` call `rememberSettings` after a `/model` or
+  `/preset` that worked. A person types those; the model can't. A session with no record (incognito, one-shot)
   writes nothing, and nor does one started with a model flag or
   `--effort`: those flags aren't `ModelChoices`, so a write would keep
   part of what it ran. `/local` isn't remembered. There is no tool to set
   a default preset any more.
-- **When it is read:** at every start whose `ProgramStart` names no
-  preset, model flag or effort flag, `-p` included
+- **When it is read:** at every start that names no preset, model flag
+  or effort flag, `-p` included
   (`startPresetAndModels`).
 - **No interrupt.** A rule added to `recommended` never reaches a saved
   `policy.json` (approval-policies.md, "A saved policy does not follow
@@ -401,8 +401,7 @@ the mark still seeds the last settings for someone upgrading.
 limits to the active preset, and `/preset save <name>` writes them to
 that name. `saveSessionPreset` in `lib/session.agency` does the save, and
 `sessionPreset` in `lib/presetSnapshot.agency` builds the preset.
-`writeSessionPreset` is the same save with a refusal as a failure, which
-the session core's `savePreset` answer sends as an error notice.
+`writeSessionPreset` is the same save with a refusal as a failure.
 
 The rule is that the saved preset, loaded in a fresh session with no
 flags and no `/model` choices, resolves to the same models, effort,
@@ -461,7 +460,7 @@ block is already in the file.
 `coordinator_skills` tool (`lib/cliTools.agency`). The scan reads only the
 Markdown files at the top of the folder. `skillsDir` does not fail when a
 folder is missing. It builds a tool that lists nothing. So
-`checkCliBundles`, which the session core calls when the session starts,
+`checkCliBundles`, which `agent.agency` calls when the session starts,
 checks the tool with `checkBundledSkill(tool, skillName)` and exits if the
 tool does not list a skill it should.
 

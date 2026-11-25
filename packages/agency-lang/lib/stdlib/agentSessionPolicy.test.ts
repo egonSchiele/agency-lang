@@ -1,18 +1,18 @@
 import * as fs from "fs";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
-import { minimalAutoApprovePolicy } from "../../runtime/builtinPolicies.js";
-import type { Policy } from "../../runtime/policy.js";
-import { failure, success } from "../../types/result.js";
-import { safeDeleteDirectoryWithin } from "../../utils.js";
-import { sessionRunPolicy } from "./policy.js";
+import { minimalAutoApprovePolicy } from "../runtime/builtinPolicies.js";
+import type { Policy } from "../runtime/policy.js";
+import { failure, success } from "../types/result.js";
+import { safeDeleteDirectoryWithin } from "../utils.js";
 import {
   copyCarriedPolicy,
   POLICY_UNREADABLE,
   readCarriedPolicy,
   removeCarriedPolicy,
   saveCarriedPolicy,
-} from "./sessionPolicy.js";
+  sessionRunPolicy,
+} from "./agentSessionPolicy.js";
 
 async function withHome(fn: (home: string) => Promise<void>): Promise<void> {
   const home = fs.mkdtempSync(path.join(process.cwd(), ".session-policy-test-"));

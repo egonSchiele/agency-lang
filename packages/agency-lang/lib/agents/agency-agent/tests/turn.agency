@@ -31,7 +31,7 @@ import {
  } from "../lib/turn.agency"
 import { applyResolved } from "../shared.agency"
 
-// What the session core does before its first turn (the grounding, and
+// What the agent does before its first turn (the grounding, and
 // the scans of the user's commands and skills, made before any handler
 // exists), then `body` under the terminal's policy handler with no one to
 // ask, on the stub policy.
@@ -105,7 +105,7 @@ node slashCommandExpands(): string {
 // The same under the terminal's policy handler in a run with no one to
 // ask, where an effect no rule decides is rejected. The stub policy has no
 // rule for the scan of `.claude/commands`, so a scan made under the handler
-// would lose the command. The session core scans before any handler
+// would lose the command. The agent scans before any handler
 // exists, as underStubPolicy does.
 node slashCommandExpandsWithNoOneToAsk(): string {
   setBrainName("simple")

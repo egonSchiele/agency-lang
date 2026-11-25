@@ -6,7 +6,7 @@ import { _contentToString } from "./threads.js";
 
 /**
  * A saved session's transcript: what the user typed and the agent's final
- * replies, in order. The session core adds an entry for each, and a
+ * replies, in order. The agent adds an entry for each, and a
  * reopened session shows this list instead of the conversation thread,
  * which also holds notes, context blocks and the runtime's own messages.
  * See docs/dev/agents/agent-sessions.md.

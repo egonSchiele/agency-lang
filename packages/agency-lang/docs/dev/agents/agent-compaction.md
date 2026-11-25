@@ -88,7 +88,7 @@ A message that expires (`docs/dev/runtime/expiring-messages.md`) stays in
 the thread and out of the summary, as in memory compaction.
 
 The head names the folder the session started in, with its AGENTS.md.
-When the agent's folder moved (a `folder` answer, or a coder's move), the
+When the agent's folder moved (a coder's move), the
 message that told the model is in the summarized part. So after a
 compaction, a session whose folder moved gets the project block again on
 its next message (`projectBlockSummarized` in `lib/projectContext.agency`).
@@ -140,13 +140,10 @@ transcript fits it whenever the window is known.
   what it did in notices.
 - `lib/agents/agency-agent/lib/repl.agency`: `/compact`, the call to
   `compactIfDue` after each turn, and the footer.
-- `lib/agents/agency-agent/core.agency`: the same call after each turn
-  of the session core.
 - Tests: `lib/stdlib/agentCompaction.test.ts` and
   `lib/agents/agency-agent/tests/compaction.agency`.
 
 ## To remove it
 
-Delete the two compaction files and their tests, and take the three uses
-out of `repl.agency` and the one out of `core.agency`. Nothing else
-depends on it.
+Delete the two compaction files and their tests, and take the uses out
+of `repl.agency` and `sessionChanges.agency`. Nothing else depends on it.

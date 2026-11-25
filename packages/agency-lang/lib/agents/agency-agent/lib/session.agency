@@ -682,8 +682,7 @@ def withGuidedLocal(flags: ModelFlags): ModelFlags {
   }
 }
 
-/** The model flags from the command line, for the session program's
-  start. A bare `--local` asks which local model first. Exits with a
+/** The model flags from the command line, for a session's start. A bare `--local` asks which local model first. Exits with a
   message on bad flags. */
 export def startupModelFlags(args: Record<string, any>): ModelFlags {
   const parsed = modelFlagsFromArgs(args)
@@ -927,8 +926,7 @@ export def refreshAndSavePreset(name: string, choices: ModelChoices): Result<str
 
 /** `saveSessionPreset`, with a save that was refused as a failure that
   holds the line saying why. Success holds the lines to show, which say
-  what was saved, or that there was nothing to save. The session core
-  sends a failure as an error notice. */
+  what was saved, or that there was nothing to save. */
 export def writeSessionPreset(name: string, choices: ModelChoices): Result<string[]> {
   const target = if name == "" then activePresetName() else name
   if (target == "") {

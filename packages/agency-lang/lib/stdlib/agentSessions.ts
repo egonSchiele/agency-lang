@@ -5,8 +5,6 @@ import { processSlot } from "../runtime/processSlot.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { stripSlug } from "../runtime/runner.js";
 import { transcriptIn, transcriptOfMessages, type TranscriptMessage } from "./agentTranscript.js";
-import type { Interrupt } from "../runtime/interrupts.js";
-import { getModuleFingerprint } from "../runtime/moduleFingerprintRegistry.js";
 import { isPlainObject } from "../utils/isPlainObject.js";
 
 /**
@@ -25,13 +23,13 @@ import { isPlainObject } from "../utils/isPlainObject.js";
 /**
  * What a session's run file holds.
  *
- * - `checkpoint`: one checkpoint, taken between turns, as the terminal's
- *   old loop saved it. Nothing resumes it now; session search still reads
+ * - `checkpoint`: one checkpoint of the session's one run, as
+ *   `agency agent` saves it.
+ * - `savedRun`: the interrupts a session program paused on, each with its
+ *   checkpoint (`{ version, pause, cancelledTexts, failedTexts, turn }`).
+ *   A front-end that runs each session as a program of its own writes
+ *   this. `agency agent` does not resume it; session search still reads
  *   it.
- * - `savedRun`: the interrupts the session core paused on, each with its
- *   checkpoint, as the session driver saves it
- *   (`{ version, pause, cancelledTexts, failedTexts, turn }`). `agency agent`
- *   and Perry both write this, in the same format.
  */
 export type RunFormat = "checkpoint" | "savedRun";
 
@@ -389,91 +387,6 @@ export function checkpointIn(runFile: unknown): unknown {
   const pause: unknown = (runFile as Record<string, unknown>).pause;
   if (!Array.isArray(pause) || typeof pause[0] !== "object" || pause[0] === null) return null;
   return (pause[0] as Record<string, unknown>).checkpoint ?? null;
-}
-
-/** The turn a session was in when it was saved. `approvals` is null while
- *  the turn was running, and the approvals it waits on once it paused. */
-export type SavedTurn = { text: string; approvals: Interrupt[] | null };
-
-/** What `<id>.json` holds for a `savedRun` record: everything needed to go
- *  on with the run. Every interrupt carries its checkpoint. `pause` is where
- *  the session waits for a message, or where the current turn started. */
-export type SavedRun = {
-  version: 1;
-  pause: Interrupt[];
-  cancelledTexts: string[];
-  /** The requests whose turn failed since the last turn that finished.
-   *  Absent is the same as empty. */
-  failedTexts?: string[];
-  turn: SavedTurn | null;
-};
-
-function isSavedInterrupt(value: unknown): boolean {
-  return (
-    isPlainObject(value) &&
-    typeof value.interruptId === "string" &&
-    typeof value.effect === "string" &&
-    isPlainObject(value.checkpoint)
-  );
-}
-
-function isSavedInterrupts(value: unknown): boolean {
-  return Array.isArray(value) && value.length > 0 && value.every(isSavedInterrupt);
-}
-
-function isSavedTurn(value: unknown): boolean {
-  return (
-    isPlainObject(value) &&
-    typeof value.text === "string" &&
-    (value.approvals === null || isSavedInterrupts(value.approvals))
-  );
-}
-
-function isTexts(value: unknown): boolean {
-  return Array.isArray(value) && value.every((text) => typeof text === "string");
-}
-
-export function isSavedRun(value: unknown): value is SavedRun {
-  return (
-    isPlainObject(value) &&
-    value.version === 1 &&
-    isSavedInterrupts(value.pause) &&
-    isTexts(value.cancelledTexts) &&
-    (value.failedTexts === undefined || isTexts(value.failedTexts)) &&
-    (value.turn === null || isSavedTurn(value.turn))
-  );
-}
-
-/** The saved run in `<dir>/<id>.json`, or null when the file is missing or
- *  is not a saved run. */
-export async function readSavedRun(dir: string, id: string): Promise<SavedRun | null> {
-  const run: unknown = await _readCheckpointFile(dir, id);
-  return isSavedRun(run) ? run : null;
-}
-
-/** Whether the code loaded now can resume the run. A checkpoint records a
- *  hash of the generated code of each module it is paused in, and the
- *  runtime refuses to resume when one differs. The generated code changes
- *  with the agency-lang version. This is the comparison the runtime makes
- *  on resume, made when the session loads, so it is found then and not on
- *  the next message.
- *
- *  - `yes`: every module is loaded, with the hash it was saved with.
- *  - `changed`: a module is loaded with another hash. The run can't go on.
- *  - `notLoaded`: none differs, but a module is not loaded in this
- *    process, so it is not known yet. Load the session program first. */
-export function canResume(run: SavedRun): "yes" | "changed" | "notLoaded" {
-  const waiting = [...run.pause, ...(run.turn?.approvals ?? [])];
-  const fingerprints = waiting.flatMap((interrupt) =>
-    Object.entries(interrupt.checkpoint?.moduleFingerprints ?? {}),
-  );
-  const loaded = fingerprints.map(([moduleId, saved]) => ({
-    saved: saved.hash,
-    now: getModuleFingerprint(moduleId)?.hash,
-  }));
-  if (loaded.some(({ saved, now }) => now !== undefined && now !== saved)) return "changed";
-  if (loaded.some(({ now }) => now === undefined)) return "notLoaded";
-  return "yes";
 }
 
 /** Tell Herdr which session the pane holds and how to reopen it after a

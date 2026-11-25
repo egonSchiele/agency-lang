@@ -1,7 +1,6 @@
 // The judge's policy check must see the run's root policy: the one
 // `agency run --policy` puts in AGENCY_RUN_POLICY, and the `policy` option
-// a host passes, which is how the agent's session driver gives a session
-// its policy. Neither is the policy of a cliPolicyHandler.
+// a host passes. Neither is the policy of a cliPolicyHandler.
 //
 // The rule approves the line's std::bash question, as an "always approve"
 // answer would. Every judge mock refuses, so the line runs only if the
@@ -20,7 +19,7 @@ process.env.AGENCY_RUN_POLICY = JSON.stringify(approveLine);
 const viaRunPolicy = (await judgedLine()).data;
 delete process.env.AGENCY_RUN_POLICY;
 
-// 2. The host surface: the session driver's `policy` option.
+// 2. The host surface: the `policy` option.
 const served = await __invokeNodeForServe("judgedLine", {}, { policy: approveLine });
 const viaPolicyOption =
   served.status === "returned" ? served.value.data : `not returned: ${JSON.stringify(served)}`;

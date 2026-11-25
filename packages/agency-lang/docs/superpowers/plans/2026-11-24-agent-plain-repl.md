@@ -743,6 +743,25 @@ What differs from the tasks above, found while building it.
   brought back: `agent-repl` covers save, resume and an approval with
   the real agent.
 
+## Pull request 2 as built
+
+What differs from Task 10.
+
+- **`lib/stdlib/cliTokens.ts` is kept**, cut down to the read of the
+  REPL's own run (`readTokenSnapshot`). The callback half is gone, with
+  `repl`'s `tokens` argument. `cli.ts` is already 1,600 lines.
+- **`lib/stdlib/agentTerminalDiff.ts` is deleted.** Pull request 1 removed
+  its only caller, and Perry does not import it.
+- **`tests/agency-js/repl-from-outside` is deleted.** It tested `tokens`
+  and `setReplJobsSource`.
+- **`sessionRunPolicy`'s tests are in
+  `lib/stdlib/agentSessionRunPolicy.test.ts`**, the old `policy.test.ts`
+  moved.
+- **The functions only Perry calls** are `moveRecord` and
+  `applyLlmOptionsAnswer`. `agent-modules-import` calls both.
+- **The Perry check passed** on 24 November against Perry main at
+  `8a9b7f0`: typecheck, 629 tests, and `engine:stage`.
+
 ## After both merge
 
 One release with #1565, #1566 and the last-settings setter. Then one

@@ -4,14 +4,14 @@
   which follows it across resumes. Every other session uses the saved
   policy, policy.json. See docs/dev/agents/agent-sessions.md.
 */
-import { sessionRunPolicy } from "agency-lang/stdlib-lib/agentDriver/policy.js"
 import {
   SESSION_POLICIES_DIR,
   copyCarriedPolicy,
   readCarriedPolicy,
   removeCarriedPolicy,
   saveCarriedPolicy,
- } from "agency-lang/stdlib-lib/agentDriver/sessionPolicy.js"
+  sessionRunPolicy,
+ } from "agency-lang/stdlib-lib/agentSessionPolicy.js"
 import { _resolveRunPolicy } from "agency-lang/stdlib-lib/runPolicy.js"
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import {

@@ -1,8 +1,8 @@
 // An edit's diff as data for a front-end to draw: `_diffTokens` with the
 // options an approval needs, limits on how much it will diff, and tokens
-// that never split a character. The session core emits one for every edit
-// (`session.editDiff`), and a front-end makes the one on an approval with
-// this same function.
+// that never split a character. A front-end's session program emits one
+// for every edit, and the front-end makes the one on an approval with this
+// same function.
 import { _diffTokens } from "./syntax.js";
 
 /** A piece of a line. `scope` is null: the diff is made with no language,

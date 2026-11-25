@@ -4,8 +4,8 @@ import { isPlainObject } from "../utils/isPlainObject.js";
 
 /**
  * The settings a new agent session starts with: the preset, models and
- * effort the person last chose, in any session. The session core writes
- * them after a model, effort or preset answer, and reads them when a run
+ * effort the person last chose, in any session. The agent writes
+ * them after a model, effort or preset change, and reads them when a run
  * names no preset, model or effort flag. See "The last settings" in
  * docs/dev/agents/agent-presets.md.
  *

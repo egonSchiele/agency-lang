@@ -280,14 +280,12 @@ The two policies, and where each comes from:
   keeps the policy it installs on the run (`RuntimeContext.runPolicy`), on
   a fresh run and again on every resume. It is the policy `agency run
   --policy`, `--approve`, and `--reject` give a run, and the `policy`
-  option a host passes. The agent's session driver passes the session's
-  policy that way, so in an interactive `agency agent` session this is the
-  policy that holds the user's "always" answers. `runPolicy()` returns a
+  option a host passes. `runPolicy()` returns a
   copy, because a caller that changed the live policy would change what
   the handler approves.
 - **A `cliPolicyHandler`'s policy** (`currentPolicy()`). A program that
-  installs `cliPolicyHandler` itself, such as `agency agent -p`, keeps its
-  rules there. The first call may load the policy file, and any call may
+  installs `cliPolicyHandler` itself, as `agency agent` does, keeps its
+  rules there, with the user's "always" answers. The first call may load the policy file, and any call may
   save "always" answers waiting to be written. Those reads and writes are
   the handler's own, which it does not ask about.
 

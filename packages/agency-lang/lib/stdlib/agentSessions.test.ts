@@ -3,10 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import {
   _isCheckpoint,
-  canResume,
   checkpointIn,
-  isSavedRun,
-  readSavedRun,
   _listSessions,
   _recordRunFormat,
   _saveSession,
@@ -19,10 +16,6 @@ import {
   type TranscriptMessage,
 } from "./agentSessions.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
-import {
-  __resetModuleFingerprintRegistry,
-  registerModuleFingerprint,
-} from "../runtime/moduleFingerprintRegistry.js";
 
 async function withDir(fn: (dir: string) => Promise<void>): Promise<void> {
   const dir = fs.mkdtempSync(path.join(process.cwd(), ".sessions-test-"));
@@ -256,83 +249,11 @@ describe("saved run format", () => {
     checkpoint: {},
   };
 
-  it.each([
-    ["another version", { version: 2, pause: [pause], cancelledTexts: [], turn: null }],
-    ["no pause", { version: 1, pause: [], cancelledTexts: [], turn: null }],
-    [
-      "an interrupt with no checkpoint",
-      { version: 1, pause: [{ ...pause, checkpoint: undefined }], cancelledTexts: [], turn: null },
-    ],
-    [
-      "a turn with an empty approval list",
-      { version: 1, pause: [pause], cancelledTexts: [], turn: { text: "x", approvals: [] } },
-    ],
-  ])("a run file with %s is not accepted", (_name, run) => {
-    expect(isSavedRun(run)).toBe(false);
-  });
-
-  it("accepts a good saved run, and checkpointIn finds its checkpoint", () => {
+  it("checkpointIn finds a saved run's checkpoint", () => {
     const run = { version: 1, pause: [pause], cancelledTexts: [], turn: null };
-    expect(isSavedRun(run)).toBe(true);
     expect(checkpointIn(run)).toEqual({});
     expect(checkpointIn(null)).toBeNull();
   });
-
-  const pausedIn = (moduleId: string, hash: string) =>
-    ({
-      version: 1,
-      pause: [{ ...pause, checkpoint: { moduleFingerprints: { [moduleId]: { hash } } } }],
-      cancelledTexts: [],
-      turn: null,
-    }) as never;
-
-  it("canResume tells a module loaded with another hash from one not loaded", () => {
-    expect(canResume(pausedIn("src/agency/gone.agency", "0000"))).toBe("notLoaded");
-    expect(canResume({ version: 1, pause: [pause], cancelledTexts: [], turn: null } as never)).toBe(
-      "yes",
-    );
-    registerModuleFingerprint("src/agency/loaded.agency", "1111");
-    try {
-      expect(canResume(pausedIn("src/agency/loaded.agency", "1111"))).toBe("yes");
-      expect(canResume(pausedIn("src/agency/loaded.agency", "2222"))).toBe("changed");
-      const both = {
-        version: 1,
-        pause: [
-          {
-            ...pause,
-            checkpoint: {
-              moduleFingerprints: {
-                "src/agency/gone.agency": { hash: "0000" },
-                "src/agency/loaded.agency": { hash: "2222" },
-              },
-            },
-          },
-        ],
-        cancelledTexts: [],
-        turn: null,
-      } as never;
-      expect(canResume(both)).toBe("changed");
-    } finally {
-      __resetModuleFingerprintRegistry();
-    }
-  });
-
-  it("accepts a saved run with failedTexts, or without, and not with a bad one", () => {
-    const run = { version: 1, pause: [pause], cancelledTexts: [], turn: null };
-    expect(isSavedRun({ ...run, failedTexts: ["x"] })).toBe(true);
-    expect(isSavedRun({ ...run, failedTexts: [1] })).toBe(false);
-  });
-
-  it("readSavedRun reads a saved run and returns null for anything else", () =>
-    withDir(async (dir) => {
-      const rec = { ...record("a", 1), runFormat: "savedRun" as const };
-      const run = { version: 1, pause: [pause], cancelledTexts: [], turn: null };
-      await _saveSession(dir, rec, run);
-      expect(await readSavedRun(dir, "a")).toEqual(run);
-      await _saveSession(dir, record("b", 1), { version: 2 });
-      expect(await readSavedRun(dir, "b")).toBeNull();
-      expect(await readSavedRun(dir, "missing")).toBeNull();
-    }));
 
   it("a record's heldBy round-trips, and a malformed one is skipped", () =>
     withDir(async (dir) => {

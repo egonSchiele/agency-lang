@@ -30,7 +30,23 @@ export type LlmStep = {
   provider?: string | null;
   limits?: Limits | null;
 };
-export type Step = ToolStep | LlmStep;
+/** A value a `match` case is tested against with `==`. */
+export type CaseValue = string | number | boolean;
+export type MatchCase = { is: CaseValue; steps: Step[] };
+/** `otherwise` reads null as absent. */
+export type MatchStep = {
+  id: string;
+  kind: "match";
+  on: Ref;
+  cases: MatchCase[];
+  otherwise?: Step[] | null;
+};
+export type EachStep = { id: string; kind: "each"; over: Ref; steps: Step[] };
+/** A step with a value a later step can read. */
+export type ValueStep = ToolStep | LlmStep;
+/** A step that holds step lists of its own, and has no value. */
+export type BlockStep = MatchStep | EachStep;
+export type Step = ValueStep | BlockStep;
 /** `result` and `limits` read null as absent. */
 export type Workflow = {
   format: 1;
@@ -51,7 +67,7 @@ export type ToolRef = { module: string; name: string };
 
 /** A reference path: a root, a name, then `.field` and `[n]` segments. */
 export const REF_PATH =
-  /^(inputs|steps)\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$/;
+  /^(inputs|steps|each)\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$/;
 
 /** An effect name as a `raises` entry spells it: `std::read`, a set name
  *  such as `FileRead`, or a bare effect such as `unknown`. */
@@ -98,6 +114,55 @@ export function refsIn(value: unknown): Ref[] {
 /** A JSON object: not null and not an array. */
 export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** An object found in a step list, and its JSON path from the workflow,
+ *  such as `["steps", 2, "cases", 0, "steps", 1]`. */
+export type Located = { step: Record<string, unknown>; path: (string | number)[] };
+
+/** Every object in every step list of a workflow that may not be well
+ *  formed, in document order: a block before the steps inside it, a
+ *  match's cases in order, then its `otherwise`. Anything that is not an
+ *  object or not a list is skipped, so this never throws. This is the one
+ *  place that knows where a step list can be. */
+export function locatedSteps(workflow: unknown): Located[] {
+  return isObject(workflow) ? stepsIn(workflow.steps, ["steps"]) : [];
+}
+
+function stepsIn(list: unknown, path: (string | number)[]): Located[] {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  return list.flatMap((item, index) => {
+    if (!isObject(item)) {
+      return [];
+    }
+    const here = [...path, index];
+    return [{ step: item, path: here }, ...childSteps(item, here)];
+  });
+}
+
+function childSteps(step: Record<string, unknown>, path: (string | number)[]): Located[] {
+  if (step.kind === "each") {
+    return stepsIn(step.steps, [...path, "steps"]);
+  }
+  if (step.kind !== "match") {
+    return [];
+  }
+  const cases = Array.isArray(step.cases) ? step.cases : [];
+  const inCases = cases.flatMap((item, index) =>
+    isObject(item) ? stepsIn(item.steps, [...path, "cases", index, "steps"]) : [],
+  );
+  return [...inCases, ...stepsIn(step.otherwise, [...path, "otherwise"])];
+}
+
+/** Every step of a parsed workflow, in the order `locatedSteps` gives. */
+export function allSteps(workflow: Workflow): Step[] {
+  return locatedSteps(workflow).map((entry) => entry.step as Step);
+}
+
+export function isBlockStep(step: Step): step is BlockStep {
+  return step.kind === "match" || step.kind === "each";
 }
 
 /** What `describe` says about one tool, keyed by `"<module>.<name>"`.

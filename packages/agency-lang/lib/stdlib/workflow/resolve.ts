@@ -25,6 +25,7 @@ import {
   type Step,
   type ToolRef,
   type ToolStep,
+  type ValueStep,
   type Workflow,
 } from "./types.js";
 
@@ -193,7 +194,10 @@ function stepFields(step: Step): [string, unknown][] {
   if (step.kind === "tool") {
     return sortedArgs(step).map((name) => [`args.${name}`, step.args[name]]);
   }
-  return step.context.map((value, index) => [`context[${index}]`, value]);
+  if (step.kind === "llm") {
+    return step.context.map((value, index) => [`context[${index}]`, value]);
+  }
+  return [];
 }
 
 const referenceRule: Rule = (context) => {
@@ -221,6 +225,9 @@ function declaredBy(step: Step): Declared[] {
       what: `argument "${arg}" of step "${step.id}"`,
     }));
     return [value, ...args];
+  }
+  if (step.kind !== "llm") {
+    return [value];
   }
   const contexts = step.context.flatMap((_, index) => [
     {
@@ -333,7 +340,7 @@ function binding(local: string, field: string, value: unknown): Binding {
 }
 
 /** A step's limits, or null when none is set. */
-function stepLimits(step: Step): Limits | null {
+function stepLimits(step: ValueStep): Limits | null {
   const limits = step.limits ?? null;
   if (limits === null || (limits.maxCost === undefined && limits.maxTime === undefined)) {
     return null;
@@ -401,9 +408,15 @@ export function resolveWorkflow(
   if (problems.length > 0) {
     return { resolved: null, problems };
   }
-  const steps = workflow.steps.map((step) =>
-    step.kind === "tool" ? resolveToolStep(step, signatures) : resolveLlmStep(step),
-  );
+  const steps = workflow.steps.map((step) => {
+    if (step.kind === "tool") {
+      return resolveToolStep(step, signatures);
+    }
+    if (step.kind === "llm") {
+      return resolveLlmStep(step);
+    }
+    throw new Error("block steps are resolved in a later task");
+  });
   const resolved: ResolvedWorkflow = {
     name: workflow.name,
     inputsType: workflow.inputs,

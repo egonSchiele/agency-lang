@@ -85,6 +85,102 @@ export function withFields(wf: unknown, patch: Record<string, unknown>): Record<
   return { ...copy(wf as Record<string, unknown>), ...patch };
 }
 
+/** A loop: search notes, then for each note read it and add its body to a list. */
+export const eachPlan: Workflow = {
+  format: 1,
+  name: "copyNotes",
+  description: "Add every matching note's text to a list.",
+  inputs: "{ query: string; listId: string }",
+  steps: [
+    {
+      id: "search",
+      kind: "tool",
+      module: "./notes.agency",
+      tool: "searchNotes",
+      args: { query: { $ref: "inputs.query" } },
+    },
+    {
+      id: "note",
+      kind: "each",
+      over: { $ref: "steps.search" },
+      steps: [
+        {
+          id: "text",
+          kind: "tool",
+          module: "./notes.agency",
+          tool: "readNote",
+          args: { id: { $ref: "each.note.id" } },
+        },
+        {
+          id: "add",
+          kind: "tool",
+          module: "./lists.agency",
+          tool: "addListItems",
+          args: {
+            listId: { $ref: "inputs.listId" },
+            items: [{ $ref: "steps.text.body" }],
+            section: "Notes",
+          },
+        },
+      ],
+    },
+    {
+      id: "done",
+      kind: "tool",
+      module: "./lists.agency",
+      tool: "findLists",
+      args: { query: "done" },
+    },
+  ],
+  result: { $ref: "steps.done" },
+};
+
+/** A branch: add an item to a list only when the level is urgent.
+ *  `addListItems` is called only inside a case. */
+export const matchPlan: Workflow = {
+  format: 1,
+  name: "routeByLevel",
+  description: "Add an item to a list when the level is urgent.",
+  inputs: "{ level: string; listId: string }",
+  steps: [
+    {
+      id: "note",
+      kind: "tool",
+      module: "./notes.agency",
+      tool: "searchNotes",
+      args: { query: "plan" },
+    },
+    {
+      id: "route",
+      kind: "match",
+      on: { $ref: "inputs.level" },
+      cases: [
+        {
+          is: "urgent",
+          steps: [
+            {
+              id: "add",
+              kind: "tool",
+              module: "./lists.agency",
+              tool: "addListItems",
+              args: { listId: { $ref: "inputs.listId" }, items: ["urgent"], section: "Inbox" },
+            },
+          ],
+        },
+        { is: "normal", steps: [] },
+      ],
+    },
+    {
+      id: "done",
+      kind: "tool",
+      module: "./lists.agency",
+      tool: "findLists",
+      args: { query: "done" },
+    },
+  ],
+  result: { $ref: "steps.done" },
+};
+
 export const mealRefs: ToolRef[] = [
   { module: "./notes.agency", name: "searchNotes" },
   { module: "./notes.agency", name: "readNote" },

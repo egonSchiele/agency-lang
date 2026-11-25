@@ -4,7 +4,7 @@ import type { Sandbox } from "./types.js";
 const WORK_DIR = "/var/eval-daytona";
 export const ENV_FILE = `${WORK_DIR}/env.sh`;
 export const EXIT_FILE = `${WORK_DIR}/exit`;
-export const PGID_FILE = `${WORK_DIR}/pgid`;
+export const PID_FILE = `${WORK_DIR}/pid`;
 export const CONSOLE_LOG = `${WORK_DIR}/console.log`;
 
 /** How long past `maxSeconds` to wait for the exit file before giving up. */
@@ -27,7 +27,7 @@ export type LongCommandArgs = {
   maxSeconds: number;
   /** What the command printed since the last poll. */
   onOutput?: (chunk: string) => void;
-  /** When aborted, the command's process group is sent SIGINT, once. */
+  /** When aborted, the command is sent SIGINT, once. */
   signal?: AbortSignal;
   /** How long to go on waiting for the command after that. Default 60. */
   interruptGraceSeconds?: number;
@@ -47,33 +47,40 @@ export type LongCommandResult = {
   interrupted: boolean;
 };
 
-/** Sleeps, but wakes at once when the signal aborts, so an interrupt is not
- *  held up by a poll interval. */
+/** Sleeps, but wakes at once when the signal aborts, or is already
+ *  aborted, so an interrupt is not held up by a poll interval. */
 function sleepUntilAbort(signal: AbortSignal | undefined): (ms: number) => Promise<void> {
   return (ms) =>
     new Promise<void>((resolve) => {
-      const timer = setTimeout(resolve, ms);
-      signal?.addEventListener(
-        "abort",
-        () => {
-          clearTimeout(timer);
-          resolve();
-        },
-        { once: true },
-      );
+      if (signal?.aborted === true) {
+        resolve();
+        return;
+      }
+      const wake = (): void => {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", wake);
+        resolve();
+      };
+      const timer = setTimeout(wake, ms);
+      signal?.addEventListener("abort", wake, { once: true });
     });
 }
 
-/** The line started in the background. The command gets a session of its
- *  own, so it leads a process group whose id is written to PGID_FILE; an
- *  interrupt can then reach everything it started. `setsid --wait` holds on
- *  until the command ends, so the exit code written is the command's. */
+/** The line started in the background. `timeout` enforces the limit, and its
+ *  pid is written to PID_FILE so an interrupt can be sent to it.
+ *
+ *  `--foreground` matters. With it, `timeout` passes a signal on to the
+ *  command, once, and to nothing else. Without it, `timeout` signals the
+ *  command and then its whole process group, so the command gets the signal
+ *  twice. `agency eval run` reads a second signal as "quit now" and would
+ *  drop the run it was about to save. The command's own children are its
+ *  business: `agency eval run` supervises the ones it starts. */
 function backgroundLine(args: LongCommandArgs): string {
   const command = args.argv.map(quote).join(" ");
-  const inSession =
-    `echo $$ > ${PGID_FILE}; ` +
-    `exec timeout ${args.maxSeconds} ${command} </dev/null > ${CONSOLE_LOG} 2>&1`;
-  return `. ${ENV_FILE} && cd ${quote(args.cwd)} && setsid --wait sh -c ${quote(inSession)}; echo $? > ${EXIT_FILE}`;
+  const limited =
+    `echo $$ > ${PID_FILE}; ` +
+    `exec timeout --foreground ${args.maxSeconds} ${command} </dev/null > ${CONSOLE_LOG} 2>&1`;
+  return `. ${ENV_FILE} && cd ${quote(args.cwd)} && sh -c ${quote(limited)}; echo $? > ${EXIT_FILE}`;
 }
 
 /** Runs a command that may take hours, as root, and waits for it by
@@ -92,7 +99,7 @@ export async function runLongCommand(
   await mustExec(
     sandbox,
     "command directory",
-    `mkdir -p ${WORK_DIR} && chmod 700 ${WORK_DIR} && rm -f ${EXIT_FILE} ${PGID_FILE}`,
+    `mkdir -p ${WORK_DIR} && chmod 700 ${WORK_DIR} && rm -f ${EXIT_FILE} ${PID_FILE}`,
   );
   // The keys go in a file only root can read, never in a command's text:
   // the provider keeps the commands of a session with its records.
@@ -113,8 +120,10 @@ export async function runLongCommand(
     await sleep(pollMs);
     try {
       if (args.signal?.aborted === true && interruptDeadline === null) {
+        await sandbox.exec(`kill -INT "$(cat ${PID_FILE})"`, { timeoutSec: POLL_TIMEOUT_SEC });
+        // Set only once the interrupt was sent: if sending failed, the next
+        // poll tries again.
         interruptDeadline = now() + interruptGraceMs;
-        await sandbox.exec(`kill -INT -"$(cat ${PGID_FILE})"`, { timeoutSec: POLL_TIMEOUT_SEC });
       }
       exited =
         (await sandbox.exec(`test -f ${EXIT_FILE}`, { timeoutSec: POLL_TIMEOUT_SEC })).exitCode === 0;
@@ -138,7 +147,9 @@ export async function runLongCommand(
     exitCode,
     seconds: Math.round((now() - started) / MS_PER_SECOND),
     timedOut: !exited && interruptDeadline === null,
-    interrupted: interruptDeadline !== null,
+    // A command that had finished cleanly by the time the interrupt arrived
+    // was not cut short by it.
+    interrupted: interruptDeadline !== null && !(exited && exitCode === 0),
   };
 }
 

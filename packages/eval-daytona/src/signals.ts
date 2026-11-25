@@ -16,8 +16,8 @@ export type SignalProcess = {
 /** The command's answer to Ctrl-C. The first terminating signal calls
  *  `onFirst`: stop starting jobs, and let the running ones save what they
  *  have. A second one calls `onSecond` (delete every container) and then
- *  exits with the signal's usual code. Returns a function that removes the
- *  handlers. */
+ *  exits with the signal's usual code. A third exits at once. Returns a
+ *  function that removes the handlers. */
 export function onSignals(
   handlers: { onFirst(): void; onSecond(): Promise<void> },
   deps: { process?: SignalProcess; now?: () => number } = {},
@@ -32,11 +32,18 @@ export function onSignals(
       handlers.onFirst();
       return;
     }
-    if (quitting || now() - firstAt < DUPLICATE_WINDOW_MS) {
+    if (now() - firstAt < DUPLICATE_WINDOW_MS) {
+      return;
+    }
+    const exit = (): never => proc.exit(128 + os.constants.signals[signal]);
+    // A third: the deletes can wait minutes on a container still being
+    // created, and the person has now asked three times.
+    if (quitting) {
+      exit();
       return;
     }
     quitting = true;
-    const exit = (): never => proc.exit(128 + os.constants.signals[signal]);
+    firstAt = now();
     handlers.onSecond().then(exit, exit);
   };
   const listeners = TERMINATING.map((signal) => ({ signal, listener: () => handle(signal) }));

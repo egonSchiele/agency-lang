@@ -108,7 +108,9 @@ export async function createDaytonaSandbox(options: DaytonaOptions, deps: Deps =
       await client
         .get(orphan)
         .then((left) => client.delete(left))
-        .catch(() => {});
+        // Best effort: the creation error below is the one to report, and an
+        // orphan that survives this is deleted by its own auto-delete timer.
+        .catch(() => undefined);
     }
     if (willNotChange(error)) {
       throw error;

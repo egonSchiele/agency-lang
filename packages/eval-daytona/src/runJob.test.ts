@@ -50,16 +50,30 @@ type Shape = {
   output?: string[];
   /** The exit file never appears. */
   hangs?: boolean;
+  /** The check for the exit file on which the command has ended. Default 1. */
+  endsOnPoll?: number;
+  /** Called on each check for the exit file. */
+  onPoll?: () => void;
+  /** How many checks for the exit file fail before one answers. */
+  failedPolls?: number;
+  /** How many downloads of the run fail before one works. */
+  failedDownloads?: number;
 };
 
 function sandboxFor(shape: Shape = {}): FakeSandbox {
   let tails = 0;
+  let polls = 0;
   const sandbox = new FakeSandbox((command): FakeReply | undefined => {
     if (command.includes("agency eval run --help")) {
       return { output: shape.help ?? HELP };
     }
     if (command.startsWith(`test -f ${EXIT_FILE}`)) {
-      return { exitCode: shape.hangs === true ? 1 : 0 };
+      shape.onPoll?.();
+      polls += 1;
+      if (polls <= (shape.failedPolls ?? 0)) {
+        throw new Error("connection reset");
+      }
+      return { exitCode: shape.hangs === true || polls < (shape.endsOnPoll ?? 1) ? 1 : 0 };
     }
     if (command.startsWith(`cat ${EXIT_FILE}`)) {
       return { output: shape.exit ?? "0" };
@@ -74,6 +88,15 @@ function sandboxFor(shape: Shape = {}): FakeSandbox {
     return undefined;
   });
   sandbox.files["/tmp/run.tgz"] = runArchive();
+  let downloads = 0;
+  const download = sandbox.download.bind(sandbox);
+  sandbox.download = async (remotePath) => {
+    downloads += 1;
+    if (downloads <= (shape.failedDownloads ?? 0)) {
+      throw new Error("download failed");
+    }
+    return download(remotePath);
+  };
   return sandbox;
 }
 
@@ -96,7 +119,7 @@ it("installs agency, uploads the project, and runs the inner command from it", a
   expect(await run(sandbox)).toEqual({ cameBack: true });
   expect(sandbox.commands[0]).toContain("npm install -g /tmp/agency-lang.tgz");
   expect(sandbox.files["/tmp/agency-lang.tgz"].toString()).toBe("tarball");
-  expect(sandbox.background[0]).toContain("cd /eval/project && setsid --wait");
+  expect(sandbox.background[0]).toContain("cd /eval/project && sh -c ");
   expect(sandbox.background[0]).toContain("agency eval run --test a --out /eval/out");
 });
 
@@ -176,13 +199,37 @@ it("brings the run directory back when the wrapper's time limit was hit", async 
   });
 });
 
-it("brings the run directory back after an interrupt", async () => {
+it("brings the run directory back after an interrupt that came while the test was running", async () => {
   const controller = new AbortController();
-  controller.abort();
-  expect(await run(sandboxFor({ exit: "130" }), { signal: controller.signal })).toEqual({
+  const sandbox = sandboxFor({ exit: "130", endsOnPoll: 3, onPoll: () => controller.abort() });
+  expect(await run(sandbox, { signal: controller.signal })).toEqual({
     cameBack: true,
     problem: "interrupted, not graded",
   });
+});
+
+it("does not start the test when the interrupt came while the container was being set up", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const sandbox = sandboxFor();
+  expect(await run(sandbox, { signal: controller.signal })).toEqual({
+    cameBack: false,
+    problem: "interrupted before the test started",
+  });
+  expect(sandbox.background).toEqual([]);
+  expect(sandbox.deleted).toBe(true);
+});
+
+it("still brings the run directory back when contact with the container was lost while waiting", async () => {
+  const result = await run(sandboxFor({ failedPolls: 5 }));
+  expect(result).toEqual({
+    cameBack: true,
+    problem: "lost contact with the container while the test ran (connection reset); what it had written was brought back",
+  });
+});
+
+it("tries the download again when it fails once", async () => {
+  expect(await run(sandboxFor({ failedDownloads: 1 }))).toEqual({ cameBack: true });
 });
 
 it("reports the end of the log when no run directory was written", async () => {

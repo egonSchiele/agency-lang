@@ -46,17 +46,22 @@ function agencyJson(projectDir: string, args: string[]): unknown {
 
 /** What the wrapper reads from the project's agency.json. Only that file:
  *  a local override file is not consulted. */
-function agencyConfig(projectDir: string): { runsDir: string; maxBatchCostUsd?: number } {
+function agencyConfig(projectDir: string): {
+  runsDir: string;
+  maxBatchCostUsd?: number;
+  wallClockSec?: number;
+} {
   const file = path.join(projectDir, "agency.json");
   if (!fs.existsSync(file)) {
     return { runsDir: DEFAULT_RUNS_DIR };
   }
   const config = JSON.parse(fs.readFileSync(file, "utf8")) as {
-    eval?: { runsDir?: string; limits?: { maxBatchCostUsd?: number } };
+    eval?: { runsDir?: string; limits?: { maxBatchCostUsd?: number; wallClockSec?: number } };
   };
   return {
     runsDir: config.eval?.runsDir ?? DEFAULT_RUNS_DIR,
     maxBatchCostUsd: config.eval?.limits?.maxBatchCostUsd,
+    wallClockSec: config.eval?.limits?.wallClockSec,
   };
 }
 

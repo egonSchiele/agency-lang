@@ -3,7 +3,14 @@ import * as path from "path";
 
 import { nanoid } from "nanoid";
 
-import { argsProblem, planJobs, uploadExclusions, type CliArgs, type Job } from "./jobs.js";
+import {
+  argsProblem,
+  DEFAULT_TEST_SECONDS,
+  planJobs,
+  uploadExclusions,
+  type CliArgs,
+  type Job,
+} from "./jobs.js";
 import { containerEnv, readOptions, type WrapperOptions } from "./options.js";
 import { runPool } from "./pool.js";
 import type { JobResult, RunJobArgs } from "./runJob.js";
@@ -28,7 +35,7 @@ export type MainDeps = {
   /** A run directory's results: `agency runs list --json`. */
   listRuns(runDir: string): ListedRun[];
   /** What the wrapper reads from the project's agency.json. */
-  agencyConfig(): { runsDir: string; maxBatchCostUsd?: number };
+  agencyConfig(): { runsDir: string; maxBatchCostUsd?: number; wallClockSec?: number };
   /** The agency tarball to install in each container. */
   agencyTarball(options: WrapperOptions): string;
   runJob(job: Job, args: JobArgs): Promise<JobResult>;
@@ -84,7 +91,15 @@ export async function main(cli: CliArgs, deps: MainDeps): Promise<number> {
   // One batch id for the whole invocation, in the form `agency eval run`
   // mints, so the runs of every container show as one batch.
   const batch = `${path.basename(groupDir)}-${nanoid(BATCH_SUFFIX_LENGTH)}`;
-  const jobs = planJobs({ cli, tests, projectDir, groupDir, batch, graceSec: options.graceSec });
+  const jobs = planJobs({
+    cli,
+    tests,
+    projectDir,
+    defaultTestSeconds: config.wallClockSec ?? DEFAULT_TEST_SECONDS,
+    groupDir,
+    batch,
+    graceSec: options.graceSec,
+  });
   const jobArgs: JobArgs = {
     options,
     projectDir,
@@ -108,10 +123,20 @@ export async function main(cli: CliArgs, deps: MainDeps): Promise<number> {
     async (job): Promise<Omit<SummaryRow, "label">> => {
       log(`[${job.label}] starting`);
       const result = await deps.runJob(job, jobArgs);
-      const run = result.cameBack ? deps.listRuns(job.hostRunDir)[0] : undefined;
-      spentUsd += run?.summary.costUsd ?? 0;
       log(`[${job.label}] ${result.cameBack ? "came back" : "brought nothing back"}`);
-      return { result, run };
+      if (!result.cameBack) {
+        return { result };
+      }
+      // A throw here would end the whole pool and leave the other jobs'
+      // containers running with nobody to delete them.
+      try {
+        const run = deps.listRuns(job.hostRunDir)[0];
+        spentUsd += run?.summary.costUsd ?? 0;
+        return { result, run };
+      } catch (error) {
+        const why = error instanceof Error ? error.message : String(error);
+        return { result: { cameBack: true, problem: `came back, but its results could not be read: ${why}` } };
+      }
     },
     () => deps.signal.aborted || overBudget(),
   );
@@ -132,6 +157,8 @@ export async function main(cli: CliArgs, deps: MainDeps): Promise<number> {
   if (deps.signal.aborted) {
     return EXIT_INTERRUPTED;
   }
-  const everyJobCameBack = rows.every((row) => row.result !== "not started" && row.result.cameBack);
-  return everyJobCameBack ? EXIT_OK : EXIT_FAILED;
+  const everyJobCameBackReadable = rows.every(
+    (row) => row.result !== "not started" && row.result.cameBack && row.run !== undefined,
+  );
+  return everyJobCameBackReadable ? EXIT_OK : EXIT_FAILED;
 }

@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 
 import { FakeSandbox, type FakeReply } from "./fakeSandbox.js";
-import { CONSOLE_LOG, ENV_FILE, EXIT_FILE, PGID_FILE, runLongCommand } from "./longCommand.js";
+import { CONSOLE_LOG, ENV_FILE, EXIT_FILE, PID_FILE, runLongCommand } from "./longCommand.js";
 
 /** A sandbox whose command "ends" on the given poll, printing `output` in
  *  pieces, one per poll. */
@@ -27,13 +27,16 @@ function sandboxEndingOnPoll(endsOn: number, exitText: string, pieces: string[] 
 const fast = { pollSeconds: 1, sleep: async () => {} };
 const base = { argv: ["agency", "eval", "run", "--test", "it's"], cwd: "/eval/project", env: {}, maxSeconds: 100 };
 
-it("starts the command in its own process group, from cwd, with its exit code and group id written to files", async () => {
+it("starts the command from cwd under a time limit, with its exit code and the limiter's pid written to files", async () => {
   const sandbox = sandboxEndingOnPoll(1, "0\n");
   await runLongCommand(sandbox, { ...base, ...fast });
   const line = sandbox.background[0];
-  expect(line).toContain(`. ${ENV_FILE} && cd /eval/project && setsid --wait sh -c `);
-  expect(line).toContain(`echo $$ > ${PGID_FILE}`);
-  expect(line).toContain("exec timeout 100 ");
+  expect(line).toContain(`. ${ENV_FILE} && cd /eval/project && sh -c `);
+  expect(line).toContain(`echo $$ > ${PID_FILE}`);
+  // --foreground: the limiter signals the command once, and only the command.
+  // Without it, it would signal the command and then its whole group, and a
+  // command that reads a second signal as "quit now" would lose its work.
+  expect(line).toContain("exec timeout --foreground 100 ");
   expect(line).toContain(`> ${CONSOLE_LOG} 2>&1`);
   expect(line.endsWith(`; echo $? > ${EXIT_FILE}`)).toBe(true);
 });
@@ -97,7 +100,7 @@ it("rethrows after five failed polls in a row, and not before", async () => {
   await expect(runLongCommand(failing(5), { ...base, ...fast })).rejects.toThrow("connection reset");
 });
 
-it("on abort, interrupts the command's whole process group once and waits for it to end", async () => {
+it("on abort, interrupts the limiter alone, once, and waits for the command to end", async () => {
   const controller = new AbortController();
   let polls = 0;
   const sandbox = new FakeSandbox((command) => {
@@ -112,7 +115,7 @@ it("on abort, interrupts the command's whole process group once and waits for it
   });
   const result = await runLongCommand(sandbox, { ...base, ...fast, signal: controller.signal });
   const kills = sandbox.commands.filter((command) => command.includes("kill -INT"));
-  expect(kills).toEqual([`kill -INT -"$(cat ${PGID_FILE})"`]);
+  expect(kills).toEqual([`kill -INT "$(cat ${PID_FILE})"`]);
   expect(result).toMatchObject({ exitCode: 130, interrupted: true, timedOut: false });
 });
 
@@ -133,4 +136,43 @@ it("after an abort, returns once the grace is over even if the command has not e
   });
   expect(result).toMatchObject({ interrupted: true, exitCode: 124 });
   expect(clock).toBeLessThan(120_000);
+});
+
+it("tries the interrupt again on the next poll when sending it failed", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let kills = 0;
+  let polls = 0;
+  const sandbox = new FakeSandbox((command) => {
+    if (command.includes("kill -INT")) {
+      kills += 1;
+      if (kills === 1) {
+        throw new Error("connection reset");
+      }
+      return undefined;
+    }
+    if (command.startsWith(`test -f ${EXIT_FILE}`)) {
+      polls += 1;
+      return { exitCode: polls >= 3 ? 0 : 1 };
+    }
+    return command.startsWith(`cat ${EXIT_FILE}`) ? { output: "130" } : undefined;
+  });
+  const result = await runLongCommand(sandbox, { ...base, ...fast, signal: controller.signal });
+  expect(kills).toBe(2);
+  expect(result.interrupted).toBe(true);
+});
+
+it("does not call a command interrupted when it had already finished cleanly", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const result = await runLongCommand(sandboxEndingOnPoll(1, "0\n"), { ...base, ...fast, signal: controller.signal });
+  expect(result).toMatchObject({ exitCode: 0, interrupted: false, timedOut: false });
+});
+
+it("its default wait ends at once for a signal that is already aborted", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const started = Date.now();
+  await runLongCommand(sandboxEndingOnPoll(1, "130\n"), { ...base, pollSeconds: 30, signal: controller.signal });
+  expect(Date.now() - started).toBeLessThan(5000);
 });

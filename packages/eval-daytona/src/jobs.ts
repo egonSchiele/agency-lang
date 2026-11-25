@@ -37,8 +37,9 @@ export type Job = {
 
 export const REMOTE_PROJECT = "/eval/project";
 export const REMOTE_OUT = "/eval/out";
-/** The limit `agency eval run` gives a test that names none. */
-export const DEFAULT_TEST_SECONDS = 3600;
+/** The limit `agency eval run` gives a test that names none, when the
+ *  project's agency.json sets no `eval.limits.wallClockSec` either. */
+export const DEFAULT_TEST_SECONDS = 60;
 /** agency-lang's fixed limit for a test's setup command. */
 export const SETUP_SECONDS = 1800;
 
@@ -92,7 +93,10 @@ export function uploadExclusions(args: {
   groupDir: string;
   runsDir: string;
 }): string[] {
-  const excluded = [...ALWAYS_EXCLUDED, args.runsDir];
+  // However it is spelled ("./runs/"), it is one folder; one outside the
+  // project has nothing to leave out.
+  const runsDir = insideProject(args.projectDir, args.runsDir);
+  const excluded = runsDir === undefined ? [...ALWAYS_EXCLUDED] : [...ALWAYS_EXCLUDED, runsDir];
   const group = insideProject(args.projectDir, args.groupDir);
   const alreadyOut =
     group === undefined || excluded.some((entry) => group === entry || group.startsWith(`${entry}/`));
@@ -106,6 +110,8 @@ export function planJobs(args: {
   cli: CliArgs;
   tests: { id: string; timeoutSec?: number }[];
   projectDir: string;
+  /** The limit for a test that names none: the project's own. */
+  defaultTestSeconds: number;
   groupDir: string;
   batch: string;
   graceSec: number;
@@ -140,7 +146,7 @@ export function planJobs(args: {
           "--batch", args.batch, "--trial-number", String(trial),
           "--grade", "--no-workdir-snapshot", "--out", REMOTE_OUT,
         ],
-        maxSeconds: (test.timeoutSec ?? DEFAULT_TEST_SECONDS) + SETUP_SECONDS + args.graceSec,
+        maxSeconds: (test.timeoutSec ?? args.defaultTestSeconds) + SETUP_SECONDS + args.graceSec,
       });
     }
   }

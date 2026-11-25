@@ -42,6 +42,7 @@ const REMOTE_RUN_ARCHIVE = "/tmp/run.tgz";
 const INSTALL_TIMEOUT_SEC = 900;
 const PACK_TIMEOUT_SEC = 900;
 const LOG_TAIL_CHARS = 2000;
+const DOWNLOAD_ATTEMPTS = 3;
 /** `timeout`'s own exit code: the inner command ran out its limit. */
 const EXIT_TIMED_OUT = 124;
 /** `agency eval run` exits 2 when it ran and wrote its run directories but a
@@ -75,21 +76,39 @@ async function runInSandbox(sandbox: Sandbox, job: Job, args: RunJobArgs): Promi
     };
   }
   await uploadProject(sandbox, args.projectDir, args.exclude);
+  // Setting the container up can take minutes. An interrupt that came during
+  // it must not start a test, and its model spend, after the fact.
+  if (args.signal.aborted) {
+    return { cameBack: false, problem: "interrupted before the test started" };
+  }
 
   fs.mkdirSync(path.dirname(job.logFile), { recursive: true });
-  const ended = await runLongCommand(sandbox, {
-    argv: job.innerArgv,
-    cwd: REMOTE_PROJECT,
-    env: args.env,
-    maxSeconds: job.maxSeconds,
-    onOutput: (chunk) => fs.appendFileSync(job.logFile, chunk),
-    signal: args.signal,
-    ...args.poll,
-  });
+  let ended: LongCommandResult | undefined;
+  let lostContact = "";
+  try {
+    ended = await runLongCommand(sandbox, {
+      argv: job.innerArgv,
+      cwd: REMOTE_PROJECT,
+      env: args.env,
+      maxSeconds: job.maxSeconds,
+      onOutput: (chunk) => fs.appendFileSync(job.logFile, chunk),
+      signal: args.signal,
+      ...args.poll,
+    });
+  } catch (error) {
+    lostContact = error instanceof Error ? error.message : String(error);
+  }
 
   // Whatever happened to the command, a run directory it finished writing
   // is brought back: a run with grades missing beats a paid run that vanishes.
   const cameBack = await bringBack(sandbox, job);
+  if (ended === undefined) {
+    const what = cameBack ? "what it had written was brought back" : "nothing came back";
+    return {
+      cameBack,
+      problem: `lost contact with the container while the test ran (${lostContact}); ${what}`,
+    };
+  }
   return { cameBack, ...problemOf(job, ended, cameBack) };
 }
 
@@ -141,10 +160,24 @@ async function bringBack(sandbox: Sandbox, job: Job): Promise<boolean> {
     `tar -czf ${REMOTE_RUN_ARCHIVE} -C ${quote(remoteRunDir)} --exclude=./workdir .`,
     { timeoutSec: PACK_TIMEOUT_SEC },
   );
-  const archive = await sandbox.download(REMOTE_RUN_ARCHIVE);
+  const archive = await downloadWithRetry(sandbox, REMOTE_RUN_ARCHIVE);
   fs.mkdirSync(job.hostRunDir, { recursive: true });
   untarGz(archive, job.hostRunDir);
   return true;
+}
+
+/** Downloads a file, trying again after a failure: the container is about
+ *  to be deleted, and this file is the whole result of the test. */
+async function downloadWithRetry(sandbox: Sandbox, remotePath: string): Promise<Buffer> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await sandbox.download(remotePath);
+    } catch (error) {
+      if (attempt >= DOWNLOAD_ATTEMPTS) {
+        throw error;
+      }
+    }
+  }
 }
 
 /** What to tell the user about how the inner command ended, if anything. */

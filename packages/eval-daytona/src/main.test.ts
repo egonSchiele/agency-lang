@@ -48,7 +48,7 @@ function deps(
     env: { OPENROUTER_API_KEY: "sk", ORACLE: "leaked" },
     listTests: async () => [{ id: "a", timeoutSec: 600 }, { id: "b" }],
     listRuns: (dir) => [listed(dir, costs[path.basename(dir)] ?? 0.5)],
-    agencyConfig: () => ({ runsDir: "runs" }),
+    agencyConfig: () => ({ runsDir: "runs", wallClockSec: 900 }),
     agencyTarball: () => "agency.tgz",
     runJob: async (job) => {
       started.push(job);
@@ -161,6 +161,31 @@ it("after an abort, starts no more jobs, lets the running one come back, prints 
   expect(logged).toContain("a  interrupted, not graded  $1.50");
   expect(logged).toContain("b  not started");
   expect(code).toBe(130);
+});
+
+it("keeps going, and says so, when a run that came back cannot be read", async () => {
+  const code = await main(
+    cli(),
+    deps({
+      listRuns: (dir) => {
+        if (path.basename(dir) === "a") {
+          throw new Error("not JSON");
+        }
+        return [listed(dir, 0.5)];
+      },
+    }),
+  );
+  expect(started.map((job) => job.label)).toEqual(["a", "b"]);
+  expect(logged).toContain("a  came back, but its results could not be read: not JSON");
+  expect(logged).toContain("b  score 1.000  $0.50");
+  expect(code).toBe(1);
+});
+
+it("gives a test with no time limit of its own the project's limit, as agency eval run does", async () => {
+  await main(cli(), deps());
+  const [withLimit, without] = started;
+  expect(withLimit.maxSeconds).toBe(600 + 1800 + 7200);
+  expect(without.maxSeconds).toBe(900 + 1800 + 7200);
 });
 
 it("runs each trial of each test as its own job", async () => {

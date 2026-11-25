@@ -84,7 +84,7 @@ Graders run as root, in the workdir.
 
 ## Limits and spending
 
-Inside each container, `agency eval run` applies your `agency.json` as usual: `eval.limits.wallClockSec`, a test's own `timeoutSec`, and `eval.limits.maxCostUsd`. The command adds one check of its own: once the runs that have come back cost more than `eval.limits.maxBatchCostUsd`, it starts no more containers.
+Inside each container, `agency eval run` applies your `agency.json` as usual: `eval.limits.wallClockSec`, a test's own `timeoutSec`, and `eval.limits.maxCostUsd`. The command reads the same two time limits to decide how long a container may live. The command adds one check of its own: once the runs that have come back cost more than `eval.limits.maxBatchCostUsd`, it starts no more containers.
 
 A container gets the test's time limit, plus 30 minutes for `setup`, plus `graceSec` for grading. If that runs out, the run directory is still downloaded when one exists; it will have no grades.
 
@@ -92,7 +92,9 @@ A container gets the test's time limit, plus 30 minutes for `setup`, plus `grace
 
 The first Ctrl-C starts no more tests and interrupts the ones running. Each has up to a minute to stop. Whatever run directory it wrote is downloaded, without grades, and its container is deleted. The summary is printed and the exit code is 130, even when every run in flight came back.
 
-A second Ctrl-C deletes every container at once and exits.
+A second Ctrl-C deletes every container at once and exits. A third exits without waiting for the deletes.
+
+A Ctrl-C that arrives while a container is still being set up does not start that test.
 
 ## Not supported yet
 

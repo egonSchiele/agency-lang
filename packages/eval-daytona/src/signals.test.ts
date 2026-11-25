@@ -86,10 +86,26 @@ it("exits even when onSecond fails, and runs it only once", async () => {
   fake.send("SIGINT");
   clock += 5000;
   fake.send("SIGINT");
-  fake.send("SIGINT");
   await settle();
   expect(seconds).toBe(1);
   expect(fake.exits).toEqual([130]);
+});
+
+it("exits at once on a third signal, without waiting for the deletes", async () => {
+  const fake = fakeProcess();
+  let clock = 0;
+  onSignals(
+    { onFirst: () => {}, onSecond: () => new Promise<void>(() => {}) },
+    { process: fake.proc, now: () => clock },
+  );
+  fake.send("SIGINT");
+  clock += 5000;
+  fake.send("SIGINT");
+  await settle();
+  expect(fake.exits).toEqual([]);
+  clock += 5000;
+  fake.send("SIGTERM");
+  expect(fake.exits).toEqual([143]);
 });
 
 it("removes its handlers when asked", () => {

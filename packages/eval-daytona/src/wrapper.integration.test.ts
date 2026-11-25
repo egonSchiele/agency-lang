@@ -117,8 +117,37 @@ it("on Ctrl-C, prints the summary, exits 130 and leaves no container", async () 
   expect(fs.existsSync(logFile)).toBe(true);
   child.kill("SIGINT");
   const { code, output } = await ended;
-  expect(output).toContain("interrupted");
-  expect(output).toMatch(/^slow {2}/m);
+  // The inner run got the interrupt once, folded the test into a run
+  // directory, and that directory came back. "failed:" would mean it did not.
+  expect(output).toMatch(/^slow {2}interrupted, not graded/m);
+  expect(rows(path.join(PROJECT, group, "slow"))[0]).toMatchObject({ kind: "run" });
+  expect(fs.readFileSync(logFile, "utf8")).toContain("setup failed: interrupted");
+  expect(code).toBe(130);
+  expect(await sandboxesLeft()).toBe(0);
+});
+
+it("on Ctrl-C while the agent is working, brings back the agent's trace", async () => {
+  const group = out("agent-interrupted");
+  const sleeper = "agency run /eval/project/sleeper.agency -- {input}";
+  const { child, ended } = start(["--agent-cmd", sleeper, "--suite", "suite-agent-slow", "--out", group]);
+  // The inner run prints where the agent's statelog is just before it
+  // starts the agent, which then sleeps for five minutes.
+  const logFile = path.join(PROJECT, group, ".logs", "sleepy.log");
+  const deadline = Date.now() + 240_000;
+  const agentStarted = (): boolean =>
+    fs.existsSync(logFile) && fs.readFileSync(logFile, "utf8").includes("live statelog");
+  while (!agentStarted() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  expect(agentStarted()).toBe(true);
+  // Give the agent a moment to write its first events.
+  await new Promise((resolve) => setTimeout(resolve, 20_000));
+  child.kill("SIGINT");
+  const { code, output } = await ended;
+  expect(output).toMatch(/^sleepy {2}interrupted, not graded/m);
+  const runDir = path.join(PROJECT, group, "sleepy");
+  expect(fs.statSync(path.join(runDir, "statelog.jsonl")).size).toBeGreaterThan(0);
+  expect(rows(runDir).map((row) => row.kind)).toEqual(["run"]);
   expect(code).toBe(130);
   expect(await sandboxesLeft()).toBe(0);
 });

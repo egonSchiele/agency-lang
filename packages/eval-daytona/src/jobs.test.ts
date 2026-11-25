@@ -29,6 +29,7 @@ const plan = (over: Partial<Parameters<typeof planJobs>[0]> = {}) =>
     cli: cli(),
     tests: [{ id: "unit-literals", timeoutSec: 7200 }],
     projectDir: "/p",
+    defaultTestSeconds: 900,
     groupDir: "/group",
     batch: "nightly-ab12cd34",
     graceSec: 7200,
@@ -62,7 +63,8 @@ it("writes a single trial flat", () => {
 });
 it("allows each job its test's time limit, the setup limit, and the grace", () => {
   expect(plan()[0].maxSeconds).toBe(7200 + 1800 + 7200);
-  expect(plan({ tests: [{ id: "a" }] })[0].maxSeconds).toBe(3600 + 1800 + 7200);
+  // A test with no limit of its own gets the project's, as `agency eval run` gives it.
+  expect(plan({ tests: [{ id: "a" }] })[0].maxSeconds).toBe(900 + 1800 + 7200);
 });
 it("refuses a test id the inner --test would read as a pattern", () => {
   for (const id of ["a*", "a?", "[ab]", "{a,b}"]) {
@@ -79,6 +81,14 @@ it("leaves out node_modules, .git, the runs directory, and a group directory els
   ]);
   expect(uploadExclusions({ projectDir: "/p", groupDir: "/elsewhere/x", runsDir: "runs" })).toEqual([
     "node_modules", ".git", "runs",
+  ]);
+  // However the runs directory is spelled, it is the same folder.
+  expect(uploadExclusions({ projectDir: "/p", groupDir: "/elsewhere/x", runsDir: "./runs/" })).toEqual([
+    "node_modules", ".git", "runs",
+  ]);
+  // One outside the project has nothing to leave out.
+  expect(uploadExclusions({ projectDir: "/p", groupDir: "/elsewhere/x", runsDir: "/var/runs" })).toEqual([
+    "node_modules", ".git",
   ]);
 });
 

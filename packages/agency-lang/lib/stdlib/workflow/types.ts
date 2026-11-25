@@ -123,8 +123,13 @@ export type Located = { step: Record<string, unknown>; path: (string | number)[]
 /** Every object in every step list of a workflow that may not be well
  *  formed, in document order: a block before the steps inside it, a
  *  match's cases in order, then its `otherwise`. Anything that is not an
- *  object or not a list is skipped, so this never throws. This is the one
- *  place that knows where a step list can be. */
+ *  object or not a list is skipped, so this never throws.
+ *
+ *  Three functions know where a step list can be, and they must agree:
+ *  `childSteps` below (unchecked JSON, with paths), `stepChildren` (a
+ *  parsed step), and `resolvedChildren` (a resolved step). A new block kind
+ *  goes in all three. `types.test.ts` checks that their walks visit the
+ *  same steps. */
 export function locatedSteps(workflow: unknown): Located[] {
   return isObject(workflow) ? stepsIn(workflow.steps, ["steps"]) : [];
 }

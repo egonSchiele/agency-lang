@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { allSteps, locatedSteps, REF_PATH, type Step, type Workflow } from "./types.js";
-import { eachPlan, matchPlan } from "./testFixtures.js";
+import { resolveWorkflow } from "./resolve.js";
+import {
+  allResolved,
+  allSteps,
+  locatedSteps,
+  REF_PATH,
+  stepChildren,
+  type Step,
+  type Workflow,
+} from "./types.js";
+import { eachPlan, matchPlan, mealRefs, mealSignatures } from "./testFixtures.js";
 
 function toolStep(id: string): Step {
   return { id, kind: "tool", module: "./lists.agency", tool: "findLists", args: { query: id } };
@@ -66,5 +75,86 @@ describe("REF_PATH", () => {
   it("accepts each as a reference root", () => {
     expect(REF_PATH.test("each.note.items[0].id")).toBe(true);
     expect(REF_PATH.test("every.note")).toBe(false);
+  });
+});
+
+/** A plain tool step with no references. */
+const listStep = (id: string): Step => ({
+  id,
+  kind: "tool",
+  module: "./lists.agency",
+  tool: "findLists",
+  args: { query: id },
+});
+
+/** Every block kind, and every place a step list can be: a case's steps,
+ *  `otherwise`, and an each's steps, nested inside one another. */
+const everyBlock: Workflow = {
+  format: 1,
+  name: "everyBlock",
+  description: "Every kind of block, nested.",
+  inputs: "{ query: string; level: string }",
+  steps: [
+    {
+      id: "search",
+      kind: "tool",
+      module: "./notes.agency",
+      tool: "searchNotes",
+      args: { query: { $ref: "inputs.query" } },
+    },
+    {
+      id: "route",
+      kind: "match",
+      on: { $ref: "inputs.level" },
+      cases: [
+        {
+          is: "a",
+          steps: [
+            {
+              id: "loop",
+              kind: "each",
+              over: { $ref: "steps.search" },
+              steps: [
+                {
+                  id: "inner",
+                  kind: "match",
+                  on: { $ref: "each.loop.title" },
+                  cases: [{ is: "x", steps: [listStep("caseStep")] }],
+                  otherwise: [listStep("innerOtherwise")],
+                },
+              ],
+            },
+          ],
+        },
+        { is: "b", steps: [listStep("secondCase")] },
+      ],
+      otherwise: [listStep("outerOtherwise")],
+    },
+    listStep("done"),
+  ],
+  result: { $ref: "steps.done" },
+};
+
+describe("the three step-list walks", () => {
+  it("visit the same steps in the same order", () => {
+    const expected = [
+      "search",
+      "route",
+      "loop",
+      "inner",
+      "caseStep",
+      "innerOtherwise",
+      "secondCase",
+      "outerOtherwise",
+      "done",
+    ];
+    const walkParsed = (steps: Step[]): string[] =>
+      steps.flatMap((step) => [step.id, ...stepChildren(step).flatMap(walkParsed)]);
+    const resolved = resolveWorkflow(everyBlock, mealRefs, mealSignatures);
+    expect(resolved.problems).toEqual([]);
+
+    expect(locatedSteps(everyBlock).map((entry) => entry.step.id)).toEqual(expected);
+    expect(walkParsed(everyBlock.steps)).toEqual(expected);
+    expect(allResolved(resolved.resolved!.steps).map((step) => step.id)).toEqual(expected);
   });
 });

@@ -97,6 +97,12 @@ describe("trimEventData", () => {
     expect(data.messages).toEqual(rows);
   });
 
+  it("does not budget promptCompletion.newMessages", () => {
+    const { data, cut } = trimEventData({ type: "promptCompletion", newMessages: rows }, 200);
+    expect(cut).toBe(false);
+    expect(data.newMessages).toEqual(rows);
+  });
+
   it("trims messages on any other event", () => {
     const { data, cut } = trimEventData({ type: "threadUpdated", messages: rows }, 200);
     expect(cut).toBe(true);

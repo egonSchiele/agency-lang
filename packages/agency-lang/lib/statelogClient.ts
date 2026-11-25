@@ -5,7 +5,15 @@ import { openLineSink } from "#platform";
 import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
-import type { DecisionLog, StatelogErrorType, StatelogWarnType } from "./statelog/wireTypes.js";
+import type {
+  ChangeFields,
+  DecisionLog,
+  FullCopyFields,
+  StatelogErrorType,
+  StatelogWarnType,
+} from "./statelog/wireTypes.js";
+import { messageFieldsFor } from "./statelog/threadMessages/write.js";
+import { newLogWriter, type LogWriterState } from "./statelog/threadMessages/writers.js";
 import type { ProviderUsageKind } from "./runtime/invocationUsage.js";
 import { statelogScrubRules, stringifyStatelogEvent } from "./runtime/redactForStatelog.js";
 import type { GlobalStore } from "./runtime/state/globalStore.js";
@@ -103,6 +111,10 @@ export type StatelogConfig = {
   /** The most characters a logged string or a top-level event field may
    *  hold. Default `DEFAULT_MAX_VALUE_CHARS`; `0` turns the cap off. */
   maxValueChars?: number;
+  /** The writer whose `promptCompletion` events this client continues. The
+   *  execution context passes the one its run used before a resume in the
+   *  same process; anything else gets a new writer. */
+  writer?: LogWriterState;
 };
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 1500;
@@ -213,9 +225,17 @@ export class StatelogClient {
   // has neither, and logs with the root stack and the fallback globals.
   private boundStack: SpanContext[] | null = null;
   private boundGlobals: GlobalStore | null = null;
+  // What this client last logged for each thread, so a `promptCompletion`
+  // logs only the messages that changed. Branch loggers made by `forBranch`
+  // read this object through the prototype, so code changes
+  // `writer.threads` in place and never assigns a new object to the field:
+  // an assignment would give that branch its own record under the same
+  // `logWriter`, and readers could no longer rebuild its events.
+  private readonly writer: LogWriterState;
 
   constructor(config: StatelogConfig) {
     const { host, apiKey, projectId, traceId, debugMode } = config;
+    this.writer = config.writer ?? newLogWriter();
     this.host = host;
     this.apiKey = apiKey;
     this.projectId = projectId;
@@ -686,9 +706,12 @@ export class StatelogClient {
      *  it asked for none, which means the provider's default. */
     reasoningEffort?: string | null;
   }): Promise<void> {
+    if (!this.willPost()) {
+      return;
+    }
     await this.post({
       type: "promptCompletion",
-      messages,
+      ...this.messageFields(threadIdentity, messages),
       // The echoed completion carries its own `usage`; conform it to statelog's
       // declared TokenUsage shape so a provider's extra runtime fields (e.g. the
       // audio-token counters) never ride along into a sink through this nested
@@ -1672,11 +1695,43 @@ export class StatelogClient {
 
   /** Wire the out-of-frame redaction fallback (see the field's docstring).
    *  Called by the execution context right after this client is created. */
+  /**
+   * A `promptCompletion`'s message fields. A thread with an identity is
+   * logged as a change from this writer's previous call on it, and a thread
+   * without one is logged whole.
+   *
+   * The record is updated here, and `post()` appends the line before its
+   * first `await`, so no other event can land between the two. That keeps
+   * the lines of one writer in the order of their `threadCall`. An `await`
+   * between this call and the append would break that.
+   */
+  private messageFields(
+    threadIdentity: string | null | undefined,
+    messages: unknown[],
+  ): FullCopyFields | ChangeFields | { messages: unknown[] } {
+    if (typeof threadIdentity !== "string") {
+      return { messages };
+    }
+    const { fields, logged } = messageFieldsFor({
+      previous: this.writer.threads[threadIdentity],
+      logWriter: this.writer.logWriter,
+      messages,
+    });
+    this.writer.threads[threadIdentity] = logged;
+    return fields;
+  }
+
   setFallbackGlobals(fn: () => GlobalStore | undefined): void {
     this.fallbackGlobals = fn;
   }
 
   // === Post (wire format) ===
+
+  /** Whether `post()` would write an event anywhere: the client is enabled,
+   *  and it has a host (remote or stdout) or a log file. */
+  private willPost(): boolean {
+    return this.enabled && (Boolean(this.host) || this.logFileSink !== null);
+  }
 
   async post(
     body: Record<string, any>,
@@ -1692,12 +1747,7 @@ export class StatelogClient {
       noWait?: boolean;
     },
   ): Promise<void> {
-    if (!this.enabled) {
-      return;
-    }
-
-    // We need either a host (remote / stdout) or a logFile to do anything.
-    if (!this.host && this.logFileSink === null) {
+    if (!this.willPost()) {
       return;
     }
 

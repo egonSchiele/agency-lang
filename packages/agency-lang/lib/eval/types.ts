@@ -150,8 +150,8 @@ export type NormalizedEvent =
 
 export type InterruptEntry = {
   interruptId: string;
-  /** From the interrupt summary attached to handlerDecision /
-   *  interruptResolved by the runtime. Null on older traces. */
+  /** The interrupt's effect, such as `std::read`, from the interrupt summary
+   *  the runtime logs. Null on older traces. */
   kind: string | null;
   message: string | null;
   /** Full data payload as it was on the interrupt object. May be

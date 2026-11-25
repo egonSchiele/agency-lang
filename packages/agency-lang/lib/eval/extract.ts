@@ -246,7 +246,7 @@ function buildInterruptEntry(interruptId: string, group: NormalizedEnvelope[]): 
       : null;
   return {
     interruptId,
-    kind: summary?.kind ?? null,
+    kind: summary?.effect ?? null,
     message: summary?.message ?? null,
     data: summary?.data ?? null,
     outcome,

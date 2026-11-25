@@ -377,13 +377,13 @@ describe("extractEvalRecord", () => {
         interruptId: "i-1",
         handlerIndex: 0,
         decision: "approve",
-        interrupt: { kind: "approval", message: "Run grep?", data: { tool: "grep" } },
+        interrupt: { effect: "std::grep", message: "Run grep?" },
       }),
       ev("interruptResolved", {
         interruptId: "i-1",
         outcome: "approved",
         resolvedBy: "handler",
-        interrupt: { kind: "approval", message: "Run grep?", data: { tool: "grep" } },
+        interrupt: { effect: "std::grep", message: "Run grep?", data: { tool: "grep" } },
       }),
     ];
     const rec = extractEvalRecord(events, "test:interrupts");
@@ -394,7 +394,8 @@ describe("extractEvalRecord", () => {
       expect(i.interruptId).toBe("i-1");
       expect(i.outcome).toBe("approved");
       expect(i.resolvedBy).toBe("handler");
-      expect(i.kind).toBe("approval");
+      // The runtime logs the interrupt's effect, and the entry calls it `kind`.
+      expect(i.kind).toBe("std::grep");
       expect(i.message).toBe("Run grep?");
       expect(i.data).toEqual({ tool: "grep" });
       expect(i.thrownAtMs).not.toBeNull();

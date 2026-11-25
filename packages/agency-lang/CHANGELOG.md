@@ -1,3 +1,24 @@
+## Nov 24 2026 — v0.45.3
+
+### Breaking
+
+- **`repl()` in `std::ui/cli` no longer takes a `tokens` argument,** and `setReplJobsSource` is gone from `agency-lang/stdlib-lib/cli.js`.
+- **The `agency-lang/agent-session` export is removed.**
+
+### Agent
+
+- **`agency agent` uses a plain REPL again,** instead of using interrupts to get user messages.
+- **New `image` model slot** lets users pick the model for generating images. You can use `--model image=google/gemini-3.1-flash-image`, `/model image=...`, or `slots.image` in a preset. You can now use `image=off` and `judge=off` to clear those slots.
+- The agent sets its session title as its trace's title.
+
+### Statelog
+
+- **New `setTraceTitle(title)` in `std::statelog`** gives the current trace a short title.
+
+### Compiler
+
+- **Compiled code no longer holds the absolute path of the machine that built it.** An imported name read as a value named its module by absolute path, and now uses the path relative to the folder the compiler ran in.
+
 ## Nov 24 2026 — v0.45.2
 
 - Add `eval upload --results-only` to send a trace digest instead of the events

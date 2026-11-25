@@ -1,3 +1,4 @@
+import { ENV_NAME } from "./options.js";
 import { mustExec, quote } from "./shell.js";
 import type { Sandbox } from "./types.js";
 
@@ -74,12 +75,16 @@ function sleepUntilAbort(signal: AbortSignal | undefined): (ms: number) => Promi
  *  command and then its whole process group, so the command gets the signal
  *  twice. `agency eval run` reads a second signal as "quit now" and would
  *  drop the run it was about to save. The command's own children are its
- *  business: `agency eval run` supervises the ones it starts. */
+ *  business: `agency eval run` supervises the ones it starts.
+ *
+ *  `-s INT`: at the limit the command gets the signal an interrupt sends it,
+ *  so the two ways of stopping it take one path. `agency eval run` saves the
+ *  run it was on and does not grade it. */
 function backgroundLine(args: LongCommandArgs): string {
   const command = args.argv.map(quote).join(" ");
   const limited =
     `echo $$ > ${PID_FILE}; ` +
-    `exec timeout --foreground ${args.maxSeconds} ${command} </dev/null > ${CONSOLE_LOG} 2>&1`;
+    `exec timeout --foreground -s INT ${args.maxSeconds} ${command} </dev/null > ${CONSOLE_LOG} 2>&1`;
   return `. ${ENV_FILE} && cd ${quote(args.cwd)} && sh -c ${quote(limited)}; echo $? > ${EXIT_FILE}`;
 }
 
@@ -104,7 +109,14 @@ export async function runLongCommand(
   // The keys go in a file only root can read, never in a command's text:
   // the provider keeps the commands of a session with its records.
   const exports = Object.entries(args.env)
-    .map(([name, value]) => `export ${name}=${quote(value)}\n`)
+    .map(([name, value]) => {
+      // A bad name would break the file for every variable, and the command
+      // would fail before it could write a line of output saying why.
+      if (!ENV_NAME.test(name)) {
+        throw new Error(`"${name}" is not a valid environment variable name`);
+      }
+      return `export ${name}=${quote(value)}\n`;
+    })
     .join("");
   await sandbox.upload(Buffer.from(exports), ENV_FILE);
   await mustExec(sandbox, "command env", `chmod 600 ${ENV_FILE}`);
@@ -120,10 +132,15 @@ export async function runLongCommand(
     await sleep(pollMs);
     try {
       if (args.signal?.aborted === true && interruptDeadline === null) {
-        await sandbox.exec(`kill -INT "$(cat ${PID_FILE})"`, { timeoutSec: POLL_TIMEOUT_SEC });
-        // Set only once the interrupt was sent: if sending failed, the next
-        // poll tries again.
-        interruptDeadline = now() + interruptGraceMs;
+        const sent = await sandbox.exec(`kill -INT "$(cat ${PID_FILE})"`, {
+          timeoutSec: POLL_TIMEOUT_SEC,
+        });
+        // Set only once the interrupt was sent, so the next poll tries again
+        // otherwise. A failed kill is an exit code, not a throw: an abort
+        // right after the start can get here before the pid file is written.
+        if (sent.exitCode === 0) {
+          interruptDeadline = now() + interruptGraceMs;
+        }
       }
       exited =
         (await sandbox.exec(`test -f ${EXIT_FILE}`, { timeoutSec: POLL_TIMEOUT_SEC })).exitCode === 0;

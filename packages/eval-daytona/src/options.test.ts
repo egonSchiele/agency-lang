@@ -4,7 +4,7 @@ import * as path from "path";
 
 import { expect, it } from "vitest";
 
-import { containerEnv, OPTIONS_FILE, readOptions } from "./options.js";
+import { containerEnv, evalSettings, OPTIONS_FILE, readOptions } from "./options.js";
 
 function project(options?: unknown): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "eval-daytona-options-"));
@@ -63,4 +63,15 @@ it("refuses a pair with no = or no name, naming it", () => {
   expect(() => containerEnv({ names: [], pairs: ["NOEQUALS"], hostEnv: {} })).toThrow('--env NOEQUALS');
   expect(() => containerEnv({ names: [], pairs: ["=x"], hostEnv: {} })).toThrow("--env =x");
   expect(() => containerEnv({ names: [], pairs: ["BAD-NAME=x"], hostEnv: {} })).toThrow("--env BAD-NAME=x");
+});
+
+it("refuses an env name that is not a variable name, naming it", () => {
+  expect(() => readOptions(project({ env: ["MY KEY"] }))).toThrow(/eval-daytona\.json[\s\S]*env/);
+});
+
+it("reads the eval settings the wrapper needs from the config agency prints", () => {
+  expect(
+    evalSettings({ eval: { runsDir: "out", limits: { maxBatchCostUsd: 5, wallClockSec: 7200 } } }),
+  ).toEqual({ runsDir: "out", maxBatchCostUsd: 5, wallClockSec: 7200 });
+  expect(evalSettings({})).toEqual({ runsDir: "runs" });
 });

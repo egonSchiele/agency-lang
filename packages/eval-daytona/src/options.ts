@@ -8,6 +8,9 @@ import { z } from "zod";
  *  know that this package exists. */
 export const OPTIONS_FILE = "eval-daytona.json";
 
+/** A name a shell can export. */
+export const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
 const OptionsSchema = z
   .object({
     /** The container image. */
@@ -18,7 +21,9 @@ const OptionsSchema = z
     /** In GB. */
     disk: z.number().int().positive().default(10),
     /** Names of host environment variables to pass into the containers. */
-    env: z.array(z.string().min(1)).default([]),
+    env: z
+      .array(z.string().regex(ENV_NAME, "must be a variable name: letters, digits and _"))
+      .default([]),
     /** Which agency to install inside: the one installed in the project, or
      *  a tarball. */
     agency: z
@@ -55,8 +60,6 @@ export function readOptions(projectDir: string): WrapperOptions {
   return parsed.data;
 }
 
-const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
 /** The environment for the containers: the named host variables that are
  *  set, then the `--env NAME=VALUE` pairs on top. A pair's name is never
  *  looked up on the host: pairs are for switches that must not leak in from
@@ -85,4 +88,26 @@ export function containerEnv(args: {
     values[name] = pair.slice(at + 1);
   }
   return { values, missing: missing.filter((name) => values[name] === undefined) };
+}
+
+const DEFAULT_RUNS_DIR = "runs";
+
+export type EvalSettings = { runsDir: string; maxBatchCostUsd?: number; wallClockSec?: number };
+
+/** What the wrapper needs from the project's agency config. `config` is what
+ *  `agency config show` prints: agency.json merged with agency.local.json,
+ *  which is what `agency eval run` uses inside the container. Reading
+ *  agency.json alone would give the host a different time limit and cost
+ *  cap from the ones the container enforces. */
+export function evalSettings(config: unknown): EvalSettings {
+  const evalConfig = (config as { eval?: { runsDir?: string; limits?: Record<string, number> } })
+    .eval;
+  const settings: EvalSettings = { runsDir: evalConfig?.runsDir ?? DEFAULT_RUNS_DIR };
+  if (evalConfig?.limits?.maxBatchCostUsd !== undefined) {
+    settings.maxBatchCostUsd = evalConfig.limits.maxBatchCostUsd;
+  }
+  if (evalConfig?.limits?.wallClockSec !== undefined) {
+    settings.wallClockSec = evalConfig.limits.wallClockSec;
+  }
+  return settings;
 }

@@ -151,7 +151,10 @@ async function bringBack(sandbox: Sandbox, job: Job): Promise<boolean> {
     return false;
   }
   if (fs.existsSync(job.hostRunDir)) {
-    throw new Error(`${job.hostRunDir} already exists; the run was left in the container`);
+    throw new Error(
+      `${job.hostRunDir} already exists, so this run was not brought back; ` +
+        "it is deleted with its container unless --keep is given",
+    );
   }
   // A statelog can be hundreds of MB, and compresses to a small download.
   await mustExec(

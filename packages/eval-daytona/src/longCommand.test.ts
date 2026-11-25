@@ -36,7 +36,9 @@ it("starts the command from cwd under a time limit, with its exit code and the l
   // --foreground: the limiter signals the command once, and only the command.
   // Without it, it would signal the command and then its whole group, and a
   // command that reads a second signal as "quit now" would lose its work.
-  expect(line).toContain("exec timeout --foreground 100 ");
+  // -s INT: at the limit the command is interrupted, the same signal a
+  // Ctrl-C sends it, so both stops take the one path: save the run, skip grading.
+  expect(line).toContain("exec timeout --foreground -s INT 100 ");
   expect(line).toContain(`> ${CONSOLE_LOG} 2>&1`);
   expect(line.endsWith(`; echo $? > ${EXIT_FILE}`)).toBe(true);
 });
@@ -160,6 +162,39 @@ it("tries the interrupt again on the next poll when sending it failed", async ()
   const result = await runLongCommand(sandbox, { ...base, ...fast, signal: controller.signal });
   expect(kills).toBe(2);
   expect(result.interrupted).toBe(true);
+});
+
+it("tries the interrupt again when the kill ran but failed, as it does before the pid file is written", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let clock = 0;
+  let kills = 0;
+  const sandbox = new FakeSandbox((command) => {
+    if (command.includes("kill -INT")) {
+      kills += 1;
+      return { exitCode: kills === 1 ? 1 : 0 };
+    }
+    if (command.startsWith(`test -f ${EXIT_FILE}`)) {
+      // The command ends only after it was really interrupted, and takes
+      // most of the grace to do it: a grace counted from the failed kill
+      // would have run out by then.
+      return { exitCode: kills >= 2 && clock >= 70_000 ? 0 : 1 };
+    }
+    return command.startsWith(`cat ${EXIT_FILE}`) ? { output: "130" } : undefined;
+  });
+  const result = await runLongCommand(sandbox, {
+    ...base,
+    maxSeconds: 10_000,
+    pollSeconds: 20,
+    interruptGraceSeconds: 60,
+    signal: controller.signal,
+    sleep: async (ms) => {
+      clock += ms;
+    },
+    now: () => clock,
+  });
+  expect(kills).toBe(2);
+  expect(result).toMatchObject({ exitCode: 130, interrupted: true });
 });
 
 it("does not call a command interrupted when it had already finished cleanly", async () => {

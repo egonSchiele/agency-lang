@@ -9,7 +9,7 @@ import { Command } from "commander";
 import { createDaytonaSandbox } from "./daytona.js";
 import type { CliArgs } from "./jobs.js";
 import { main, type MainDeps } from "./main.js";
-import type { WrapperOptions } from "./options.js";
+import { evalSettings, type EvalSettings, type WrapperOptions } from "./options.js";
 import { installedAgencyDir, packInstalledAgency } from "./packAgency.js";
 import { runJob } from "./runJob.js";
 import { onSignals } from "./signals.js";
@@ -17,7 +17,6 @@ import type { ListedRun } from "./summary.js";
 import { deleteAllSandboxes } from "./withSandbox.js";
 
 const MAX_OUTPUT_BYTES = 256 * 1024 * 1024;
-const DEFAULT_RUNS_DIR = "runs";
 
 const log = (line: string): void => {
   process.stderr.write(`${line}\n`);
@@ -44,25 +43,17 @@ function agencyJson(projectDir: string, args: string[]): unknown {
   return JSON.parse(printed.trimEnd().split("\n").pop() ?? "");
 }
 
-/** What the wrapper reads from the project's agency.json. Only that file:
- *  a local override file is not consulted. */
-function agencyConfig(projectDir: string): {
-  runsDir: string;
-  maxBatchCostUsd?: number;
-  wallClockSec?: number;
-} {
-  const file = path.join(projectDir, "agency.json");
-  if (!fs.existsSync(file)) {
-    return { runsDir: DEFAULT_RUNS_DIR };
-  }
-  const config = JSON.parse(fs.readFileSync(file, "utf8")) as {
-    eval?: { runsDir?: string; limits?: { maxBatchCostUsd?: number; wallClockSec?: number } };
-  };
-  return {
-    runsDir: config.eval?.runsDir ?? DEFAULT_RUNS_DIR,
-    maxBatchCostUsd: config.eval?.limits?.maxBatchCostUsd,
-    wallClockSec: config.eval?.limits?.wallClockSec,
-  };
+/** The project's eval settings, from the config its own agency reports. */
+function agencyConfig(projectDir: string): EvalSettings {
+  const [node, script] = projectAgency(projectDir);
+  // `config show` prints the config alone on stdout, and which files it
+  // read on stderr.
+  const printed = execFileSync(node, [script, "config", "show"], {
+    cwd: projectDir,
+    maxBuffer: MAX_OUTPUT_BYTES,
+    stdio: ["ignore", "pipe", "ignore"],
+  }).toString();
+  return evalSettings(JSON.parse(printed));
 }
 
 function agencyTarball(projectDir: string, options: WrapperOptions): string {

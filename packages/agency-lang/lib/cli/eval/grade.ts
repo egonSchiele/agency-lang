@@ -8,7 +8,6 @@ import {
 } from "@/eval/batchStatistics.js";
 import { gradeSuite } from "@/eval/grading/gradeSuite.js";
 import type { EvalRunGrading, SuiteTestResult } from "@/eval/runTypes.js";
-import { shellInterrupted } from "@/eval/shellCommand.js";
 import { findRunDirectories, uniqueRunDirectories } from "@/runDirectory/findRuns.js";
 import { summarizeRunDirectory } from "@/runDirectory/list.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
@@ -128,11 +127,6 @@ export async function evalGrade(
     const { grading, judgeCostUsd } = await gradeSuite(dir, graders, config, {
       defaultGoal: opts.goal,
     });
-    // Ctrl-C reached a grader's command. The pass was not recorded, and the
-    // remaining directories would only spend money on judges nobody waits for.
-    if (shellInterrupted()) {
-      throw new Error("eval grade was interrupted; the interrupted run was not graded");
-    }
     doneCount += 1;
     opts.progress?.(
       `graded ${doneCount}/${runDirs.length} ${dir} — objective ${grading.objective.toFixed(3)}` +
@@ -154,9 +148,13 @@ export async function evalGrade(
 function gradableRunDirs(runDirs: string[]): string[] {
   const skipped = runDirs.filter(madeWithoutWorkdir);
   for (const dir of skipped) {
+    // Not every such run was graded: one that was interrupted, or whose
+    // grading failed, has no grades, and can no longer get any.
+    const standing = hasScores(dir)
+      ? "the grades from `eval run --grade` stand"
+      : "it was never graded, and cannot be now";
     console.warn(
-      `grading: skipping ${dir}: it was run with --no-workdir-snapshot, so its workdir is gone; ` +
-        "the grades from `eval run --grade` stand",
+      `grading: skipping ${dir}: it was run with --no-workdir-snapshot, so its workdir is gone; ${standing}`,
     );
   }
   const kept = runDirs.filter((dir) => !skipped.includes(dir));
@@ -166,6 +164,11 @@ function gradableRunDirs(runDirs: string[]): string[] {
     );
   }
   return kept;
+}
+
+function hasScores(runDir: string): boolean {
+  const snapshot = readRunDirectory(runDir, { reportWarning: () => {} });
+  return snapshot.annotationRows.some((row) => row.kind === "score");
 }
 
 /** True for a run made with `eval run --no-workdir-snapshot`. Its workdir

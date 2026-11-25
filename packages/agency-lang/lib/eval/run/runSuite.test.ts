@@ -1043,13 +1043,23 @@ describe("runSuite", () => {
       expect(result.tests[0].grading?.objective).toBe(later.objective());
     });
 
-    it("does not grade a test whose agent never started", async () => {
+    it("scores a test whose agent never started 0 without running its graders, as eval grade would", async () => {
       const result = await runSuite(
         { ...suiteWith("never", { any: "true" }), gradeInPlace: true },
         { runner: async () => ({ ok: false as const, errorMessage: "boom" }) },
       );
       expect(scoreRows(result.tests[0].runDir)).toEqual([]);
-      expect(result.tests[0].grading).toBeUndefined();
+      expect(result.tests[0].grading?.objective).toBe(0);
+    });
+
+    it("refuses an empty batch id before creating anything or listening for signals", async () => {
+      const before = process.listenerCount("SIGINT");
+      const options = { ...suiteWith("bad-batch", { any: "true" }), batch: "" };
+      await expect(runSuite(options, { runner: traceWritingRunner("done") })).rejects.toThrow(
+        "batch must not be empty",
+      );
+      expect(fs.existsSync(options.out)).toBe(false);
+      expect(process.listenerCount("SIGINT")).toBe(before);
     });
 
     it("does not grade once the suite has been interrupted", async () => {

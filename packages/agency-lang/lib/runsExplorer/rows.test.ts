@@ -105,6 +105,36 @@ describe("buildRunRowFromDirectory", () => {
     expect(row.agent).toBe("claude -p {task}");
   });
 
+  it("a timed-out run with reported usage reads as killed, though it has no events", () => {
+    const dir = writeRunDirectory(
+      {
+        traceId: "p1",
+        test: { id: "t1", input: "x" },
+        wroteStatelog: false,
+        ended: "timeout",
+        reported: {
+          models: [
+            {
+              name: "z-ai/glm-5.3-flash",
+              reasoning: null,
+              calls: 0,
+              inputTokens: 6296,
+              cachedInputTokens: 50944,
+              cacheCreationInputTokens: 0,
+              outputTokens: 1404,
+              costUsd: 0.00317472,
+            },
+          ],
+          startedAtMs: Date.parse("2026-11-13T23:34:26.015Z"),
+          durationMs: 68_853,
+          lastEventAt: "2026-11-13T23:35:34.868Z",
+        },
+      },
+      path.join(tmpDir, "pi-run"),
+    );
+    expect(rowFor(dir).status).toBe("killed");
+  });
+
   it("names the agent from the harness label when the trace never named itself", () => {
     expect(rowFor(writeGradedRun(tmpDir)).agent).toBe("regex-log.agency");
     expect(rowFor(writeKilledRun(tmpDir)).agent).toBe("claude -p {task}");

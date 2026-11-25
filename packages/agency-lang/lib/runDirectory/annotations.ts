@@ -5,6 +5,10 @@ import { z } from "zod";
 import { canonicalize, type JsonValue } from "@/utils/canonicalize.js";
 import { sha256Text } from "@/utils/hash.js";
 
+import { agentNameProblem } from "@/statelog/agentName.js";
+
+import { TraceDigestSchema, type TraceDigest } from "./traceDigest.js";
+
 /**
  * Annotations: every structured opinion anyone or anything forms about a trace
  * — a checklist answer, a grader score, an LLM judgement, or the eval harness's
@@ -116,7 +120,17 @@ export type RunPayload = {
   /** The reasoning level for calls whose trace records none, for imported
    *  runs from before the trace logged it. */
   reasoning?: string;
+  /** What the harness reported, for a run whose agent wrote no trace. */
+  reported?: RunReported;
+  /** The agent's name as whoever recorded the run gave it, such as an
+   *  importer's `--agent`. It beats the trace's own `agentName`. */
+  agentName?: string;
 };
+
+export type RunReported = Pick<
+  TraceDigest,
+  "models" | "startedAtMs" | "durationMs" | "lastEventAt"
+>;
 
 export type AnnotationPayload = ChecklistPayload | ScorePayload | RunPayload;
 
@@ -251,6 +265,16 @@ const RunAnnotationSchema = z
     trial: z.number().int().positive().optional(),
     benchmark: z.string().min(1).optional(),
     reasoning: z.string().min(1).optional(),
+    agentName: z
+      .string()
+      .refine((name) => agentNameProblem(name) === null, { message: "not a valid agent name" })
+      .optional(),
+    reported: TraceDigestSchema.pick({
+      models: true,
+      startedAtMs: true,
+      durationMs: true,
+      lastEventAt: true,
+    }).optional(),
   })
   .strict();
 

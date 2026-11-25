@@ -41,9 +41,10 @@ export type ImportPlan = {
   unknownExceptions: string[];
 };
 
-/** Void: the run failed for reasons outside the agent, so it doesn't count. */
+/** Void: the run failed for reasons outside the agent, so it doesn't count.
+ *  An agent that left neither a trace nor reported usage never ran. */
 export function isVoid(trial: HarborTrial): boolean {
-  if (trial.statelogPath === null) {
+  if (trial.statelogPath === null && trial.reported === null) {
     return true;
   }
   if (trial.rewards !== null) {
@@ -89,10 +90,14 @@ export function planHarborImport({
   trials,
   batch,
   reasoning,
+  agent,
 }: {
   trials: HarborTrial[];
   batch: string;
   reasoning?: string;
+  /** Names every run's agent, over the trace's own name. Each trial's
+   *  `agent_info.name` is kept as its `flags.agent` label either way. */
+  agent?: string;
 }): ImportPlan {
   const trialsPerTest: Record<string, number> = {};
   const runs = trials.map((trial): PlannedRun => {
@@ -101,7 +106,7 @@ export function planHarborImport({
     return {
       trial,
       relativeDir: `${trial.testId}/${number}`,
-      payload: payloadOf({ trial, batch, number, reasoning }),
+      payload: payloadOf({ trial, batch, number, reasoning, agent }),
       scores: scoresOf(trial),
       silentTraceId: trial.statelogPath === null ? silentTraceIdOf(trial) : null,
     };
@@ -119,18 +124,24 @@ function payloadOf({
   batch,
   number,
   reasoning,
+  agent,
 }: {
   trial: HarborTrial;
   batch: string;
   number: number;
   reasoning?: string;
+  agent?: string;
 }): RunPayload {
   const payload: RunPayload = {
     kind: "run",
     test: { id: trial.testId },
     suite: null,
     ended: endedOf(trial),
-    flags: { harborJob: trial.jobName, harborTrial: trial.trialName },
+    flags: {
+      harborJob: trial.jobName,
+      harborTrial: trial.trialName,
+      ...(trial.agentName === null ? {} : { agent: trial.agentName }),
+    },
     batch,
     trial: number,
     benchmark: trial.benchmark,
@@ -140,6 +151,12 @@ function payloadOf({
   }
   if (reasoning !== undefined) {
     payload.reasoning = reasoning;
+  }
+  if (trial.reported !== null) {
+    payload.reported = trial.reported;
+  }
+  if (agent !== undefined) {
+    payload.agentName = agent;
   }
   return payload;
 }

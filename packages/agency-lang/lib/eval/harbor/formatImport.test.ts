@@ -15,6 +15,8 @@ function trial(testId: string, overrides: Partial<HarborTrial> = {}): HarborTria
     rewards: { reward: 1 },
     exception: null,
     statelogPath: "/t/agent/statelog.jsonl",
+    agentName: null,
+    reported: null,
     ...overrides,
   };
 }

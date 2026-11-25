@@ -188,7 +188,8 @@ describe("a frozen version-1 digest", () => {
       costUsd: 0.875,
       inputTokens: 160,
       status: "ok",
-      endedAt: "2026-08-18T00:00:09Z",
+      // The digest's last event, not the run row's time.
+      endedAt: "2026-08-23T00:01:30.000Z",
       codeHash: "abc123",
     });
     expect(summary.models.map((item) => [item.name, item.reasoning])).toEqual([

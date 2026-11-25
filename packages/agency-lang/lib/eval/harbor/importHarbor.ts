@@ -2,7 +2,8 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { harnessVersion } from "@/eval/harnessVersion.js";
-import type { Annotation, Annotator } from "@/runDirectory/annotations.js";
+import { agentNameProblem } from "@/statelog/agentName.js";
+import type { Annotation, Annotator, RunPayload } from "@/runDirectory/annotations.js";
 import { recordCompletedRun, recordGradingPass } from "@/runDirectory/mutations.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { readTracesOrThrow } from "@/runDirectory/traces.js";
@@ -33,6 +34,7 @@ export function importHarbor({
   outDir,
   batch,
   reasoning,
+  agent,
   reportProgress = (): void => {},
 }: {
   jobDirs: string[];
@@ -40,12 +42,18 @@ export function importHarbor({
   outDir: string;
   batch?: string;
   reasoning?: string;
+  /** Names every run's agent, over the trace's own name. */
+  agent?: string;
   /** Called once per trial, as `[n/total] <status> <test>/<trial>`. */
   reportProgress?: (line: string) => void;
 }): ImportResult {
   const batchName = batchNameOf({ jobDirs, trialsFile, batch });
+  const agentProblem = agent === undefined ? null : agentNameProblem(agent);
+  if (agentProblem !== null) {
+    throw new Error(`import-harbor: --agent ${agentProblem}`);
+  }
   const { trials, problems } = readHarborInputs({ jobDirs, trialsFile });
-  const plan = planHarborImport({ trials, batch: batchName, reasoning });
+  const plan = planHarborImport({ trials, batch: batchName, reasoning, agent });
   const uploadPath = path.join(outDir, batchName);
   const outcomes = plan.runs.map((run, index) => {
     const outcome = writeRun({ run, dir: path.join(uploadPath, run.relativeDir) });
@@ -131,11 +139,29 @@ function finishExisting({
         `The input changed order or contents; delete the batch folder and import again.`,
     );
   }
+  if (
+    existing.row.agentName !== run.payload.agentName ||
+    existing.row.flags.agent !== run.payload.flags.agent
+  ) {
+    throw new Error(
+      `${dir} was imported with agent ${agentSourceOf(existing.row)}; this import names ` +
+        `${agentSourceOf(run.payload)}. Delete the batch folder and import again.`,
+    );
+  }
   if (existing.gradingPasses > 0 || run.scores.length === 0) {
     return { status: "present", dir };
   }
   writeScores({ run, dir, traceId: existing.row.traceId });
   return { status: "scored", dir };
+}
+
+/** The agent name a run shows, and where it came from. */
+function agentSourceOf(run: Pick<RunPayload, "agentName" | "flags">): string {
+  if (run.agentName !== undefined) {
+    return `${run.agentName} (--agent)`;
+  }
+  const label = run.flags.agent;
+  return typeof label === "string" ? `${label} (Harbor's agent_info.name)` : "(none)";
 }
 
 /** Writes the trace (if any) and the `run` row; returns the trace id. */

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import type { RunOutcome } from "@/runDirectory/annotations.js";
+import type { RunOutcome, RunReported } from "@/runDirectory/annotations.js";
 import { recordCompletedRun } from "@/runDirectory/mutations.js";
 import { runDirPaths } from "@/runDirectory/runDir.js";
 import { finishedTraceLines, tempDir } from "@/runDirectory/testFixtures.js";
@@ -26,6 +26,8 @@ export type FakeRun = {
   wroteStatelog?: boolean;
   /** The harness's agent label, recorded as `flags.agent` on the run row. */
   agentLabel?: string;
+  /** What the harness reported for an agent that wrote no trace. */
+  reported?: RunReported;
   /** Harness pairs to store under graders/ and record on the run row, as
    *  `eval run` does for a test directory with files/ and holdout/. */
   harness?: HarnessSnapshot;
@@ -103,6 +105,7 @@ export function writeRunDirectory(run: FakeRun, dir: string = tempDir("run-")): 
         ...(run.graders === undefined ? {} : { graders: gradersIdentityOf(run.graders) }),
         ...(run.harness === undefined ? {} : { harness: run.harness.records }),
         ...(run.graderFiles === undefined ? {} : { graderFiles: run.graderFiles.dirName }),
+        ...(run.reported === undefined ? {} : { reported: run.reported }),
         ...(ended === "ok" ? {} : { error: run.errorMessage ?? `ended with ${ended}` }),
       },
     },

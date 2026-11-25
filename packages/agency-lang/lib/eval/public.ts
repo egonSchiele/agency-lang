@@ -39,7 +39,7 @@ export type { InputBreakdown, GradeRow } from "./grading/gradeBreakdown.js";
 // directory reader, trace parser, or annotation fold is exported, so a
 // consumer cannot rebuild agency-lang's internal snapshot and derive a second
 // definition of score, status, cost, or timestamps.
-export { summarizeEvalRun } from "../runDirectory/list.js";
+export { displayAgent, summarizeEvalRun } from "../runDirectory/list.js";
 export type { EvalRunInput, RunSummary, RunStatus } from "../runDirectory/list.js";
 export type { ModelUsage } from "../runDirectory/modelUsage.js";
 // A results-only upload's stored stand-in for its events. Only the schema is

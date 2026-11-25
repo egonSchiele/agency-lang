@@ -3,6 +3,8 @@ import * as path from "path";
 
 import { describe, expect, it } from "vitest";
 
+import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
+
 import { computeCodeIdentity } from "./codeIdentity.js";
 import {
   normalizeDefinition,
@@ -433,6 +435,12 @@ describe("recordGradingPass", () => {
 
   it("refuses an empty pass instead of minting a pass id for nothing", () => {
     expect(() => recordGradingPass({ dir: directory(), scores: [] })).toThrow(/at least one/);
+  });
+
+  it("scores a run that wrote no trace but has a run row, as an import from another agent does", () => {
+    const dir = writeRunDirectory({ traceId: "s1", test: { id: "a" }, wroteStatelog: false });
+    const pass = recordGradingPass({ dir, scores: [scoreDraft("s1", "reward", 1)] });
+    expect(pass.snapshot.effectiveAnnotations.s1.gradingPasses).toBe(1);
   });
 
   it("refuses when any score names an unknown trace, recording nothing", () => {

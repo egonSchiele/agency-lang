@@ -509,6 +509,11 @@ export function recordGradingPass(
   const result = withWriter(request.dir, options, (paths, snapshot, reportWarning) => {
     const known: Record<string, true> = Object.create(null);
     for (const trace of snapshot.traces) known[trace.traceId] = true;
+    // A run that wrote no trace, such as another agent's imported run, is
+    // known by its run row.
+    for (const [traceId, effective] of Object.entries(snapshot.effectiveAnnotations)) {
+      if (effective.run !== null) known[traceId] = true;
+    }
     const unknown = request.scores.find((score) => !known[score.traceId]);
     if (unknown !== undefined) {
       throw new Error(`No trace ${unknown.traceId} in ${request.dir}; nothing was recorded.`);

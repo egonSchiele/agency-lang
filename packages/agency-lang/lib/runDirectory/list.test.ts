@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { completeAnnotation, type Annotation, type AnnotationDraft } from "./annotations.js";
+import {
+  completeAnnotation,
+  type Annotation,
+  type AnnotationDraft,
+  type RunReported,
+} from "./annotations.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
 import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
@@ -262,7 +267,7 @@ describe("buildRunsListing", () => {
 });
 
 describe("summarizeEvalRun and summarizeRunDirectory", () => {
-  it("a finished suite run: batch, trial, event count, status, and the run row's time as endedAt", () => {
+  it("a finished suite run: batch, trial, event count, status, and the last event's time as endedAt", () => {
     const dir = writeRunDirectory({
       test: { id: "a", input: "t" },
       output: "x",
@@ -272,7 +277,7 @@ describe("summarizeEvalRun and summarizeRunDirectory", () => {
     });
     const snapshot = readRunDirectory(dir, quiet);
     const summary = summarizeRunDirectory(snapshot);
-    const runRow = snapshot.effectiveAnnotations["trace-1"].run;
+    const lastEvent = snapshot.traces[0].events.at(-1);
     expect(summary).toMatchObject({
       traceId: "trace-1",
       testId: "a",
@@ -283,7 +288,7 @@ describe("summarizeEvalRun and summarizeRunDirectory", () => {
       llmCalls: 1,
       status: "ok",
       ended: "ok",
-      endedAt: runRow?.createdAt,
+      endedAt: lastEvent?.data.timestamp,
       suiteSource: null,
     });
   });
@@ -590,5 +595,120 @@ describe("usage and benchmark on the run summary", () => {
 
   it("an --input run has no benchmark", () => {
     expect(summarize({ suite: { source: "inline:--input" } }).benchmark).toBeNull();
+  });
+});
+
+describe("reported usage, end times and the record rule", () => {
+  const traceId = "pi-1";
+  const PI_REPORTED: RunReported = {
+    models: [
+      {
+        name: "z-ai/glm-5.3-flash",
+        reasoning: null,
+        calls: 0,
+        inputTokens: 6296,
+        cachedInputTokens: 50944,
+        cacheCreationInputTokens: 0,
+        outputTokens: 1404,
+        costUsd: 0.00317472,
+      },
+    ],
+    startedAtMs: Date.parse("2026-11-13T23:34:26.015Z"),
+    durationMs: 68_853,
+    lastEventAt: "2026-11-13T23:35:34.868Z",
+  };
+  const IMPORTED_AT = "2026-11-24T20:15:00.000Z";
+
+  function runRow(fields: Partial<AnnotationDraft> = {}): Annotation {
+    return completeAnnotation(
+      {
+        traceId,
+        annotator: { kind: "harness", id: "harbor-import@1" },
+        kind: "run",
+        test: { id: "astropy-12907" },
+        suite: null,
+        ended: "ok",
+        flags: {},
+        ...fields,
+      } as AnnotationDraft,
+      IMPORTED_AT,
+    );
+  }
+
+  function eventsEndingAt(timestamp: string): EventEnvelope[] {
+    return [
+      agentStartLine(traceId),
+      statelogLine(traceId, "promptCompletion", {
+        model: JSON.stringify("opus"),
+        reasoningEffort: "high",
+        usage: {
+          inputTokens: 10,
+          cachedInputTokens: 0,
+          cacheCreationInputTokens: 0,
+          outputTokens: 2,
+        },
+        cost: { totalCost: 0.5 },
+      }),
+      statelogLine(traceId, "agentEnd", { timestamp }),
+    ].map((line) => JSON.parse(line) as EventEnvelope);
+  }
+
+  function summarize(events: EventEnvelope[], fields: Partial<AnnotationDraft> = {}) {
+    return summarizeEvalRun({ traceId, events, annotations: [runRow(fields)], source: "x" });
+  }
+
+  it("uses the run row's reported usage when the trace has no events", () => {
+    const summary = summarize([], { reasoning: "high", reported: PI_REPORTED });
+    expect(summary.costUsd).toBe(0.00317472);
+    expect(summary.inputTokens).toBe(6296);
+    expect(summary.cachedInputTokens).toBe(50944);
+    expect(summary.outputTokens).toBe(1404);
+    expect(summary.durationMs).toBe(68_853);
+    expect(summary.startedAt).toBe("2026-11-13T23:34:26.015Z");
+    expect(summary.endedAt).toBe("2026-11-13T23:35:34.868Z");
+    expect(summary.models).toEqual([
+      expect.objectContaining({ name: "z-ai/glm-5.3-flash", reasoning: "high" }),
+    ]);
+  });
+
+  it("ignores reported usage when the trace has events", () => {
+    const summary = summarize(eventsEndingAt("2026-11-13T23:36:29.379Z"), {
+      reported: PI_REPORTED,
+    });
+    expect(summary.costUsd).toBe(0.5);
+    expect(summary.inputTokens).toBe(10);
+    expect(summary.models.map((item) => item.name)).toEqual(["opus"]);
+  });
+
+  it("takes endedAt from the last event before the run row", () => {
+    expect(summarize(eventsEndingAt("2026-11-13T23:36:29.379Z")).endedAt).toBe(
+      "2026-11-13T23:36:29.379Z",
+    );
+  });
+
+  it("falls back to the run row's time when there are no events", () => {
+    expect(summarize([]).endedAt).toBe(IMPORTED_AT);
+  });
+
+  it("counts a timed-out run with reported usage as killed", () => {
+    expect(summarize([], { ended: "timeout", reported: PI_REPORTED }).status).toBe("killed");
+  });
+
+  it("still counts a timed-out run with no record as failed", () => {
+    expect(summarize([], { ended: "timeout" }).status).toBe("failed");
+  });
+
+  it("the run row's agentName beats the trace's own name", () => {
+    const named = [
+      ...eventsEndingAt("2026-11-13T23:36:29.379Z"),
+      JSON.parse(statelogLine(traceId, "agentName", { name: "agency-agent/coordinator" })),
+    ] as EventEnvelope[];
+    expect(summarize(named).agentName).toBe("agency-agent/coordinator");
+    expect(summarize(named, { agentName: "agency-main" }).agentName).toBe("agency-main");
+  });
+
+  it("counts a run as silent only when the agent left no record", () => {
+    expect(buildRunsListing([summarize([], { ended: "error" })]).silentRunCount).toBe(1);
+    expect(buildRunsListing([summarize([], { reported: PI_REPORTED })]).silentRunCount).toBe(0);
   });
 });

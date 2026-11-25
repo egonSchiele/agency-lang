@@ -300,7 +300,16 @@ export type ResolvedWorkflow = {
 
 /** The step and field a generated statement belongs to. */
 export type Owner = { step: string | null; field: string | null };
-export type Fragment = { code: Code; owner: Owner | null };
+/** A statement, and how many blocks it is inside. */
+export type CodeFragment = { code: Code; owner: Owner | null; depth: number };
+/** One line of a block's own text, such as `for (a in b) {` or `}`. Such a
+ *  line does not parse without its body, so it is text, not `Code`. */
+export type LineFragment = { line: string; owner: Owner | null; depth: number };
+export type Fragment = CodeFragment | LineFragment;
+
+export function isLine(fragment: Fragment): fragment is LineFragment {
+  return "line" in fragment;
+}
 /** A type the program declares. Its text is canonicalized in render. */
 export type TypeDecl = { name: string; text: string; owner: Owner };
 export type Lowered = {

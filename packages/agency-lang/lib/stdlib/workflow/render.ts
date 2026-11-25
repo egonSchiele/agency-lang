@@ -7,7 +7,7 @@
 import { _toSource, type Code } from "../template.js";
 import { guardArgs } from "./shapes.js";
 import { parseTypeText, printType } from "./typeText.js";
-import type { Lowered, Owner, Range, TypeDecl } from "./types.js";
+import { isLine, type Lowered, type Owner, type Range, type TypeDecl } from "./types.js";
 
 export type RenderResult = { source: string; ranges: Range[]; typeOwners: Record<string, Owner> };
 
@@ -149,7 +149,12 @@ export function renderWorkflow(lowered: Lowered): RenderResult {
   const args = limits === null ? "" : guardArgs(limits).join(", ");
   const scaffold = args === "" ? SCAFFOLD : GUARDED_SCAFFOLD;
   const depth = args === "" ? 2 : 3;
-  const prints = lowered.body.map((fragment) => printLines(fragment.code));
+  const prints = lowered.body.map((fragment) => {
+    if (isLine(fragment)) {
+      throw new Error("block lines are rendered in a later task");
+    }
+    return printLines(fragment.code);
+  });
   const resultLines = printLines(lowered.result);
   resultLines[0] = `return success(${resultLines[0]}`;
   resultLines[resultLines.length - 1] += ")";

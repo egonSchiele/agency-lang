@@ -1265,11 +1265,12 @@ export class StatelogClient {
     handlerIndex: number;
     decision: "approve" | "reject" | "propagate" | "pass" | "none";
     value?: any;
-    /** Optional summary of the interrupt being decided on. Carries
-     *  `effect`, `message`, and `data` so log consumers can see *what*
-     *  was being approved/rejected without having to correlate with
-     *  a separate `interruptThrown` event (which doesn't fire for
-     *  synchronously-resolved interrupts like `with approve`). */
+    /** Optional summary of the interrupt being decided on. Only its
+     *  `effect` and `message` are logged, so a reader sees what was being
+     *  approved or rejected. The `data` is logged once, on the
+     *  `interruptResolved` event every interrupt gets. Every handler in the
+     *  chain logs a `handlerDecision`, and an edit's data holds the whole
+     *  file before and after, so logging it here repeated it per handler. */
     interrupt?: InterruptSummary;
   }): Promise<void> {
     await this.post({
@@ -1278,7 +1279,10 @@ export class StatelogClient {
       handlerIndex,
       decision,
       value,
-      interrupt,
+      interrupt:
+        interrupt === undefined
+          ? undefined
+          : { effect: interrupt.effect, message: interrupt.message },
     });
   }
 
@@ -1295,8 +1299,9 @@ export class StatelogClient {
      *  surfacing interrupt records ("propagated"/"passed"). */
     resolvedBy: "handler" | "user" | "policy" | "ipc" | null;
     timeTaken?: number;
-    /** Optional summary of the interrupt being resolved. See
-     *  `handlerDecision.interrupt` for rationale. */
+    /** Optional summary of the interrupt being resolved, with its `data`.
+     *  This is the one event that logs the data; see
+     *  `handlerDecision.interrupt`. */
     interrupt?: InterruptSummary;
   }): Promise<void> {
     await this.post({

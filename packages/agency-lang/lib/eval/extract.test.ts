@@ -419,6 +419,38 @@ describe("extractEvalRecord", () => {
       expect(outcomes).toContainEqual(["i-u", "unresolved"]);
     });
 
+    it("takes an interrupt's data from interruptResolved", () => {
+      const events: EventEnvelope[] = [
+        ev("handlerDecision", {
+          interruptId: "i-d",
+          handlerIndex: 0,
+          decision: "approve",
+          interrupt: { effect: "std::write", message: "Write a.txt?" },
+        }),
+        ev("interruptResolved", {
+          interruptId: "i-d",
+          outcome: "approved",
+          resolvedBy: "handler",
+          interrupt: { effect: "std::write", message: "Write a.txt?", data: { filename: "a.txt" } },
+        }),
+      ];
+      const [entry] = extractEvalRecord(events, "test:data-from-resolved").interrupts;
+      expect(entry.data).toEqual({ filename: "a.txt" });
+    });
+
+    it("falls back to handlerDecision for an old log", () => {
+      const events: EventEnvelope[] = [
+        ev("handlerDecision", {
+          interruptId: "i-o",
+          handlerIndex: 0,
+          decision: "approve",
+          interrupt: { effect: "std::write", message: "Write a.txt?", data: { filename: "a.txt" } },
+        }),
+      ];
+      const [entry] = extractEvalRecord(events, "test:old-log").interrupts;
+      expect(entry.data).toEqual({ filename: "a.txt" });
+    });
+
     it("takes the LAST interruptResolved: a user decision supersedes the chain outcome", () => {
       // The runtime records the chain outcome when an interrupt surfaces
       // ("propagated"), then the user decides ("approved", resolvedBy user).

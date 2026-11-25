@@ -1055,6 +1055,37 @@ describe("StatelogClient", () => {
       expect(evt.data.value).toBe(42);
     });
 
+    it("handlerDecision logs the interrupt's effect and message without its data", async () => {
+      const file = newLogFile("handler-no-data");
+      const client = fileClient(file);
+      await client.handlerDecision({
+        interruptId: "i1",
+        handlerIndex: 0,
+        decision: "approve",
+        interrupt: {
+          effect: "std::edit",
+          message: "Edit a.txt?",
+          data: { before: "x", after: "y" },
+        },
+      });
+      const [evt] = readEvents(file);
+      expect(evt.data.interrupt).toEqual({ effect: "std::edit", message: "Edit a.txt?" });
+    });
+
+    it("interruptResolved logs the whole interrupt", async () => {
+      const file = newLogFile("resolved-with-data");
+      const client = fileClient(file);
+      const interrupt = { effect: "std::edit", message: "Edit a.txt?", data: { before: "x" } };
+      await client.interruptResolved({
+        interruptId: "i1",
+        outcome: "approved",
+        resolvedBy: "handler",
+        interrupt,
+      });
+      const [evt] = readEvents(file);
+      expect(evt.data.interrupt).toEqual(interrupt);
+    });
+
     it("interruptResolved emits outcome + resolvedBy", async () => {
       const file = newLogFile("intr-resolved");
       const client = fileClient(file);

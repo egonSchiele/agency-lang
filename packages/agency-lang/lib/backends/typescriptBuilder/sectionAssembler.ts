@@ -14,8 +14,12 @@ import { ts } from "../../ir/builders.js";
  * registry keys still match exactly within a single compilation
  * pass — the value of `process.cwd()` at runtime is irrelevant once
  * the literals are baked in.
+ *
+ * The builder also prints the module named in a `__readStatic` call
+ * through this function. That id appears only in the error message for
+ * a static read before its initializer ran.
  */
-function displayModuleId(abs: string): string {
+export function displayModuleId(abs: string): string {
   if (!path.isAbsolute(abs)) return abs;
   return path.relative(process.cwd(), abs);
 }

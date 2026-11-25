@@ -169,7 +169,11 @@ import {
 } from "./typescriptBuilder/finalizeCodegen.js";
 import { PipeChainEmitter } from "./typescriptBuilder/pipeChainEmitter.js";
 import { AssignmentEmitter } from "./typescriptBuilder/assignmentEmitter.js";
-import { assembleSections, partitionProgram } from "./typescriptBuilder/sectionAssembler.js";
+import {
+  assembleSections,
+  displayModuleId,
+  partitionProgram,
+} from "./typescriptBuilder/sectionAssembler.js";
 import { resolveNamedArgs } from "./typescriptBuilder/namedArgsResolver.js";
 
 const DEFAULT_PROMPT_NAME = "__promptVar";
@@ -1179,13 +1183,16 @@ export class TypeScriptBuilder {
             // when we know it (always, when compileClosure built our
             // InitPlan). Without the plan, the empty string falls back
             // to the runtime trap's "<unknown module>" placeholder —
-            // less helpful but never silently wrong.
+            // less helpful but never silently wrong. The plan's id is an
+            // absolute path, so print it relative to the folder the
+            // compiler runs in, as the registry calls do. An absolute
+            // path would put the build machine's folders in the output.
             const sourceModuleId =
               this.initPlan?.resolveImportedName(literal.value)?.sourceModuleId ?? "";
             return ts.call(ts.id("__readStatic"), [
               ts.id(literal.value),
               ts.str(literal.value),
-              ts.str(sourceModuleId),
+              ts.str(displayModuleId(sourceModuleId)),
             ]);
           }
           // Synthetic match-expression result temps (`__matchval_<id>`) are

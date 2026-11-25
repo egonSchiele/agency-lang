@@ -3,6 +3,7 @@ import { pathToFileURL } from "url";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { compile, resetCompilationCache } from "@/compiler/defaultSession.js";
+import { safeDeleteDirectoryWithin } from "@/utils.js";
 
 /**
  * Cross-module static dependency end-to-end: compile a small two-file
@@ -110,5 +111,54 @@ describe("imported static used only from a function body initializes via closure
     const mod = await import(pathToFileURL(mainJs).href);
     const result = await mod.main();
     expect(result.data).toBe("hello!");
+  });
+});
+
+/**
+ * Generated code names an imported module by its path relative to the
+ * folder the compiler runs in, the way the init registry calls name it.
+ * An absolute path would put the build machine's folders into published
+ * output (issue #1565).
+ */
+describe("an imported name read as a value names its module by a relative path", () => {
+  const packageRoot = path.resolve(__dirname, "../..");
+  const fixturesRoot = path.join(packageRoot, ".agency-tmp/static-read-ids");
+  const mainAgency = path.join(fixturesRoot, "main.agency");
+  const barAgency = path.join(fixturesRoot, "bar.agency");
+  const mainJs = mainAgency.replace(/\.agency$/, ".js");
+
+  beforeAll(() => {
+    fs.mkdirSync(fixturesRoot, { recursive: true });
+    fs.writeFileSync(
+      barAgency,
+      'export static const barStatic = "hello"\n' +
+        "\n" +
+        "export def greet(): string {\n" +
+        '  return "hi"\n' +
+        "}\n",
+    );
+    fs.writeFileSync(
+      mainAgency,
+      'import { barStatic, greet } from "./bar.agency"\n' +
+        "\n" +
+        "node main() {\n" +
+        "  const tools = [greet]\n" +
+        '  return "${barStatic} ${tools.length}"\n' +
+        "}\n",
+    );
+    resetCompilationCache();
+    compile({}, mainAgency);
+  });
+
+  afterAll(() => {
+    safeDeleteDirectoryWithin(packageRoot, fixturesRoot);
+  });
+
+  it("names the imported module by a path relative to the folder the compiler runs in", () => {
+    const compiled = fs.readFileSync(mainJs, "utf8");
+    const barId = path.relative(process.cwd(), barAgency);
+    expect(compiled).toContain(`__readStatic(barStatic, "barStatic", "${barId}")`);
+    expect(compiled).toContain(`__readStatic(greet, "greet", "${barId}")`);
+    expect(compiled).not.toContain(fixturesRoot);
   });
 });

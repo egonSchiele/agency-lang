@@ -385,6 +385,11 @@ sites use the same helper so the registry keys still match exactly
 within a single compilation pass. Once the literals are baked in,
 the value of `process.cwd()` at runtime is irrelevant.
 
+The module argument of a `__readStatic` call goes through
+`displayModuleId` too, so a module has the same printed name in every
+call. Generated code prints every module path relative to the folder
+the compiler runs in.
+
 ## Runtime registry (`lib/runtime/crossModuleInitRegistry.ts`)
 
 The runtime side is small. Three registries keyed by moduleId
@@ -536,8 +541,9 @@ chains, function values stored in variables, methods on user objects, and
 stdlib functions.
 
 The runtime read-before-init trap, `__readStatic`, catches this case. Every static read in generated code is wrapped in
-`__readStatic(value, name, sourceModuleId)`. If the value is still
-the `__UNINIT_STATIC` sentinel, the trap throws with a helpful
+`__readStatic(value, name, sourceModuleId)`. The third argument is
+the source module's id as `displayModuleId` prints it. If the value is
+still the `__UNINIT_STATIC` sentinel, the trap throws with a helpful
 message pointing at the source module of the unset static. The
 test suite exercises this in
 `lib/runtime/topsortCycleErrors.test.ts` (the `runtime-trap`

@@ -1,4 +1,4 @@
-// `agency agent -p` through the session core: it prints the reply, the
+// `agency agent -p`: it prints the reply, the
 // model is told a write no rule covers was declined because no one is
 // there to ask, nothing is saved, and the run offers no job tools.
 import { spawnSync } from "node:child_process";

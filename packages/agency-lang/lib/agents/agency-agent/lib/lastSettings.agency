@@ -131,7 +131,7 @@ export def readLastSettings(): LastSettings | null {
   return _readLastSettings(POLICY_DIR)
 }
 
-/** What a run starts with, from its `ProgramStart`. */
+/** What a run starts with. */
 export type StartRequest = {
   preset: string;
   flags: ModelFlags;

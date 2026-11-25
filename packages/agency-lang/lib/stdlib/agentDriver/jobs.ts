@@ -2,7 +2,8 @@
 // its pauses. A job is a process outside the run (lib/runtime/jobs/), and
 // the run holds the jobs it started in every checkpoint it takes. Reading
 // and stopping the jobs themselves is in jobControl.ts, which is Node-only.
-// See docs/dev/agents/session-driver.md and docs/dev/stdlib/jobs.md.
+// Nothing in this package calls either file: a front-end that runs the
+// agent's modules in a run of its own does. See docs/dev/stdlib/jobs.md.
 import { z } from "zod";
 import type { Interrupt } from "../../runtime/interrupts.js";
 import { heldJobSchema, mergeHeldJobs, type HeldJob } from "../../runtime/jobs/heldJobs.js";

@@ -21,5 +21,8 @@
   "refusedByTheFlag": true,
   "askedDespiteTheFlag": false,
   "noteAfterTheFlag": "write the note again",
-  "policyFilesLeft": []
+  "policyFilesLeft": [],
+  "askedUnderItsOwnPolicy": true,
+  "wroteUnderSavedPolicy": true,
+  "askedUnderSavedPolicy": false
 }

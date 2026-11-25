@@ -1,8 +1,7 @@
 /** @module
   @summary The harness side of a turn: which brain is selected, and the
   per-turn work (slash expansion, attachments, the hard stop for a subagent
-  budget trip) that happens before `agencyAgent` sees the message. The
-  session core (core.agency) runs each turn under the run's policy. See
+  budget trip) that happens before `agencyAgent` sees the message. See
   docs/dev/agents/agent-brains.md.
 */
 import { map } from "std::array"

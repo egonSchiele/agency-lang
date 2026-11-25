@@ -1,9 +1,8 @@
 // Reading and stopping a session's background jobs between its legs: the
 // list `/jobs` shows, a stop a person asks for, and the jobs of a dropped
-// turn. Node-only, like the job processes it reads (detachedJobs.ts), so it
-// is not exported from the driver's index: a front-end imports it as
-// `agency-lang/stdlib-lib/agentDriver/jobControl.js`. See
-// docs/dev/agents/session-driver.md, "Background jobs".
+// turn. Node-only, like the job processes it reads (detachedJobs.ts). A
+// front-end imports it as `agency-lang/stdlib-lib/agentDriver/jobControl.js`.
+// See docs/dev/stdlib/jobs.md.
 import type { Host } from "../../host/host.js";
 import { heldJobStatus, requestStop } from "../../runtime/jobs/detachedJobs.js";
 import type { HeldJob } from "../../runtime/jobs/heldJobs.js";

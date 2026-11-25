@@ -270,7 +270,7 @@ function heldSummary(run: Run, held: HeldJob): Promise<JobSummaryForAgency> {
 
 /** A held job's summary, read from its record now, as `listJobs` shows it.
  *  Exported so a front-end that holds a session's jobs between its legs
- *  (the session driver) shows them in the same words. */
+ *  (agentDriver/jobControl.ts) shows them in the same words. */
 export async function heldJobSummary(host: Host, held: HeldJob): Promise<JobSummaryForAgency> {
   const record = await heldJobStatus(host, { id: held.handle.id, token: held.token });
   return forAgency(summaryOf(host, held, record), host.clock.wallTime());

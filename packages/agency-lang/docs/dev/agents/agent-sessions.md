@@ -172,6 +172,21 @@ what they resolve to as its own policy file,
 `<agent home>/session-policies/<id>.json` (`newSessionPolicy`), and its
 "always" answers go there. Every other session runs under `policy.json`.
 
+- The file is kept outside the session's checkpoint
+  (`lib/stdlib/agentSessionPolicy.ts`). In the checkpoint, an edit to the
+  saved file would change what the session is allowed to do. The built-in
+  policies guard it as they guard `policy.json`: none but `approve-all`
+  approves a write, edit, remove, copy or move of a file under
+  `session-policies/`.
+- On a resume, `sessionRunPolicy` picks the policy. A session with a file
+  of its own gets that policy and nothing from `policy.json`: a reject
+  that follows an approve means "reject, unless the approve already
+  answered", so no rule is lifted out of one policy into another. The
+  flags given at the resume go ahead of the session's rules for the same
+  effect.
+- A policy file that can't be read, or is not a valid policy, refuses the
+  resume. It never falls back to `policy.json`, which could approve what
+  the session's own policy would ask about.
 - A session that ends before its first turn is never saved, and its
   policy file is removed (`forgetUnsavedPolicy`).
 - `/fork` copies the file to the new id and points the handler at the

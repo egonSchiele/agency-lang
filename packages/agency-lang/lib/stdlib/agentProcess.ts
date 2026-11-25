@@ -1,5 +1,5 @@
-// What this process can do for the agent's session program. A front-end
-// sets these once, when it starts. They describe the process, so they are
+// What this process can do for the agent's sessions. A front-end sets
+// these once, when it starts. They describe the process, so they are
 // not saved with a session: whichever process resumes one answers for
 // itself.
 

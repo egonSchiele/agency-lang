@@ -2,7 +2,7 @@
   @summary The session a run writes to: its record, the turn count, the
   title, and the thread the conversation runs on. This is session state,
   so it lives apart from resume.agency, which picks a session at the
-  terminal. The session core reports the record at every pause.
+  terminal.
 */
 import { now } from "std::date"
 import { setTraceTitle } from "std::statelog"

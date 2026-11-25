@@ -168,7 +168,7 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
 
 The grounding block goes on the conversation thread, not in `context`. It
 holds the session facts, the date, the working directory, and the project
-`AGENTS.md`. The session core (`core.agency`) builds it once with
+`AGENTS.md`. `agent.agency` builds it once with
 `groundingText` and stores it with `setGrounding` (`lib/grounding.agency`). Each turn adds that stored
 string with `ensureSystemMessage`. Two reasons:
 
@@ -376,6 +376,36 @@ it: the two differ only in the two tools and the primer.
 2. Add it to `AgencyAgentBrain`, to the `match` in `agencyAgent`, and to
    `agencyAgentBrains()` in `stdlib/agents/agency.agency`.
 3. Add a test under `tests/agency/agents/`, as `brainSimple.agency` does.
+
+## The agent's modules, from outside the package
+
+The package exports every compiled module of the agent, by its real path:
+
+    import { askedEffort } from "pkg::agency-lang/dist/lib/agents/agency-agent/lib/session"
+
+A program outside the package can import them to build a session program
+of its own, as Perry does. The path must be the real folder, because a
+`pkg::` import resolves the part after the package name to a file in the
+package.
+
+- **They are the agent's own modules**, with the same standing as the
+  files under `agency-lang/stdlib-lib/`. They have no generated docs, and
+  any release can rename or remove a function in them. The importing
+  program learns of it at its next compile. Moving the agent's folder, in
+  the source or in `dist/`, breaks every such import.
+- **Some functions have no caller in this package**, such as `moveRecord`
+  in `lib/record.agency`. They are kept for those programs.
+  `tests/agency-js/agent-modules-import` imports and calls them this way.
+- **Import only the modules the program needs.** Loading a module runs
+  its top-level code, and `lib/trace.agency` registers callbacks that
+  print every tool call to the terminal, for every run in the process.
+- **A process that holds many sessions** calls two setters once, before
+  any session runs (`agency-lang/stdlib-lib/agentProcess.js`).
+  `_setManySessions(true)` stops the scans of a folder's commands and
+  skills being kept for the process, where one session could read
+  another's. `_setLocalModelsAllowed(false)` refuses every local model
+  request with "Local models are not available here." Both default to
+  the terminal's answer, and forgetting one gives no error.
 
 ## Known limits
 

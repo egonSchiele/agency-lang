@@ -1,10 +1,20 @@
-// Imports one of the agent's compiled modules the way a program outside
-// the package does. See docs/dev/agents/session-core.md.
-import { applyEffortAnswer, askedEffort } from "pkg::agency-lang/dist/lib/agents/agency-agent/lib/session"
+// Imports the agent's compiled modules the way a program outside the
+// package does. See docs/dev/agents/agent-brains.md. Nothing in this
+// package calls `moveRecord` or `applyLlmOptionsAnswer`: a front-end with
+// a session program of its own does, so they are called here.
+import { moveRecord } from "pkg::agency-lang/dist/lib/agents/agency-agent/lib/record"
+import {
+  applyEffortAnswer,
+  applyLlmOptionsAnswer,
+  askedEffort,
+ } from "pkg::agency-lang/dist/lib/agents/agency-agent/lib/session"
 
 node main() {
   const before = askedEffort()
   const applied = applyEffortAnswer("low")
+  // With no session, and with no options, both change nothing.
+  moveRecord("/somewhere/else")
+  applyLlmOptionsAnswer({})
   return {
     before: before,
     applied: isSuccess(applied),

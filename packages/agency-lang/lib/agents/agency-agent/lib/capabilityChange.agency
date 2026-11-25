@@ -2,8 +2,7 @@
   @summary What `/settings` changes, applied in the session run: save one
   capability override to settings.json, resolve the profile again, and
   apply what can apply now. The screen that picks the change is the
-  terminal's (capabilitiesUi.agency). The session core reports the profile
-  at each pause (`capabilityReport`) and takes a `capabilities` answer.
+  terminal's (capabilitiesUi.agency).
 */
 import { setLlmOptions } from "std::llm"
 import { disableMemory } from "std::memory"

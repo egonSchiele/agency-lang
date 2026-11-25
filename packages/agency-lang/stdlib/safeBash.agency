@@ -6667,7 +6667,7 @@ def judgeGate(command: string, reason: BroadReason, dir: string, limitMs: number
   // A rule that approves or rejects the question means nobody will be
   // asked, so there is nothing to judge. A run can be answered by two
   // policies, and either one decides: runPolicy() is the run's root policy
-  // (`agency run --policy`, or the session driver's `policy` option), and
+  // (`agency run --policy`, or the `policy` option a host passes), and
   // currentPolicy() is the policy of a cliPolicyHandler the program
   // installed.
   const question = bashQuestion(command, dir, limitMs, background)

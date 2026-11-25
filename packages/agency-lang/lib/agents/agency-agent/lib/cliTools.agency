@@ -33,7 +33,7 @@ static const agentSkills = skillsDir(
 /** A failure when the bundled skills folder is missing. A wrong path does
   not make skillsDir fail, so the check looks for a skill the folder is
   known to hold. The caller stops the run: the terminal prints the reason
-  and exits, and the session core ends the run with it. */
+  and exits. */
 export def checkCliBundles(): Result<boolean> {
   const checked = checkBundledSkill(agentSkills, "presets")
   if (checked is failure(reason)) {
@@ -42,8 +42,8 @@ export def checkCliBundles(): Result<boolean> {
   return success(true)
 }
 
-// Whether a turn is offered the background job tools. On for the REPL and
-// the session core, where a job outlives the turn that started it. A
+// Whether a turn is offered the background job tools. On for the REPL,
+// where a job outlives the turn that started it. A
 // one-shot run turns them off (setInteractive in trace.agency): its turn is
 // the whole run, so a model that started a job could never read it.
 let _jobToolsOn: boolean = true

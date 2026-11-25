@@ -1,11 +1,12 @@
 // The policy a session runs under, when it was started with policy flags.
 // It is a file of its own beside the user's policy files:
-// `<agent home>/session-policies/<session id>.json`. A front-end writes it.
-// The core never sees it, and nothing in a checkpoint or an interrupt's
-// data can change it. See docs/dev/agents/session-driver.md.
-import { currentHost } from "../../runtime/currentHost.js";
-import { validatePolicy, type Policy } from "../../runtime/policy.js";
-import { failure, success, type Result } from "../../types/result.js";
+// `<agent home>/session-policies/<session id>.json`. It is kept outside
+// the session's checkpoint, so nothing in a checkpoint or an interrupt's
+// data can change it. See docs/dev/agents/agent-sessions.md.
+import { currentHost } from "../runtime/currentHost.js";
+import { validatePolicy, type Policy } from "../runtime/policy.js";
+import { layerPolicy } from "../runtime/policyFlags.js";
+import { failure, success, type Result } from "../types/result.js";
 
 /** The folder under the agent home that holds each session's policy. */
 export const SESSION_POLICIES_DIR = "session-policies";
@@ -31,9 +32,36 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Saves the policy session `id` runs under. A front-end calls it when it
- *  starts a session with policy flags. A policy that is not valid is
- *  refused, and nothing is written. */
+/** The policy a session runs under. `carried` is what `readCarriedPolicy`
+ *  gives for the session, and `saved` is the user's saved policy.
+ *
+ *  - The session has a policy of its own: that policy, and nothing from
+ *    `saved`. A session started with `--policy minimal` gets neither the
+ *    approvals nor the rejects in the saved file. A rule's meaning can
+ *    depend on the rules before it in its list, so no rule is lifted out
+ *    of one policy into another.
+ *  - It has none: `saved`.
+ *  - Its policy can't be read: this fails, and `saved` is never used.
+ *
+ *  `extra` is the flags given at resume, laid over the rest as flags are.
+ *  "Always" answers given in a session that has a policy of its own are
+ *  saved to its policy file, so `carried` already holds them. */
+export function sessionRunPolicy(args: {
+  carried: Result<Policy | null>;
+  saved: Policy;
+  extra: Policy | null;
+}): Result<Policy> {
+  const { carried, saved, extra } = args;
+  if (!carried.success) {
+    return carried;
+  }
+  const base = carried.value === null ? saved : carried.value;
+  return success(extra === null ? base : layerPolicy({ top: extra, base }));
+}
+
+/** Saves the policy session `id` runs under, when the session is started
+ *  with policy flags. A policy that is not valid is refused, and nothing
+ *  is written. */
 export async function saveCarriedPolicy(args: {
   home: string;
   id: string;
@@ -86,10 +114,9 @@ export async function readCarriedPolicy(args: {
   }
 }
 
-/** Removes session `id`'s policy file. A front-end calls it for a session
- *  it started with policy flags and closed before its first turn: such a
- *  session is never saved, so its policy file would belong to nothing.
- *  No file is not a failure. */
+/** Removes session `id`'s policy file, for a session started with policy
+ *  flags and closed before its first turn: such a session is never saved,
+ *  so its policy file would belong to nothing. No file is not a failure. */
 export async function removeCarriedPolicy(args: {
   home: string;
   id: string;
@@ -110,10 +137,10 @@ export async function removeCarriedPolicy(args: {
   }
 }
 
-/** Carries session `from`'s policy to its fork `to`. A front-end calls it
- *  on the driver's `forked` event. Without it a session started with
- *  `--policy minimal` would run its fork under the saved policy. No file
- *  at `from` copies nothing; one that can't be read is a failure. */
+/** Carries session `from`'s policy to its fork `to`. Without it a session
+ *  started with `--policy minimal` would run its fork under the saved
+ *  policy. No file at `from` copies nothing; one that can't be read is a
+ *  failure. */
 export async function copyCarriedPolicy(args: {
   home: string;
   from: string;

@@ -10,9 +10,7 @@ export def addNote(note: string) {
   _notes.push(note)
 }
 
-/** Every pending note, removed, so each one is sent once. The terminal
-  sends them as a message answer's `notes`, and the session core puts them
-  above the message. */
+/** Every pending note, removed, so each one is sent once. */
 export def takePendingNotes(): string[] {
   const notes = _notes
   _notes = []

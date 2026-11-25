@@ -62,7 +62,7 @@ def factsRule(brainName: string): string {
   return ""
 }
 
-// The grounding for this run, built once by the session core. Each turn adds this
+// The grounding for this run, built once at its start. Each turn adds this
 // same string to the conversation with ensureSystemMessage, which matches
 // by exact text, so a rebuilt block that differs is never added twice.
 let _grounding: string = ""
@@ -72,7 +72,7 @@ export def setGrounding(text: string) {
   _grounding = text
 }
 
-/** The grounding stored for this run, or "" before the session core sets it. */
+/** The grounding stored for this run, or "" before it is set. */
 export def grounding(): string {
   return _grounding
 }

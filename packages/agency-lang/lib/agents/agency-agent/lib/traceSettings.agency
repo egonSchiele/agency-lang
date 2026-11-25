@@ -1,8 +1,7 @@
 // What a run shows of the agent's work, and whether a person is at it.
 // They are globals, so each run has its own: the terminal sets them from
-// its flags, and the session program from `ProgramStart.trace`. The
-// callbacks in trace.agency read them. This module has no callbacks, so
-// the session program can import it.
+// its flags. The callbacks in trace.agency read them. This module has no
+// callbacks, so a program that must not install them can import it.
 import { env } from "std::system"
 
 export type TraceSettings = {

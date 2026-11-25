@@ -41,6 +41,10 @@ import {
   _offeredDecision,
   _decisionApproves,
   _policyAfterDecision,
+  _setPolicyAfterRestore,
+  _takePolicyAfterRestore,
+  _setDefersUndecided,
+  _defersUndecided,
  } from "agency-lang/stdlib-lib/policy.js"
 import { describeProblem } from "agency-lang/stdlib-lib/workflow/index.js"
 
@@ -1376,6 +1380,7 @@ def _handler(intr: any): any {
     return pass()
   }
 
+  takePolicyAfterRestore()
   maybeLoadPolicy()
   maybeFlush()
 
@@ -1383,6 +1388,26 @@ def _handler(intr: any): any {
     return rejectWithoutPolicy()
   }
   return answerByPolicy(intr, _policy)
+}
+
+// A restore brought the handler's state back from the checkpoint. A
+// program that restored one from another sitting gave the policy for this
+// one (`policyAfterRestore`), and it is taken here, once.
+def takePolicyAfterRestore() {
+  const given = _takePolicyAfterRestore()
+  if (given == null) {
+    return
+  }
+  globalCliPolicyOpts = {
+    file: given.file,
+    fields: globalCliPolicyOpts.fields
+  }
+  _policy = given.policy
+  _policyLoaded = true
+  _pendingSave = false
+  _pendingAnswers = []
+  _saveFailing = false
+  _saveAnswersOnly = given.answersOnly
 }
 
 // The answer once a policy is in hand, for `_handler` and `askAbout`
@@ -1417,6 +1442,12 @@ def answerByPolicy(intr: any, policy: Policy): any {
   // usual way to arrive here.
   if (!_interactive) {
     return nonInteractiveReject(intr, ruleApproves)
+  }
+
+  // Left unanswered, so it leaves the run with a checkpoint
+  // (`deferUndecided`).
+  if (_defersUndecided()) {
+    return propagate()
   }
 
   return askPerson(intr)
@@ -1542,11 +1573,48 @@ export def currentPolicy(): Policy {
   """
   Return the CLI handler's active policy, or an empty one when none is loaded.
   """
+  takePolicyAfterRestore()
   if (globalCliPolicyOpts.file != "") {
     maybeLoadPolicy()
     maybeFlush()
   }
   return _policy ?? {}
+}
+
+/**
+Use this before restoring a checkpoint that another sitting of the program
+saved. The handler keeps its policy in the run's state, so a restore
+brings back the policy that sitting had. The handler takes the one given
+here at its first interrupt after the restore.
+*/
+@hidden
+export def policyAfterRestore(file: string, policy: Policy, answersOnly: boolean = false) {
+  """
+  Give the CLI handler the policy to use after the next checkpoint restore.
+
+  @param file - Policy file path later "always" answers are saved to
+  @param policy - The rules to use from the first interrupt after the restore
+  @param answersOnly - Save only the rules "always" answers add to the file
+  """
+  _setPolicyAfterRestore(file, policy, answersOnly)
+}
+
+/**
+Use this in a program that saves a checkpoint when it has to ask. With it
+on, the handler leaves an interrupt no rule decides unanswered, so the
+interrupt leaves the run with a checkpoint. The program saves that
+checkpoint, turns this off, and restores it: the interrupt is raised again
+and the handler asks. It is kept outside the run's state, so a restore
+does not change it.
+*/
+@hidden
+export def deferUndecided(defers: boolean) {
+  """
+  Leave interrupts no rule decides unanswered, or go back to asking.
+
+  @param defers - True to leave them unanswered, false to ask at the terminal
+  """
+  _setDefersUndecided(defers)
 }
 
 /**

@@ -1,15 +1,13 @@
 /** @module The `/settings` command UI for the agency agent: show the
-  session's capability profile and pick one change to it. The profile is
-  the one the session reported at its last pause, and the change is sent to
-  the session as a `capabilities` answer, which saves and applies it
-  (capabilityChange.agency). */
+  session's capability profile and pick one change to it, which is saved
+  and applied (capabilityChange.agency). */
 
-import { _pause, _send } from "agency-lang/stdlib-lib/agentTerminalDriver.js"
 import { ChoiceItem, chooseOption } from "std::ui/cli"
 import { pushMessage } from "std::ui/cli"
 
 import { CAPABILITY_FIELDS, providerLacksEmbeddings } from "./capabilities.agency"
-import { CapabilityChange, CapabilityReport } from "./capabilityChange.agency"
+import { CapabilityChange, CapabilityReport, capabilityReport } from "./capabilityChange.agency"
+import { changeCapabilities } from "./sessionChanges.agency"
 
 /** Human label for a capability source layer. Interprets the source
   strings resolveCapabilities emits (capabilities.agency). */
@@ -182,22 +180,16 @@ export def editCapabilities(report: CapabilityReport): CapabilityChange | null {
   return { scope: scopeKey, field: fieldKey, value: picked.value }
 }
 
-/** `/settings`: show the profile, pick a change, and send it to the
-  session, which saves it, applies it, and says so. */
+/** `/settings`: show the profile, pick a change, save and apply it, and
+  show the profile again. What the change did is a notice. */
 export def settingsSlashCommand(): boolean {
-  const before: any = _pause() ?? {}
-  const report = before.capabilities ?? null
-  if (report == null) {
-    pushMessage(color.red("This session reports no capability profile."))
-    return true
-  }
+  const report = capabilityReport()
   showCapabilities(report)
   const change = editCapabilities(report)
   if (change == null) {
     return true
   }
-  _send({ kind: "capabilities", settings: change })
-  const after: any = _pause() ?? {}
-  showCapabilities(after.capabilities ?? report)
+  changeCapabilities(change)
+  showCapabilities(capabilityReport())
   return true
 }

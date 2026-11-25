@@ -4,12 +4,10 @@ The agent's conversation loop as a program a front-end runs. It draws
 nothing and asks no one: a front-end starts it, answers its pause and its
 approvals, and listens to its events.
 
-`agency agent` runs every session on it, interactive and `-p` alike,
-through the session driver (`docs/dev/agents/session-driver.md`, "The
-terminal"). It is the only front-end of this program. Perry runs a
-session program of its own, which started as a copy of this one and
-imports the agent's other modules (see "The agent's modules, from outside
-the package").
+Nothing in this package runs it. `agency agent` is one run with a REPL
+(`docs/dev/agents/agent-sessions.md`). Perry runs a session program of
+its own, which started as a copy of this one and imports the agent's
+other modules (see "The agent's modules, from outside the package").
 
 Design: `docs/superpowers/specs/2026-11-18-shared-session-core-design.md`.
 

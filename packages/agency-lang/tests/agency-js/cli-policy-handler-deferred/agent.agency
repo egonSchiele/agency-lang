@@ -1,0 +1,60 @@
+import { cliPolicyHandler, deferUndecided, policyAfterRestore } from "std::policy"
+
+def readSecret(): string {
+  interrupt myapp::secret("Allow reading the secret?", { key: "k" })
+  return "granted"
+}
+
+def outcomeOf(result: Result<string>): string {
+  if (result is success(v)) {
+    return "approved: ${v}"
+  }
+  if (result is failure(f)) {
+    return "failure: ${f}"
+  }
+  return ""
+}
+
+// With `deferUndecided`, an interrupt no rule decides is not asked about:
+// it leaves the run, so a program can save its checkpoint.
+node deferred(args: { policyFile: string }): string {
+  const handler = cliPolicyHandler(file: args.policyFile, policy: {}, interactive: true)
+  deferUndecided(true)
+  let outcome = ""
+  handle {
+    outcome = outcomeOf(try readSecret())
+  } with handler
+  return outcome
+}
+
+// A rule still decides while undecided interrupts are deferred.
+node ruleDecides(args: { policyFile: string }): string {
+  const handler = cliPolicyHandler(
+    file: args.policyFile,
+    policy: { "myapp::secret": [{ action: "approve" }] },
+    interactive: true,
+  )
+  deferUndecided(true)
+  let outcome = ""
+  handle {
+    outcome = outcomeOf(try readSecret())
+  } with handler
+  deferUndecided(false)
+  return outcome
+}
+
+// The policy given with `policyAfterRestore` replaces the handler's at its
+// next interrupt: here an approving policy gives way to a rejecting one.
+node takesGivenPolicy(args: { policyFile: string }): string {
+  const handler = cliPolicyHandler(
+    file: args.policyFile,
+    policy: { "myapp::secret": [{ action: "approve" }] },
+    interactive: true,
+  )
+  policyAfterRestore(args.policyFile, { "myapp::secret": [{ action: "reject" }] })
+  let outcome = ""
+  handle {
+    outcome = outcomeOf(try readSecret())
+  } with handler
+  return outcome
+}

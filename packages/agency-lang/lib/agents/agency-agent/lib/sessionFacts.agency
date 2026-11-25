@@ -1,0 +1,30 @@
+/** @module
+  @summary What the terminal shows of the session: its models, its preset,
+  the provider it is fixed to, and its web search backend. The header and
+  the commands that say what changed read it before and after.
+*/
+import { Resolved } from "./models.agency"
+import { activePresetName } from "./presets.agency"
+import { getSearchBackend } from "./search.agency"
+import { fixedProvider } from "./session.agency"
+import { getResolvedSlots } from "../shared.agency"
+
+export type SessionFacts = {
+  // Each model slot, resolved.
+  models: Record<string, Resolved>;
+  // The active preset's name, or "".
+  preset: string;
+  // The provider the session is fixed to, by the name a person sees, or "".
+  fixedProvider: string;
+  // The web search backend in force: hosted, tavily, brave or off.
+  search: string
+}
+
+export def sessionFacts(): SessionFacts {
+  return {
+    models: getResolvedSlots(),
+    preset: activePresetName(),
+    fixedProvider: fixedProvider(),
+    search: getSearchBackend()
+  }
+}

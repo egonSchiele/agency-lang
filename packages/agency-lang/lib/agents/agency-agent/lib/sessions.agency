@@ -5,7 +5,6 @@
 */
 import {
   _listSessions,
-  _recordRunFormat,
   _saveSession,
   _readCheckpointFile,
  } from "agency-lang/stdlib-lib/agentSessions.js"
@@ -29,9 +28,9 @@ export type SessionRecord = {
   // The slug id of the thread the conversation runs on, such as "t3". The
   // transcript printed on resume is read from it.
   conversationThread?: string;
-  // What the session's run file holds. A front-end that drives the session
-  // core from outside saves the core's pause ("savedRun"), which this
-  // terminal cannot resume yet. A record without it is a checkpoint.
+  // What the session's run file holds. This agent writes "checkpoint": one
+  // checkpoint of its run. "savedRun" is the pause of a session program,
+  // which this agent cannot resume.
   runFormat?: "checkpoint" | "savedRun"
 }
 
@@ -56,23 +55,29 @@ export def newSessionId(): string {
   return "${now()}-${random.slice(2, 8)}"
 }
 
-/** Every session saved in this directory that this terminal can resume,
-  most recently saved first: the sessions saved as a run of the session
-  program, by this terminal or by another front-end. A session the
-  terminal's old loop saved is left out: only that loop could resume it. */
+/** Whether this agent saved the session: its record says the run file is
+  a checkpoint. A record that says nothing is from an agent older than
+  the field, and one that says `savedRun` is from the agent that ran its
+  sessions on the session program. Neither can be continued here. */
+def savedByThisAgent(record: SessionRecord): boolean {
+  return record.runFormat == "checkpoint"
+}
+
+/** Every session saved in this directory that this agent can resume,
+  most recently saved first. */
 @capabilities(fileRead)
 export def listSessions(): SessionRecord[] {
   const all: SessionRecord[] = _listSessions(projectDir())
-  return [record for record in all if _recordRunFormat(record) == "savedRun"]
+  return [record for record in all if savedByThisAgent(record)]
 }
 
-/** True when a session with this id was saved here by the terminal's old
-  loop, so `--resume <id>` can say why it will not open. */
+/** True when a session with this id was saved here by an earlier version
+  of the agent, so `--resume <id>` can say why it will not open. */
 @capabilities(fileRead)
-export def isOldLoopSession(id: string): boolean {
+export def isEarlierAgentsSession(id: string): boolean {
   const all: SessionRecord[] = _listSessions(projectDir())
   const found = find(all, \record -> record.id == id)
-  return found != null && _recordRunFormat(found) == "checkpoint"
+  return found != null && !savedByThisAgent(found)
 }
 
 export def mostRecentSession(): SessionRecord | null {

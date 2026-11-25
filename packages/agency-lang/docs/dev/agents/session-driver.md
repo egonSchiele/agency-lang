@@ -5,9 +5,9 @@ start the run, answer its pause, answer its approvals, save it, and load
 it again. It lives in `lib/stdlib/agentDriver/`. A front-end imports it
 as `agency-lang/stdlib-lib/agentDriver/index.js`.
 
-Every front-end shares this one copy. Two copies would have to agree
-exactly on the file format and on what a crash in the middle of a turn
-means.
+Nothing in this package uses it. `agency agent` is one run with a REPL
+(`docs/dev/agents/agent-sessions.md`), and "The terminal" below describes
+how it ran before that. Perry has a driver of its own.
 
 The program it drives is described in `session-core.md`. Read that first.
 

@@ -4,6 +4,7 @@ import process from "process";
 import { wholePath, stat, readText, writeText, mkdir } from "../host/node/nodeFiles.js";
 import { __call } from "../runtime/call.js";
 import { currentRun, type Run } from "../runtime/asyncContext.js";
+import { processSlot } from "../runtime/processSlot.js";
 import { logReplTurn } from "./statelog.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js";
 import { color, colors, bgColors } from "../utils/termcolors.js";
@@ -1346,6 +1347,32 @@ function routeInputThroughRepl(
   };
 }
 
+// A line the next REPL prompt takes as submitted, once, without reading
+// one or printing its banner. A program that restores a checkpoint taken
+// in the middle of a turn sets it: the REPL starts again after the
+// restore, and its first submit picks that turn up. It is submitted even
+// when empty, since the turn it picks up does not read the line. It is
+// kept outside the execution model, so the restore leaves it alone.
+const replResubmit = processSlot<string | null>("agency.replResubmit", () => null);
+
+export function _setReplResubmit(line: string): void {
+  replResubmit.set(line);
+}
+
+function takeReplResubmit(): string | null {
+  const line = replResubmit.get();
+  replResubmit.set(null);
+  return line;
+}
+
+/** The line a person submitted, shown above the turn it starts. */
+function writeUserBanner(line: string): void {
+  const banner = line.includes("\n")
+    ? ` User: ${summarizeMultiline(line)} \n`
+    : ` User: ${line} \n`;
+  process.stdout.write(color.bgBrightBlack.darkBlack(banner));
+}
+
 export async function _runLineRepl(
   status: unknown,
   onSubmit: unknown,
@@ -1449,11 +1476,12 @@ export async function _runLineRepl(
   try {
     while (true) {
       let line: string;
+      const resubmitted = takeReplResubmit();
       herdr.report("idle");
       try {
         editorKey.atPrompt(true);
         jobLines.setOwner("prompt");
-        line = await askLine(rl, coloredPrompt, prefill);
+        line = resubmitted ?? (await askLine(rl, coloredPrompt, prefill));
         // The palette, `/paste`, or `$EDITOR` may own the terminal next.
         jobLines.setOwner("other");
         prefill = "";
@@ -1472,7 +1500,7 @@ export async function _runLineRepl(
       editorKey.atPrompt(false);
       line = lineOrEdited(rl, editorKey, typedLine, line, expansions);
       let trimmed = line.trim();
-      if (trimmed.length === 0) continue;
+      if (trimmed.length === 0 && resubmitted === null) continue;
       // A recalled multi-line paste comes back as its one-line preview (that's
       // all readline ever held for it); expand it to the full buffer so the
       // turn and the banner see the original text. Storing the preview rather
@@ -1508,10 +1536,7 @@ export async function _runLineRepl(
         trimmed = buffer;
       }
 
-      const banner = line.includes("\n")
-        ? ` User: ${summarizeMultiline(line)} \n`
-        : ` User: ${line} \n`;
-      process.stdout.write(color.bgBrightBlack.darkBlack(banner));
+      if (resubmitted === null) writeUserBanner(line);
 
       let reply: unknown;
       // Snapshot wall-clock and the cumulative token counters before

@@ -216,3 +216,20 @@ export def recordTurn(userMsg: string): SaveTarget | null {
     record: record
   }
 }
+
+/** Where to save a session whose turn waits on an approval, or null for
+  a run that is not saved. The record is as it was before the turn: the
+  turn has not finished, so it is not counted. */
+export def waitingTarget(): SaveTarget | null {
+  const record = _current
+  if (record == null) {
+    return null
+  }
+  if (_conversationThread != "") {
+    record.conversationThread = _conversationThread
+  }
+  return {
+    dir: projectDir(),
+    record: record
+  }
+}

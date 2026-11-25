@@ -1,0 +1,6 @@
+{
+  "leftTheRun": ["myapp::secret"],
+  "carriesACheckpoint": true,
+  "ruleDecides": "approved: granted",
+  "givenPolicyRejects": true
+}

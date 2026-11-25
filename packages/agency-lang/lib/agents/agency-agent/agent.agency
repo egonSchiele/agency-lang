@@ -1,10 +1,10 @@
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { _isLogging } from "agency-lang/stdlib-lib/statelog.js"
-import { _cost, _pause } from "agency-lang/stdlib-lib/agentTerminalDriver.js"
 import { map } from "std::array"
-import { cliPolicyHandler } from "std::policy"
+import { cliPolicyHandler, policyAfterRestore } from "std::policy"
 import { evalOutput, evalValue, setAgentName } from "std::statelog"
 import { cwd, isTTY, readStdin, setTitle } from "std::system"
+import { getCost } from "std::thread"
 import { setSlashPalette } from "std::ui/cli"
 import { clearScreen } from "std::ui/cli"
 
@@ -12,45 +12,56 @@ import { agencyAgentBrains } from "std::agents/agency"
 
 import { agentNameFor } from "./lib/agentName.agency"
 import { parseAgentArgs } from "./lib/args.agency"
+import { checkCliBundles } from "./lib/cliTools.agency"
 import { mergedPalette } from "./lib/commandPalette.agency"
+import { groundingText, setGrounding } from "./lib/grounding.agency"
 import { getHeader } from "./lib/header.agency"
 import { maybeLoadMcp } from "./lib/mcp.agency"
 import { getPolicyForAgent, printPolicyHelp } from "./lib/policy.agency"
 import { presetTable, serverNotice } from "./lib/presets.agency"
-import { startInteractive } from "./lib/repl.agency"
-import { chooseSession, incognitoProblem, newSessionRecord } from "./lib/resume.agency"
-import { SessionRecord } from "./lib/sessions.agency"
-import { loadSettings } from "./lib/settings.agency"
+import { setCurrentRecord, startIncognito } from "./lib/record.agency"
+import { installSessionHooks, startInteractive } from "./lib/repl.agency"
+import {
+  chooseSession,
+  incognitoProblem,
+  newSessionRecord,
+  resumeSession,
+ } from "./lib/resume.agency"
+import { sessionFacts } from "./lib/sessionFacts.agency"
+import { setSessionFolder } from "./lib/sessionFolder.agency"
 import {
   SessionPolicy,
   forgetUnsavedPolicy,
   newSessionPolicy,
-  programStartFor,
-  resumeSessionRun,
   resumedSessionPolicy,
-  runOneShot,
   setSessionPolicyFile,
-  startSessionRun,
- } from "./lib/terminal.agency"
+  unsavedSessionPolicy,
+ } from "./lib/sessionPolicy.agency"
+import { SessionRecord } from "./lib/sessions.agency"
+import { loadSettings } from "./lib/settings.agency"
+import { setUpSession } from "./lib/startup.agency"
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
 import {
   setBrainName,
   resolveBrainName,
   resolveStartTarget,
+  runTurn,
   startTargetsFor,
  } from "./lib/turn.agency"
+import { formatTurnFailure } from "./lib/utils.agency"
 
 /** `agency agent -p`: one message to a session that saves nothing, with
   no one to ask. What no rule decides is declined with a reason the model
   reads. Its output is the reply, then the session's cost. */
 def oneShot(args: any, brainName: string, target: string, prompt: string) {
-  setInteractive(false)
   // Mark the input and reply in the statelog so a one-shot run is gradable:
   // `agency eval grade` reads the agent's output from the trace's
   // `evalOutputRecorded` events, not from stdout.
   evalValue(prompt)
   const resolved = getPolicyForAgent(args.flags.policy ?? "", args.flags.approve ?? "", args.flags.reject ?? "", false)
   setSessionPolicyFile(resolved.policyFile)
+  // Before the policy handler exists, as for a session (`interactive`).
+  setGrounding(groundingText(brainName, args.flags))
   const handler = cliPolicyHandler(
     file: resolved.policyFile,
     policy: resolved.startPolicy,
@@ -58,45 +69,70 @@ def oneShot(args: any, brainName: string, target: string, prompt: string) {
   )
   let reply = ""
   handle {
-    reply = runOneShot(args, brainName, prompt, target)
+    checkBundles()
+    const result = try runTurn(target, prompt)
+    // Not `match`: a match expression inside a block body keeps its value
+    // on the wrong stack, so `reply` would end up null (compiler bug).
+    if (result is success(text)) {
+      reply = text ?? ""
+    } else if (result is failure(problem)) {
+      reply = formatTurnFailure("${problem}")
+    }
   } with handler
   evalOutput(reply)
   print(reply)
-  print(color.dim("\nSession cost: $${_cost().toFixed(4)}"))
+  print(color.dim("\nSession cost: $${getCost().toFixed(4)}"))
 }
 
-/** The policy an incognito session runs under. It is not saved, so it
-  carries no policy of its own. */
-def incognitoPolicy(flags: any): SessionPolicy {
-  const resolved = getPolicyForAgent(flags.policy ?? "", flags.approve ?? "", flags.reject ?? "", true)
-  return { policy: resolved.startPolicy ?? {}, file: resolved.policyFile }
+/** Checks the bundled files, under the policy handler. Exits with the
+  reason when one is missing. */
+def checkBundles() {
+  const bundles = checkCliBundles()
+  if (bundles is failure(reason)) {
+    print(color.red(reason))
+    _exit(1)
+  }
 }
 
-/** The interactive terminal: picks the session, runs it under its policy,
-  and runs the REPL on it. The session program runs in its own run,
-  through the driver; this run draws the prompt and asks the person. */
+/** The interactive terminal: picks the session, and runs the REPL on it
+  under its policy. A saved session is restored here: the run's state
+  becomes the saved one, and it goes on from where it was saved. */
 def interactive(args: any, brainName: string, startAgent: string, seedPrompt: string, incognito: boolean) {
+  // Before any restore: a resumed run skips what a restore replays past.
+  installSessionHooks()
   setSlashPalette(mergedPalette())
   let chosen: SessionRecord | null = null
   if (!incognito) {
     chosen = chooseSession(args.flags.continue, args.flags.resume ?? null)
   }
-  let record: SessionRecord | null = null
-  let sessionPolicy: SessionPolicy = { policy: {}, file: "" }
+  setTitle("Agency Agent")
+  clearScreen()
   if (chosen != null) {
-    sessionPolicy = resumedSessionPolicy(chosen.id, args.flags)
-  } else if (incognito) {
-    sessionPolicy = incognitoPolicy(args.flags)
+    // The restore brings the handler's policy back from the checkpoint,
+    // which is the policy of the sitting that saved it. The handler takes
+    // this sitting's at its first interrupt.
+    const resumed = resumedSessionPolicy(chosen.id, args.flags)
+    policyAfterRestore(resumed.file, resumed.policy, answersOnly: true)
+    resumeSession(chosen)
+    return
+  }
+  let sessionPolicy: SessionPolicy = { policy: {}, file: "" }
+  if (incognito) {
+    // Before the grounding: an incognito run's grounding names no
+    // scratch folder.
+    startIncognito()
+    sessionPolicy = unsavedSessionPolicy(args.flags)
   } else {
     const fresh = newSessionRecord(brainName)
-    record = fresh
+    setCurrentRecord(fresh)
     sessionPolicy = newSessionPolicy(fresh.id, args.flags)
   }
   setSessionPolicyFile(sessionPolicy.file)
-  // The shell's own interrupts (`!cmd` needs none, but an MCP connect or
-  // an `/image` read does) are judged by the session's policy too, and an
-  // "always" answer to a session's approval is saved by this handler's
-  // state (askAbout).
+  // Built once, and before the policy handler exists: its reads of the
+  // project's instructions and the scratch folder it makes approve
+  // themselves, and the handler would ask about them all the same. Every
+  // turn adds this same text to the conversation.
+  setGrounding(groundingText(brainName, args.flags))
   // Answers only: the policy can be the session's own with the flags
   // given now on top, and only what the person answers "always" belongs
   // in the file.
@@ -107,16 +143,10 @@ def interactive(args: any, brainName: string, startAgent: string, seedPrompt: st
     answersOnly: true,
   )
   handle {
-    setTitle("Agency Agent")
-    clearScreen()
-    if (chosen != null) {
-      resumeSessionRun(chosen)
-    } else {
-      startSessionRun(programStartFor(args, brainName, record))
-      print(getHeader(brainName, _pause()))
-    }
-    const firstPause: any = _pause() ?? {}
-    const notice = serverNotice(presetTable(), firstPause.preset ?? "")
+    checkBundles()
+    const facts = sessionFacts()
+    print(getHeader(brainName, facts))
+    const notice = serverNotice(presetTable(), facts.preset)
     if (notice != "") {
       print(color.yellow(notice))
     }
@@ -205,9 +235,9 @@ node main() {
 
   // Store the configured MCP servers. They connect on the first turn, under
   // the policy handler, which answers each stdio server's mcp::connect.
-  // They are the process's, so the session run uses them too.
   maybeLoadMcp(loadSettings())
   setAgentCwd(cwd())
+  setSessionFolder(cwd())
 
   // One-shot runs are not saved, so a resume flag on one is a mistake
   // rather than something to ignore.
@@ -228,6 +258,24 @@ node main() {
       print(color.red(problem))
       _exit(1)
     }
+  }
+
+  // The preset, the models, the tool limits and memory. This is the
+  // process's own setup: model resolution feeds the memory layer, and its
+  // reads of settings.json come before the policy handler exists, or they
+  // would prompt. A resumed session does it too, and then restores, which
+  // replaces only the Agency state.
+  if (isOneShot) {
+    setInteractive(false)
+  }
+  const started = setUpSession(args, isOneShot)
+  if (started is failure(problem)) {
+    print(color.red(problem))
+    _exit(1)
+    return
+  }
+  for (warning in started.value) {
+    print(color.yellow(warning))
   }
 
   if (!isOneShot) {

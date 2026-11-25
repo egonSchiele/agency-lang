@@ -1,0 +1,21 @@
+{
+  "replied": true,
+  "renamed": true,
+  "cost": true,
+  "cancelled": true,
+  "repliedAfterEsc": true,
+  "asked": true,
+  "wrote": true,
+  "firstNote": "write the note",
+  "goodbye": true,
+  "afterFirst": [{ "title": "smoke test", "turns": 3, "runFormat": "checkpoint" }],
+  "showsTheConversation": true,
+  "askedInSecond": true,
+  "afterSecond": [{ "title": "smoke test", "turns": 3, "runFormat": "checkpoint" }],
+  "askedAgain": true,
+  "wroteAfterResume": true,
+  "secondNote": "write the note again",
+  "goodbyeAfterResume": true,
+  "afterThird": [{ "title": "smoke test", "turns": 4, "runFormat": "checkpoint" }],
+  "policyFilesLeft": []
+}

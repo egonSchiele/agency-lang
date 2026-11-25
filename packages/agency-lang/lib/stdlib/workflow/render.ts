@@ -149,11 +149,11 @@ export function renderWorkflow(lowered: Lowered): RenderResult {
   const args = limits === null ? "" : guardArgs(limits).join(", ");
   const scaffold = args === "" ? SCAFFOLD : GUARDED_SCAFFOLD;
   const depth = args === "" ? 2 : 3;
+  // A block line prints as itself; a statement through the printer. Each is
+  // indented by the scaffold's depth plus the number of blocks it is inside.
   const prints = lowered.body.map((fragment) => {
-    if (isLine(fragment)) {
-      throw new Error("block lines are rendered in a later task");
-    }
-    return printLines(fragment.code);
+    const lines = isLine(fragment) ? [fragment.line] : printLines(fragment.code);
+    return indent(lines, depth + fragment.depth);
   });
   const resultLines = printLines(lowered.result);
   resultLines[0] = `return success(${resultLines[0]}`;
@@ -167,7 +167,7 @@ export function renderWorkflow(lowered: Lowered): RenderResult {
     // identifiers, so JSON writes them as plain Agency string literals.
     guardLabel: JSON.stringify(lowered.guardLabel),
     guardLabels: JSON.stringify(lowered.guardLabels),
-    body: indent([...prints.flat(), ...resultLines], depth).join("\n"),
+    body: [...prints.flat(), ...indent(resultLines, depth)].join("\n"),
     outputSchemas: outputSchemasText(lowered.types),
   };
   const typeBlocks = lowered.types.map((decl, index) => ({

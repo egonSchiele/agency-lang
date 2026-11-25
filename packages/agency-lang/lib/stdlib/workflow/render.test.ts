@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { _parseExpr, _parseStatements } from "../template.js";
+import { lowerWorkflow } from "./lower.js";
 import { renderWorkflow } from "./render.js";
-import type { Lowered, Owner } from "./types.js";
+import { resolveWorkflow } from "./resolve.js";
+import { eachPlan, matchPlan, mealRefs, mealSignatures } from "./testFixtures.js";
+import type { Lowered, Owner, Workflow } from "./types.js";
 
 const oa: Owner = { step: "a", field: "args.q" };
 const ob: Owner = { step: "a", field: "args" };
@@ -12,8 +15,8 @@ const lowered: Lowered = {
   imports: ['import { f } from "./f.agency"'],
   types: [{ name: "Inputs", text: "{ q: string }", owner: inputsOwner }],
   body: [
-    { code: _parseStatements("const a = 1"), owner: oa },
-    { code: _parseStatements("if (a is failure) {\n  return a\n}"), owner: ob },
+    { code: _parseStatements("const a = 1"), owner: oa, depth: 0 },
+    { code: _parseStatements("if (a is failure) {\n  return a\n}"), owner: ob, depth: 0 },
   ],
   result: _parseExpr("a"),
   guard: null,
@@ -175,5 +178,47 @@ describe("renderWorkflow", () => {
 
   it("is deterministic", () => {
     expect(renderWorkflow(lowered).source).toBe(renderWorkflow(lowered).source);
+  });
+});
+
+/** Every stage but parse, on a fixture workflow. */
+const render = (wf: Workflow) =>
+  renderWorkflow(lowerWorkflow(resolveWorkflow(wf, mealRefs, mealSignatures).resolved!));
+
+describe("renderWorkflow match and each", () => {
+  it("prints an each block with its steps two levels deeper", () => {
+    const { source } = render(eachPlan);
+    expect(source).toContain(
+      [
+        "    for (step_note_item in step_note_over) {",
+        "      thread {",
+        "        const step_text_id = step_note_item.id",
+      ].join("\n"),
+    );
+    expect(source).toContain(
+      ["        }", "      }", "    }", "    const step_done_query"].join("\n"),
+    );
+  });
+
+  it("prints a match as an if/else-if chain that closes once", () => {
+    const { source } = render(matchPlan);
+    expect(source).toMatch(
+      /if \(step_route_case1\) \{[\s\S]*\} else if \(step_route_case2\) \{\n\s*\} else \{[\s\S]*no case matches/,
+    );
+    expect(source).toContain('      const step_add_items = ["urgent"]');
+  });
+
+  it("gives every owned line the right owner", () => {
+    const { source, ranges } = render(eachPlan);
+    const lines = source.split("\n");
+    const ownerOf = (text: string) => {
+      const line = lines.findIndex((entry) => entry.includes(text)) + 1;
+      return ranges.find((range) => range.from <= line && line <= range.to)?.owner;
+    };
+    expect(ownerOf("const step_note_over =")).toEqual({ step: "note", field: "over" });
+    expect(ownerOf("for (step_note_item")).toEqual({ step: "note", field: "over" });
+    expect(ownerOf("thread {")).toEqual({ step: "note", field: "over" });
+    expect(ownerOf("const step_text_id =")).toEqual({ step: "text", field: "args.id" });
+    expect(ownerOf("return success(")).toEqual({ step: null, field: "result" });
   });
 });

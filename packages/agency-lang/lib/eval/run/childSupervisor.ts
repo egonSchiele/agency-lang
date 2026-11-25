@@ -52,12 +52,28 @@ export type SupervisedProcess = {
   exit(code: number): never;
 };
 
-export function makeChildSupervisor(proc: SupervisedProcess): (kill: ChildKill) => () => void {
+export type ChildSupervisor = {
+  /** Supervise a child until the returned function is called (on settle). */
+  supervise(kill: ChildKill): () => void;
+  /** Whether a terminating signal has reached this process while a child was
+   *  live. It stays true: the process is shutting down, and what is left to
+   *  do is fold what finished, not start more work. This is the one place
+   *  that fact is kept, for commands, grading and the suite loop alike. */
+  terminatingSignalSeen(): boolean;
+  /** @internal */
+  resetForTests(): void;
+};
+
+export function makeChildSupervisor(proc: SupervisedProcess): ChildSupervisor {
   const live: ChildKill[] = [];
   let exitHookInstalled = false;
+  // Reset when the first child of a new set registers, so only a second
+  // signal to the same children is a force quit.
   let signalled = false;
+  let seen = false;
 
   const onSignal = (signal: NodeJS.Signals) => {
+    seen = true;
     // Over a copy each time: a child may settle inside its own kill and
     // unregister, which removes it from `live` while this loop is running,
     // and the child after it would then be skipped.
@@ -73,7 +89,7 @@ export function makeChildSupervisor(proc: SupervisedProcess): (kill: ChildKill) 
     TERMINATING.map((signal) => [signal, () => onSignal(signal)]),
   );
 
-  return (kill) => {
+  const supervise = (kill: ChildKill): (() => void) => {
     if (live.length === 0) {
       signalled = false;
       for (const signal of TERMINATING) proc.on(signal, listeners[signal]);
@@ -94,7 +110,23 @@ export function makeChildSupervisor(proc: SupervisedProcess): (kill: ChildKill) 
       }
     };
   };
+  return {
+    supervise,
+    terminatingSignalSeen: () => seen,
+    resetForTests: () => {
+      seen = false;
+    },
+  };
 }
 
+const processSupervisor = makeChildSupervisor(process);
+
 /** Supervise a child until the returned function is called (on settle). */
-export const supervise = makeChildSupervisor(process);
+export const supervise = processSupervisor.supervise;
+
+/** Whether a terminating signal has reached this process while an eval child
+ *  (an agent, a setup command, a grader command) was running. */
+export const terminatingSignalSeen = processSupervisor.terminatingSignalSeen;
+
+/** @internal */
+export const resetTerminatingSignalForTests = processSupervisor.resetForTests;

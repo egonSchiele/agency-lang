@@ -4,12 +4,8 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  OUTPUT_TAIL_CHARS,
-  outputTail,
-  resetShellInterruptForTests,
-  runShell,
-} from "./shellCommand.js";
+import { resetTerminatingSignalForTests } from "./run/childSupervisor.js";
+import { OUTPUT_TAIL_CHARS, outputTail, runShell } from "./shellCommand.js";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -17,11 +13,11 @@ describe("runShell", () => {
   let cwd: string;
   beforeEach(() => {
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "shell-command-"));
-    resetShellInterruptForTests();
+    resetTerminatingSignalForTests();
   });
   afterEach(() => {
     fs.rmSync(cwd, { recursive: true, force: true });
-    resetShellInterruptForTests();
+    resetTerminatingSignalForTests();
   });
 
   it("returns the exit status and both streams", async () => {

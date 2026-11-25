@@ -11,6 +11,7 @@ import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
 import { grader } from "@/eval/grading/functionGrader.js";
 import { gradeRun } from "@/eval/grading/gradeRun.js";
 
+import { resetTerminatingSignalForTests, supervise } from "./childSupervisor.js";
 import { runSuite } from "./runSuite.js";
 import { loadInputs } from "@/eval/loadInputs.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
@@ -1076,6 +1077,79 @@ describe("runSuite", () => {
       );
       expect(readRunDirectory(result.tests[0].runDir, quiet).traces).toHaveLength(1);
       expect(scoreRows(result.tests[0].runDir)).toEqual([]);
+    });
+
+    it("neither grades nor starts the next test after a SIGTERM or SIGHUP reaches the agent", async () => {
+      for (const signal of ["SIGTERM", "SIGHUP"] as const) {
+        // What the real runners do: the agent is a supervised child, and the
+        // supervisor is what receives the signal while it runs.
+        const runner = vi.fn(async (job: EvalRunnerJob) => {
+          const settled = supervise(() => {});
+          process.emit(signal, signal);
+          settled();
+          fs.writeFileSync(job.statelogPath, traceFor(job, "done").join("\n") + "\n");
+          return { ok: true as const };
+        });
+        const options = suiteWith(`stopped-${signal}`, { any: "true" });
+        try {
+          const result = await runSuite(
+            {
+              ...options,
+              inputs: [options.inputs[0], { ...options.inputs[0], id: "b" }],
+              gradeInPlace: true,
+            },
+            { runner },
+          );
+          expect(runner).toHaveBeenCalledTimes(1);
+          expect(result.tests.map((test) => test.testId)).toEqual(["a"]);
+          expect(scoreRows(result.tests[0].runDir)).toEqual([]);
+        } finally {
+          resetTerminatingSignalForTests();
+        }
+      }
+    });
+
+    it("keeps the run ungraded and goes on to the next test when grading throws", async () => {
+      const testDir = path.join(proj, "tests", "throws");
+      fs.mkdirSync(testDir, { recursive: true });
+      const broken = path.join(testDir, "graders.ts");
+      // Loads when the suite is read, and throws when grading loads the copy
+      // the run directory stored: the agent's run is what flips the switch.
+      fs.writeFileSync(
+        broken,
+        'if ((globalThis as any).breakGraders === true) throw new Error("this grader module is broken");\n' +
+          "export default [];\n",
+      );
+      const running = traceWritingRunner("done", () => {
+        (globalThis as any).breakGraders = true;
+      });
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const result = await runSuite(
+          {
+            agent: path.join(proj, "agent.agency"),
+            inputs: [
+              { id: "a", input: "t", graders: broken },
+              { id: "b", input: "t", graders: broken },
+            ],
+            out: path.join(proj, "runs", "throws"),
+            config: {},
+            perRun: { pipeOutput: false },
+            gradeInPlace: true,
+          },
+          { runner: running },
+        );
+        expect(result.tests.map((test) => test.testId)).toEqual(["a", "b"]);
+        for (const test of result.tests) {
+          expect(readRunDirectory(test.runDir, quiet).traces).toHaveLength(1);
+          expect(scoreRows(test.runDir)).toEqual([]);
+          expect(test.grading).toBeUndefined();
+        }
+        expect(warn.mock.calls.flat().join("\n")).toContain("could not grade");
+      } finally {
+        delete (globalThis as any).breakGraders;
+        warn.mockRestore();
+      }
     });
 
     it("still grades in the live workdir when no workdir is stored", async () => {

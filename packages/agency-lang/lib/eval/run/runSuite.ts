@@ -34,9 +34,9 @@ import { safeDeleteDirectoryWithin } from "@/utils.js";
 
 import { GradingInterrupted } from "@/eval/grading/gradeRun.js";
 import { gradeSuite } from "@/eval/grading/gradeSuite.js";
-import { shellInterrupted } from "@/eval/shellCommand.js";
 
 import { agentRunPaths } from "./extract.js";
+import { terminatingSignalSeen } from "./childSupervisor.js";
 import { runAgent, SETUP_TIMEOUT_SEC, type AgentRun, type RunAgentOptions } from "./runAgent.js";
 import { seedFromAgentFile } from "./seed.js";
 import type { EvalInputRunner } from "./subprocess.js";
@@ -170,10 +170,13 @@ export async function runSuite(
   process.once("SIGINT", onSigint);
 
   const budget = makeBatchBudget(batchCostCapFromConfig(config));
-  // SIGTERM and SIGHUP reach this process only through a running setup or
-  // grader command, which records them: no further test may start then
-  // either, since its commands would all refuse to run.
-  const shouldStop = () => interrupted || shellInterrupted() || budget.exhausted();
+  // Ctrl-C is not the only way to be told to stop: `docker stop`, `timeout`
+  // and a closed terminal send SIGTERM or SIGHUP. While an agent or a command
+  // runs, the child supervisor receives all three and remembers; the SIGINT
+  // listener above covers the moments when nothing is running. After either,
+  // no test is graded and no further test starts.
+  const stopping = () => interrupted || terminatingSignalSeen();
+  const shouldStop = () => stopping() || budget.exhausted();
 
   const parallel = Math.max(1, Math.floor(opts.parallel ?? 1));
   // `agent` is the target's label (an agent file path or the command line),
@@ -263,7 +266,7 @@ export async function runSuite(
       // an interrupt: a build grader can run for most of an hour, and
       // whoever interrupted is waiting.
       const graded =
-        opts.gradeInPlace === true && !interrupted && !shellInterrupted()
+        opts.gradeInPlace === true && !stopping()
           ? await gradeInPlace(runDir, run, config)
           : undefined;
       return graded === undefined ? result : { ...result, ...graded };

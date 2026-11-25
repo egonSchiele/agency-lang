@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
 
-import { groupKill, supervise } from "./run/childSupervisor.js";
+import { groupKill, supervise, terminatingSignalSeen } from "./run/childSupervisor.js";
 
 /** How much of a command's output a failure message carries. */
 export const OUTPUT_TAIL_CHARS = 2000;
@@ -14,24 +14,11 @@ export type ShellResult = {
   output: string;
   timedOut: boolean;
   /** The process got a terminating signal while the command ran, or before
-   *  it could start. */
+   *  it could start. After one, no further command starts: whoever sent it is
+   *  waiting, and a suite's remaining setup and grader commands can each
+   *  take many minutes. */
   interrupted: boolean;
 };
-
-/** Set by the first terminating signal that reaches a running command. After
- *  that no further command starts: whoever pressed Ctrl-C is waiting, and a
- *  suite's remaining setup and grader commands can each take many minutes. */
-let interrupted = false;
-
-/** @internal */
-export function resetShellInterruptForTests(): void {
-  interrupted = false;
-}
-
-/** Whether a terminating signal has reached a command in this process. */
-export function shellInterrupted(): boolean {
-  return interrupted;
-}
 
 /** Run `sh -c command` without blocking the event loop. `env` is the whole
  *  environment: the caller merges `process.env` itself. Output is stdout and
@@ -48,7 +35,7 @@ export function shellInterrupted(): boolean {
  *  At the timeout the result is settled at once, so a process the command
  *  left holding the output pipe cannot keep the caller waiting. */
 export function runShell(command: string, options: ShellOptions): Promise<ShellResult> {
-  if (interrupted) {
+  if (terminatingSignalSeen()) {
     return Promise.resolve({
       status: null,
       output: "interrupted",
@@ -90,7 +77,6 @@ export function runShell(command: string, options: ShellOptions): Promise<ShellR
       resolve({ ...result, interrupted: signalled });
     };
     const unsupervise = supervise((signal) => {
-      interrupted = true;
       signalled = true;
       // The shell may trap a polite signal; the whole group must be gone
       // before anything else touches the workdir.

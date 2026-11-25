@@ -1,4 +1,4 @@
-import { shellInterrupted } from "@/eval/shellCommand.js";
+import { terminatingSignalSeen } from "@/eval/run/childSupervisor.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -89,11 +89,15 @@ export async function gradeSnapshot(
       return gradeEntry(entry, ctx, graders, graderFiles);
     }),
   );
-  // A terminating signal reached a grader's command. The commands after it
+  // A terminating signal reached this process. The command graders after it
   // never ran and report "interrupted", so these grades are not the run's.
   // Thrown here, where every caller passes: `eval grade`, `eval run --grade`
   // and the optimizer, which would otherwise score candidates on them.
-  if (shellInterrupted()) {
+  //
+  // A known cost, accepted: LLM judges already running beside those commands
+  // are not cancelled. They finish, are paid for, and their grades are thrown
+  // away here with the rest.
+  if (terminatingSignalSeen()) {
     throw new GradingInterrupted();
   }
   return new Scorecard(perInput);

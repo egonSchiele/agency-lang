@@ -224,3 +224,76 @@ describe("readHarborTrial", () => {
     expect(readHarborTrial(dir)).toMatchObject({ ok: true, trial: { statelogPath: null } });
   });
 });
+
+describe("readHarborTrial: the agent and its reported usage", () => {
+  const PI = {
+    agentInfo: { name: "pi", model: "z-ai/glm-5.3-flash" },
+    agentResult: { input: 57240, cache: 50944, output: 1404, cost: 0.00317472 },
+  };
+
+  function read(overrides: Partial<FakeHarborTrial>) {
+    const dir = writeHarborTrial(tempDir("harbor-"), trial({ name: "t", ...overrides }));
+    const result = readHarborTrial(dir);
+    if (!result.ok) throw new Error(result.problem.reason);
+    return result.trial;
+  }
+
+  it("reads a Pi trial's agent and reported usage", () => {
+    const pi = read({
+      ...PI,
+      statelogLines: undefined,
+      agentExecution: {
+        startedAt: "2026-11-13T23:34:26.015034Z",
+        finishedAt: "2026-11-13T23:35:34.868438Z",
+      },
+    });
+    expect(pi.agentName).toBe("pi");
+    expect(pi.reported).toEqual({
+      models: [
+        {
+          name: "z-ai/glm-5.3-flash",
+          reasoning: null,
+          calls: 0,
+          inputTokens: 6296,
+          cachedInputTokens: 50944,
+          cacheCreationInputTokens: 0,
+          outputTokens: 1404,
+          costUsd: 0.00317472,
+        },
+      ],
+      startedAtMs: Date.parse("2026-11-13T23:34:26.015Z"),
+      durationMs: 68_853,
+      lastEventAt: "2026-11-13T23:35:34.868Z",
+    });
+  });
+
+  it("reports nothing for an Agency trial with null token counts", () => {
+    const agency = read({
+      agentInfo: { name: "agency-agent", model: "z-ai/glm-5.3-flash" },
+      agentResult: { input: null, cache: null, output: null, cost: null },
+    });
+    expect(agency.agentName).toBe("agency-agent");
+    expect(agency.reported).toBeNull();
+  });
+
+  it("falls back to the trial's own times without agent_execution", () => {
+    const pi = read({
+      ...PI,
+      startedAt: "2026-11-13T23:33:54.260502Z",
+      finishedAt: "2026-11-13T23:36:35.714892Z",
+    });
+    expect(pi.reported?.startedAtMs).toBe(Date.parse("2026-11-13T23:33:54.260Z"));
+    expect(pi.reported?.lastEventAt).toBe("2026-11-13T23:36:35.714Z");
+  });
+
+  it("counts a missing cost as zero when tokens are present", () => {
+    const pi = read({ ...PI, agentResult: { ...PI.agentResult, cost: null } });
+    expect(pi.reported?.models[0].costUsd).toBe(0);
+  });
+
+  it("reads an old result.json with none of these fields", () => {
+    const old = read({});
+    expect(old.agentName).toBeNull();
+    expect(old.reported).toBeNull();
+  });
+});

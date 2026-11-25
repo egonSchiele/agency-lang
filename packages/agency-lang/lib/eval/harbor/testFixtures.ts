@@ -9,6 +9,15 @@ export type FakeHarborTrial = {
   rewards: Record<string, number> | null;
   exception?: { type: string; message: string };
   statelogLines?: string[];
+  agentInfo?: { name: string; model: string };
+  agentResult?: {
+    input: number | null;
+    cache: number | null;
+    output: number | null;
+    cost: number | null;
+  };
+  agentExecution?: { startedAt: string; finishedAt: string };
+  finishedAt?: string;
 };
 
 /** Write one Harbor trial folder under `jobDir`, the way Harbor lays it out;
@@ -22,7 +31,35 @@ export function writeHarborTrial(jobDir: string, trial: FakeHarborTrial): string
     trial_name: trial.name,
     source: trial.source,
     started_at: trial.startedAt,
-    agent_result: null,
+    ...(trial.finishedAt === undefined ? {} : { finished_at: trial.finishedAt }),
+    ...(trial.agentInfo === undefined
+      ? {}
+      : {
+          agent_info: {
+            name: trial.agentInfo.name,
+            version: "1.5.2",
+            model_info: { name: trial.agentInfo.model, provider: "openrouter" },
+          },
+        }),
+    agent_result:
+      trial.agentResult === undefined
+        ? null
+        : {
+            n_input_tokens: trial.agentResult.input,
+            n_cache_tokens: trial.agentResult.cache,
+            n_output_tokens: trial.agentResult.output,
+            cost_usd: trial.agentResult.cost,
+            rollout_details: null,
+            metadata: null,
+          },
+    ...(trial.agentExecution === undefined
+      ? {}
+      : {
+          agent_execution: {
+            started_at: trial.agentExecution.startedAt,
+            finished_at: trial.agentExecution.finishedAt,
+          },
+        }),
     verifier_result: trial.rewards === null ? null : { rewards: trial.rewards },
     exception_info:
       trial.exception === undefined

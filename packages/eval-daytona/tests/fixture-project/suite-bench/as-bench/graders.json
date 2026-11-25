@@ -1,0 +1,12 @@
+[
+  {
+    "kind": "command",
+    "name": "owned-by-bench",
+    "command": "test \"$(stat -c %U hello.txt)\" = bench"
+  },
+  {
+    "kind": "command",
+    "name": "graded-as-root",
+    "command": "test \"$(id -un)\" = root"
+  }
+]

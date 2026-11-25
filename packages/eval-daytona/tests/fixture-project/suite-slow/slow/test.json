@@ -1,0 +1,5 @@
+{
+  "input": "do nothing",
+  "timeoutSec": 600,
+  "setup": "sleep 300"
+}

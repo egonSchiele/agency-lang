@@ -1,0 +1,7 @@
+[
+  {
+    "kind": "command",
+    "name": "any",
+    "command": "true"
+  }
+]

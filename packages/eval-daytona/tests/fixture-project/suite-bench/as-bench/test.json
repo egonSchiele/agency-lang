@@ -1,0 +1,5 @@
+{
+  "input": "do nothing",
+  "timeoutSec": 300,
+  "setup": "id bench >/dev/null 2>&1 || useradd -m bench; mkdir -p /opt/eval-fixture && cp \"$AGENCY_EVAL_TEST_DIR/../../noop.agency\" /opt/eval-fixture/ && chown -R bench /opt/eval-fixture . \"$AGENCY_EVAL_AGENT_DIR\""
+}

@@ -1,0 +1,4 @@
+node main(prompt: string) {
+  sleep(300s)
+  return "awake"
+}

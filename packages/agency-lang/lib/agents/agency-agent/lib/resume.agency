@@ -1,10 +1,11 @@
 /** @module
-  @summary The terminal's side of save and resume: which session this run
-  is (new, `--continue`, or `--resume`), the picker, and the record of a
-  new session. The session itself is a run of the session program, which
-  the driver saves and loads (lib/stdlib/agentTerminalDriver.ts). The files
-  are in sessions.agency and the title in sessionTitle.agency.
+  @summary Which session this run is (new, `--continue`, or `--resume`),
+  the picker, the record of a new session, and the restore of a saved
+  one. A session is saved from the REPL (lib/stdlib/agentReplSession.ts).
+  The files are in sessions.agency and the title in sessionTitle.agency.
 */
+import { _checkpointFitsThisCode, _pickUpOnResume } from "agency-lang/stdlib-lib/agentReplSession.js"
+import { _isCheckpoint, _readTranscript } from "agency-lang/stdlib-lib/agentSessions.js"
 import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { now } from "std::date"
 import { cwd } from "std::system"
@@ -13,12 +14,16 @@ import { chooseOption, ChoiceItem } from "std::ui/cli"
 import {
   SessionRecord,
   findSession,
-  isOldLoopSession,
+  isEarlierAgentsSession,
   listSessions,
   mostRecentSession,
   newSessionId,
+  readCheckpointFile,
   sessionLabel,
  } from "./sessions.agency"
+import { showTranscript } from "./transcript.agency"
+
+static const EARLIER_VERSION = "This session was saved by an earlier version of agency agent and can't be continued."
 
 export def incognitoProblem(continueFlag: boolean, resumeArg: string | null, logging: boolean): string {
   """
@@ -49,8 +54,8 @@ export def chooseSession(
 ): SessionRecord | null {
   if (resumeArg != null && resumeArg != "") {
     const found = findSession(resumeArg)
-    if (found == null && isOldLoopSession(resumeArg)) {
-      print(color.red("Session ${resumeArg} was saved by an older version of the agent and can't be resumed."))
+    if (found == null && isEarlierAgentsSession(resumeArg)) {
+      print(color.red(EARLIER_VERSION))
       _exit(1)
     }
     if (found == null) {
@@ -104,8 +109,7 @@ def pickSession(): SessionRecord | null {
   return findSession(choice)
 }
 
-/** The record of a new session, which the session program reports and the
-  driver saves after its first turn. */
+/** The record of a new session, which is saved after its first turn. */
 export def newSessionRecord(brainName: string): SessionRecord {
   const t = now()
   return {
@@ -115,6 +119,30 @@ export def newSessionRecord(brainName: string): SessionRecord {
     created: t,
     lastActive: t,
     turns: 0,
-    title: ""
+    title: "",
+    runFormat: "checkpoint"
   }
+}
+
+/** Go on with a saved session: print its conversation, then restore its
+  checkpoint. The Agency state becomes the saved one and the program
+  continues from the saved point, so nothing placed after this call runs.
+  Exits with the reason when the session can't be continued. */
+export def resumeSession(chosen: SessionRecord) {
+  const saved = readCheckpointFile(chosen.id)
+  if (saved == null || !_isCheckpoint(saved)) {
+    print(color.red("The file for session ${chosen.id} is missing or is not a checkpoint this agent can resume."))
+    _exit(1)
+  }
+  // The runtime refuses a checkpoint paused in code that has changed
+  // since. Checked here, so the reason is the agent's and comes before
+  // the conversation is printed.
+  if (!_checkpointFitsThisCode(saved)) {
+    print(color.red(EARLIER_VERSION))
+    _exit(1)
+  }
+  print(color.dim("Resuming: ${chosen.title}"))
+  showTranscript(_readTranscript(saved, chosen.conversationThread ?? ""))
+  _pickUpOnResume()
+  restore(saved, {})
 }

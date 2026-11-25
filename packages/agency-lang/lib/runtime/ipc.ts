@@ -23,6 +23,7 @@ import type { RuntimeContext } from "./state/context.js";
 import { detachedRun, currentRun, withRun, type Run } from "./asyncContext.js";
 import type { SpanContext } from "../statelogClient.js";
 import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./interrupts.js";
+import { whileAnsweringSubprocess } from "./answeringSubprocess.js";
 import { runBatch } from "./runBatch.js";
 import { AgencyAbort, AgencyCancelledError } from "./errors.js";
 import type { State, StateStack } from "./state/stateStack.js";
@@ -789,11 +790,13 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
         // A copy with its own state: several interrupts from one child can be
         // answered at once, and none of them is counted against the stored run.
         withRun(chainRun(stored, spans), (run) =>
-          gatherChainOutcome(
-            run,
-            { effect, message, data, origin, expectsValue },
-            s.stateStack,
-            msg.interruptId,
+          whileAnsweringSubprocess(() =>
+            gatherChainOutcome(
+              run,
+              { effect, message, data, origin, expectsValue },
+              s.stateStack,
+              msg.interruptId,
+            ),
           ),
         ),
     );

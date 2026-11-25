@@ -5,7 +5,7 @@ import test {
   saveSession,
   listSessions,
   findSession,
-  isOldLoopSession,
+  isEarlierAgentsSession,
   mostRecentSession,
   readCheckpointFile,
   SessionRecord,
@@ -103,13 +103,13 @@ node refreshSchedule(): boolean[] {
 // sessions saved, listed most recently active first, found by id, and
 // the checkpoint read back unchanged. Saving a session again replaces
 // its record.
-// A session the terminal's old loop saved in this folder is not offered:
-// its file is one checkpoint of that loop's run, which only that loop
-// could resume. A record with no `runFormat` is one of those.
-node oldLoopSessionIsSkipped(): any {
-  // Only the old loop's session is saved here. A session saved as a run of
-  // the session program would be counted by storeRoundTrip, which shares
-  // the folder.
+// A session an earlier agent saved in this folder is not offered: this
+// agent can't go on from its file. A record with no `runFormat` is from an
+// agent older than the field, and one that says `savedRun` is from the
+// agent that ran its sessions on a session program.
+node earlierAgentsSessionIsSkipped(): any {
+  // Neither is counted by storeRoundTrip, which shares the folder: it
+  // counts the sessions this agent can resume.
   const theirs: SessionRecord = {
     id: "theirs",
     cwd: "/x",
@@ -119,14 +119,26 @@ node oldLoopSessionIsSkipped(): any {
     turns: 1,
     title: "an old one"
   }
-  saveSession(theirs, { fake: "the old loop's checkpoint" })
+  const savedRun: SessionRecord = {
+    id: "a-saved-run",
+    cwd: "/x",
+    brain: "coordinator",
+    created: 20,
+    lastActive: 9999999999998,
+    turns: 1,
+    title: "a session program's",
+    runFormat: "savedRun"
+  }
+  saveSession(theirs, { fake: "an older agent's checkpoint" })
+  saveSession(savedRun, { fake: "a session program's pause" })
   const recent = mostRecentSession()
+  const skipped = ["theirs", "a-saved-run"]
   return {
-    listed: [r.id for r in listSessions() if r.id == "theirs"],
-    newestIsTheirs: recent != null && recent.id == "theirs",
-    foundById: findSession("theirs") != null,
-    saysWhy: isOldLoopSession("theirs"),
-    saysNothingForAnUnknownId: isOldLoopSession("no-such-session")
+    listed: [r.id for r in listSessions() if skipped.includes(r.id)],
+    newestIsOneOfThem: recent != null && skipped.includes(recent.id),
+    foundById: findSession("theirs") != null || findSession("a-saved-run") != null,
+    saysWhy: isEarlierAgentsSession("theirs") && isEarlierAgentsSession("a-saved-run"),
+    saysNothingForAnUnknownId: isEarlierAgentsSession("no-such-session")
   }
 }
 
@@ -139,7 +151,7 @@ node storeRoundTrip(): any {
     lastActive: 10,
     turns: 1,
     title: "first",
-    runFormat: "savedRun"
+    runFormat: "checkpoint"
   }
   const second: SessionRecord = {
     id: "s2",
@@ -149,7 +161,7 @@ node storeRoundTrip(): any {
     lastActive: 20,
     turns: 1,
     title: "second",
-    runFormat: "savedRun"
+    runFormat: "checkpoint"
   }
   saveSession(first, { fake: "checkpoint one" })
   saveSession(second, { fake: "checkpoint two" })

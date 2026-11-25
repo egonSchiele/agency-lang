@@ -1,6 +1,8 @@
 import { checkPolicy, validatePolicy } from "@/runtime/policy.js";
 import { currentRun } from "@/runtime/asyncContext.js";
 import { currentHost } from "@/runtime/currentHost.js";
+import { processSlot } from "@/runtime/processSlot.js";
+import { isAnsweringSubprocess } from "@/runtime/answeringSubprocess.js";
 import path from "#path";
 import { assertContained } from "./assertContained.js";
 import { allAlwaysScopes, type ScopedField } from "@/runtime/alwaysScope.js";
@@ -279,4 +281,41 @@ export async function _writePreparedPolicy(write: PolicyWrite): Promise<void> {
  *  `std::write` first. */
 export async function _writePolicyFile(filePath: string, policy: Policy, allowedPaths?: string[]) {
   await _writePreparedPolicy(await _preparePolicyWrite(filePath, policy, allowedPaths));
+}
+
+// What `cliPolicyHandler` keeps outside the execution model, so a
+// checkpoint restore leaves it alone. The handler's own state is Agency
+// globals, which a restore replaces with the ones in the checkpoint.
+type ProcessPolicyState = {
+  /** A policy the handler takes at its next interrupt, once. */
+  afterRestore: { file: string; policy: Policy; answersOnly: boolean } | null;
+  /** Whether an interrupt no rule decides is left unanswered. */
+  defersUndecided: boolean;
+};
+
+const processPolicy = processSlot<ProcessPolicyState>("agency.cliPolicy", () => ({
+  afterRestore: null,
+  defersUndecided: false,
+}));
+
+export function _setPolicyAfterRestore(file: string, policy: Policy, answersOnly: boolean): void {
+  processPolicy.set({ ...processPolicy.get(), afterRestore: { file, policy, answersOnly } });
+}
+
+/** The policy set with `_setPolicyAfterRestore`, or null. It is given once. */
+export function _takePolicyAfterRestore(): ProcessPolicyState["afterRestore"] {
+  const state = processPolicy.get();
+  processPolicy.set({ ...state, afterRestore: null });
+  return state.afterRestore;
+}
+
+export function _setDefersUndecided(defers: boolean): void {
+  processPolicy.set({ ...processPolicy.get(), defersUndecided: defers });
+}
+
+/** Whether the handler leaves this interrupt unanswered. Never for one a
+ *  subprocess raised: the program's restore of the checkpoint could not
+ *  answer the child (`answeringSubprocess.ts`), so the person is asked. */
+export function _defersUndecided(): boolean {
+  return processPolicy.get().defersUndecided && !isAnsweringSubprocess();
 }

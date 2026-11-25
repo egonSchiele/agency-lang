@@ -56,10 +56,10 @@
       ]
     },
     {
-      "nodeName": "oldLoopSessionIsSkipped",
-      "description": "a session the terminal's old loop saved is not listed, not the most recent, and --resume can say why",
+      "nodeName": "earlierAgentsSessionIsSkipped",
+      "description": "a session an earlier agent saved is not listed, not the most recent, and --resume can say why",
       "input": "",
-      "expectedOutput": "{\"listed\":[],\"newestIsTheirs\":false,\"foundById\":false,\"saysWhy\":true,\"saysNothingForAnUnknownId\":false}",
+      "expectedOutput": "{\"listed\":[],\"newestIsOneOfThem\":false,\"foundById\":false,\"saysWhy\":true,\"saysNothingForAnUnknownId\":false}",
       "evaluationCriteria": [
         {
           "type": "exact"

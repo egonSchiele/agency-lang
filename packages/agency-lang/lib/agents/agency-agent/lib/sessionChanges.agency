@@ -1,0 +1,99 @@
+/** @module
+  @summary What a command changes in the session: its models, its preset,
+  its search backend, its capability overrides, and a compaction asked
+  for by hand. Each function makes one change. What it could not do is a
+  notice at level `error`, which the terminal's trace prints.
+
+  A model or preset change that works is kept for new sessions
+  (lastSettings.agency). Only a person's command reaches these functions,
+  so the model can't change what new sessions start with.
+*/
+import { CapabilityChange, applyCapabilityChange } from "./capabilityChange.agency"
+import { canCompact, compactAndReport } from "./compaction.agency"
+import { rememberSettings } from "./lastSettings.agency"
+import { notice } from "./notice.agency"
+import { activePresetName, refreshPresetTable } from "./presets.agency"
+import { conversationThread } from "./record.agency"
+import { switchSearchBackend } from "./search.agency"
+import {
+  applyModelSpec,
+  applyPresetAnswer,
+  modelChoices,
+  refreshAndSavePreset,
+  useLocalModel,
+ } from "./session.agency"
+
+/** `/model <spec>`: switch models. */
+export def changeModel(spec: string) {
+  const switched = applyModelSpec(spec)
+  if (switched is failure(reason)) {
+    notice(reason, "error")
+    return
+  }
+  rememberSettings(activePresetName(), modelChoices())
+}
+
+/** `/preset <name>`: switch to a saved preset, whole. */
+export def changePreset(name: string) {
+  // Another session may have saved this preset since this run read the
+  // presets. Reading them is the agent's own bookkeeping, caused by a
+  // person's command, as a save's write is.
+  refreshPresetTable() with approve
+  const switched = applyPresetAnswer(name)
+  if (switched is failure(reason)) {
+    notice("Could not switch preset: ${reason}", "error")
+    return
+  }
+  rememberSettings(activePresetName(), modelChoices())
+}
+
+/** `/preset save [name]`: save the session to a preset, "" for the
+  active one. */
+export def saveToPreset(name: string) {
+  // Compared with the preset as saved now, not as this run first read it.
+  // The person asked for this save, so its reads and its write are approved.
+  const saved = refreshAndSavePreset(name, modelChoices()) with approve
+  if (saved is success(lines)) {
+    notice(lines.join("\n"))
+  } else if (saved is failure(reason)) {
+    notice(reason, "error")
+  }
+}
+
+/** `/compact [keep]`: summarize the older messages now. */
+export def compactNow(keep: string) {
+  const threadId = conversationThread()
+  if (!canCompact(threadId)) {
+    notice("Nothing to compact yet.", "error")
+    return
+  }
+  compactAndReport(threadId, keep)
+}
+
+/** `/search`: switch the web search backend, and save the choice. */
+export def changeSearch(backend: string) {
+  const switched = switchSearchBackend(backend)
+  if (switched is failure(reason)) {
+    notice("Could not switch the search backend: ${reason}", "error")
+  }
+}
+
+/** `/local`: run the session on a local model. */
+export def useLocal(model: string) {
+  const used = useLocalModel(model)
+  if (used is failure(reason)) {
+    notice(reason, "error")
+    return
+  }
+  notice("Switched to local model: ${model}")
+}
+
+/** `/settings`: save one capability override and apply it. */
+export def changeCapabilities(change: CapabilityChange) {
+  const applied = applyCapabilityChange(change)
+  if (applied is success(lines)) {
+    notice(lines.join("\n"))
+  } else if (applied is failure(reason)) {
+    notice(reason, "error")
+  }
+}

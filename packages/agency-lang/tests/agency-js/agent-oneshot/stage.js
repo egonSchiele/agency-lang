@@ -2,8 +2,7 @@
 // file, which no rule covers, and then replies with what the write tool
 // told it, so the test can read the reason the model was sent.
 import { ToolCall } from "smoltalk";
-import { main } from "../../../dist/lib/agents/agency-agent/agent.js";
-import { __setLLMClient } from "../../../dist/lib/agents/agency-agent/program.js";
+import { __setLLMClient, main } from "../../../dist/lib/agents/agency-agent/agent.js";
 
 const project = process.env.ONE_SHOT_PROJECT;
 process.argv = [process.argv[0], "agent", "-p", "--brain", "minimal", "write the note"];

@@ -1,0 +1,60 @@
+/** @module
+  @summary What `agency agent` sets up before its first turn: the preset
+  and the models, the tool limits, the capability cap, and memory off.
+  `agent.agency` calls it for a session and for a one-shot run, before the
+  policy handler exists, so none of its reads prompt.
+*/
+import { setLlmOptions } from "std::llm"
+import { disableMemory } from "std::memory"
+
+import { setJobToolsOn } from "./cliTools.agency"
+import { startPresetAndModels } from "./lastSettings.agency"
+import { activePreset } from "./presets.agency"
+import { notePresetBaseline, startupModelFlags } from "./session.agency"
+import { loadSettings } from "./settings.agency"
+import { applyToolLimits, limitFlagsFromArgs, setStartupLimitFlags } from "./toolLimits.agency"
+import { getCapabilities } from "../shared.agency"
+
+/** Set the run up from the command line. Returns the warnings to show,
+  or the reason the run can't start. `oneShot` is `agency agent -p`: a
+  run that takes one message and ends. */
+export def setUpSession(args: any, oneShot: boolean): Result<string[]> {
+  // A one-shot run's turn is the whole run, so its model could never read
+  // a job it started, and the job would outlive the run.
+  setJobToolsOn(!oneShot)
+
+  // The preset, then the models: the preset is one of their layers. A run
+  // that names no preset, model or effort flag starts from the last
+  // settings the person chose (lastSettings.agency). This is the user's
+  // own terminal, so the search backend the run picks is saved.
+  const started = startPresetAndModels({
+    preset: args.flags.preset ?? "",
+    flags: startupModelFlags(args),
+    saveSearchChoice: true,
+    settings: loadSettings()
+  })
+  if (isFailure(started)) {
+    return started
+  }
+
+  setStartupLimitFlags(limitFlagsFromArgs(args))
+  // A one-shot run gets more tool rounds by default: no one is there to
+  // ask for more.
+  applyToolLimits(activePreset(), oneShot)
+  // What a preset's changes are reported against: the preset as this
+  // session took it.
+  notePresetBaseline()
+  const capsMaxTokens = getCapabilities().maxTokens
+  if (capsMaxTokens != null) {
+    setLlmOptions({
+      maxTokens: capsMaxTokens
+    })
+  }
+
+  // Memory stays off for the agent. After every model reply it ran a fact
+  // extraction and a summary on another model, and the tool calls waited
+  // for both.
+  disableMemory() with approve
+
+  return success(started.value)
+}

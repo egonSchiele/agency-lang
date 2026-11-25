@@ -202,14 +202,15 @@ the context percentage, the session title, the resume transcript, and
 
 ## The safety boundary
 
-The rule, in one sentence: **every turn runs in a run of the session
-program (`program.agency`), under the policy the front-end gives that run,
-and every approval no rule decides leaves the run as an interrupt for the
-front-end to ask about.** The terminal's interactive REPL and its one-shot
-`-p` both run the session program through the driver
-(`docs/dev/agents/session-driver.md`, "The terminal"). The terminal asks
-about each interrupt with `askAbout` from `std::policy`, under the
-`cliPolicyHandler` its shell run installs.
+The rule, in one sentence: **every turn runs inside the one
+`cliPolicyHandler` that `agent.agency` installs, and that handler decides
+every interrupt the turn raises.** The interactive REPL and the one-shot
+`-p` both run their turns in its `handle` block. A rule decides what it
+covers. What no rule decides is asked about at the terminal, or rejected
+with a reason for `-p`, where no one is there to ask. For a line the REPL
+submits, the asking goes by way of a saved checkpoint
+(`docs/dev/agents/agent-sessions.md`, "When a session is saved"), and the
+same handler does it.
 
 `agencyAgent` installs no handler of its own. The only reads it approves are
 of the files packaged with Agency, through `agentPrompt` and `agentSkill`,
@@ -217,7 +218,7 @@ which is what every stdlib agent does. So the harness policy decides every
 interrupt a turn raises. `tests/turn.agency`
 (`sessionPolicyDecidesTheAgentsInterrupts`) runs a turn whose model writes a
 file under the CLI policy, and the write is rejected.
-`tests/agency-js/agent-terminal-oneshot` checks the same for `-p`.
+`tests/agency-js/agent-oneshot` checks the same for `-p`.
 
 Handlers in Agency are not try/catch. When a function raises an interrupt,
 every handler up the chain is consulted, and if any one of them rejects,

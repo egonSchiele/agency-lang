@@ -1,20 +1,20 @@
 /** @module
-  @summary The interactive terminal: slash commands, the status line, and how
-  a line reaches the session. The session runs in its own run, through the
-  driver (terminal.agency): a message or a command that changes the session
-  is sent to it as an answer, and what the commands show is read from its
-  pause. See docs/dev/agents/session-driver.md, "The terminal".
+  @summary The interactive terminal: slash commands, the status line, and
+  how a message becomes a turn and its reply is drawn. The agent is one
+  run: a message calls the harness's `runTurn` here, and a command calls
+  the function that makes its change. After each line the session is saved
+  (lib/stdlib/agentReplSession.ts). See docs/dev/agents/agent-sessions.md.
 */
 import {
-  _cost,
-  _costRows,
-  _endedBecause,
-  _footerTokens,
-  _pause,
-  _send,
- } from "agency-lang/stdlib-lib/agentTerminalDriver.js"
+  _installSessionHooks,
+  _sessionOnSubmit,
+  _takeCheckpointToRestore,
+ } from "agency-lang/stdlib-lib/agentReplSession.js"
+import { _setReplResubmit } from "agency-lang/stdlib-lib/cli.js"
+import { _addToTranscript } from "agency-lang/stdlib-lib/agentTranscript.js"
 import { localModelsSupported, listModelNames } from "std::agency/local"
 import { listHostedModels } from "std::llm"
+import { getModelCosts } from "std::thread"
 import {
   chooseOption,
   ChoiceItem,
@@ -26,46 +26,63 @@ import {
  } from "std::ui/cli"
 
 import { settingsSlashCommand } from "./capabilitiesUi.agency"
+import { compactIfDue, contextStatus } from "./compaction.agency"
 import { HISTORY_PATH } from "./config.agency"
 import { mcpSlashCommand } from "./mcpMenu.agency"
 import { filterHostedModels } from "./modelFilters.agency"
+import { withPendingNotes } from "./pendingNotes.agency"
 import { presetListLines, presetTable } from "./presets.agency"
+import {
+  conversationThread,
+  forkSession,
+  markTurnDone,
+  recordTurn,
+  renameSession,
+  sessionTitle,
+  waitingTarget,
+ } from "./record.agency"
 import { availableBackendItems } from "./search.agency"
 import {
+  applyPendingLlmOptions,
   modelChoiceItems,
   scopedPickerNotes,
   parseModelsFilters,
   parsePresetCommand,
  } from "./session.agency"
-import { displayTitle } from "./sessions.agency"
+import {
+  changeModel,
+  changePreset,
+  changeSearch,
+  compactNow,
+  saveToPreset,
+  useLocal,
+ } from "./sessionChanges.agency"
+import { sessionFacts } from "./sessionFacts.agency"
+import { forkSessionPolicy } from "./sessionPolicy.agency"
 import { attachClipboardImage } from "./slashCommands/image.agency"
 import { policySlashCommand } from "./slashCommands/policy.agency"
+import { forkLine, renameLine } from "./slashCommands/session.agency"
 import { shellCommand } from "./slashCommands/shell.agency"
 import { jobsSlashCommand } from "./slashCommands/jobs.agency"
-import { sendMessage, sendSeedMessage } from "./terminal.agency"
-import { parseModelSpec } from "./utils.agency"
+import { renderReply, renderUserLine } from "./transcript.agency"
+import { runTurn } from "./turn.agency"
+import { formatTurnFailure, parseModelSpec } from "./utils.agency"
 
-/** What the session reported at its last pause, or an empty object before
-  it has one. */
-def pauseNow(): any {
-  return _pause() ?? {}
-}
+static const ESC_HINT = " Press Esc to stop."
 
 def searchSlashCommand(): boolean {
-  const before = pauseNow()
   const opts = availableBackendItems()
   const choice = chooseOption(
     "Web search backend",
-    "Pick how this agent searches the web. Current: ${before.search ?? ""}",
+    "Pick how this agent searches the web. Current: ${sessionFacts().search}",
     opts,
     false,
     true,
   )
   if (choice != "" && choice != null && choice != undefined) {
-    // A backend the session can't use is reported by the session itself.
-    _send({ kind: "search", backend: choice })
-    const after = pauseNow()
-    if (after.search == choice) {
+    // A backend the session can't use is reported as an error notice.
+    changeSearch(choice)
+    if (sessionFacts().search == choice) {
       pushMessage("Web search backend set to: ${choice}")
     }
   }
@@ -85,10 +102,20 @@ def costRowLabel(kind: string, model: string): string {
   return "${model} (${kind})"
 }
 
+/** The run's spend: every row of its usage meter, which a checkpoint
+  carries across a resume. */
+def totalCost(): number {
+  let total = 0.0
+  for (m in getModelCosts()) {
+    total = total + m.cost
+  }
+  return total
+}
+
 def costSlashCommand(): boolean {
-  // The session's usage, from the driver: the run's own total, which a
-  // checkpoint carries across a resume.
-  const byModel = _costRows()
+  // The total and the rows come from the same meter, so the lines here
+  // can never disagree.
+  const byModel = getModelCosts()
   let totalTokens = 0
   let totalCacheRead = 0
   let totalCacheWrite = 0
@@ -102,7 +129,7 @@ def costSlashCommand(): boolean {
     totalCacheRead = totalCacheRead + m.cachedInputTokens
     totalCacheWrite = totalCacheWrite + m.cacheCreationInputTokens
   }
-  pushMessage("Cost:   $${_cost().toFixed(4)}")
+  pushMessage("Cost:   $${totalCost().toFixed(4)}")
   pushMessage("Tokens: ${totalTokens}")
   if (totalCacheRead > 0 || totalCacheWrite > 0) {
     pushMessage(
@@ -132,17 +159,17 @@ def pushSlots(heading: string, models: any) {
   }
 }
 
-/** True when the session's models changed between two pauses. */
-def modelsChanged(before: any, after: any): boolean {
-  return JSON.stringify(before.models ?? {}) != JSON.stringify(after.models ?? {})
+/** The session's models as text, to tell whether a command changed them. */
+def modelsNow(): string {
+  return JSON.stringify(sessionFacts().models)
 }
 
 def modelSlashCommand(command: string): boolean {
   let spec = parseModelSpec(command)
-  const before = pauseNow()
   if (spec == "") {
-    pushSlots("Current models:", before.models ?? {})
-    const established = before.fixedProvider ?? ""
+    const facts = sessionFacts()
+    pushSlots("Current models:", facts.models)
+    const established = facts.fixedProvider
     const items = modelChoiceItems({}, established)
     for (line in scopedPickerNotes(established, items.length)) {
       pushMessage(color.dim(line))
@@ -159,11 +186,11 @@ def modelSlashCommand(command: string): boolean {
     }
     spec = choice
   }
-  // A refused spec is reported by the session itself, as an error notice.
-  _send({ kind: "model", spec: spec })
-  const after = pauseNow()
-  if (modelsChanged(before, after)) {
-    pushSlots("Model set:", after.models ?? {})
+  const before = modelsNow()
+  // A refused spec is reported as an error notice.
+  changeModel(spec)
+  if (modelsNow() != before) {
+    pushSlots("Model set:", sessionFacts().models)
   }
   return true
 }
@@ -171,21 +198,20 @@ def modelSlashCommand(command: string): boolean {
 def presetSlashCommand(command: string): boolean {
   const parsed = parsePresetCommand(command)
   if (parsed.kind == "list") {
-    const current = pauseNow()
-    for (line in presetListLines(presetTable(), current.preset ?? "")) {
+    for (line in presetListLines(presetTable(), sessionFacts().preset)) {
       pushMessage(line)
     }
     return true
   }
   if (parsed.kind == "save") {
-    _send({ kind: "savePreset", name: parsed.name })
+    saveToPreset(parsed.name)
     return true
   }
   const name = parsed.name
-  _send({ kind: "preset", name: name })
-  const after = pauseNow()
+  changePreset(name)
+  const after = sessionFacts()
   if (after.preset == name) {
-    pushSlots("Preset set: ${name}", after.models ?? {})
+    pushSlots("Preset set: ${name}", after.models)
   }
   return true
 }
@@ -231,26 +257,46 @@ def localSlashCommand(): boolean {
   if (choice == "" || choice == null) {
     return true
   }
-  // The session switches and says so, or says why it can't.
-  _send({ kind: "local", model: choice })
+  // The switch says what it did, or why it could not, in a notice.
+  useLocal(choice)
   return true
 }
 
-// Slash-command + user-message dispatcher invoked by `repl()` for
-// every Enter keystroke. Return `false` to terminate the loop.
-def _runTurn(msg: string): boolean {
-  const goOn = dispatch(msg)
-  // Another front-end took the session: it can't go on here.
-  if (_endedBecause() != "") {
-    return false
-  }
-  return goOn
+def renameSlashCommand(title: string): boolean {
+  pushMessage(renameLine(renameSession(title)))
+  return true
 }
 
+def forkSlashCommand(): boolean {
+  const forked = forkSession()
+  if (forked is success(fact)) {
+    // A session with a policy file of its own keeps that policy.
+    forkSessionPolicy(fact.forkedFrom, fact.id)
+  }
+  pushMessage(forkLine(forked))
+  return true
+}
+
+def compactSlashCommand(keep: string): boolean {
+  compactNow(keep)
+  return true
+}
+
+// The start target of the `-i` prompt, until the REPL submits it. That
+// line is a message whatever it starts with, sent to this target.
+let _seedWaits = false
+let _seedTarget = ""
+
+// Slash-command + user-message dispatcher invoked by `repl()` for
+// every Enter keystroke. Return `false` to terminate the loop.
 def dispatch(msg: string): boolean {
+  if (_seedWaits) {
+    _seedWaits = false
+    return messageTurn(_seedTarget, msg)
+  }
   // Trim once for built-in matching so `"/help\n"` (piped) or
-  // `"  /clear"` behave the same as `"/clear"`. The session receives the
-  // raw `msg`, so the model sees the exact text the user typed.
+  // `"  /clear"` behave the same as `"/clear"`. The turn receives the raw
+  // `msg`, so the model sees the exact text the user typed.
   const trimmed = msg.trim()
   return match(trimmed) {
     "" => true
@@ -280,11 +326,11 @@ def dispatch(msg: string): boolean {
     "/local" => localSlashCommand()
     "/preset" => presetSlashCommand(trimmed)
     "/policy" => policySlashCommand()
-    "/rename" => sendAnswer({ kind: "rename", title: "" })
+    "/rename" => renameSlashCommand("")
     "/image" => imageSlashCommand("")
-    "/compact" => sendAnswer({ kind: "compact", keep: "" })
+    "/compact" => compactSlashCommand("")
     "/jobs" => jobsSlashCommand("")
-    "/fork" => sendAnswer({ kind: "fork" })
+    "/fork" => forkSlashCommand()
     _ => prefixedCommand(trimmed, msg)
   }
 }
@@ -300,10 +346,10 @@ def prefixedCommand(trimmed: string, msg: string): boolean {
     return jobsSlashCommand(trimmed.slice(6))
   }
   if (trimmed.startsWith("/compact ")) {
-    return sendAnswer({ kind: "compact", keep: trimmed.slice(9).trim() })
+    return compactSlashCommand(trimmed.slice(9).trim())
   }
   if (trimmed.startsWith("/rename ")) {
-    return sendAnswer({ kind: "rename", title: trimmed.slice(8) })
+    return renameSlashCommand(trimmed.slice(8))
   }
   if (trimmed.startsWith("/model ")) {
     return modelSlashCommand(trimmed)
@@ -314,15 +360,7 @@ def prefixedCommand(trimmed: string, msg: string): boolean {
   if (trimmed.startsWith("/preset ")) {
     return presetSlashCommand(trimmed)
   }
-  sendMessage(msg)
-  return true
-}
-
-/** Sends a command's answer. The session reports what it did with a
-  notice, which the terminal's trace callbacks print. */
-def sendAnswer(answer: any): boolean {
-  _send(answer)
-  return true
+  return messageTurn("", msg)
 }
 
 // A `!` line is a shell command only when the user typed it and pressed
@@ -343,43 +381,83 @@ def imageSlashCommand(message: string): boolean {
     pushMessage(color.dim("The image will go with your next message."))
     return true
   }
-  sendMessage(message)
+  return messageTurn("", message)
+}
+
+/** One message as a turn: the model answers it, and the reply is drawn.
+  `target` is a start target such as "code", or "" for the main agent.
+  An edit's diff is drawn by the policy handler: in its prompt, or when a
+  rule approves the edit. */
+def messageTurn(target: string, text: string): boolean {
+  // Before the turn, so a turn picked up from a checkpoint taken at an
+  // approval already has its entry, and it is not added twice.
+  _addToTranscript("user", text)
+  // The message is worked out on its own line. A call inside the argument
+  // of a `try` call is run again when a turn is picked up from a
+  // checkpoint, and takes the saved frame of the turn (#1506).
+  const message = withPendingNotes(text)
+  const reply = try runTurn(target, message)
+  if (reply is success(replyText)) {
+    if (replyText != "" && replyText != null) {
+      _addToTranscript("assistant", replyText)
+      renderReply(replyText)
+    } else {
+      pushMessage(color.red("No reply generated."))
+    }
+  } else if (reply is failure(problem)) {
+    pushMessage(color.red(formatTurnFailure("${problem}")))
+  }
+  applyPendingLlmOptions()
+  markTurnDone()
+  compactIfDue(conversationThread(), ESC_HINT)
   return true
 }
 
 /** The footer: the session's title, its spend, and how full its context
-  is, as the session reported them at its last pause. */
+  is. */
 export def buildStatus(): { left: string; right: string; context: string } {
-  const pause = pauseNow()
-  const record = pause.record ?? null
-  const title = if record == null then "" else displayTitle(record)
   return {
-    left: title,
-    right: "$${_cost().toFixed(4)}",
-    context: pause.context ?? ""
+    left: sessionTitle(),
+    right: "$${totalCost().toFixed(4)}",
+    context: contextStatus(conversationThread())
   }
 }
 
-/** The session's tokens, for the footer's per-turn counts. */
-def footerTokens(): any {
-  return _footerTokens()
+/** Hand the REPL's submit its Agency functions. Called from `main` before
+  any restore: a resumed process skips the statements a restore replays
+  past, and these functions must be the ones this process loaded. */
+export def installSessionHooks() {
+  _installSessionHooks(dispatch, recordTurn, waitingTarget)
 }
 
-/** Runs the REPL on the session, after the `-i` prompt when there is one. */
+/** Runs the REPL. The `-i` prompt from the command line, when there is
+  one, is the REPL's first line: it is submitted without being typed, so
+  it is saved, and its approvals are, as any line's. Runs inside the
+  policy handler `agent.agency` installs. */
 export def startInteractive(seedTarget: string, seedPrompt: string, saveHistory: boolean = true) {
   if (seedPrompt != "") {
-    sendSeedMessage(seedPrompt, seedTarget)
+    renderUserLine(seedPrompt)
+    _seedTarget = seedTarget
+    _seedWaits = true
+    _setReplResubmit(seedPrompt)
   }
   // "" turns the history file off, for an incognito session.
   const historyFile = if saveHistory then HISTORY_PATH else ""
   repl(
     status: buildStatus,
-    onSubmit: _runTurn,
+    onSubmit: _sessionOnSubmit,
     prompt: "> ",
     historyFile: historyFile,
     historyMax: 1000,
     herdrName: "agency",
-    tokens: footerTokens,
   )
+  // A line stopped on an approval no rule decides, and the REPL ended so
+  // the run can go back to that approval. The restore replaces this run's
+  // state with the one saved there, the REPL starts again, and its first
+  // submit picks the line up with the person asked.
+  const waiting = _takeCheckpointToRestore()
+  if (waiting != null) {
+    restore(waiting, {})
+  }
   print(color.cyan("\nGoodbye!"))
 }

@@ -1,0 +1,154 @@
+/** @module
+  @summary The policy a session runs under, and where its "always" answers
+  go. A session started with policy flags has a policy file of its own,
+  which follows it across resumes. Every other session uses the saved
+  policy, policy.json. See docs/dev/agents/agent-sessions.md.
+*/
+import { sessionRunPolicy } from "agency-lang/stdlib-lib/agentDriver/policy.js"
+import {
+  SESSION_POLICIES_DIR,
+  copyCarriedPolicy,
+  readCarriedPolicy,
+  removeCarriedPolicy,
+  saveCarriedPolicy,
+ } from "agency-lang/stdlib-lib/agentDriver/sessionPolicy.js"
+import { _resolveRunPolicy } from "agency-lang/stdlib-lib/runPolicy.js"
+import { _exit } from "agency-lang/stdlib-lib/system.js"
+import {
+  Policy,
+  cliPolicyHandler,
+  currentPolicy,
+  parsePolicyFile,
+  policyFileInUse,
+ } from "std::policy"
+import { cwd } from "std::system"
+
+import { POLICY_DIR, POLICY_PATH } from "./config.agency"
+import { getPolicyForAgent } from "./policy.agency"
+import { currentRecord } from "./record.agency"
+
+// Where "always" answers go is the handler's to say (`policyFileInUse`).
+// A copy kept here would come back from a restore as the sitting that
+// saved the session had it, and the handler's is set for this sitting.
+
+/** The policy the session runs under, and where "always" answers go. */
+export type SessionPolicy = {
+  policy: Policy;
+  file: string
+}
+
+def anyPolicyFlag(flags: any): boolean {
+  return (flags.policy ?? "") != "" || (flags.approve ?? "") != "" || (flags.reject ?? "") != ""
+}
+
+def carriedPolicyPath(id: string): string {
+  return path.join(POLICY_DIR, SESSION_POLICIES_DIR, "${id}.json")
+}
+
+/** A new session's policy. With policy flags, the policy they resolve to
+  becomes the session's own, saved in its policy file, so it follows the
+  session to every resume, and "always" answers go there too. With none,
+  the saved policy, and answers go to policy.json. */
+export def newSessionPolicy(id: string, flags: any): SessionPolicy {
+  const resolved = getPolicyForAgent(flags.policy ?? "", flags.approve ?? "", flags.reject ?? "", true)
+  const policy = resolved.startPolicy ?? {}
+  if (!anyPolicyFlag(flags)) {
+    return { policy: policy, file: resolved.policyFile }
+  }
+  const saved = saveCarriedPolicy({ home: POLICY_DIR, id: id, policy: policy })
+  if (saved is failure(reason)) {
+    print(color.yellow("This session's policy could not be saved with it: ${reason}"))
+    return { policy: policy, file: resolved.policyFile }
+  }
+  return { policy: policy, file: carriedPolicyPath(id) }
+}
+
+/** The policy of a session that is not saved, such as an incognito one:
+  what the flags resolve to, with nothing of its own. */
+export def unsavedSessionPolicy(flags: any): SessionPolicy {
+  const resolved = getPolicyForAgent(flags.policy ?? "", flags.approve ?? "", flags.reject ?? "", true)
+  return { policy: resolved.startPolicy ?? {}, file: resolved.policyFile }
+}
+
+/** The saved policy, policy.json, or none when it can't be read. */
+def savedPolicy(): Policy {
+  const parsed = parsePolicyFile(POLICY_PATH)
+  if (parsed is success(policy)) {
+    return policy
+  }
+  return {}
+}
+
+/** A resumed session's policy. One that has its own runs under it, in
+  place of the saved policy, with the flags given now laid on top. One
+  that has none runs as a new session without its own would. */
+export def resumedSessionPolicy(id: string, flags: any): SessionPolicy {
+  const carried = readCarriedPolicy({ home: POLICY_DIR, id: id })
+  if (carried is failure(reason)) {
+    print(color.red(reason))
+    _exit(1)
+  }
+  if (carried.value == null) {
+    return unsavedSessionPolicy(flags)
+  }
+  let extra: Policy | null = null
+  if (anyPolicyFlag(flags)) {
+    const fromFlags = _resolveRunPolicy({
+      policy: flags.policy ?? "",
+      approve: flags.approve ?? "",
+      reject: flags.reject ?? ""
+    }, cwd())
+    if (fromFlags is failure(reason)) {
+      print(color.red(reason))
+      _exit(1)
+    }
+    extra = fromFlags.value
+  }
+  const run = sessionRunPolicy({ carried: carried, saved: savedPolicy(), extra: extra })
+  if (run is failure(reason)) {
+    print(color.red(reason))
+    _exit(1)
+  }
+  return { policy: run.value, file: carriedPolicyPath(id) }
+}
+
+/** At the end of the REPL: a session that never had a turn was never
+  saved, so the policy file it was started with is removed too. */
+export def forgetUnsavedPolicy() {
+  const record = currentRecord()
+  if (record == null || record.turns > 0 || policyFileInUse() != carriedPolicyPath(record.id)) {
+    return
+  }
+  const removed = removeCarriedPolicy({ home: POLICY_DIR, id: record.id })
+  if (removed is failure(reason)) {
+    print(color.yellow(reason))
+  }
+}
+
+/** After `/fork`: a session with a policy file of its own keeps that
+  policy under its new id, and "always" answers go to the new file. */
+export def forkSessionPolicy(from: string, to: string) {
+  if (policyFileInUse() != carriedPolicyPath(from)) {
+    return
+  }
+  const copied = copyCarriedPolicy({ home: POLICY_DIR, from: from, to: to })
+  if (copied is failure(reason)) {
+    print(color.yellow("This session's policy could not be copied to the fork: ${reason}"))
+    return
+  }
+  // The handler saves to the file it was given, so it is given the new one,
+  // with the policy it holds now.
+  cliPolicyHandler(
+    file: carriedPolicyPath(to),
+    policy: currentPolicy(),
+    interactive: true,
+    answersOnly: true,
+  )
+}
+
+/** True when the session's approvals come from the saved policy file,
+  policy.json, and false when it runs on a policy of its own or on
+  --policy, --approve or --reject, none of which is written back to it. */
+export def usesSavedPolicy(): boolean {
+  return policyFileInUse() == POLICY_PATH
+}

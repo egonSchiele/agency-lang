@@ -157,7 +157,11 @@ export function applyRestoreSignal(
   execCtx: RuntimeContext<GraphState>,
   signal: RestoreSignal,
 ): string {
-  execCtx._restoreCount++;
+  if (execCtx._nextRestoreUncounted) {
+    execCtx._nextRestoreUncounted = false;
+  } else {
+    execCtx._restoreCount++;
+  }
   if (execCtx._restoreCount > execCtx.maxRestores) {
     throw new CheckpointError(
       `Exceeded maximum number of restores (${execCtx.maxRestores}). Possible infinite loop.`,

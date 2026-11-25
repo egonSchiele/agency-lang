@@ -70,7 +70,7 @@ Three more flags exist for tools that run each test as its own `eval run`:
 - `--trial-number <n>` records each run as trial `n`. It runs each test once and cannot be combined with `--trials`.
 - `--no-workdir-snapshot` leaves the workdir out of the run directory. Use it when the workdir is too large to copy. Pair it with `--grade`: such a run cannot be graded later, and `agency eval grade` skips it.
 
-`agency eval ls --json` prints the selected tests as JSON for such a tool to read.
+`agency eval ls --json` prints the selected tests as JSON for such a tool to read, and `agency runs list --json <dir>` prints each run's summary and scores.
 
 For a single ad-hoc run, use `--input` instead of `--suite` (grade it afterwards with `eval grade --goal`):
 

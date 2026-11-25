@@ -2,6 +2,17 @@
 
 Agency is a domain-specific language for defining AI agent workflows. It compiles Agency code to executable TypeScript that calls an LLM's structured output API.
 
+## The process for every feature
+
+A request to add, change, or support something ("add X", "let's support Y", "users should be able to Z") starts this process. It is not permission to write code.
+
+1. Answer any question in the request.
+2. Write a plan in `docs/superpowers/plans/`, inside a worktree for the task.
+3. Wait for the owner's plan review.
+4. Build only after the owner says the plan is approved, in words such as "plan approved" or "build it".
+
+You may skip the plan only when the owner says so for that task ("skip the plan", "just build it"). Never decide on your own that a change is small enough to skip it. When you can't tell which kind of request it is, ask in one sentence.
+
 ## Repository layout
 
 This is a pnpm workspace. Nearly all the code is in one package:

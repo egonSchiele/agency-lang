@@ -34,6 +34,8 @@ static const CHANGE_FIELDS = [
   "slots.reasoning",
   "slots.embedding",
   "slots.router",
+  "slots.judge",
+  "slots.image",
   "effort",
   "maxToolCallRounds",
   "maxToolResultChars",
@@ -102,7 +104,8 @@ def modelFields(
       local: local.model,
       slots: {
         embedding: local.embedding,
-        router: local.router
+        router: local.router,
+        image: local.image
       }
     }
   }

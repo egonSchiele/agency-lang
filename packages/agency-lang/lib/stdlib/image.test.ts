@@ -7,7 +7,13 @@ import type { AddressInfo } from "node:net";
 import * as smoltalk from "smoltalk";
 import { withRun } from "../runtime/asyncContext.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
-import { _generateImage, _generateImageLocal, _imageSources, _imageDestination } from "./image.js";
+import {
+  _generateImage,
+  _generateImageLocal,
+  _imageSources,
+  _imageDestination,
+  _listHostedImageModels,
+} from "./image.js";
 import { MAX_IMAGE_BYTES } from "./vision.js";
 import { registerMlxImageProvider } from "./mlxImage.js";
 import { _localImageInputs, type LocalImageInputs } from "./localImageInputs.js";
@@ -252,6 +258,15 @@ describe("_imageSources", () => {
     expect(() => _imageSources([path.join(dir, "missing.png")])).toThrow(/no such file/);
     expect(() => _imageSources([path.join(dir, "folder.png")])).toThrow(/not a regular file/);
     expect(() => _imageSources([path.join(dir, "notes.txt")])).toThrow(/Accepted: .png/);
+  });
+});
+
+describe("_listHostedImageModels", () => {
+  it("lists image models with their providers, and no text model", () => {
+    const models = _listHostedImageModels();
+    expect(models).toContainEqual({ name: "gpt-image-1", provider: "openai" });
+    expect(models).toContainEqual({ name: "gemini-3.1-flash-image", provider: "google" });
+    expect(models.map((model) => model.name)).not.toContain("text-embedding-3-small");
   });
 });
 

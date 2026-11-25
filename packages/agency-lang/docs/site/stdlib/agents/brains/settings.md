@@ -39,6 +39,10 @@ export type AgentSettings = {
   // review (commandJudge in std::safeBash). "" means no judge.
   judgeModel: string;
   judgeProvider: string;
+  // The model `generateImageFile` makes images with. "" means
+  // generateImage's default.
+  imageModel: string;
+  imageProvider: string;
   // Tools added to the coder's and the Agency coder's own.
   coderTools: any[]
 }
@@ -58,7 +62,7 @@ export type ModelChoice = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L39))
 
 ## Functions
 
@@ -79,7 +83,7 @@ Return the reasoning model and its provider, or the main model when no
 
 **Returns:** [ModelChoice](#modelchoice)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L45))
 
 ### commandJudgeFor
 
@@ -99,7 +103,7 @@ Return the judge for broad shell lines, or null when no judge model is
 
 **Returns:** `ModelChoice | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L64))
 
 ### commandJudgeOf
 
@@ -117,7 +121,7 @@ Return the call's judge for broad shell lines, or null when it has none.
 
 **Returns:** `ModelChoice | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L81))
 
 ### reasoningOptions
 
@@ -136,4 +140,4 @@ Return the `llm()` options that pick the reasoning model, or the main
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/settings.agency#L90))

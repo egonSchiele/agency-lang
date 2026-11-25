@@ -22,6 +22,18 @@
       ]
     },
     {
+      "nodeName": "sameAfterAnImageChoice",
+      "input": "",
+      "expectedOutput": "\"same\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "changeLinesForAnImage",
+      "input": "",
+      "expectedOutput": "[\"  slots.image: (none) → google/gemini-3.1-flash-image\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "sameAfterAChatModelChoice",
       "input": "",
       "expectedOutput": "\"same\"",

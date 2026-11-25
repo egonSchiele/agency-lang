@@ -16,7 +16,8 @@ export type PresetSlots = {
   main?: string;
   reasoning?: string;
   embedding?: string;
-  router?: string
+  router?: string;
+  image?: string
 }
 
 /** What savePreset accepts. It has no `default`: the mark is kept only to

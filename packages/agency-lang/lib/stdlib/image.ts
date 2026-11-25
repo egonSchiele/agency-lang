@@ -72,6 +72,15 @@ export function _imageDestination(
   return { model: chosen, provider: owner || "unknown" };
 }
 
+/** The hosted image models smoltalk's catalog lists, each with its
+ *  provider, for a picker such as Perry's Image field. */
+export function _listHostedImageModels(): { name: string; provider: string }[] {
+  return smoltalk
+    .getAllModels()
+    .filter((model) => model.type === "image")
+    .map((model) => ({ name: model.modelName, provider: model.provider }));
+}
+
 /** The request's input images. A local file is read here, after the
  *  approval, and sent as bytes, so the provider library never opens a
  *  path. `approvedFileBytes` refuses a symlink that appeared while the

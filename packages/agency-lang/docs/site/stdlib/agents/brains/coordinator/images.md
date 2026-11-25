@@ -17,6 +17,8 @@ generateImageFile(
   path: string,
   size: string = "",
   images: string[] = [],
+  model: string = "",
+  provider: string = "",
 ): string
 ```
 
@@ -33,6 +35,8 @@ Generate an image from a text prompt and save it to `path`. To MODIFY
 | path | `string` |  | Where to save the resulting image (e.g. "diagram.png"). |
 | size | `string` | "" | Optional size like "1024x1024". |
 | images | `string[]` | [] | Optional input image paths to edit / vary. |
+| model | `string` | "" | The image model, or "" for the default. |
+| provider | `string` | "" | The image model's provider, or "" to take it from the model. |
 
 **Returns:** `string`
 
@@ -40,7 +44,7 @@ Generate an image from a text prompt and save it to `path`. To MODIFY
 
 **Needs:** `fileRead`, `llm`, `fileWrite`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/images.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/images.agency#L26))
 
 ### viewImageFile
 
@@ -64,4 +68,4 @@ Look at an image or PDF file. The file appears in the next message so
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/images.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/brains/coordinator/images.agency#L76))

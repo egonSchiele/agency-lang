@@ -261,6 +261,39 @@ node localWithRouterFlagIsFine(): string {
   return "${local.model}|${local.router}"
 }
 
+// The image slot keeps the provider it names, even under a chat provider.
+node imageFlagKeepsItsProvider(): string {
+  const flags = unwrapFlags(
+    flagsFor({
+      model: "image=google/gemini-3.1-flash-image",
+      provider: "anthropic"
+    }),
+  )
+  return resolvedProvider(request(flags, null, noModelChoices()), "image")
+}
+
+// anthropic makes no images, so `anthropic/...` does not name an image
+// provider, and the value is refused like one with no provider.
+node imageFlagWithAChatOnlyProviderIsRefused(): string {
+  const parsed = flagsFor({ model: "image=anthropic/claude-opus-4-8" })
+  if (parsed is failure(reason)) {
+    return reason
+  }
+  return "accepted"
+}
+
+node localKeepsTheImageFlag(): string {
+  const parsed = flagsFor({ local: "qwen3.5-2b", model: "image=openai/gpt-image-2" })
+  if (parsed is failure(reason)) {
+    return reason
+  }
+  const local = localModelOf(request(parsed.value, null, noModelChoices()))
+  if (local == null) {
+    return "hosted"
+  }
+  return "${local.model}|${local.image}"
+}
+
 def unwrapFlags(parsed: Result<ModelFlags>): ModelFlags {
   if (isFailure(parsed)) {
     return noModelFlags()

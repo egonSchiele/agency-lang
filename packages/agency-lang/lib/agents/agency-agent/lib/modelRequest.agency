@@ -44,7 +44,8 @@ export type ModelRequest = {
 export type LocalModel = {
   model: string;
   embedding: string;
-  router: string
+  router: string;
+  image: string
 }
 
 /** The models provider detection should know about. */
@@ -102,7 +103,7 @@ def modelFlagProblem(parsed: ParsedModelFlag, hasChatModel: boolean, local: stri
     return "${providerFormTitle(parsed.slot)} models need the provider/model form, e.g. --model ${parsed.slot}=${providerFormExample(parsed.slot)}."
   }
   if (local != null && hasChatModel) {
-    return "Pass either --model (hosted) or --local (local), not both. The exceptions are --model embedding=<provider>/<model> and --model router=<provider>/<model>."
+    return "Pass either --model (hosted) or --local (local), not both. The exceptions are --model embedding=<provider>/<model>, --model router=<provider>/<model>, and --model image=<provider>/<model>."
   }
   return ""
 }
@@ -187,7 +188,8 @@ export def localModelOf(request: ModelRequest): LocalModel | null {
     return {
       model: flags.local,
       embedding: flags.slots["embedding"] ?? "",
-      router: flags.slots["router"] ?? ""
+      router: flags.slots["router"] ?? "",
+      image: flags.slots["image"] ?? ""
     }
   }
   const preset = request.preset
@@ -198,7 +200,8 @@ export def localModelOf(request: ModelRequest): LocalModel | null {
   return {
     model: preset.local,
     embedding: presetSlots.embedding ?? "",
-    router: presetSlots.router ?? ""
+    router: presetSlots.router ?? "",
+    image: presetSlots.image ?? ""
   }
 }
 

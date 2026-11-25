@@ -21,12 +21,15 @@ def resolveEditInputs(images: string[]): string[] {
 // returns the path — never base64, which would flood the LLM context.
 // The write rides the std::writeBinary interrupt gate (writes are not
 // auto-approved by policy) and generation cost accrues to the agent's
-// cost tracking like any llm() call.
+// cost tracking like any llm() call. The coordinator binds `model` and
+// `provider` from the session's image slot, so the model never picks them.
 export def generateImageFile(
   prompt: string,
   path: string,
   size: string = "",
   images: string[] = [],
+  model: string = "",
+  provider: string = "",
 ): string {
   """
   Generate an image from a text prompt and save it to `path`. To MODIFY
@@ -38,11 +41,13 @@ export def generateImageFile(
   @param path - Where to save the resulting image (e.g. "diagram.png").
   @param size - Optional size like "1024x1024".
   @param images - Optional input image paths to edit / vary.
+  @param model - The image model, or "" for the default.
+  @param provider - The image model's provider, or "" to take it from the model.
   """
   // LLM-supplied paths resolve against the agent cwd, like every other
   // agent file tool.
   const inputs = resolveEditInputs(images)
-  const generated = generateImage(prompt, size: size, images: inputs)
+  const generated = generateImage(prompt, model: model, provider: provider, size: size, images: inputs)
   if (isFailure(generated)) {
     return "Image generation failed: ${generated.error}"
   }

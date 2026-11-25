@@ -39,6 +39,8 @@ def settingsWith(context: string, routerModel: string, coderTools: any[]): Agent
     routerProvider: "openrouter",
     judgeModel: "",
     judgeProvider: "",
+    imageModel: "",
+    imageProvider: "",
     coderTools: coderTools
   }
 }

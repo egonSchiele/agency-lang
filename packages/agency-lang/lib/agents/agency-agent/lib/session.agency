@@ -77,6 +77,7 @@ import {
   configureLocalModel,
   defaultSlots,
   explicitRouterSpec,
+  imageSpec,
   getResolvedSlots,
   getCapabilities,
   getCapabilitiesResolved,
@@ -176,7 +177,7 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
     if (!_localModelsAllowed()) {
       return failure(LOCAL_MODELS_OFF)
     }
-    configureLocalModel(local.model, local.embedding, local.router)?
+    configureLocalModel(local.model, local.embedding, local.router, local.image)?
     applyRequestOptions(request, settings)
     return success(true)
   }
@@ -564,15 +565,16 @@ export def reactToSlotChange(change: SlotChange): boolean {
 }
 
 /** `/local`: run the session on a local model, as the `local` answer asks.
-  The router the user set keeps routing; the default router stays out of a
-  local session. Refused where the process cannot host a local model. */
+  The router the user set keeps routing, and the image model stays; the
+  default router stays out of a local session. Refused where the process
+  cannot host a local model. */
 export def useLocalModel(model: string): Result<boolean> {
   if (!_localModelsAllowed()) {
     return failure(LOCAL_MODELS_OFF)
   }
   const before = getResolvedSlots()
   const router = explicitRouterSpec()
-  configureLocalModel(model, "", router)?
+  configureLocalModel(model, "", router, imageSpec())?
   configureSearch(true)
   for (change in diffResolved(before, getResolvedSlots())) {
     reactToSlotChange(change)

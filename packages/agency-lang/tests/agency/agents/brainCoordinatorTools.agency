@@ -23,6 +23,8 @@ def plainSettings(): AgentSettings {
     routerProvider: "",
     judgeModel: "",
     judgeProvider: "",
+    imageModel: "",
+    imageProvider: "",
     coderTools: []
   }
 }
@@ -54,14 +56,15 @@ node toolNamesMatch(): string {
 }
 
 // The schema the model receives for each tool has no `settings` and no
-// `since` parameter.
+// `since` parameter, and the image tool has no `model` or `provider`.
 node settingsAreHidden(): string {
   llm("Reply with ok.", { tools: coordinatorTools(plainSettings(), now()) })
   let leaked: string[] = []
   for (tool in calls[0].tools) {
     // A recorded tool's schema keeps its parameters under `def.shape`.
     const params = Object.keys(tool.schema.def.shape)
-    if (params.includes("settings") || params.includes("since")) {
+    const imageModelShown = tool.name == "generateImageFile" && (params.includes("model") || params.includes("provider"))
+    if (params.includes("settings") || params.includes("since") || imageModelShown) {
       leaked.push(tool.name)
     }
   }
@@ -69,4 +72,31 @@ node settingsAreHidden(): string {
     return "FAIL ${leaked.join(", ")}"
   }
   return "pass"
+}
+
+// A one-pixel PNG.
+static const PIXEL_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+
+// The image tool makes images with the settings' image model. Editing a
+// local image asks before uploading it, and the question names the model
+// the image goes to, so the answer shows which model was bound.
+node imageToolUsesTheImageModel(): string {
+  writeBinary("bct-seed.png", PIXEL_PNG, "/tmp") with approve
+  const settings: AgentSettings = {
+    ...plainSettings(),
+    imageModel: "gemini-3.1-flash-image",
+    imageProvider: "google"
+  }
+  const tools = coordinatorTools(settings, now())
+  const imageTool = [tool for tool in tools if tool.name == "generateImageFile"][0]
+  let named = "no upload question"
+  handle {
+    imageTool("restyle it", "/tmp/bct-out.png", images: ["/tmp/bct-seed.png"])
+  } with (intr) {
+    if (intr.effect == "std::uploadImage") {
+      named = "${intr.data.provider}/${intr.data.model}"
+    }
+    return reject()
+  }
+  return named
 }

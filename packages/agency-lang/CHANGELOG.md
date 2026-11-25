@@ -1,3 +1,33 @@
+## Nov 25 2026 — v0.46.0
+
+### Highlights:
+
+- Statelogs are much smaller.
+- Evals can be run and graded in a single command. This was added so they could be run and graded in one go inside a hosted Docker container.
+
+### Breaking
+
+- **A statelog no longer logs each call's whole conversation.** A thread's later calls log how many messages they kept and only the new ones, with a full copy every 50 calls. Agency's own readers (the logs viewer, eval, `std::statelog`, `agency remote logs`) rebuild the full list, but code that reads `promptCompletion.messages` straight from the file will not.
+- **`handlerDecision` events no longer carry the interrupt's `data`,** only its `effect` and `message`. The `interruptResolved` event still has the data.
+- **An eval's `command` graders now run one at a time, in file order,** instead of all at once, so two builds in one workdir don't collide.
+- **A failing `command` grader's feedback is now the end of its output,** where a build prints its error, instead of the first 2,000 characters.
+
+### Statelog
+
+- A session with N model calls used to log about N²/2 messages. On one 97 MB agent log, the messages drop from 84 MB to about 4.6 MB. Each interrupt's payload is also logged once instead of once per handler.
+
+### Evals
+
+- **New `setup` in `test.json`:** a shell command run in the workdir after `files` is copied and before the agent starts, such as checking out a repo and installing its dependencies.
+- **`agency eval run --grade` grades each test as soon as its agent finishes,** in the workdir the agent used.
+- **New `eval run` flags `--batch <id>` and `--trial-number <n>`,** plus `eval ls --json` and `runs list --json` for tools that read tests and results.
+- **A command grader that times out now kills everything it started,** not just its shell.
+- **New package `@agency-lang/eval-daytona`** runs each eval test in its own Daytona container with `agency-eval-daytona`.
+
+### Local models
+
+- **New catalog entry `bonsai-2.5-27b`,** PrismML's ternary Qwen3.8 27B in a 7.7 GB file. A catalog entry can now name a single GGUF file instead of a quant tag.
+
 ## Nov 24 2026 — v0.45.4
 
 Harbor import: agent names, Pi runs, and end times from the trace.

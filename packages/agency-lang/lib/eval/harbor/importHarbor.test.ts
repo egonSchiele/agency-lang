@@ -341,5 +341,27 @@ describe("importHarbor", () => {
         error: expect.stringContaining("Delete the batch folder"),
       }),
     ]);
+    const [outcome] = named.outcomes;
+    expect(outcome.status === "failed" && outcome.error).toContain(
+      "was imported with agent agency-agent (Harbor's agent_info.name); " +
+        "this import names agency-agent (--agent)",
+    );
+  });
+
+  it("a run whose Harbor label changed fails with a message that tells the two apart", () => {
+    const root = tempDir("harbor-");
+    const jobDir = path.join(root, "flash-high");
+    writeHarborTrial(jobDir, harborTrial({ name: "a__1" }));
+    const outDir = path.join(root, "out");
+    importHarbor({ jobDirs: [jobDir], outDir });
+    // The same trial, now with agent_info, as a newer Harbor writes it.
+    writeHarborTrial(
+      jobDir,
+      harborTrial({ name: "a__1", agentInfo: { name: "agency-agent", model: "glm" } }),
+    );
+    const [outcome] = importHarbor({ jobDirs: [jobDir], outDir }).outcomes;
+    expect(outcome.status === "failed" && outcome.error).toContain(
+      "was imported with agent (none); this import names agency-agent (Harbor's agent_info.name)",
+    );
   });
 });

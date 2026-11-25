@@ -3,7 +3,7 @@ import * as path from "path";
 
 import { harnessVersion } from "@/eval/harnessVersion.js";
 import { agentNameProblem } from "@/statelog/agentName.js";
-import type { Annotation, Annotator } from "@/runDirectory/annotations.js";
+import type { Annotation, Annotator, RunPayload } from "@/runDirectory/annotations.js";
 import { recordCompletedRun, recordGradingPass } from "@/runDirectory/mutations.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { readTracesOrThrow } from "@/runDirectory/traces.js";
@@ -139,12 +139,13 @@ function finishExisting({
         `The input changed order or contents; delete the batch folder and import again.`,
     );
   }
-  const oldAgent = existing.row.agentName;
-  const newAgent = run.payload.agentName;
-  if (oldAgent !== newAgent || existing.row.flags.agent !== run.payload.flags.agent) {
+  if (
+    existing.row.agentName !== run.payload.agentName ||
+    existing.row.flags.agent !== run.payload.flags.agent
+  ) {
     throw new Error(
-      `${dir} was imported with agent ${oldAgent ?? "(no --agent)"}; this import names ` +
-        `${newAgent ?? "(no --agent)"}. Delete the batch folder and import again.`,
+      `${dir} was imported with agent ${agentSourceOf(existing.row)}; this import names ` +
+        `${agentSourceOf(run.payload)}. Delete the batch folder and import again.`,
     );
   }
   if (existing.gradingPasses > 0 || run.scores.length === 0) {
@@ -152,6 +153,15 @@ function finishExisting({
   }
   writeScores({ run, dir, traceId: existing.row.traceId });
   return { status: "scored", dir };
+}
+
+/** The agent name a run shows, and where it came from. */
+function agentSourceOf(run: Pick<RunPayload, "agentName" | "flags">): string {
+  if (run.agentName !== undefined) {
+    return `${run.agentName} (--agent)`;
+  }
+  const label = run.flags.agent;
+  return typeof label === "string" ? `${label} (Harbor's agent_info.name)` : "(none)";
 }
 
 /** Writes the trace (if any) and the `run` row; returns the trace id. */

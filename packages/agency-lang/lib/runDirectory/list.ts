@@ -237,6 +237,8 @@ function withReported(digest: TraceDigest, runRow: RunRow | null): TraceDigest {
 
 /** Whether the agent left a record: events, or usage its harness reported. */
 export function agentLeftRecord(run: Pick<TraceDigest, "eventCount" | "models">): boolean {
+  // With no events, a model entry can only come from the run row's
+  // `reported`, which an importer writes with exactly one entry.
   return run.eventCount > 0 || run.models.length > 0;
 }
 

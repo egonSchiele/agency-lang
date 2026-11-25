@@ -84,7 +84,15 @@ function spyClient(ctx: RuntimeContext<any>) {
     debug,
     promptWait,
   } as any;
-  return { evalValueRecorded, evalOutputRecorded, agentName, traceTitle, turnStart, debug, promptWait };
+  return {
+    evalValueRecorded,
+    evalOutputRecorded,
+    agentName,
+    traceTitle,
+    turnStart,
+    debug,
+    promptWait,
+  };
 }
 
 async function withFrame(

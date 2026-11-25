@@ -14,9 +14,10 @@ For example, a workflow could find a note, ask an LLM to extract its shopping
 list, and call a function that adds the items to a task list. The steps stay in
 the order you wrote, even when one of them asks an LLM for help.
 
-Workflows support function calls, LLM calls, and references to values. Put
-branches, loops, retries, or other behavior in an Agency function, then call
-that function from a step.
+Workflows support function calls, LLM calls, and references to values. A
+workflow can branch on a value with a `match` step and repeat steps for every
+item of a list with an `each` step. Put retries and any other behavior in an
+Agency function, then call that function from a step.
 
 ## Your first workflow
 
@@ -225,6 +226,144 @@ If your functions call TypeScript, name their directories as trusted modules in
 Build your project before you check or run the workflow. A trusted module is
 your own code, so the sandbox does not check it. See
 [trusted modules](/guide/agency-config-file#trusted-modules).
+
+## Branching with `match`
+
+This workflow asks an LLM whether a support message is a refund request, and
+forwards only refund requests to the billing team:
+
+```json
+{
+  "format": 1,
+  "name": "routeSupportMessage",
+  "description": "Forward a refund request to the billing team.",
+  "inputs": "{ message: string }",
+  "steps": [
+    {
+      "id": "sort",
+      "kind": "llm",
+      "prompt": "Is this support message a refund request or a question?",
+      "context": [{ "$ref": "inputs.message" }],
+      "output": "{ kind: \"refund\" | \"question\" }"
+    },
+    {
+      "id": "branch",
+      "kind": "match",
+      "on": { "$ref": "steps.sort.kind" },
+      "cases": [
+        {
+          "is": "refund",
+          "steps": [
+            {
+              "id": "forward",
+              "kind": "tool",
+              "module": "./billing.agency",
+              "tool": "forwardToBilling",
+              "args": { "text": { "$ref": "inputs.message" } }
+            }
+          ]
+        },
+        { "is": "question", "steps": [] }
+      ]
+    }
+  ],
+  "result": { "$ref": "steps.sort" }
+}
+```
+
+The `branch` step reads one value, the model's answer, and runs the steps of
+the case whose `is` equals it. The rules:
+
+1. `on` is a reference.
+2. Each `is` is a string, a number, or `true` or `false`. No two cases may have
+   the same `is`. The number `1` and the string `"1"` are different values.
+3. A case's `steps` may be empty, which means "do nothing for this value".
+4. When no case fits and the step has no `otherwise`, the workflow fails, and
+   the failure names the step: `step branch: no case matches "spam"`.
+5. An `otherwise` list runs when no case fits. Write `"otherwise": []` to
+   ignore other values.
+6. A step inside a case can be read only by later steps in that case.
+7. A `match` has no value, so no reference may name it. When the last step is a
+   `match`, set `result`.
+
+An if/else is a `match` on a boolean with the cases `true` and `false`.
+
+The checker does not report a case that can never match. If you misspell
+`"refund"` as `"refnud"`, a refund request fails the run with "no case
+matches", which you will see. With `"otherwise": []`, the same request is
+skipped and nothing reports it, so check each `is` against the values `on` can
+have.
+
+## Repeating with `each`
+
+This workflow ships every order in a list, then reports what shipped:
+
+```json
+{
+  "format": 1,
+  "name": "shipOrders",
+  "description": "Ship every order in the list.",
+  "inputs": "{ orders: { id: string; address: string }[] }",
+  "steps": [
+    {
+      "id": "order",
+      "kind": "each",
+      "over": { "$ref": "inputs.orders" },
+      "steps": [
+        {
+          "id": "ship",
+          "kind": "tool",
+          "module": "./shipping.agency",
+          "tool": "shipOrder",
+          "args": {
+            "orderId": { "$ref": "each.order.id" },
+            "address": { "$ref": "each.order.address" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "kind": "tool",
+      "module": "./shipping.agency",
+      "tool": "shippedToday",
+      "args": {}
+    }
+  ],
+  "result": { "$ref": "steps.report" }
+}
+```
+
+The `order` step runs its steps once for every item of the list, in order.
+Inside the loop, `each.order` is the current item, so `each.order.id` is the
+current order's id. The rules:
+
+1. `over` is a reference to a list. An empty list runs the steps zero times.
+2. Name the loop after one item, as `order` is here, so references read well.
+3. Read the current item as `each.<loop id>`. A loop inside another loop can
+   read both items.
+4. A step inside the loop can be read only by later steps in the same round.
+5. An `each` has no value, so set `result` to a step outside it.
+6. A failure in one round stops the workflow, and the failure names the step.
+7. Each round starts with an empty conversation, so an LLM step in round 10
+   does not see rounds 1 to 9.
+
+A step may read any input, any earlier step in its own list or in a list that
+holds it, and the current item of every loop it is inside. Nothing outside a
+`match` or an `each` can read a step inside it.
+
+The checker warns when a loop holds an LLM step, or a function that hands work
+to an agent, and the workflow sets no `limits.maxCost`, because the cost then
+depends on the length of the list. See [Setting limits](#setting-limits).
+
+### What a model decides
+
+Without `match` and `each`, a workflow runs the same steps every time. With a
+`match` on an LLM step's value, a model picks among the routes you wrote. With
+an `each` over a list an LLM step produced, a model sets how many times the
+loop's steps run, and with which item each time. A model never adds a route or
+a function. Each step still asks for its own approval when it runs, with that
+round's real arguments.
 
 ## Approvals and effects
 

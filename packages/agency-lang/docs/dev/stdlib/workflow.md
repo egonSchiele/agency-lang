@@ -104,6 +104,70 @@ A diagnostic on the call line belongs to the field `args`. When its code is one 
 
 `checkWorkflow` runs `typecheck` before `compile`. A strict compile reports type errors too, but as one message with no line, so it runs second.
 
+## Blocks: `match` and `each`
+
+Two step kinds hold step lists of their own. A `match` step runs the steps of the case whose `is` equals a value:
+
+```json
+{ "id": "route", "kind": "match", "on": { "$ref": "inputs.level" },
+  "cases": [ { "is": "urgent", "steps": [ { "id": "add", ... } ] }, { "is": "normal", "steps": [] } ] }
+```
+
+```
+const step_route_on = inputs.level
+const step_route_case1 = step_route_on == "urgent"
+const step_route_case2 = step_route_on == "normal"
+if (step_route_case1) {
+  ...the add step...
+} else if (step_route_case2) {
+} else {
+  return failure("step route: no case matches ${JSON.stringify(step_route_on)}", { step: "route" })
+}
+```
+
+An `each` step runs its steps once per item of a list, and `each.<id>` reads the current item:
+
+```json
+{ "id": "note", "kind": "each", "over": { "$ref": "steps.search" },
+  "steps": [ { "id": "text", "kind": "tool", "module": "./notes.agency", "tool": "readNote",
+               "args": { "id": { "$ref": "each.note.id" } } } ] }
+```
+
+```
+const step_note_over = step_search.value
+for (step_note_item in step_note_over) {
+  thread {
+    const step_text_id = step_note_item.id
+    const step_text = readNote(id: step_text_id)
+    ...the failure check...
+  }
+}
+```
+
+With an `otherwise`, its steps go in the last `else` and there is no failure line. The value and each case's comparison are bound to locals first, so a type error in `on` lands on a line `on` owns, and a case's line belongs to its `is`. `==` compiles to `__eq`, which is `===` except that `null` equals `undefined`, so the case `1` does not match the string `"1"`.
+
+A `match` lowers to an if/else-if chain. It does not lower to Agency's `match`, because inside a `match` arm, `return` returns from the arm, so a failure check there would end the arm and the workflow would carry on. Inside an `if` block and a `thread` block, `return` returns from `main`, which is what every failure check needs.
+
+Each round of an `each` runs inside a `thread` block, so it starts with an empty conversation. A tool that calls a model appends to the conversation it is called in, and without the block round 10 would resend rounds 1 to 9. The runtime gives the block a new conversation every round (`clearIterationLocals` in `lib/runtime/runner.ts`). `eachRoundHasItsOwnThread` in `tests/agency/workflow/matchEach.agency` checks it with a tool that fails on a conversation that already holds a message, and `freshThreadOnlyFailsOnASharedThread` shows that tool does fail when two steps share one.
+
+A block has no value, so no reference may name it, and a workflow whose last top-level step is a block must set `result`. A value for the block would need the program to declare a variable before it, with a type, and the generator does not know types: it writes `const` declarations and lets the typechecker infer them.
+
+### What a step may reference
+
+`referenceRule` in `resolve.ts` walks the tree with a `Scope`: the tool and LLM steps a reference may name (`visible`), the enclosing loops (`loops`), and the steps after this one in its own list or an enclosing list (`later`). A step may read any input, any earlier step in its own list, any step before the block it is inside at every level, and the item of every loop it is inside. A step's own fields see the scope before it; a tool or LLM step joins `visible` for the rest of its list; a block's lists start from the scope at the block, and nothing they add leaves them. So nothing outside a block reads a step inside it, a step in one case cannot read a step in another, and `result` reads top-level steps only. A reference to a step that is not visible gets "comes after this step" when the step is in `later`, and "is inside a block this step is not in" otherwise. Agency's block scope enforces the same rule a second time in the generated program.
+
+A step id is unique across the whole tree, so every generated name, guard label, and `workflowSchemas` entry stays unique with no change to how they are built. A block declares only the locals its lines read: `step_<id>_on` and `step_<id>_case<n>` for a match, `step_<id>_over` and `step_<id>_item` for a loop. `collisionRule` refuses a step id that would produce the same local.
+
+A block takes no `limits`. A step's limits become a `guard` block, and `return` inside a guard returns from the guard, so a guard around a block would change what the failure checks inside it do. The workflow's limits cover the block, and each step inside may set its own. `costWarnings` warns on the outermost loop that holds an LLM step or a `handoff` tool when the workflow sets no `maxCost`.
+
+### Where the step lists are
+
+`locatedSteps` in `types.ts` is the one function that knows where a step list can be: the workflow's `steps`, a case's `steps`, a match's `otherwise`, and an each's `steps`. It returns every object in those lists with its JSON path, in document order, and skips anything that is not an object or a list. It takes unchecked JSON because two readers run before parse succeeds: `problemAt` in `parse.ts`, which names a problem by the innermost step with an id whose path holds the issue, and the CLI's import planner in `lib/cli/workflow/toolImports.ts`. `allSteps` is the same walk over a parsed workflow. Every rule that reads steps reads them through one of the two, so a tool inside a case is imported, checked against the tool list, counted by `raises`, and listed by `agency workflow check`.
+
+### Lowering a block
+
+A block's opening line, such as `for (a in b) {`, does not parse without its body, so it cannot be a `Code` fragment. `Lowered.body` stays one flat list in which a fragment is either a statement from a shape or a line of a block's own text (`ifLine`, `forLine`, `ELSE_LINE`, `THREAD_LINE`, `CLOSE_LINE` in `shapes.ts`). Each fragment records how many blocks it is inside, and render indents it by the scaffold's depth plus that number. The line ranges come from the same prints, so a diagnostic three levels down maps to its own step and field. A block's own lines hold generated names that pass `isIdentifier` and nothing else. A case's value enters through the `caseTest` shape as a literal, as every other workflow value does. Child statements are filled and printed one at a time, so the loop variable is never bound by a template a child is filled into, and hygiene has nothing to rename.
+
 ## Running a workflow
 
 `runWorkflow(workflow, inputs, tools, dir)` does three things in order:
@@ -155,6 +219,8 @@ The node asks zod for the schema's input form, which describes what a caller may
 ### `checkWorkflowWithSchemas`
 
 A host that saves workflows itself, as BMO does in a table, needs from one compile what `writeWorkflow` gets in two of its steps: the warnings and the inputs schema. It also needs what an LLM step produces, so an editor can offer a later step the fields of that output. `checkWorkflowWithSchemas(workflow, tools, dir)` is `_checked` followed by `_workflowSchemas`, and returns `{ warnings, inputsSchema, outputSchemas }`. `outputSchemas` is keyed by step id and holds only LLM steps: a tool step's result type is the tool's declared return type, which `catalog` reports as text. An output schema is the output form of the step's type, the value a later step reads. A workflow with problems fails with them before any process starts, so the function raises `std::run` only for a workflow that passed. A rejected or failed run is returned as it came, with `rejected` set and no `problems`, so a host can tell a refusal from a workflow problem the way `catalog` lets it tell a refused read; only the node's own failure becomes a problem. In practice the node does not fail: `parseTypeText` refuses a `regex` anywhere in `inputs` or an LLM step's `output`, naming the field, because JSON Schema cannot express one and the node would fail with zod's message instead of a step and field. A type name from a tool's signature, such as `Note` in `inputs`, is refused by the typecheck (AG1034): the generated program imports its tools and nothing else, so the name has no binding there. The problem is reported on the `inputs` field, or on the LLM step's `output`, and names the module that declares the type. Before this export existed, BMO called `_checked` and `_inputsSchema`, two underscore names a release could rename.
+
+`outputSchemas` holds every LLM step, including one inside a `match` or an `each`. Not every later step may read such a step, so an editor that offers an output's fields to another step has to apply the scope rule in "Blocks: `match` and `each`" first.
 
 The node is named `workflowSchemas`, so a tool of that name would shadow it and is refused through `PROGRAM_NAMES` (`resolve.ts`), which is checked against the tool a step calls; step ids are always prefixed and can never collide. `inputsSchema` stays in the list although no generated node has that name now, so no tool list refused before passes now.
 
@@ -251,6 +317,8 @@ The generator raises nothing itself. `compileWorkflow` and `checkWorkflow` raise
 
 The generated program is ordinary Agency, and it runs in a child process. Each step raises the interrupts its tool raises, and they go up the parent's handler chain, so the caller's handlers and policy answer them. One that no handler answers pauses the child, which saves a checkpoint and exits. The interrupt then surfaces to the user like any other, and a resume starts a fresh child from the checkpoint at the step's line. `tests/agency/workflow/runMealPlan.agency` pins this: the last step's interrupt is left to the test runner to approve, and the resume finishes the workflow. The test does not show that the resume skipped the LLM step. Each child builds its own mock client from the full mock list, so a repeated model call would be answered too.
 
+A step inside a block raises what its tool raises, when it runs, and a step in a loop raises once per round with that round's real arguments. The generator adds nothing for this. The runtime records which branch of an `if` was taken and which round and statement of a `for` loop a run paused in (`docs/dev/runtime/interrupts.md`), so a resume lands in the same branch and round. The scaffold's handler wraps the whole body, so it encloses every block, and a guard trip from a step inside a loop is rejected by the same label check. `eachResumesMidLoop` in `tests/agency/workflow/matchEach.agency` leaves each round's interrupt to the test runner and checks that no finished round runs again.
+
 ## Tool modules
 
 `toolRefs` in `tools.ts` turns the host's function values into the module text an import uses. A function value whose module id is under `stdlib/` becomes `std::<name>`. Any other tool is local. Its import path comes from its source file, the absolute path of the `.agency` file it was defined in (`sourceFile`, see [agency-function.md](../language/agency-function.md)), written relative to the workflow's `dir`:
@@ -296,7 +364,7 @@ The entry joins two sources. `describe` reads the tool's module. It gives the de
 
 `effects` is what the tool can raise, as `describe` reports it. It keeps `std::guard` for a tool that uses `guard`, because an entry describes the tool, not a workflow. `stepEffects` drops `std::guard`, because a guard trip is a question about budget, not a permission. So `agency workflow tools` can list `std::guard` for a tool that `agency workflow check` never lists for a workflow that calls it.
 
-`type`, `default`, and `returns` are Agency text, written the way the signature writes them, so a reader can compare one tool's `returns` with another tool's parameter `type`. `returnSchema` is the same return type as a JSON Schema, with a `Result` unwrapped to its success type, since that is what a reference into the step reads. The compiler emits it as a thunk on every exported def beside the parameter schema (`returnSchemaFor` in `typescriptBuilder.ts`), from the declared type, so it needs no subprocess and costs nothing at module load; an alias of `Result` is looked through the way `describe`'s `returnsResult` does. A tool with no declared return type, one that returns a function, or one whose type holds a `regex` (which JSON Schema cannot express) has null. An alias the module never imports by name has no schema const there, so the compiler writes its body in place: `Record<string, ExportInfo>` inlines `ExportInfo`, whose body names `ExportParam`, and `ExportParam`'s body is written where its name would go. Such an alias that refers to itself cannot be written in place, and a tool whose return type reaches one has null. A schema that prints an imported alias by name, such as `Result<Outer>`, is fine whatever `Outer`'s body names, since the declaring module supplies the body. A `default` of null means a step must pass the parameter. A function-typed parameter, such as a block, is not in the tool's schema, and the catalog leaves it out, because a step's arguments are JSON values. The entry's `description` is the docstring with every `@param` entry removed, including one whose name matches no parameter. `handoff` is true for a `handoff def`, taken from what `describe` reports, so a picker can show an agent apart from a function; a step calls either the same way, as an ordinary call. One consequence worth knowing: an LLM step runs inside `thread { }` and starts with an empty conversation, but a tool step's call goes straight into `main`'s body, so two agent steps in one workflow append to the same thread and the second sees the first's prompt and answer. That predates the catalog marking agents; wrapping tool steps in `thread { }` in `lower.ts` is the follow-up.
+`type`, `default`, and `returns` are Agency text, written the way the signature writes them, so a reader can compare one tool's `returns` with another tool's parameter `type`. `returnSchema` is the same return type as a JSON Schema, with a `Result` unwrapped to its success type, since that is what a reference into the step reads. The compiler emits it as a thunk on every exported def beside the parameter schema (`returnSchemaFor` in `typescriptBuilder.ts`), from the declared type, so it needs no subprocess and costs nothing at module load; an alias of `Result` is looked through the way `describe`'s `returnsResult` does. A tool with no declared return type, one that returns a function, or one whose type holds a `regex` (which JSON Schema cannot express) has null. An alias the module never imports by name has no schema const there, so the compiler writes its body in place: `Record<string, ExportInfo>` inlines `ExportInfo`, whose body names `ExportParam`, and `ExportParam`'s body is written where its name would go. Such an alias that refers to itself cannot be written in place, and a tool whose return type reaches one has null. A schema that prints an imported alias by name, such as `Result<Outer>`, is fine whatever `Outer`'s body names, since the declaring module supplies the body. A `default` of null means a step must pass the parameter. A function-typed parameter, such as a block, is not in the tool's schema, and the catalog leaves it out, because a step's arguments are JSON values. The entry's `description` is the docstring with every `@param` entry removed, including one whose name matches no parameter. `handoff` is true for a `handoff def`, taken from what `describe` reports, so a picker can show an agent apart from a function; a step calls either the same way, as an ordinary call. An LLM step runs inside `thread { }` and starts with an empty conversation. A tool step's call goes straight into the body around it, so two agent steps at the top level append to `main`'s conversation, and the second sees the first's prompt and answer. Each round of an `each` runs in a `thread` block of its own, so agent steps in a loop share only their round's conversation.
 
 `catalog` starts with the same two steps as `checkWorkflow`: `_toolRefs`, then `_signatures`. So it refuses the same tool lists, with every problem in `data.problems`, and it raises one `std::read` for each local module and nothing for a `std::` module. A failed or rejected read is returned as it came. It keeps its `rejected` flag and has no `data.problems`, which is how a caller tells it from a refused tool list. Entries keep the tool list's order.
 

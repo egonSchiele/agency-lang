@@ -1,3 +1,4 @@
+import { compile, run } from "std::agency"
 import { cliPolicyHandler, deferUndecided, policyAfterRestore } from "std::policy"
 
 def readSecret(): string {
@@ -38,6 +39,38 @@ node ruleDecides(args: { policyFile: string }): string {
   let outcome = ""
   handle {
     outcome = outcomeOf(try readSecret())
+  } with handler
+  deferUndecided(false)
+  return outcome
+}
+
+// An interrupt a subprocess raises is asked about in place, even while
+// undecided interrupts are deferred. Left unanswered, the child would
+// pause, and a restore of the parent's checkpoint could not answer it.
+node childIsAsked(args: { policyFile: string }): string {
+  const handler = cliPolicyHandler(
+    file: args.policyFile,
+    policy: {
+      "myapp::secret": [{ action: "propagate" }],
+      "*": [{ action: "approve" }]
+    },
+    interactive: true,
+  )
+  deferUndecided(true)
+  let outcome = ""
+  handle {
+    const compiled = compile("""
+node main() {
+  interrupt myapp::secret("Allow reading the secret?", { key: "k" })
+  return "the child went on"
+}
+""")
+    if (compiled is success(program)) {
+      const ran = run(compiled: program, node: "main")
+      outcome = JSON.stringify(ran)
+    } else {
+      outcome = "did not compile"
+    }
   } with handler
   deferUndecided(false)
   return outcome

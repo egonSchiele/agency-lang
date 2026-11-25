@@ -2,5 +2,7 @@
   "leftTheRun": ["myapp::secret"],
   "carriesACheckpoint": true,
   "ruleDecides": "approved: granted",
+  "childWentOn": true,
+  "childWasAskedOnce": true,
   "givenPolicyRejects": true
 }

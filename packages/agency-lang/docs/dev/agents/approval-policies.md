@@ -749,13 +749,27 @@ checkpoint: closing the terminal then loses the turn. Two functions in
   `deferUndecided(false)` and restores that checkpoint: the interrupt is
   raised again, and the handler asks. A rule still decides while this is
   on, and a handler made with `interactive: false` still rejects.
+  - **An interrupt a subprocess raised is never deferred.** The parent
+    answers a child's interrupt with its own handler chain. If that
+    handler left it unanswered, the child would pause, and the parent's
+    restore could not answer it: the resume fails with "Missing user
+    response for subprocess interrupt". So the person is asked in place
+    (`lib/runtime/answeringSubprocess.ts`), and that one approval has no
+    saved checkpoint.
+  - **`askAbout` never defers.** It answers an interrupt handed to it as
+    data, which has left its run already. Only the handler passes
+    `mayDefer` to `answerByPolicy`.
 - **`policyAfterRestore(file, policy, answersOnly)`** gives the handler a
   policy to take at its next interrupt. The handler keeps its policy in
   the run's state, so a restore brings back the policy the saving program
   had. A program that restores a checkpoint another sitting saved calls
   this first, with the policy for this sitting.
+- **`policyFileInUse()`** is the file the handler saves "always" answers
+  to now. A program that needs it reads it here. A copy of its own, kept
+  in the run's state, would come back from a restore as the saving
+  sitting had it.
 
-Both are kept outside the run's state (`processSlot` in
+The first two are kept outside the run's state (`processSlot` in
 `lib/stdlib/policy.ts`), so a restore does not change them. That is the
 point: a value in the run's state would come back as it was saved.
 

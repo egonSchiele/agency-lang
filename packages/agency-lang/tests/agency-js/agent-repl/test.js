@@ -44,6 +44,10 @@ function sitting(flags, stdio = ["pipe", "pipe", "pipe"]) {
       NO_COLOR: "1",
       NOTE_DIR: notes,
       STAGE_FLAGS: flags,
+      // One restore a run. Each approval a person is asked about restores
+      // a checkpoint, and the first sitting asks about two: those restores
+      // are paced by a person and must not count toward this.
+      AGENCY_CONFIG_OVERRIDES: JSON.stringify({ checkpoints: { maxRestores: 1 } }),
     },
   });
   const state = { child, printed: "", exited: new Promise((resolve) => child.on("exit", resolve)) };
@@ -138,6 +142,12 @@ type(first, "write the note");
 const asked = await printedSince(first, beforeWrite, "approval needed");
 first.child.stdin.write("a\r");
 const wrote = await printedSince(first, beforeWrite, "wrote the note");
+// A second approval in the same sitting.
+const beforeSecondWrite = first.printed.length;
+type(first, "write the note twice");
+await printedSince(first, beforeSecondWrite, "approval needed");
+first.child.stdin.write("a\r");
+const wroteTwice = await printedSince(first, beforeSecondWrite, "wrote the note");
 const firstNote = noteNow();
 const goodbye = await close(first);
 const shown = stripAnsi(first.printed);
@@ -166,6 +176,21 @@ const secondNote = noteNow();
 const goodbyeAfterResume = await close(third);
 const afterThird = record();
 
+// The fourth sitting is closed with another approval on screen. The fifth
+// continues it with `--reject std::write`: the flag given now decides the
+// write that was waiting, so nothing is asked and nothing is written.
+const fourth = sitting("--continue");
+await started(fourth);
+type(fourth, "write the note once more");
+await printedSince(fourth, 0, "approval needed");
+fourth.child.kill("SIGKILL");
+await fourth.exited;
+const fifth = sitting("--continue --reject std::write");
+const refusedByTheFlag = await printedSince(fifth, 0, "the write was refused");
+const askedDespiteTheFlag = stripAnsi(fifth.printed).includes("approval needed");
+const noteAfterTheFlag = noteNow();
+await close(fifth);
+
 // Started with `--policy minimal` and closed before any turn: the session
 // is never saved, so the policy file it was started with is gone too.
 const policiesDir = path.join(home, "session-policies");
@@ -187,6 +212,7 @@ writeFileSync(
       repliedAfterEsc,
       asked,
       wrote,
+      wroteTwice,
       firstNote,
       goodbye,
       afterFirst,
@@ -198,6 +224,9 @@ writeFileSync(
       secondNote,
       goodbyeAfterResume,
       afterThird,
+      refusedByTheFlag,
+      askedDespiteTheFlag,
+      noteAfterTheFlag,
       policyFilesLeft,
     },
     null,
@@ -208,4 +237,5 @@ if (!goodbye || !goodbyeAfterResume || process.env.SHOW === "1") {
   console.error("=== first ===\n" + shown.slice(-3000));
   console.error("=== second ===\n" + stripAnsi(second.printed).slice(-2000));
   console.error("=== third ===\n" + stripAnsi(third.printed).slice(-3000));
+  console.error("=== fifth ===\n" + stripAnsi(fifth.printed).slice(-3000));
 }

@@ -14,16 +14,22 @@ import {
  } from "agency-lang/stdlib-lib/agentDriver/sessionPolicy.js"
 import { _resolveRunPolicy } from "agency-lang/stdlib-lib/runPolicy.js"
 import { _exit } from "agency-lang/stdlib-lib/system.js"
-import { Policy, cliPolicyHandler, currentPolicy, parsePolicyFile } from "std::policy"
+import {
+  Policy,
+  cliPolicyHandler,
+  currentPolicy,
+  parsePolicyFile,
+  policyFileInUse,
+ } from "std::policy"
 import { cwd } from "std::system"
 
 import { POLICY_DIR, POLICY_PATH } from "./config.agency"
 import { getPolicyForAgent } from "./policy.agency"
 import { currentRecord } from "./record.agency"
 
-// The file an "always" answer is saved to: policy.json, or the session's
-// own policy file when it has one.
-let _policyFile: string = ""
+// Where "always" answers go is the handler's to say (`policyFileInUse`).
+// A copy kept here would come back from a restore as the sitting that
+// saved the session had it, and the handler's is set for this sitting.
 
 /** The policy the session runs under, and where "always" answers go. */
 export type SessionPolicy = {
@@ -110,7 +116,7 @@ export def resumedSessionPolicy(id: string, flags: any): SessionPolicy {
   saved, so the policy file it was started with is removed too. */
 export def forgetUnsavedPolicy() {
   const record = currentRecord()
-  if (record == null || record.turns > 0 || _policyFile != carriedPolicyPath(record.id)) {
+  if (record == null || record.turns > 0 || policyFileInUse() != carriedPolicyPath(record.id)) {
     return
   }
   const removed = removeCarriedPolicy({ home: POLICY_DIR, id: record.id })
@@ -122,7 +128,7 @@ export def forgetUnsavedPolicy() {
 /** After `/fork`: a session with a policy file of its own keeps that
   policy under its new id, and "always" answers go to the new file. */
 export def forkSessionPolicy(from: string, to: string) {
-  if (_policyFile != carriedPolicyPath(from)) {
+  if (policyFileInUse() != carriedPolicyPath(from)) {
     return
   }
   const copied = copyCarriedPolicy({ home: POLICY_DIR, from: from, to: to })
@@ -130,30 +136,19 @@ export def forkSessionPolicy(from: string, to: string) {
     print(color.yellow("This session's policy could not be copied to the fork: ${reason}"))
     return
   }
-  _policyFile = carriedPolicyPath(to)
   // The handler saves to the file it was given, so it is given the new one,
   // with the policy it holds now.
   cliPolicyHandler(
-    file: _policyFile,
+    file: carriedPolicyPath(to),
     policy: currentPolicy(),
     interactive: true,
     answersOnly: true,
   )
 }
 
-/** Where "always" answers go from now on. Set before the session starts. */
-export def setSessionPolicyFile(file: string) {
-  _policyFile = file
-}
-
-/** Where "always" answers go. */
-export def sessionPolicyFile(): string {
-  return _policyFile
-}
-
 /** True when the session's approvals come from the saved policy file,
   policy.json, and false when it runs on a policy of its own or on
   --policy, --approve or --reject, none of which is written back to it. */
 export def usesSavedPolicy(): boolean {
-  return _policyFile == POLICY_PATH
+  return policyFileInUse() == POLICY_PATH
 }

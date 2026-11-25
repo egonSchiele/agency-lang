@@ -1353,6 +1353,12 @@ function routeInputThroughRepl(
 // restore, and its first submit picks that turn up. It is submitted even
 // when empty, since the turn it picks up does not read the line. It is
 // kept outside the execution model, so the restore leaves it alone.
+//
+// The pick-up depends on `onSubmit` being the first Agency function the
+// REPL calls after it starts. The saved frames are handed to the next
+// frames pushed, so that call gets the saved frame of the line. A change
+// that calls `status`, or any other Agency callback, before the first
+// submit would hand it the line's frame.
 const replResubmit = processSlot<string | null>("agency.replResubmit", () => null);
 
 export function _setReplResubmit(line: string): void {

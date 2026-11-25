@@ -10,13 +10,10 @@ import {
   _sessionOnSubmit,
   _takeCheckpointToRestore,
  } from "agency-lang/stdlib-lib/agentReplSession.js"
-import { renderEditDiff } from "agency-lang/stdlib-lib/agentTerminalDiff.js"
 import { _setReplResubmit } from "agency-lang/stdlib-lib/cli.js"
 import { _addToTranscript } from "agency-lang/stdlib-lib/agentTranscript.js"
-import { editDiff } from "agency-lang/stdlib-lib/editDiff.js"
 import { localModelsSupported, listModelNames } from "std::agency/local"
 import { listHostedModels } from "std::llm"
-import { checkPolicy, currentPolicy } from "std::policy"
 import { getModelCosts } from "std::thread"
 import {
   chooseOption,
@@ -387,39 +384,19 @@ def imageSlashCommand(message: string): boolean {
   return messageTurn("", message)
 }
 
-/** Draw the diff of an edit a rule approves. Such an edit gets no prompt,
-  and the prompt is what draws an edit's diff. */
-def showApprovedEdit(intr: any) {
-  if (intr.data == null) {
-    return
-  }
-  const decision = checkPolicy(currentPolicy(), intr)
-  if (decision.type != "approve") {
-    return
-  }
-  pushMessage(renderEditDiff(intr.data.filename, editDiff(intr.data.before, intr.data.after)))
-}
-
 /** One message as a turn: the model answers it, and the reply is drawn.
-  `target` is a start target such as "code", or "" for the main agent. */
+  `target` is a start target such as "code", or "" for the main agent.
+  An edit's diff is drawn by the policy handler: in its prompt, or when a
+  rule approves the edit. */
 def messageTurn(target: string, text: string): boolean {
-  // Before the turn, so a cancel takes the entry away with the turn.
+  // Before the turn, so a turn picked up from a checkpoint taken at an
+  // approval already has its entry, and it is not added twice.
   _addToTranscript("user", text)
   // The message is worked out on its own line. A call inside the argument
   // of a `try` call is run again when a turn is picked up from a
   // checkpoint, and takes the saved frame of the turn (#1506).
   const message = withPendingNotes(text)
-  let reply: Result<string> = failure("The turn did not run.")
-  handle {
-    reply = try runTurn(target, message)
-  } with (intr) {
-    // This handler never decides: it always passes. It sees an edit even
-    // when a rule answers it.
-    if (intr.effect == "std::edit") {
-      showApprovedEdit(intr)
-    }
-    return pass()
-  }
+  const reply = try runTurn(target, message)
   if (reply is success(replyText)) {
     if (replyText != "" && replyText != null) {
       _addToTranscript("assistant", replyText)

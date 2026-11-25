@@ -43,16 +43,20 @@ function wait(ms, signal) {
 
 __setLLMClient({
   // "take your time" is slow enough for the test to press Esc. "write the
-  // note" asks to write a file no rule covers, and then says it did. Every
-  // other call, the title's included, gets the same reply.
+  // note" asks to write a file no rule covers, and then says whether it
+  // was written or refused. Every other call, the title's included, gets
+  // the same reply.
   async text(config) {
     const said = lastUserText(config);
     if (said.includes("take your time")) {
       await wait(4000, config.abortSignal);
     }
     if (said.includes("write the note")) {
-      if (config.messages.at(-1)?.role === "tool") {
-        return reply("wrote the note");
+      const last = config.messages.at(-1);
+      if (last?.role === "tool") {
+        // What the write tool told the model: done, or refused.
+        const told = typeof last.content === "string" ? last.content : JSON.stringify(last.content);
+        return reply(/reject/i.test(told) ? "the write was refused" : "wrote the note");
       }
       const write = new ToolCall("call-write", "write", {
         filename: "note.txt",

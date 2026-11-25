@@ -34,7 +34,6 @@ import {
   forgetUnsavedPolicy,
   newSessionPolicy,
   resumedSessionPolicy,
-  setSessionPolicyFile,
   unsavedSessionPolicy,
  } from "./lib/sessionPolicy.agency"
 import { SessionRecord } from "./lib/sessions.agency"
@@ -59,7 +58,6 @@ def oneShot(args: any, brainName: string, target: string, prompt: string) {
   // `evalOutputRecorded` events, not from stdout.
   evalValue(prompt)
   const resolved = getPolicyForAgent(args.flags.policy ?? "", args.flags.approve ?? "", args.flags.reject ?? "", false)
-  setSessionPolicyFile(resolved.policyFile)
   // Before the policy handler exists, as for a session (`interactive`).
   setGrounding(groundingText(brainName, args.flags))
   const handler = cliPolicyHandler(
@@ -127,7 +125,6 @@ def interactive(args: any, brainName: string, startAgent: string, seedPrompt: st
     setCurrentRecord(fresh)
     sessionPolicy = newSessionPolicy(fresh.id, args.flags)
   }
-  setSessionPolicyFile(sessionPolicy.file)
   // Built once, and before the policy handler exists: its reads of the
   // project's instructions and the scratch folder it makes approve
   // themselves, and the handler would ask about them all the same. Every

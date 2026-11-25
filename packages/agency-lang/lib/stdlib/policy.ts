@@ -2,6 +2,7 @@ import { checkPolicy, validatePolicy } from "@/runtime/policy.js";
 import { currentRun } from "@/runtime/asyncContext.js";
 import { currentHost } from "@/runtime/currentHost.js";
 import { processSlot } from "@/runtime/processSlot.js";
+import { isAnsweringSubprocess } from "@/runtime/answeringSubprocess.js";
 import path from "#path";
 import { assertContained } from "./assertContained.js";
 import { allAlwaysScopes, type ScopedField } from "@/runtime/alwaysScope.js";
@@ -312,6 +313,9 @@ export function _setDefersUndecided(defers: boolean): void {
   processPolicy.set({ ...processPolicy.get(), defersUndecided: defers });
 }
 
+/** Whether the handler leaves this interrupt unanswered. Never for one a
+ *  subprocess raised: the program's restore of the checkpoint could not
+ *  answer the child (`answeringSubprocess.ts`), so the person is asked. */
 export function _defersUndecided(): boolean {
-  return processPolicy.get().defersUndecided;
+  return processPolicy.get().defersUndecided && !isAnsweringSubprocess();
 }

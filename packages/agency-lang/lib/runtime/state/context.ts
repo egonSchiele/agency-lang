@@ -175,6 +175,12 @@ export class RuntimeContext<T> {
   pauseRequested: boolean;
   _pendingArgOverrides?: PendingArgOverrides;
   _restoreCount: number;
+  /** The next `restore` is not counted against `maxRestores`. The cap is
+   *  there to stop a restore loop, which nothing paces. A host sets this for
+   *  a restore that a person's answer paces, as `agency agent` does for each
+   *  approval it asks about (lib/stdlib/agentReplSession.ts). It holds for
+   *  one restore. */
+  _nextRestoreUncounted: boolean;
 
   /* Here is why this is needed: When you're stepping through the code,
   every step emits a checkpoint and halts execution. When you execute an
@@ -435,6 +441,7 @@ export class RuntimeContext<T> {
     this.beforeCheckpoint = [];
     this.pauseRequested = false;
     this._restoreCount = 0;
+    this._nextRestoreUncounted = false;
     this._toolCallDepth = 0;
     this.debugSlot = { state: null, waits: [] };
     this.traceWriter = null;
@@ -607,6 +614,7 @@ export class RuntimeContext<T> {
     execCtx.beforeCheckpoint = [];
     execCtx.pauseRequested = false;
     execCtx._restoreCount = 0;
+    execCtx._nextRestoreUncounted = false;
     execCtx._toolCallDepth = 0;
     execCtx._interruptResponses = {};
     execCtx.debugSlot = this.debugSlot;

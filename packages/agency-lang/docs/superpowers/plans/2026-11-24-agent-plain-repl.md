@@ -717,6 +717,19 @@ What differs from the tasks above, found while building it.
   `savedRun` from the one after. Both are left out of the picker
   (`listSessions`) and refused by `--resume <id>`. A session whose code
   has changed since is refused the same way (`_checkpointFitsThisCode`).
+- **From the review of pull request 1:**
+  - An approval a subprocess raises is asked in place and not deferred
+    (`lib/runtime/answeringSubprocess.ts`). Deferred, the child paused and
+    the restore could not answer it.
+  - The restore after an asked approval is not counted against
+    `maxRestores` (`_nextRestoreUncounted`). Counted, the 101st asked
+    approval in a sitting ended the process.
+  - The turn has no handler of its own for edit diffs. `cliPolicyHandler`
+    draws an edit's diff when a rule approves it, so the one copied from
+    the core drew it a second time.
+  - The agent keeps no copy of the policy file's path
+    (`policyFileInUse`).
+  - `askAbout` never defers.
 - **There is no `/effort` command**, so there is no `changeEffort`.
 - **`lib/terminal.agency` is deleted in this pull request**, since
   everything in it moved. `sessionPolicy.agency` imports the two files

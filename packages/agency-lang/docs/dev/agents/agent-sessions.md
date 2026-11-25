@@ -116,6 +116,18 @@ resume in a new process. Three things follow from it:
   run's state** (`processSlot`), so the restore leaves it alone. A value
   an Agency statement made would come back from the checkpoint as it was
   saved.
+- **These restores are not counted against `maxRestores`.** The cap
+  (100 a run) stops a restore loop, and the REPL is one run for the whole
+  sitting. `_takeCheckpointToRestore` marks the restore that follows as
+  uncounted (`_nextRestoreUncounted` on the run's context), since a
+  person's answer paces each one.
+- **An approval a subprocess raises is asked in place**, and has no saved
+  checkpoint (`approval-policies.md`, "A program that saves a checkpoint
+  when it has to ask").
+- **The pick-up depends on `onSubmit` being the first Agency function the
+  REPL calls after it starts.** The saved frames are handed to the next
+  frames pushed. A change to `repl()` that calls `status`, or any Agency
+  callback, before the first submit would hand it the line's frame.
 
 **A cancelled line** (Esc) saves nothing. The call comes back as an
 `AbortedResult`, which `_sessionOnSubmit` throws on as the error the REPL
@@ -167,6 +179,11 @@ what they resolve to as its own policy file,
 - The handler is installed with `answersOnly: true`: the policy in memory
   can hold the flags given now, and only what a person answers "always"
   belongs in the file.
+- Which file the session saves to is the handler's to say
+  (`policyFileInUse` in `std::policy`). `usesSavedPolicy`, which `/policy`
+  asks, and `forkSessionPolicy` read it there. A copy kept in the agent's
+  own state would be the saving sitting's after a resume with other
+  flags.
 
 ### The transcript
 

@@ -128,6 +128,12 @@ export async function _sessionOnSubmit(line: string): Promise<unknown> {
 export function _takeCheckpointToRestore(): unknown {
   const state = session.get();
   session.set({ ...state, toRestore: null });
+  if (state.toRestore !== null) {
+    // The restore that follows is paced by a person's answer, so it is not
+    // counted against the cap that stops a restore loop. A long sitting
+    // asks about more approvals than the cap allows restores.
+    currentRun().ctx._nextRestoreUncounted = true;
+  }
   return state.toRestore;
 }
 

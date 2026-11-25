@@ -1387,7 +1387,7 @@ def _handler(intr: any): any {
   if (_policy == null) {
     return rejectWithoutPolicy()
   }
-  return answerByPolicy(intr, _policy)
+  return answerByPolicy(intr, _policy, mayDefer: true)
 }
 
 // A restore brought the handler's state back from the checkpoint. A
@@ -1413,7 +1413,7 @@ def takePolicyAfterRestore() {
 // The answer once a policy is in hand, for `_handler` and `askAbout`
 // alike: by a rule if one can decide, else the non-interactive reject when
 // no one is at a terminal, else the person's answer.
-def answerByPolicy(intr: any, policy: Policy): any {
+def answerByPolicy(intr: any, policy: Policy, mayDefer: boolean = false): any {
   // A rule may reject anything. A rule may not approve a raise that
   // expects a value: `approve()` carries no value, so the raise site
   // reads it as a bare yes, and for `std::toolbox::review` that accepts a
@@ -1445,8 +1445,9 @@ def answerByPolicy(intr: any, policy: Policy): any {
   }
 
   // Left unanswered, so it leaves the run with a checkpoint
-  // (`deferUndecided`).
-  if (_defersUndecided()) {
+  // (`deferUndecided`). Only the handler may: `askAbout` answers an
+  // interrupt it was handed as data, which has left its run already.
+  if (mayDefer && _defersUndecided()) {
     return propagate()
   }
 
@@ -1579,6 +1580,20 @@ export def currentPolicy(): Policy {
     maybeFlush()
   }
   return _policy ?? {}
+}
+
+/**
+The file the handler saves "always" answers to now: the one
+`cliPolicyHandler` was given, or the one `policyAfterRestore` gave since.
+"" when `cliPolicyHandler` was not called.
+*/
+@hidden
+export def policyFileInUse(): string {
+  """
+  Return the policy file the CLI handler saves "always" answers to.
+  """
+  takePolicyAfterRestore()
+  return globalCliPolicyOpts.file
 }
 
 /**

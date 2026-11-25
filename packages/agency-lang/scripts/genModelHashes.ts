@@ -16,6 +16,28 @@ export function parseHfUri(uri: string): { user: string; repo: string; quant: st
   return { user: m[1], repo: m[2], quant: m[3] };
 }
 
+/** Split `hf:user/repo/file.gguf` (the file form, used where a quant tag
+ *  matches more than one file). The file may sit in a subfolder. Returns
+ *  null for any other URI. */
+export function parseHfFileUri(uri: string): { user: string; repo: string; file: string } | null {
+  const m = /^hf:([^/:]+)\/([^/:]+)\/([^:]+\.gguf)$/.exec(uri);
+  if (!m) return null;
+  return { user: m[1], repo: m[2], file: m[3] };
+}
+
+/** The repo and the one file a curated URI names, or why there is none. */
+async function pinnedFile(
+  uri: string,
+): Promise<{ user: string; repo: string; file: string } | string> {
+  const named = parseHfFileUri(uri);
+  if (named) return named;
+  const parsed = parseHfUri(uri);
+  if (!parsed) return "not an hf: uri";
+  const file = pickSingleQuantFile(await repoFiles(parsed.user, parsed.repo), parsed.quant);
+  if (!file) return `not a single-file ${parsed.quant} gguf (sharded?)`;
+  return { user: parsed.user, repo: parsed.repo, file };
+}
+
 /** The lone `.gguf` whose name contains `quant`; null if zero or many (a sharded
  *  model has many → we record no pin for it). */
 export function pickSingleQuantFile(files: string[], quant: string): string | null {
@@ -48,18 +70,12 @@ async function fetchSha256(user: string, repo: string, file: string): Promise<st
 async function main(): Promise<void> {
   const out: Record<string, string> = {};
   for (const [name, info] of Object.entries(CURATED_LOCAL_MODELS)) {
-    const parsed = parseHfUri(info.uri);
-    if (!parsed) {
-      console.warn(`skip ${name}: not an hf:user/repo:quant uri`);
+    const target = await pinnedFile(info.uri);
+    if (typeof target === "string") {
+      console.warn(`skip ${name}: ${target}`);
       continue;
     }
-    const files = await repoFiles(parsed.user, parsed.repo);
-    const file = pickSingleQuantFile(files, parsed.quant);
-    if (!file) {
-      console.warn(`skip ${name}: not a single-file ${parsed.quant} gguf (sharded?)`);
-      continue;
-    }
-    const sha = await fetchSha256(parsed.user, parsed.repo, file);
+    const sha = await fetchSha256(target.user, target.repo, target.file);
     if (!sha) {
       console.warn(`skip ${name}: no X-Linked-ETag`);
       continue;

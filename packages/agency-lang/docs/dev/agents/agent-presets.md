@@ -76,25 +76,25 @@ The `judge` slot is set the same way, `--model judge=<provider>/<model>`
 or `slots.judge`, and takes the same decision providers. It names the
 decision model that may refuse a broad shell line too complex to review
 ("The command judge" in `docs/dev/stdlib/safe-bash.md`). It has no
-default and no `off`, and a local session does not carry it.
+default, and a local session does not carry it. `off` empties it, so
+`/model judge=off` takes back a judge that a preset or `settings.model`
+set (`OFF_WITHOUT_DEFAULT` in `lib/slots.agency`).
 
 The `image` slot names the model `generateImageFile` makes images with:
 `--model image=google/gemini-3.1-flash-image`, `/model image=...`,
 `slots.image` in a preset or in `settings.model`. It takes only the
 providers smoltalk's `image()` answers through (`IMAGE_PROVIDERS`:
 `openai`, `google`, `litellm`, `openai-compat`). It has no default in
-`SLOT_DEFAULTS` and no `off`: an empty slot sends no model, so
-`generateImage` uses its own default, `gpt-image-1`. Like the router, a
-local session carries it (`localModelOf`, `configureLocalModel`), and
-`/local` keeps it, so a local chat model can still make images with the
-hosted model the user named.
+`SLOT_DEFAULTS`: an empty slot sends no model, so `generateImage` uses
+its own default, `gpt-image-1`. `off` empties it, the same as the judge.
+Like the router, a local session carries it (`localModelOf`,
+`configureLocalModel`), and `/local` keeps it, so a local chat model can
+still make images with the hosted model the user named. A local start
+reads the router and image slots only from `--model` or the local
+preset, not from `settings.model`.
 
-The slot reaches the tool through `AgentSettings`: `cliSettings` reads
-`getImageModel` and `getImageProvider`, `agencyAgent` takes them as
-`imageModel` and `imageProvider`, and `coordinatorTools` binds them with
-`generateImageFile.partial(model:, provider:)`. The binding keeps both
-parameters out of the tool's schema, so the model can't pick an image
-model, the same reason the judge is bound into `safeBash`.
+How the slot reaches the tool, and why the model can't pick an image
+model, is in `docs/dev/agents/agent-brains.md`.
 
 A preset with `local` runs `configureLocalModel`, the same call `--local`
 makes. A local model that fails to load ends the process, from startup or

@@ -340,7 +340,19 @@
     {
       "nodeName": "imageFlagWithAChatOnlyProviderIsRefused",
       "input": "",
-      "expectedOutput": "\"Image models need the provider/model form, e.g. --model image=openai/gpt-image-1.\"",
+      "expectedOutput": "\"Image models take only these providers: openai, google, litellm, openai-compat. For example, --model image=openai/gpt-image-1.\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "imageOffClearsAPresetImageModel",
+      "input": "",
+      "expectedOutput": "\":\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "imageOffFlagIsAccepted",
+      "input": "",
+      "expectedOutput": "\"off\"",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {

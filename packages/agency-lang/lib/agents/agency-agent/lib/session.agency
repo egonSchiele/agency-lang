@@ -43,6 +43,7 @@ import {
   parseModelFlag,
   lacksProviderForm,
   missingProviderEnvVar,
+  providerFormMessage,
   Resolved,
   takesSlashModelNames,
  } from "./models.agency"
@@ -68,7 +69,7 @@ import {
   loadSettings,
  } from "./settings.agency"
 import { notice } from "./notice.agency"
-import { chatSlots, providerFormExample, providerFormTitle, SLOTS } from "./slots.agency"
+import { chatSlots, providerFormExample, SLOTS } from "./slots.agency"
 import { ToolLimits, applyToolLimits, startupLimitFlags } from "./toolLimits.agency"
 import {
   demoteProvider,
@@ -379,9 +380,7 @@ export def trySwitchModel(
   if (lacksProviderForm(parsed.slot, parsed.model)) {
     // A derived slot exists to point AWAY from the chat provider, so the
     // provider can never be inferred. Require the explicit form.
-    return failure(
-      "${providerFormTitle(parsed.slot)} models need the provider/model form, e.g. ${parsed.slot}=${providerFormExample(parsed.slot)}.",
-    )
+    return failure(providerFormMessage(parsed.slot, parsed.model, "${parsed.slot}=${providerFormExample(parsed.slot)}"))
   }
   if (parsed.slot == "") {
     next.pin = parsed.model

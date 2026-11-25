@@ -31,25 +31,31 @@ export static const SLOT_DEFAULTS: Record<string, string> = {
   router: "openrouter/jev-1.14"
 }
 
-/** The value that turns off a slot that has a default. */
+/** The value that empties a slot: it turns off a slot's default, or
+  clears a model a lower layer set, such as one in settings.model. */
 export static const SLOT_OFF = "off"
 
-/** True when the slot has a default, so `off` means something in it. */
+/** Slots with no default that `off` can still empty. Without it, a
+  remembered `/model image=...` choice could never be taken back. */
+static const OFF_WITHOUT_DEFAULT = ["judge", "image"]
+
+/** True when `off` means something in the slot. */
 export def slotCanBeOff(name: string): boolean {
-  return SLOT_DEFAULTS[canonicalSlot(name)] != null
+  const slot = canonicalSlot(name)
+  return SLOT_DEFAULTS[slot] != null || OFF_WITHOUT_DEFAULT.includes(slot)
 }
 
 /** The providers smoltalk's decide() answers through. The router and
   judge slots take only these. */
 export static const DECISION_PROVIDERS: string[] = ["typesafe", "laya", "openai", "openrouter", "llama-cpp"]
 
-/** Slots whose value may name only these providers. Every other slot
-  takes the chat providers (`knownProviders()` in models.agency). Kept
-  apart so `typesafe` and `laya` never reach a chat slot. */
 /** The providers smoltalk's image() answers through. The image slot
   takes only these. */
 export static const IMAGE_PROVIDERS: string[] = ["openai", "google", "litellm", "openai-compat"]
 
+/** Slots whose value may name only these providers. Every other slot
+  takes the chat providers (`knownProviders()` in models.agency). Kept
+  apart so `typesafe` and `laya` never reach a chat slot. */
 static const SLOT_PROVIDERS: Record<string, string[]> = {
   router: DECISION_PROVIDERS,
   judge: DECISION_PROVIDERS,
@@ -95,6 +101,12 @@ export def slotKind(name: string): SlotKind {
 /** The providers a value in this slot may name. */
 export def providersFor(name: string, chatProviders: string[]): string[] {
   return SLOT_PROVIDERS[canonicalSlot(name)] ?? chatProviders
+}
+
+/** The providers this slot is limited to, or [] when it takes any chat
+  provider. */
+export def onlyProvidersFor(name: string): string[] {
+  return SLOT_PROVIDERS[canonicalSlot(name)] ?? []
 }
 
 /** True when the slot's value must be in the provider/model form. The

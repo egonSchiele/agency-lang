@@ -64,7 +64,7 @@
     {
       "nodeName": "embeddingWithoutProvider",
       "input": "",
-      "expectedOutput": "[\"slots.embedding needs the provider/model form, e.g. openai/text-embedding-3-small\"]",
+      "expectedOutput": "[\"slots.embedding: Embedding models need the provider/model form, e.g. openai/text-embedding-3-small.\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

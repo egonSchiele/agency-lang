@@ -29,7 +29,8 @@ Set only the fields the user asked for.
   `openrouter/jev-1.14`. `image` is the model `generateImageFile` makes
   images with, and must be written `provider/model`, such as
   `openai/gpt-image-1` or `google/gemini-3.1-flash-image`. Its provider is
-  `openai`, `google`, `litellm`, or `openai-compat`.
+  `openai`, `google`, `litellm`, or `openai-compat`. `off` clears it, so
+  images use the default model.
 - `local`: a local model name, `hf:` URI, `.gguf` path, `mlx:` URI, or
   model directory. With `local`, do not set `provider`, `pin`,
   `slots.main`, or `slots.reasoning`. `slots.embedding`, `slots.router`,

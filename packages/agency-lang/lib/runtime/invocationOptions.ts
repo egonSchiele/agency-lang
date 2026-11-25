@@ -52,9 +52,10 @@ export type InvocationOptions = {
    *  adds it to its held jobs. For a caller that runs a program one leg at
    *  a time and must know of a job before the leg pauses, such as a
    *  front-end that runs each turn of a session as its own run, whose
-   *  dropped turns would otherwise forget the jobs they started. The job carries its token, so this is a
-   *  TypeScript function and never an Agency callback. Per execution: a
-   *  resume does not remember it, so the caller passes it again. */
+   *  dropped turns would otherwise forget the jobs they started. The job
+   *  carries its token, so this is a TypeScript function and never an
+   *  Agency callback. Per execution: a resume does not remember it, so
+   *  the caller passes it again. */
   onJobStarted?: (job: HeldJob) => void;
 };
 

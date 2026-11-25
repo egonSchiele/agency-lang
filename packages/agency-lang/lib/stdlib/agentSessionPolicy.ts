@@ -60,8 +60,8 @@ export function sessionRunPolicy(args: {
 }
 
 /** Saves the policy session `id` runs under, when the session is started
- *  with policy flags. A policy that is not valid is
- *  refused, and nothing is written. */
+ *  with policy flags. A policy that is not valid is refused, and nothing
+ *  is written. */
 export async function saveCarriedPolicy(args: {
   home: string;
   id: string;
@@ -115,9 +115,8 @@ export async function readCarriedPolicy(args: {
 }
 
 /** Removes session `id`'s policy file, for a session started with policy
- *  flags and closed before its first turn: such a
- *  session is never saved, so its policy file would belong to nothing.
- *  No file is not a failure. */
+ *  flags and closed before its first turn: such a session is never saved,
+ *  so its policy file would belong to nothing. No file is not a failure. */
 export async function removeCarriedPolicy(args: {
   home: string;
   id: string;
@@ -139,9 +138,9 @@ export async function removeCarriedPolicy(args: {
 }
 
 /** Carries session `from`'s policy to its fork `to`. Without it a session
- *  started with
- *  `--policy minimal` would run its fork under the saved policy. No file
- *  at `from` copies nothing; one that can't be read is a failure. */
+ *  started with `--policy minimal` would run its fork under the saved
+ *  policy. No file at `from` copies nothing; one that can't be read is a
+ *  failure. */
 export async function copyCarriedPolicy(args: {
   home: string;
   from: string;

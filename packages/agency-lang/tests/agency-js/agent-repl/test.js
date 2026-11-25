@@ -201,6 +201,38 @@ await Promise.race([closedAtOnce.exited, wait(5000)]);
 closedAtOnce.child.kill();
 const policyFilesLeft = existsSync(policiesDir) ? readdirSync(policiesDir) : [];
 
+// A session started with `--policy minimal` keeps that policy when it is
+// continued. The saved policy now approves every write, and the continued
+// session still asks about one: nothing from policy.json reaches it.
+const withOwnPolicy = sitting("--policy minimal");
+await started(withOwnPolicy);
+type(withOwnPolicy, "hello again");
+await printedSince(withOwnPolicy, 0, "stub reply");
+await close(withOwnPolicy);
+writeFileSync(
+  path.join(home, "policy.json"),
+  JSON.stringify({ "std::write": [{ action: "approve" }] }),
+);
+const continued = sitting("--continue");
+await started(continued);
+const beforeOwnPolicyWrite = continued.printed.length;
+type(continued, "write the note");
+const askedUnderItsOwnPolicy = await printedSince(
+  continued,
+  beforeOwnPolicyWrite,
+  "approval needed",
+);
+continued.child.kill("SIGKILL");
+await continued.exited;
+// A new session, with no policy of its own, runs under the saved policy:
+// the same write is done without asking.
+const underSavedPolicy = sitting("");
+await started(underSavedPolicy);
+type(underSavedPolicy, "write the note");
+const wroteUnderSavedPolicy = await printedSince(underSavedPolicy, 0, "wrote the note");
+const askedUnderSavedPolicy = stripAnsi(underSavedPolicy.printed).includes("approval needed");
+await close(underSavedPolicy);
+
 writeFileSync(
   "__result.json",
   JSON.stringify(
@@ -228,6 +260,9 @@ writeFileSync(
       askedDespiteTheFlag,
       noteAfterTheFlag,
       policyFilesLeft,
+      askedUnderItsOwnPolicy,
+      wroteUnderSavedPolicy,
+      askedUnderSavedPolicy,
     },
     null,
     2,

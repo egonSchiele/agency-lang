@@ -682,8 +682,9 @@ def withGuidedLocal(flags: ModelFlags): ModelFlags {
   }
 }
 
-/** The model flags from the command line, for a session's start. A bare `--local` asks which local model first. Exits with a
-  message on bad flags. */
+/** The model flags from the command line, for a session's start. A bare
+  `--local` asks which local model first. Exits with a message on bad
+  flags. */
 export def startupModelFlags(args: Record<string, any>): ModelFlags {
   const parsed = modelFlagsFromArgs(args)
   if (parsed is failure(reason)) {

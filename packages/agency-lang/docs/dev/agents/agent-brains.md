@@ -32,6 +32,10 @@ export def agencyAgent(
   reasoningProvider: string = "",
   routerModel: string = "",
   routerProvider: string = "",
+  judgeModel: string = "",
+  judgeProvider: string = "",
+  imageModel: string = "",
+  imageProvider: string = "",
   extraTools: AgentExtraTools = {},
   attachments: Attachment[] = [],
 ): Result<string>
@@ -68,6 +72,12 @@ export def agencyAgent(
 - `routerModel` and `routerProvider` pick the decision model that can send
   a plain message straight to the coder or the researcher
   (`docs/dev/agents/agent-router.md`). Empty means no routing.
+- `judgeModel` and `judgeProvider` pick the decision model that may refuse
+  a broad shell line ("The command judge" in `docs/dev/stdlib/safe-bash.md`).
+  Empty means no judge.
+- `imageModel` and `imageProvider` pick the model `generateImageFile` makes
+  images with. The coordinator binds them into the tool, so the model can't
+  pick one. Empty means `generateImage`'s default.
 - `extraTools` is a record. `main` is added to the tools of the model that
   answers the turn, and `coder` to the tools of the two coders. Only the
   coordinator brain has coders.

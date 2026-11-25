@@ -76,7 +76,25 @@ The `judge` slot is set the same way, `--model judge=<provider>/<model>`
 or `slots.judge`, and takes the same decision providers. It names the
 decision model that may refuse a broad shell line too complex to review
 ("The command judge" in `docs/dev/stdlib/safe-bash.md`). It has no
-default and no `off`, and a local session does not carry it.
+default, and a local session does not carry it. `off` empties it, so
+`/model judge=off` takes back a judge that a preset or `settings.model`
+set (`OFF_WITHOUT_DEFAULT` in `lib/slots.agency`).
+
+The `image` slot names the model `generateImageFile` makes images with:
+`--model image=google/gemini-3.1-flash-image`, `/model image=...`,
+`slots.image` in a preset or in `settings.model`. It takes only the
+providers smoltalk's `image()` answers through (`IMAGE_PROVIDERS`:
+`openai`, `google`, `litellm`, `openai-compat`). It has no default in
+`SLOT_DEFAULTS`: an empty slot sends no model, so `generateImage` uses
+its own default, `gpt-image-1`. `off` empties it, the same as the judge.
+Like the router, a local session carries it (`localModelOf`,
+`configureLocalModel`), and `/local` keeps it, so a local chat model can
+still make images with the hosted model the user named. A local start
+reads the router and image slots only from `--model` or the local
+preset, not from `settings.model`.
+
+How the slot reaches the tool, and why the model can't pick an image
+model, is in `docs/dev/agents/agent-brains.md`.
 
 A preset with `local` runs `configureLocalModel`, the same call `--local`
 makes. A local model that fails to load ends the process, from startup or
@@ -371,7 +389,8 @@ A preset may be named `constructor`, so every lookup by name goes through
 `savedEntry`, which reads a key only when the record has it.
 
 `savePreset` takes `PresetInput`, which has no `default` field, and whose
-`slots` is an object with three named fields. A `Record` in a tool
+`slots` is an object with named fields: `main`, `reasoning`, `embedding`,
+`router`, and `image`. A `Record` in a tool
 parameter becomes a JSON schema that OpenAI and Anthropic reject.
 Replacing a preset marked `default` keeps the mark (`keepDefaultFlag`):
 the mark still seeds the last settings for someone upgrading.

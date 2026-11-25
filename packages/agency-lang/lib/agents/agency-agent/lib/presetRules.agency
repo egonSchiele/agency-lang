@@ -8,7 +8,7 @@ import { filterEntries } from "std::object"
 
 import { EFFORT_CHOICES, EffortChoice } from "./effort.agency"
 import { checkLlmOptions, LlmOptions } from "./llmOptions.agency"
-import { lacksProviderForm } from "./models.agency"
+import { lacksProviderForm, providerFormMessage } from "./models.agency"
 import { canonicalSlot, isKnownSlot, providerFormExample, slotKind } from "./slots.agency"
 import { isPlainObject } from "./utils.agency"
 
@@ -16,7 +16,8 @@ export type PresetSlots = {
   main?: string;
   reasoning?: string;
   embedding?: string;
-  router?: string
+  router?: string;
+  image?: string
 }
 
 /** What savePreset accepts. It has no `default`: the mark is kept only to
@@ -133,7 +134,7 @@ def slotProblems(slots: Record<string, any>): string[] {
   const notText = ["slots.${slot} must be a non-empty string" for slot in known if !kindHolds("text", slots[slot])]
   const textSlots = [slot for slot in known if kindHolds("text", slots[slot])]
   const noProvider = [
-    "slots.${canonicalSlot(slot)} needs the provider/model form, e.g. ${providerFormExample(slot)}"
+    "slots.${canonicalSlot(slot)}: ${providerFormMessage(slot, slots[slot], providerFormExample(slot))}"
     for slot in textSlots
     if lacksProviderForm(slot, slots[slot])
   ]

@@ -27,6 +27,10 @@ export type AgentSettings = {
   // review (commandJudge in std::safeBash). "" means no judge.
   judgeModel: string;
   judgeProvider: string;
+  // The model `generateImageFile` makes images with. "" means
+  // generateImage's default.
+  imageModel: string;
+  imageProvider: string;
   // Tools added to the coder's and the Agency coder's own.
   coderTools: any[]
 }

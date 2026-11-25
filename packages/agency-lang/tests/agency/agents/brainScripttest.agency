@@ -26,6 +26,8 @@ def emptySettings(): AgentSettings {
     routerProvider: "",
     judgeModel: "",
     judgeProvider: "",
+    imageModel: "",
+    imageProvider: "",
     coderTools: []
   }
 }

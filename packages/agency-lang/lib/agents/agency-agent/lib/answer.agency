@@ -16,6 +16,8 @@ import { grounding } from "./grounding.agency"
 import { addJobsNote } from "./jobsNote.agency"
 import { messageWasRewritten } from "./rewrittenMessage.agency"
 import {
+  getImageModel,
+  getImageProvider,
   getJudgeModel,
   getJudgeProvider,
   getResolvedSlots,
@@ -80,6 +82,8 @@ export def cliSettings(): AgentSettings {
     routerProvider: getRouterProvider(),
     judgeModel: getJudgeModel(),
     judgeProvider: getJudgeProvider(),
+    imageModel: getImageModel(),
+    imageProvider: getImageProvider(),
     coderTools: sessionJobTools()
   }
 }
@@ -153,6 +157,8 @@ export def answerTurn(
     routerProvider: settings.routerProvider,
     judgeModel: settings.judgeModel,
     judgeProvider: settings.judgeProvider,
+    imageModel: settings.imageModel,
+    imageProvider: settings.imageProvider,
     extraTools: {
       main: mainTools,
       coder: settings.coderTools

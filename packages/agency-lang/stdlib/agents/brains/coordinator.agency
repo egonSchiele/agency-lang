@@ -71,7 +71,7 @@ export def coordinatorTools(settings: AgentSettings, turnStart: any): any[] {
     explorerAgent.partial(settings: settings),
     writingAgent.partial(settings: settings),
     rewriteAgent.partial(settings: settings),
-    generateImageFile,
+    generateImageFile.partial(model: settings.imageModel, provider: settings.imageProvider),
     viewImageFile,
     ...writableFileTools(),
     elapsedTime.partial(since: turnStart),

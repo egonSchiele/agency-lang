@@ -3,7 +3,7 @@
   a CLOSED enum so consumers switch on the kind, not the raw name; adding a slot
   whose semantics match an existing kind is a one-line data edit. Pure. */
 
-export static const SLOTS = ["main", "reasoning", "embedding", "router", "judge"]
+export static const SLOTS = ["main", "reasoning", "embedding", "router", "judge", "image"]
 export static const SLOT_ALIASES: Record<string, string> = {
   fast: "main",
   slow: "reasoning"
@@ -16,7 +16,8 @@ export static const SLOT_KIND: Record<string, SlotKind> = {
   reasoning: "slow",
   embedding: "derived",
   router: "derived",
-  judge: "derived"
+  judge: "derived",
+  image: "derived"
 }
 
 /** The model a slot gets when no layer sets it, for the slots that have
@@ -24,29 +25,41 @@ export static const SLOT_KIND: Record<string, SlotKind> = {
   provider's key: startup checks the key once (`defaultSlots` in
   shared.agency) and keeps the rows that pass. The judge has no default on
   purpose: it sends shell command lines to its provider, so the user picks
-  the provider. */
+  the provider. The image slot has none here because `generateImage` has
+  its own: an empty slot sends no model, and the default applies. */
 export static const SLOT_DEFAULTS: Record<string, string> = {
   router: "openrouter/jev-1.14"
 }
 
-/** The value that turns off a slot that has a default. */
+/** The value that empties a slot: it turns off a slot's default, or
+  clears a model a lower layer set, such as one in settings.model. */
 export static const SLOT_OFF = "off"
 
-/** True when the slot has a default, so `off` means something in it. */
+/** Slots with no default that `off` can still empty. Without it, a
+  remembered `/model image=...` choice could never be taken back. */
+static const OFF_WITHOUT_DEFAULT = ["judge", "image"]
+
+/** True when `off` means something in the slot. */
 export def slotCanBeOff(name: string): boolean {
-  return SLOT_DEFAULTS[canonicalSlot(name)] != null
+  const slot = canonicalSlot(name)
+  return SLOT_DEFAULTS[slot] != null || OFF_WITHOUT_DEFAULT.includes(slot)
 }
 
 /** The providers smoltalk's decide() answers through. The router and
   judge slots take only these. */
 export static const DECISION_PROVIDERS: string[] = ["typesafe", "laya", "openai", "openrouter", "llama-cpp"]
 
+/** The providers smoltalk's image() answers through. The image slot
+  takes only these. */
+export static const IMAGE_PROVIDERS: string[] = ["openai", "google", "litellm", "openai-compat"]
+
 /** Slots whose value may name only these providers. Every other slot
   takes the chat providers (`knownProviders()` in models.agency). Kept
   apart so `typesafe` and `laya` never reach a chat slot. */
 static const SLOT_PROVIDERS: Record<string, string[]> = {
   router: DECISION_PROVIDERS,
-  judge: DECISION_PROVIDERS
+  judge: DECISION_PROVIDERS,
+  image: IMAGE_PROVIDERS
 }
 
 /** A derived slot points away from the chat model, so its value must name
@@ -63,6 +76,10 @@ static const PROVIDER_FORM: Record<string, { title: string; example: string }> =
   judge: {
     title: "Judge",
     example: "openrouter/jev-1.14"
+  },
+  image: {
+    title: "Image",
+    example: "openai/gpt-image-1"
   }
 }
 
@@ -84,6 +101,12 @@ export def slotKind(name: string): SlotKind {
 /** The providers a value in this slot may name. */
 export def providersFor(name: string, chatProviders: string[]): string[] {
   return SLOT_PROVIDERS[canonicalSlot(name)] ?? chatProviders
+}
+
+/** The providers this slot is limited to, or [] when it takes any chat
+  provider. */
+export def onlyProvidersFor(name: string): string[] {
+  return SLOT_PROVIDERS[canonicalSlot(name)] ?? []
 }
 
 /** True when the slot's value must be in the provider/model form. The

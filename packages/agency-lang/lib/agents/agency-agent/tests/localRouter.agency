@@ -1,5 +1,7 @@
 // A local session keeps the router slot: it may route with a hosted
-// decision model. An MLX model needs no download, so the real setup runs.
+// decision model. It keeps the image slot too, so it makes images with the
+// hosted model the user named. An MLX model needs no download, so the real
+// setup runs.
 import { setEnv } from "std::system"
 
 import { noModelChoices, noModelFlags } from "../lib/modelRequest.agency"
@@ -9,6 +11,7 @@ import {
   defaultSlots,
   getRouterModel,
   getRouterProvider,
+  imageSpec,
  } from "../shared.agency"
 
 static const LOCAL_MODEL = "mlx:mlx-community/Qwen3-4B-4bit"
@@ -44,6 +47,28 @@ node localStartGetsNoDefaultRouter(): string {
     return reason
   }
   return getRouterModel()
+}
+
+node localStartKeepsTheImageModel(): string {
+  setStartupModelFlags(
+    {
+      ...noModelFlags(),
+      local: LOCAL_MODEL,
+      slots: { image: "google/gemini-3.1-flash-image" }
+    },
+    {},
+    DEFAULTS,
+  )
+  const applied = applyModelRequest(currentModelRequest(noModelChoices()), {})
+  if (applied is failure(reason)) {
+    return reason
+  }
+  return imageSpec()
+}
+
+node localStartWithNoImageModelLeavesItEmpty(): string {
+  configureLocalModel(LOCAL_MODEL)
+  return imageSpec()
 }
 
 node localRouterOffIsEmpty(): string {

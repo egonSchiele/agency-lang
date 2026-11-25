@@ -22,6 +22,8 @@ def settingsWith(model: string, provider: string, context: string = ""): AgentSe
     routerProvider: "",
     judgeModel: "",
     judgeProvider: "",
+    imageModel: "",
+    imageProvider: "",
     coderTools: []
   }
 }

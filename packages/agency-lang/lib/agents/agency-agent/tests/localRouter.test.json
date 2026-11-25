@@ -26,6 +26,18 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "localStartKeepsTheImageModel",
+      "input": "",
+      "expectedOutput": "\"google/gemini-3.1-flash-image\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "localStartWithNoImageModelLeavesItEmpty",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "localRouterOffIsEmpty",
       "input": "",
       "expectedOutput": "\"\"",

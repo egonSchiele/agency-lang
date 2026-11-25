@@ -88,7 +88,7 @@ def sameSession(request: ModelRequest, settings: ModelSettings = {}): string {
   if (after is failure(reason)) {
     return "after failed: ${reason}"
   }
-  for (slot in ["main", "reasoning", "embedding", "router"]) {
+  for (slot in ["main", "reasoning", "embedding", "router", "image"]) {
     const was: Resolved = before.value[slot]
     const now: Resolved = after.value[slot]
     if (was.model != now.model || was.provider != now.provider) {
@@ -114,6 +114,23 @@ node sameAfterARouterChoice(): string {
   return sameSession(
     req(noModelFlags(), GLM, withSlotChoice("router", "openrouter/jev-1.14")),
   )
+}
+
+node sameAfterAnImageChoice(): string {
+  onlyKey("OPENROUTER_API_KEY")
+  return sameSession(
+    req(noModelFlags(), GLM, withSlotChoice("image", "google/gemini-3.1-flash-image")),
+  )
+}
+
+node changeLinesForAnImage(): string[] {
+  const after: Preset = {
+    ...GLM,
+    slots: {
+      image: "google/gemini-3.1-flash-image"
+    }
+  }
+  return presetChangeLines(GLM, after)
 }
 
 node sameAfterAChatModelChoice(): string {

@@ -43,6 +43,7 @@ import {
   parseModelFlag,
   lacksProviderForm,
   missingProviderEnvVar,
+  providerFormMessage,
   Resolved,
   takesSlashModelNames,
  } from "./models.agency"
@@ -68,7 +69,7 @@ import {
   loadSettings,
  } from "./settings.agency"
 import { notice } from "./notice.agency"
-import { chatSlots, providerFormExample, providerFormTitle, SLOTS } from "./slots.agency"
+import { chatSlots, providerFormExample, SLOTS } from "./slots.agency"
 import { ToolLimits, applyToolLimits, startupLimitFlags } from "./toolLimits.agency"
 import {
   demoteProvider,
@@ -77,6 +78,7 @@ import {
   configureLocalModel,
   defaultSlots,
   explicitRouterSpec,
+  imageSpec,
   getResolvedSlots,
   getCapabilities,
   getCapabilitiesResolved,
@@ -176,7 +178,7 @@ export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Re
     if (!_localModelsAllowed()) {
       return failure(LOCAL_MODELS_OFF)
     }
-    configureLocalModel(local.model, local.embedding, local.router)?
+    configureLocalModel(local.model, local.embedding, local.router, local.image)?
     applyRequestOptions(request, settings)
     return success(true)
   }
@@ -378,9 +380,7 @@ export def trySwitchModel(
   if (lacksProviderForm(parsed.slot, parsed.model)) {
     // A derived slot exists to point AWAY from the chat provider, so the
     // provider can never be inferred. Require the explicit form.
-    return failure(
-      "${providerFormTitle(parsed.slot)} models need the provider/model form, e.g. ${parsed.slot}=${providerFormExample(parsed.slot)}.",
-    )
+    return failure(providerFormMessage(parsed.slot, parsed.model, "${parsed.slot}=${providerFormExample(parsed.slot)}"))
   }
   if (parsed.slot == "") {
     next.pin = parsed.model
@@ -564,15 +564,16 @@ export def reactToSlotChange(change: SlotChange): boolean {
 }
 
 /** `/local`: run the session on a local model, as the `local` answer asks.
-  The router the user set keeps routing; the default router stays out of a
-  local session. Refused where the process cannot host a local model. */
+  The router the user set keeps routing, and the image model stays; the
+  default router stays out of a local session. Refused where the process
+  cannot host a local model. */
 export def useLocalModel(model: string): Result<boolean> {
   if (!_localModelsAllowed()) {
     return failure(LOCAL_MODELS_OFF)
   }
   const before = getResolvedSlots()
   const router = explicitRouterSpec()
-  configureLocalModel(model, "", router)?
+  configureLocalModel(model, "", router, imageSpec())?
   configureSearch(true)
   for (change in diffResolved(before, getResolvedSlots())) {
     reactToSlotChange(change)

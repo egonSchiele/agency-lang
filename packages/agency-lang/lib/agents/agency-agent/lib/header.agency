@@ -47,6 +47,10 @@ def headerModelLines(slots: Record<string, Resolved>): string[] {
   if (judgeLabel != "") {
     lines.push("Judge      ${judgeLabel}")
   }
+  const imageLabel = slotModelLabel(slots["image"])
+  if (imageLabel != "") {
+    lines.push("Image      ${imageLabel}")
+  }
   return lines
 }
 

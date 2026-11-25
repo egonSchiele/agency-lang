@@ -15,7 +15,16 @@ import { pickProvider, envVarFor, hostedModelInfo } from "std::llm"
 import { keys } from "std::object"
 import { env } from "std::system"
 
-import { slotKind, canonicalSlot, needsProviderForm, providersFor, slotCanBeOff, SLOT_OFF } from "./slots.agency"
+import {
+  slotKind,
+  canonicalSlot,
+  needsProviderForm,
+  onlyProvidersFor,
+  providerFormTitle,
+  providersFor,
+  slotCanBeOff,
+  SLOT_OFF,
+ } from "./slots.agency"
 
 // Default models per provider. `slowProvider` pins the provider for the
 // deep-reasoning call: OpenAI needs the Responses API for reasoning /
@@ -122,6 +131,19 @@ export def lacksProviderForm(slot: string, value: string): boolean {
     return false
   }
   return parseModelSpec(value, false, providersFor(slot, knownProviders())).provider == ""
+}
+
+/** Why `lacksProviderForm` refused the value. `example` is a good value
+ *  as the caller's syntax writes it, such as `--model image=openai/gpt-image-1`.
+ *  A value like `image=anthropic/claude-opus-4-8` is already in the
+ *  provider/model form, so it is told which providers the slot takes. */
+export def providerFormMessage(slot: string, value: string, example: string): string {
+  const title = providerFormTitle(slot)
+  const only = onlyProvidersFor(slot)
+  if (only.length > 0 && value.indexOf("/") > 0) {
+    return "${title} models take only these providers: ${only.join(", ")}. For example, ${example}."
+  }
+  return "${title} models need the provider/model form, e.g. ${example}."
 }
 
 // The agent always uses the OpenAI Responses API (not Chat Completions) for

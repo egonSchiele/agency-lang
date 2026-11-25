@@ -10,12 +10,19 @@
     },
     {
       "nodeName": "settingsAreHidden",
-      "description": "No tool schema the model receives has a settings or since parameter, because both are bound.",
+      "description": "No tool schema the model receives has a settings or since parameter, and the image tool has no model or provider, because all are bound.",
       "input": "",
       "expectedOutput": "\"pass\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "useTestLLMProvider": true,
       "llmMocks": [{ "return": "ok" }]
+    },
+    {
+      "nodeName": "imageToolUsesTheImageModel",
+      "description": "The image tool sends images to the image model in the settings: the upload question names it.",
+      "input": "",
+      "expectedOutput": "\"google/gemini-3.1-flash-image\"",
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

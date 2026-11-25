@@ -332,6 +332,36 @@
       ]
     },
     {
+      "nodeName": "imageFlagKeepsItsProvider",
+      "input": "",
+      "expectedOutput": "\"google:gemini-3.1-flash-image\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "imageFlagWithAChatOnlyProviderIsRefused",
+      "input": "",
+      "expectedOutput": "\"Image models take only these providers: openai, google, litellm, openai-compat. For example, --model image=openai/gpt-image-1.\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "imageOffClearsAPresetImageModel",
+      "input": "",
+      "expectedOutput": "\":\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "imageOffFlagIsAccepted",
+      "input": "",
+      "expectedOutput": "\"off\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "localKeepsTheImageFlag",
+      "input": "",
+      "expectedOutput": "\"qwen3.5-2b|openai/gpt-image-2\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "routerOffFlagIsAccepted",
       "input": "",
       "expectedOutput": "\"off\"",

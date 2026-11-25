@@ -26,11 +26,15 @@ Set only the fields the user asked for.
   `provider/model`, such as `openai/text-embedding-3-small`. `router` is a
   decision model that sends a turn straight to the researcher or the
   coder, and must be written `provider/model`, such as
-  `openrouter/jev-1.14`.
+  `openrouter/jev-1.14`. `image` is the model `generateImageFile` makes
+  images with, and must be written `provider/model`, such as
+  `openai/gpt-image-1` or `google/gemini-3.1-flash-image`. Its provider is
+  `openai`, `google`, `litellm`, or `openai-compat`. `off` clears it, so
+  images use the default model.
 - `local`: a local model name, `hf:` URI, `.gguf` path, `mlx:` URI, or
   model directory. With `local`, do not set `provider`, `pin`,
   `slots.main`, or `slots.reasoning`. `slots.embedding`, `slots.router`,
-  the tool limits, and `llmOptions` may be set with it.
+  `slots.image`, the tool limits, and `llmOptions` may be set with it.
 - `maxToolCallRounds`: the most tool-call rounds in one turn, a whole number above zero.
 - `maxToolResultChars`: the most characters of one tool result you see.
   `0` means no cap.

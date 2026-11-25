@@ -445,6 +445,16 @@ describe("parseWorkflow match and each", () => {
     ]);
   });
 
+  it("reads null limits on a match or an each as absent, as a tool step does", () => {
+    const wf = edited(eachPlan, (copy) => {
+      copy.steps[1].limits = null;
+      copy.steps[1].steps[0].limits = null;
+    });
+    expect(parseWorkflow(wf).problems).toEqual([]);
+    const onMatch = edited(matchPlan, (copy) => (copy.steps[1].limits = null));
+    expect(parseWorkflow(onMatch).problems).toEqual([]);
+  });
+
   it("names a nested step by its own id", () => {
     const wf = edited(eachPlan, (copy) => (copy.steps[1].steps[0].args.id = { $ref: "bad path" }));
     expect(parseWorkflow(wf).problems).toEqual([

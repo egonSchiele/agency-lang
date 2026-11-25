@@ -359,7 +359,7 @@ effect std::workflow::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1316))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1314))
 
 ## Functions
 
@@ -748,7 +748,7 @@ run on their own thread, so the caller's conversation does not see them.
 
 **Needs:** `fileRead`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1283))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1281))
 
 ### designWorkflow
 
@@ -789,4 +789,4 @@ edited workflow, which is checked and saved without another draft.
 
 **Needs:** `fileRead`, `fileWrite`, `subprocess`, `terminal`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1378))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/workflow.agency#L1376))

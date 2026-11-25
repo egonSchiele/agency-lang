@@ -223,7 +223,8 @@ const caseValue = z.custom<CaseValue>(
 /** A block names `limits` only to refuse it: zod drops a key it does not name. */
 function noLimits(kind: string) {
   const message = `${kind} step takes no limits; set limits on the steps inside it`;
-  return z.never({ error: message }).optional();
+  // null reads as absent, as it does for a tool or LLM step's limits.
+  return z.never({ error: message }).nullish();
 }
 
 /** A step list inside a block. The schema is recursive through it. */

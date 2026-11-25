@@ -345,8 +345,9 @@ current order's id. The rules:
 4. A step inside the loop can be read only by later steps in the same round.
 5. An `each` has no value, so set `result` to a step outside it.
 6. A failure in one round stops the workflow, and the failure names the step.
-7. Each round starts with an empty conversation, so an LLM step in round 10
-   does not see rounds 1 to 9.
+7. Each round starts with an empty conversation, so a function that asks a
+   model in round 10 does not see rounds 1 to 9. An LLM step always starts
+   with an empty conversation of its own.
 
 A step may read any input, any earlier step in its own list or in a list that
 holds it, and the current item of every loop it is inside. Nothing outside a

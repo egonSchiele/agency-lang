@@ -1228,9 +1228,7 @@ def lastProblems(problem: DraftProblem | null): string {
 
 // One model call on a thread of its own: the brief carries everything the
 // attempt needs, and a host calling from a conversation keeps its history
-// as it was. A function call is a new frame, so each attempt's `thread`
-// opens a new thread; a `thread` written in the loop body would reopen
-// the first attempt's thread on every iteration.
+// as it was. Each call opens a new thread.
 def draftReply(brief: string, options: any): Result<WorkflowDraftReply> {
   thread {
     const reply: WorkflowDraftReply! = llm(brief, options)

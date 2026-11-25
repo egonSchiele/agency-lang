@@ -138,7 +138,7 @@ A round that pauses keeps its locals until it finishes, so a resume inside a `th
 
 The prefix approach is deliberately broad. Enumerating specific keys would be fragile and would break whenever a new kind of tracking local appears.
 
-**If you add a new kind of tracking local**, you must either name it with one of the existing prefixes, so the sweep already covers it, or add a `clearLocalsWithPrefix` call for the new prefix to both `loop()` and `whileLoop()` in `lib/runtime/runner.ts`. Skip that and the local persists across iterations, and resume after an interrupt goes wrong.
+**If you add a new kind of tracking local**, you must either name it with one of the existing prefixes, so the sweep already covers it, or add a `clearLocalsWithPrefix` call for the new prefix to `clearIterationLocals` in `lib/runtime/runner.ts`, which both `loop()` and `whileLoop()` call. Skip that and the local persists across iterations, and resume after an interrupt goes wrong.
 
 ## For loops
 

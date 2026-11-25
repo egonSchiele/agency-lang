@@ -42,7 +42,25 @@ A test says nothing about the agent. Tests describe the work; whoever runs the e
 
 `input` is what the agent is told: a string, or a JSON object for agents that take structured data. The runner passes it as the entry node's single parameter, whatever it is named. An agent that takes no input runs a test with none — then the entry node takes no parameter. Within one suite, either every test has an input or none does; the runner checks the parameter count before anything runs.
 
-`goal` is the success criterion. The agent never sees it. The default LLM judge needs it; a test with its own graders makes it optional (see [Custom graders](#custom-graders)). `id` defaults to a generated id and must be filesystem-safe when you supply one. `expected` is an optional gold output that match graders read. `files` names the test's fixture directory (see [Test files and suites](#test-files-and-suites)). `timeoutSec` overrides the suite's wall clock for one test. `graders` names the test's own grading module, resolved relative to the test; in the test-directory form a `graders.ts` beside `test.json` is picked up automatically. Graders are code the harness runs, so pulling a remote suite means trusting it.
+`goal` is the success criterion. The agent never sees it. The default LLM judge needs it; a test with its own graders makes it optional (see [Custom graders](#custom-graders)). `id` defaults to a generated id and must be filesystem-safe when you supply one. `expected` is an optional gold output that match graders read. `files` names the test's fixture directory (see [Test files and suites](#test-files-and-suites)). `timeoutSec` overrides the suite's wall clock for one test. `setup` is a shell command that prepares the workdir (see [Test setup](#test-setup)). `graders` names the test's own grading module, resolved relative to the test; in the test-directory form a `graders.ts` beside `test.json` is picked up automatically. Graders are code the harness runs, so pulling a remote suite means trusting it.
+
+### Test setup
+
+Some tests need more than fixture files before the agent starts: a repository at a certain commit, installed dependencies, a running service. Give the test a `setup` command for that:
+
+```json
+{
+  "input": "Make the failing test pass.",
+  "setup": "git clone --depth 1 https://example.com/repo.git . && npm ci"
+}
+```
+
+The harness runs the command with `sh` in the workdir. It runs after `files` is copied in and before the agent starts. Two environment variables tell it where things are:
+
+- `AGENCY_EVAL_TEST_DIR` is the folder that holds `test.json`, so a suite can keep one setup program beside its tests and call it from each.
+- `AGENCY_EVAL_AGENT_DIR` is the folder the agent writes its trace into. If your agent runs as another user, give that user the workdir and this folder.
+
+If the command exits with an error, or runs for more than 30 minutes, the test is recorded as an error and the agent does not start. The error shows the end of the command's output. Setup is code the harness runs, like a grading module, so pulling a remote suite means trusting it.
 
 For a single ad-hoc run, use `--input` instead of `--suite` (grade it afterwards with `eval grade --goal`):
 

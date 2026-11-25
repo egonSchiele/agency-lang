@@ -20,6 +20,7 @@ import {
   seedFromAgentFile,
   type AgentSeed,
 } from "./seed.js";
+import { outputTail, runShell } from "../shellCommand.js";
 import { runCommandInSpawn } from "./spawnRunner.js";
 import {
   costCapFromConfig,
@@ -56,7 +57,21 @@ export type RunAgentOptions = {
   pipeOutput?: boolean;
   /** The test's per-test wall-clock override, in seconds. */
   timeoutSec?: number;
+  /** The test's setup command, run in the workdir after seeding and before
+   *  the agent. `testDir` is the folder the test's paths resolve from. */
+  setup?: { command: string; testDir: string | undefined; timeoutSec: number };
 };
+
+/** How long a test's setup command may run. Fixed: generous enough to fetch
+ *  a repo and install its dependencies, and not something to tune per test
+ *  until a test needs it. */
+export const SETUP_TIMEOUT_SEC = 1800;
+
+const MS_PER_SECOND = 1000;
+
+/** The environment variables a setup command reads its two folders from. */
+export const SETUP_TEST_DIR_ENV = "AGENCY_EVAL_TEST_DIR";
+export const SETUP_AGENT_DIR_ENV = "AGENCY_EVAL_AGENT_DIR";
 
 /** Test seam: inject a fake in place of the subprocess fork. */
 export type RunAgentDeps = { runner?: EvalInputRunner };
@@ -125,6 +140,11 @@ class AgentRunner {
       return this.fail(errMessage(err));
     }
 
+    const setupProblem = await this.runSetup();
+    if (setupProblem !== undefined) {
+      return this.fail(setupProblem);
+    }
+
     const result = await this.execute(compiledPath);
 
     if (!result.ok) {
@@ -157,6 +177,37 @@ class AgentRunner {
       return this.fail(`the entry node returned a failure: ${output.error}`);
     }
     return { status: "success", output, ...this.artifacts() };
+  }
+
+  /** Run the test's setup command, if it has one. Returns what went wrong,
+   *  or undefined. The statelog folder is created first and named in the
+   *  environment, so a setup that makes the agent run as another user can
+   *  hand that user the folder. */
+  private async runSetup(): Promise<string | undefined> {
+    const setup = this.options.setup;
+    if (setup === undefined) {
+      return undefined;
+    }
+    fs.mkdirSync(this.paths.agentDir, { recursive: true });
+    const result = await runShell(setup.command, {
+      cwd: this.paths.workdirPath,
+      env: {
+        ...process.env,
+        ...(setup.testDir === undefined ? {} : { [SETUP_TEST_DIR_ENV]: setup.testDir }),
+        [SETUP_AGENT_DIR_ENV]: this.paths.agentDir,
+      },
+      timeoutMs: Math.ceil(setup.timeoutSec * MS_PER_SECOND),
+    });
+    if (result.interrupted) {
+      return "setup failed: interrupted";
+    }
+    if (result.timedOut) {
+      return `setup failed: did not finish within ${setup.timeoutSec}s`;
+    }
+    if (result.status !== 0) {
+      return `setup failed (exit ${result.status}):\n${outputTail(result.output)}`;
+    }
+    return undefined;
   }
 
   private artifacts(): AgentRunArtifacts {

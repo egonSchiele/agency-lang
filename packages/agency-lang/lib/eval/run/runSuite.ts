@@ -33,7 +33,7 @@ import { readTraces } from "@/runDirectory/traces.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
 
 import { agentRunPaths } from "./extract.js";
-import { runAgent, type AgentRun, type RunAgentOptions } from "./runAgent.js";
+import { runAgent, SETUP_TIMEOUT_SEC, type AgentRun, type RunAgentOptions } from "./runAgent.js";
 import { seedFromAgentFile } from "./seed.js";
 import type { EvalInputRunner } from "./subprocess.js";
 
@@ -200,6 +200,10 @@ export async function runSuite(
           seed: defaultSeed,
           pipeOutput,
           timeoutSec: test.timeoutSec,
+          setup:
+            test.setup === undefined
+              ? undefined
+              : { command: test.setup, testDir: test.dir, timeoutSec: SETUP_TIMEOUT_SEC },
         },
         { runner: deps.runner },
       );

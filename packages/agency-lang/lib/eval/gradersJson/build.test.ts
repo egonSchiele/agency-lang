@@ -259,6 +259,21 @@ describe("command graders", () => {
     expect(grade.feedback).toBe("bad\n");
   });
 
+  it("feedback is the end of long output, where the error is", async () => {
+    const grade = await gradeWith(
+      {
+        kind: "command",
+        name: "c",
+        command:
+          'i=0; while [ $i -lt 500 ]; do echo "progress line $i"; i=$((i+1)); done; echo "error: the real problem"; exit 1',
+      },
+      EMPTY_RECORD,
+      workdir,
+    );
+    expect(grade.feedback?.startsWith("…")).toBe(true);
+    expect(grade.feedback?.trimEnd().endsWith("error: the real problem")).toBe(true);
+  });
+
   it("a command that reads stdin does not hang", async () => {
     const grade = await gradeWith(
       { kind: "command", name: "c", command: "cat", timeoutSec: 5 },

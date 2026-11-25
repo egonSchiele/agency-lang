@@ -24,6 +24,25 @@ import * as os from "os";
 
 export type ChildKill = (signal: NodeJS.Signals) => void;
 
+/** A kill for a child that was spawned `detached`, so it leads its own
+ *  process group: the signal goes to the whole group (`-pid`), reaching
+ *  everything the child started. When the group is already gone, the signal
+ *  goes to the child alone, which is then a no-op. */
+export function groupKill(child: {
+  pid?: number;
+  kill(signal: NodeJS.Signals): boolean;
+}): ChildKill {
+  return (signal) => {
+    try {
+      process.kill(-(child.pid as number), signal);
+    } catch {
+      // ESRCH: the group has already exited. Nothing is left to signal but
+      // the child handle, and signalling that is harmless.
+      child.kill(signal);
+    }
+  };
+}
+
 const TERMINATING = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
 
 /** The slice of `process` the supervisor uses; tests pass a stand-in. */

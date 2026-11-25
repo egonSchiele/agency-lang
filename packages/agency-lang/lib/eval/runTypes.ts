@@ -77,6 +77,17 @@ export type Test<T = TestInput> = {
    *  task.toml timeout_sec — a hard task may deserve more time than the
    *  suite default (eval.limits.wallClockSec). */
   timeoutSec?: number;
+  /** A shell command run in the workdir after `files` is seeded and before
+   *  the agent starts: fetch a repo, install dependencies, create a user.
+   *  It gets `AGENCY_EVAL_TEST_DIR` (this test's `dir`) and
+   *  `AGENCY_EVAL_AGENT_DIR` (the folder the agent writes its statelog
+   *  into). A non-zero exit or a timeout makes the test an error and the
+   *  agent does not start.
+   *  Trust note: like `graders`, this is code the harness executes. */
+  setup?: string;
+  /** The folder this test's relative paths resolve from: the test's own
+   *  folder in the directory form. Set by loading, when `setup` is given. */
+  dir?: string;
   /** Freeform, grader-agnostic metadata (tags, expectedOutput, …). */
   metadata?: Record<string, any>;
 };

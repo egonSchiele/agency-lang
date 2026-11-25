@@ -274,6 +274,9 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   ) {
     throw new Error("Eval input timeoutSec must be a positive number of seconds when provided");
   }
+  if (spec.setup !== undefined && (typeof spec.setup !== "string" || spec.setup.length === 0)) {
+    throw new Error("Eval input setup must be a non-empty command string when provided");
+  }
   if (spec.metadata !== undefined && !isPlainObject(spec.metadata)) {
     throw new Error("Eval input metadata must be an object when provided");
   }
@@ -322,6 +325,10 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (typeof spec.graderFiles === "string")
     out.graderFiles = resolveGraderFilesDir(spec.graderFiles, baseDir, out.id ?? "");
   if (typeof spec.timeoutSec === "number") out.timeoutSec = spec.timeoutSec;
+  if (typeof spec.setup === "string") {
+    out.setup = spec.setup;
+    out.dir = baseDir;
+  }
   if (typeof spec.harnessMaxCost === "number") out.harnessMaxCost = spec.harnessMaxCost;
   if (typeof spec.harnessMustPass === "boolean") {
     out.harnessMustPass = spec.harnessMustPass;

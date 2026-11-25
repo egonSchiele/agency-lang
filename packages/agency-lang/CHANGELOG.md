@@ -1,3 +1,7 @@
+## Nov 24 2026 — v0.45.2
+
+- Add `eval upload --results-only` to send a trace digest instead of the events
+
 ## Nov 24 2026 — v0.45.1
 
 - Tools to import Harbor results as Agency eval results.

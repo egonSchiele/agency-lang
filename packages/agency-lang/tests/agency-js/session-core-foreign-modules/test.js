@@ -14,7 +14,7 @@ const PROGRAM = "../../../dist/lib/agents/agency-agent/program.js";
 const TERMINAL = "../../../dist/lib/agents/agency-agent/agent.js";
 // A terminal module with globals of its own. Process one's checkpoint holds
 // them, so the second process really resumes a pause the terminal shaped.
-const TERMINAL_MODULE = "dist/lib/agents/agency-agent/lib/sessionPolicy.agency";
+const TERMINAL_MODULE = "dist/lib/agents/agency-agent/lib/repl.agency";
 const policy = { "agent::sessionInput": [{ action: "propagate" }] };
 const USAGE = { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 };
 const COST = { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" };

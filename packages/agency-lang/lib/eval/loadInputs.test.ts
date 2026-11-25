@@ -261,6 +261,22 @@ describe("eval run input loading", () => {
     }
   });
 
+  it("setup is a command, loaded with the folder its paths resolve from", () => {
+    const file = writeJson("setup.json", {
+      inputs: [{ id: "t", goal: "g", input: "x", setup: "make deps" }],
+    });
+    const [input] = loadInputsFromFile(file);
+    expect(input.setup).toBe("make deps");
+    expect(input.dir).toBe(path.dirname(file));
+    for (const bad of [5, "", ["make"]]) {
+      expect(() =>
+        loadInputsFromFile(
+          writeJson("bad-setup.json", { inputs: [{ id: "t", goal: "g", input: "x", setup: bad }] }),
+        ),
+      ).toThrow(/setup must be a non-empty command string/);
+    }
+  });
+
   it("timeoutSec must be a positive number when provided", () => {
     const [input] = loadInputsFromFile(
       writeJson("timeout.json", { inputs: [{ id: "t", goal: "g", input: "x", timeoutSec: 1200 }] }),

@@ -8,26 +8,70 @@ import {
   type RunsListing,
   type RunSummary,
 } from "@/runDirectory/list.js";
-import { readRunDirectory } from "@/runDirectory/runDir.js";
+import type { Annotation, Score } from "@/runDirectory/annotations.js";
+import { readRunDirectory, type RunDirectorySnapshot } from "@/runDirectory/runDir.js";
 
 import { formatTextTable, oneLine } from "@/runDirectory/table.js";
 
 export type RunsListDependencies = { report(message: string): void };
+
+/** One run as `runs list --json` prints it: where it is, its summary, and
+ *  the scores that currently count for it, one per grader. For a program
+ *  that needs a run's results without reading the run directory itself. */
+export type ListedRun = {
+  dir: string;
+  summary: RunSummary;
+  scores: ListedScore[];
+};
+
+export type ListedScore = {
+  name: string;
+  score: Score;
+  weight: number;
+  mustPass: boolean;
+  feedback?: string;
+};
 
 /** One line per run across every run directory the paths name (a run
  *  directory is itself; a directory of run directories is its children). */
 export function runsList(
   paths: string[],
   dependencies: RunsListDependencies = { report: (message) => console.log(message) },
+  options: { json?: boolean } = {},
 ): RunSummary[] {
   // One run at a time: each snapshot is dropped once summarized, so memory
   // stays flat however many runs are listed.
-  const summaries = findRunDirectories(paths).flatMap((dir) =>
-    summarizeRuns(readRunDirectory(dir, { reportWarning: (message) => console.warn(message) })),
+  const listed = findRunDirectories(paths).flatMap((dir) =>
+    listedRuns(readRunDirectory(dir, { reportWarning: (message) => console.warn(message) })),
   );
-  const listing = buildRunsListing(summaries);
-  dependencies.report(formatRunsList(listing));
+  const listing = buildRunsListing(listed.map((run) => run.summary));
+  dependencies.report(options.json === true ? JSON.stringify(listed) : formatRunsList(listing));
   return listing.summaries;
+}
+
+function listedRuns(snapshot: RunDirectorySnapshot): ListedRun[] {
+  return summarizeRuns(snapshot).map((summary) => ({
+    dir: snapshot.dir,
+    summary,
+    scores: Object.values(snapshot.effectiveAnnotations[summary.traceId]?.scores ?? {}).flatMap(
+      listedScore,
+    ),
+  }));
+}
+
+function listedScore(row: Annotation): ListedScore[] {
+  if (row.kind !== "score") {
+    return [];
+  }
+  return [
+    {
+      name: row.name,
+      score: row.score,
+      weight: row.weight,
+      mustPass: row.mustPass,
+      ...(row.feedback === undefined ? {} : { feedback: row.feedback }),
+    },
+  ];
 }
 
 const HEADER = [

@@ -7,10 +7,11 @@ import {
   type IncompleteBatch,
 } from "@/eval/batchStatistics.js";
 import { gradeSuite } from "@/eval/grading/gradeSuite.js";
-import type { EvalRunGrading } from "@/eval/runTypes.js";
+import type { EvalRunGrading, SuiteTestResult } from "@/eval/runTypes.js";
 import { findRunDirectories, uniqueRunDirectories } from "@/runDirectory/findRuns.js";
 import { summarizeRunDirectory } from "@/runDirectory/list.js";
-import { readRunDirectory } from "@/runDirectory/runDir.js";
+import { readAnnotations, type Annotation } from "@/runDirectory/annotations.js";
+import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 
 import type { GraderSource } from "@/eval/grading/gradeRun.js";
 
@@ -116,7 +117,7 @@ export async function evalGrade(
   opts: EvalGradeOptions,
 ): Promise<EvalGradeResult> {
   const config = opts.config ?? {};
-  const runDirs = validateGradeTarget(targets, opts);
+  const runDirs = gradableRunDirs(validateGradeTarget(targets, opts));
   const graders = graderSourceFor(opts, config);
 
   // Each directory is one gradeSuite call (its own grading pass id and its
@@ -134,19 +135,83 @@ export async function evalGrade(
     );
     return { dir, grading, judgeCostUsd };
   });
-  const runs: EvalGradeResult["runs"] = graded.map(({ dir, grading }) => ({ dir, grading }));
-  const result: EvalGradeResult = {
-    runs,
-    mean: runs.reduce((sum, run) => sum + run.grading.objective, 0) / runs.length,
-    judgeCostUsd: graded.reduce((sum, entry) => sum + entry.judgeCostUsd, 0),
-    gatesPassed: runs.every((run) => run.grading.gatesPassed),
-    ...trialBatches(runDirs),
-  };
+  const result = gradeResultOf(graded);
 
   if (opts.out !== undefined) {
     fs.writeFileSync(opts.out, JSON.stringify(result, null, 2));
   }
   return result;
+}
+
+/** The run directories `eval grade` will grade: all but those made with
+ *  `--no-workdir-snapshot`, each of which is named on stderr. An error when
+ *  that leaves nothing. */
+function gradableRunDirs(runDirs: string[]): string[] {
+  const kept: string[] = [];
+  for (const dir of runDirs) {
+    // Only the annotations: reading the whole run directory parses its
+    // statelog, which can be hundreds of megabytes, and grading reads it
+    // again anyway.
+    const rows = readAnnotations(runDirPaths(dir).annotations, () => {});
+    if (!madeWithoutWorkdir(rows)) {
+      kept.push(dir);
+      continue;
+    }
+    // Not every such run was graded: one that was interrupted, or whose
+    // grading failed, has no grades, and can no longer get any.
+    const standing = rows.some((row) => row.kind === "score")
+      ? "the grades from `eval run --grade` stand"
+      : "it was never graded, and cannot be now";
+    console.warn(
+      `grading: skipping ${dir}: it was run with --no-workdir-snapshot, so its workdir is gone; ${standing}`,
+    );
+  }
+  if (kept.length === 0) {
+    throw new Error(
+      "Nothing to grade: every run here was made with --no-workdir-snapshot and cannot be graded again.",
+    );
+  }
+  return kept;
+}
+
+/** True for the annotations of a run made with `eval run
+ *  --no-workdir-snapshot`. Its workdir was graded where the agent left it and
+ *  then removed. Grading it again would fail every grader that reads the
+ *  workdir and record those failures as the run's newest grades, over the
+ *  real ones. */
+function madeWithoutWorkdir(rows: Annotation[]): boolean {
+  return rows.some((row) => row.kind === "run" && row.flags.workdirSnapshot === false);
+}
+
+/** The report for a set of graded run directories. Shared by `eval grade`
+ *  and `eval run --grade`, so the two print the same thing. */
+export function gradeResultOf(
+  graded: { dir: string; grading: EvalRunGrading; judgeCostUsd: number }[],
+): EvalGradeResult {
+  const runs: EvalGradeResult["runs"] = graded.map(({ dir, grading }) => ({ dir, grading }));
+  return {
+    runs,
+    mean: runs.reduce((sum, run) => sum + run.grading.objective, 0) / runs.length,
+    judgeCostUsd: graded.reduce((sum, entry) => sum + entry.judgeCostUsd, 0),
+    gatesPassed: runs.every((run) => run.grading.gatesPassed),
+    ...trialBatches(runs.map((run) => run.dir)),
+  };
+}
+
+/** The lines `eval run --grade` prints after the suite: the same report
+ *  `eval grade` prints, for the tests that were graded. Empty when none was. */
+export function inPlaceGradeReport(tests: SuiteTestResult[]): string[] {
+  const graded = tests.flatMap((test) =>
+    test.grading === undefined
+      ? []
+      : [{ dir: test.runDir, grading: test.grading, judgeCostUsd: test.judgeCostUsd ?? 0 }],
+  );
+  if (graded.length === 0) {
+    return [];
+  }
+  // One invocation may hold only part of a batch (`--trial-number`), so a
+  // "batch has no statistics" line here would be noise, not news.
+  return formatGradeResult({ ...gradeResultOf(graded), incompleteBatches: [] });
 }
 
 /**

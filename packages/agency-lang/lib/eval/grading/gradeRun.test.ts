@@ -10,9 +10,11 @@ import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 
 import { AgencyRunner } from "./agencyRunner.js";
 import { grader } from "./functionGrader.js";
-import { gradeRun, type GradingContext } from "./gradeRun.js";
+import { resetTerminatingSignalForTests } from "../run/childSupervisor.js";
+import { gradeRun, GradingInterrupted, type GradingContext } from "./gradeRun.js";
 import { snapshotHarness } from "./harnessSnapshot.js";
 import { snapshotGraderFiles } from "./graderFilesSnapshot.js";
+import { buildGraders } from "../gradersJson/build.js";
 import { snapshotGradersJson } from "../gradersJson/load.js";
 
 const capital: Test = { id: "a", goal: "name the capital", input: "t", expected: "New Delhi" };
@@ -403,5 +405,139 @@ describe("harness graders from the run row", () => {
     await expect(gradeRun(runDir, ctx([]))).rejects.toThrow(
       /Harness snapshot not found.*recorded for h/,
     );
+  });
+});
+
+describe("graders that need the workdir to themselves", () => {
+  const passes = (card: Awaited<ReturnType<typeof gradeRun>>): boolean[] =>
+    card.perInput[0].grades.map((g) => g.grade.score.kind === "binary" && g.grade.score.pass);
+  const workdirOf = (runDir: string): string => runDirPaths(runDir).workdirDir;
+
+  it("never runs two of them at the same time", async () => {
+    const runDir = makeRun({ output: "x" });
+    const command = "test ! -e busy && touch busy && sleep 0.2 && rm busy";
+    const card = await gradeRun(
+      runDir,
+      ctx(
+        buildGraders([
+          { kind: "command", name: "a", command },
+          { kind: "command", name: "b", command },
+          { kind: "command", name: "c", command },
+        ]),
+      ),
+    );
+    expect(passes(card)).toEqual([true, true, true]);
+  });
+
+  it("runs them in the order they were listed, and reports grades in that order", async () => {
+    const runDir = makeRun({ output: "x" });
+    const card = await gradeRun(
+      runDir,
+      ctx([
+        ...buildGraders([{ kind: "command", name: "a", command: "echo a >> order.txt" }]),
+        grader(() => true, { name: "plain" }),
+        ...buildGraders([
+          { kind: "command", name: "b", command: "echo b >> order.txt" },
+          { kind: "command", name: "c", command: "echo c >> order.txt" },
+        ]),
+      ]),
+    );
+    expect(fs.readFileSync(path.join(workdirOf(runDir), "order.txt"), "utf8")).toBe("a\nb\nc\n");
+    expect(card.perInput[0].grades.map((g) => g.grader.name())).toEqual(["a", "plain", "b", "c"]);
+  });
+
+  it(
+    "gives the next one its turn after one fails or times out, with nothing of the old one left running",
+    { timeout: 15_000 },
+    async () => {
+      const runDir = makeRun({ output: "x" });
+      const card = await gradeRun(
+        runDir,
+        ctx(
+          buildGraders([
+            { kind: "command", name: "fails", command: "exit 1" },
+            {
+              kind: "command",
+              name: "slow",
+              command: "(sleep 2; touch late) & sleep 5",
+              timeoutSec: 1,
+            },
+            { kind: "command", name: "after", command: "sleep 2.5; test ! -e late" },
+          ]),
+        ),
+      );
+      expect(passes(card)).toEqual([false, false, true]);
+    },
+  );
+
+  it("starts a grader's time limit when its turn starts", { timeout: 10_000 }, async () => {
+    const runDir = makeRun({ output: "x" });
+    const card = await gradeRun(
+      runDir,
+      ctx(
+        buildGraders([
+          { kind: "command", name: "first", command: "sleep 1.5" },
+          { kind: "command", name: "second", command: "sleep 1", timeoutSec: 2 },
+        ]),
+      ),
+    );
+    expect(passes(card)).toEqual([true, true]);
+  });
+
+  it("still runs the other graders together, beside the ones taking turns", async () => {
+    const runDir = makeRun({ output: "x" });
+    const wait = (): Promise<boolean> =>
+      new Promise((resolve) => setTimeout(() => resolve(true), 300));
+    const started = Date.now();
+    await gradeRun(
+      runDir,
+      ctx([
+        grader(wait, { name: "one" }),
+        grader(wait, { name: "two" }),
+        ...buildGraders([{ kind: "command", name: "c", command: "sleep 0.3" }]),
+      ]),
+    );
+    expect(Date.now() - started).toBeLessThan(800);
+  });
+});
+
+describe("grading after an interrupt", () => {
+  it("throws, so no caller scores a run on commands that never ran", async () => {
+    const runDir = makeRun({ output: "x" });
+    const graders = buildGraders([{ kind: "command", name: "c", command: "sleep 5" }]);
+    const grading = gradeRun(runDir, ctx(graders));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    process.emit("SIGINT");
+    await expect(grading).rejects.toThrow(GradingInterrupted);
+    // Until the flag is cleared, grading keeps refusing instead of failing commands.
+    await expect(gradeRun(runDir, ctx(graders))).rejects.toThrow(GradingInterrupted);
+    resetTerminatingSignalForTests();
+  });
+
+  it("reports grades in listed order even when one grader object is listed twice", async () => {
+    const runDir = makeRun({ output: "x" });
+    const twice = grader(() => true, { name: "same" });
+    const card = await gradeRun(
+      runDir,
+      ctx([twice, grader(() => false, { name: "other" }), twice]),
+    );
+    expect(card.perInput[0].grades.map((g) => g.grader.name())).toEqual(["same", "other", "same"]);
+  });
+});
+
+describe("a workdir override", () => {
+  it("gives graders the override in place of the run directory's stored copy", async () => {
+    const runDir = makeRun({ output: "x", workdirFiles: { marker: "snapshot" } });
+    const live = fs.mkdtempSync(path.join(os.tmpdir(), "live-workdir-"));
+    fs.writeFileSync(path.join(live, "marker"), "live");
+    const graders = buildGraders([
+      { kind: "command", name: "is-live", command: "grep -q live marker" },
+    ]);
+    const passed = async (context: GradingContext): Promise<boolean> => {
+      const { score } = (await gradeRun(runDir, context)).perInput[0].grades[0].grade;
+      return score.kind === "binary" && score.pass;
+    };
+    expect(await passed({ ...ctx(graders), workdirOverride: live })).toBe(true);
+    expect(await passed(ctx(graders))).toBe(false);
   });
 });

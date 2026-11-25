@@ -6,7 +6,7 @@ import type { RunLimits } from "@/runtime/ipc.js";
 
 import { makeCostCapTracker } from "./subprocess.js";
 import { makeStatelogCostTailer } from "./costTail.js";
-import { supervise } from "./childSupervisor.js";
+import { groupKill, supervise } from "./childSupervisor.js";
 
 /** Substituted argv must fit the OS argument-size limit; the raw failure is
  *  an opaque E2BIG from spawn. Conservative cap, checked before spawning. */
@@ -83,15 +83,7 @@ export function runCommandInSpawn(args: {
     detached: true,
   });
 
-  // Signal the whole group (-pid); fall back to the direct child if the
-  // group is already gone.
-  const killTree = (signal: NodeJS.Signals) => {
-    try {
-      process.kill(-(child.pid as number), signal);
-    } catch {
-      child.kill(signal);
-    }
-  };
+  const killTree = groupKill(child);
 
   return new Promise((resolve) => {
     let settled = false;

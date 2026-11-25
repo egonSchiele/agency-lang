@@ -99,16 +99,26 @@ grader's name.
 - `repeated` compares `tool` and `argsPreview`, the 200-character preview
   of the arguments. No row in the record carries the full arguments, so two
   calls that differ only after the preview count as one.
+- Command graders of one run take turns: they execute one after another,
+  in file order, because two builds or test runs in one workdir collide.
+  The other kinds still run together, beside them. The rule is in
+  `gradeInput` (`lib/eval/grading/gradeRun.ts`): a grader that reports
+  `needsWorkdirToItself()` runs in turn, and the command grader does. A
+  must-pass command still runs before everything else.
 - A command grader runs inside the run directory's stored workdir, the same
   place the agent suite's pytest runner runs. Whatever it writes
   (`__pycache__`, `.pytest_cache`) lands there, so a command must not depend
   on a clean workdir. stdin is closed, so a command that reads it sees end
-  of file. A command that outlives `timeoutSec` (default 600) is killed with
-  SIGKILL and fails with "timed out after Ns". Only the shell is killed. A
-  process it started in the background, as in `sleep 60 & echo done`, keeps
-  running, and while it holds the output pipe the grader waits for it, up
-  to the timeout and no further.
-  Output is kept to 2000 characters of feedback.
+  of file. A command that outlives `timeoutSec` (default 600) fails with
+  "timed out after Ns". The command runs in its own process group, and at
+  the timeout the whole group is killed with SIGKILL, so a `make` it started
+  does not keep compiling in the workdir. The grader stops waiting at the
+  timeout even if something still holds the output pipe.
+  Feedback is the last 2000 characters of output, because a failing build
+  or test prints its error last. The shell runner is `lib/eval/shellCommand.ts`,
+  shared with a test's `setup` command. It registers each command with the
+  eval child supervisor (`lib/eval/run/childSupervisor.ts`), so Ctrl-C still
+  reaches a command, and after one, no further command starts.
 
 ## The checklist judge
 

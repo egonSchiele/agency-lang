@@ -41,6 +41,10 @@ export type GraderOptions = {
   samples?: number; // k repetitions (default 1; must be a positive integer)
   aggregate?: "any" | "all"; // binary only; scalar always averages
   name?: string; // overrides the grader's defaultName
+  /** The grader changes or builds things in the run's workdir, so it must
+   *  not run beside another grader that does. Graders with this set run
+   *  one after another, in the order they are listed. */
+  needsWorkdirToItself?: boolean;
 };
 
 /** What a grader's `_run` receives. */

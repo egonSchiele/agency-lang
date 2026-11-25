@@ -14,15 +14,27 @@ function harness() {
       return undefined as never;
     },
   };
-  const supervise = makeChildSupervisor(proc);
+  const { supervise, terminatingSignalSeen } = makeChildSupervisor(proc);
   const child = () => {
     const signals: string[] = [];
     return { signals, kill: (signal: string) => signals.push(signal) };
   };
-  return { emitter, exits, supervise, child };
+  return { emitter, exits, supervise, terminatingSignalSeen, child };
 }
 
 describe("child supervisor", () => {
+  it("remembers a terminating signal after the child it reached is gone", () => {
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+      const h = harness();
+      const stop = h.supervise(h.child().kill);
+      expect(h.terminatingSignalSeen()).toBe(false);
+      h.emitter.emit(signal);
+      stop();
+      h.supervise(h.child().kill);
+      expect(h.terminatingSignalSeen()).toBe(true);
+    }
+  });
+
   it("keeps one listener per signal however many children are live, and none when idle", () => {
     const h = harness();
     const children = Array.from({ length: 15 }, h.child);
@@ -38,6 +50,25 @@ describe("child supervisor", () => {
     stops[14]();
     stops[14](); // a second stop is harmless
     expect(h.emitter.listenerCount("SIGINT")).toBe(0);
+  });
+
+  it("signals every live child even when one of them settles, and stops being supervised, inside its own kill", () => {
+    const h = harness();
+    const seen: string[] = [];
+    const stops: (() => void)[] = [];
+    for (const name of ["a", "b", "c"]) {
+      stops.push(
+        h.supervise((signal) => {
+          seen.push(`${name}:${signal}`);
+          // What a shell command does: it settles at once and unregisters.
+          if (name === "a") {
+            stops[0]();
+          }
+        }),
+      );
+    }
+    h.emitter.emit("SIGINT");
+    expect(seen).toEqual(["a:SIGINT", "b:SIGINT", "c:SIGINT"]);
   });
 
   it("a second signal force-quits: SIGKILL to every live child, then exit 130", () => {

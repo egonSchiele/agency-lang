@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -372,5 +373,40 @@ describe("evalGrade", () => {
     const source = graderSourceFor({ suite }, {});
     expect(source.kind).toBe("suite");
     if (source.kind === "suite") expect(source.tests.map((test) => test.id)).toEqual(["a"]);
+  });
+});
+
+describe("runs made with --no-workdir-snapshot", () => {
+  const flagged = (dir: string): void => {
+    const file = path.join(dir, "annotations.jsonl");
+    const rows = fs
+      .readFileSync(file, "utf8")
+      .trimEnd()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    rows[0].flags = { ...rows[0].flags, workdirSnapshot: false };
+    fs.writeFileSync(file, rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
+  };
+
+  it("are skipped, and the others in the group are still graded", async () => {
+    const group = fs.mkdtempSync(path.join(os.tmpdir(), "grade-noworkdir-"));
+    writeRunDirectory({ test: lenTest("kept"), output: "hello" }, path.join(group, "kept"));
+    writeRunDirectory({ test: lenTest("gone"), output: "hello" }, path.join(group, "gone"));
+    flagged(path.join(group, "gone"));
+
+    const result = await evalGrade([group], {});
+
+    expect(result.runs.map((run) => path.basename(run.dir))).toEqual(["kept"]);
+    const kinds = (name: string) =>
+      readRunDirectory(path.join(group, name), { reportWarning: () => {} }).annotationRows.map(
+        (row) => row.kind,
+      );
+    expect(kinds("gone")).toEqual(["run"]);
+  });
+
+  it("is an error when nothing else is left to grade", async () => {
+    const dir = writeRunDirectory({ test: lenTest("gone"), output: "hello" });
+    flagged(dir);
+    await expect(evalGrade([dir], {})).rejects.toThrow("Nothing to grade");
   });
 });

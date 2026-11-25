@@ -299,4 +299,99 @@ describe("runAgent", () => {
       expect(run.errorMessage).toMatch(/over the .*-byte cap/);
     }
   });
+
+  describe("setup", () => {
+    const commandTarget = {
+      kind: "command" as const,
+      tokens: ["node", "run.js", "-p", "{input}"],
+      label: "node run.js -p {input}",
+    };
+
+    it("runs after the files are seeded and before the agent, with both folders in its environment", async () => {
+      const runDir = path.join(tmp(), "run-setup");
+      const filesDir = tmp();
+      fs.writeFileSync(path.join(filesDir, "seeded.txt"), "fixture");
+      let seenByAgent = "";
+      let statelogDir = "";
+      const run = await runAgent(
+        commandTarget,
+        "go",
+        {
+          runDir,
+          traceId: "trace-setup",
+          config: {},
+          seedFiles: filesDir,
+          setup: {
+            command:
+              'test -f seeded.txt && test -d "$AGENCY_EVAL_AGENT_DIR" && ' +
+              'echo "$AGENCY_EVAL_TEST_DIR|$AGENCY_EVAL_AGENT_DIR" > setup-ran',
+            testDir: "/suite/a-test",
+            timeoutSec: 10,
+          },
+        },
+        {
+          runner: traceWritingRunner("done", (job) => {
+            seenByAgent = fs.readFileSync(path.join(job.cwd, "setup-ran"), "utf8");
+            statelogDir = path.dirname(job.statelogPath);
+          }),
+        },
+      );
+      expect(run.status).toBe("success");
+      expect(seenByAgent).toBe(`/suite/a-test|${statelogDir}\n`);
+    });
+
+    it("does not start the agent when setup exits non-zero, and reports the end of its output", async () => {
+      let runnerCalls = 0;
+      const run = await runAgent(
+        commandTarget,
+        "go",
+        {
+          runDir: path.join(tmp(), "run-setup-fail"),
+          traceId: "trace-setup-fail",
+          config: {},
+          setup: {
+            command:
+              'i=0; while [ $i -lt 500 ]; do echo "progress line $i"; i=$((i+1)); done; echo broke >&2; exit 3',
+            testDir: undefined,
+            timeoutSec: 10,
+          },
+        },
+        {
+          runner: async () => {
+            runnerCalls += 1;
+            return { ok: true };
+          },
+        },
+      );
+      expect(run.status).toBe("error");
+      const message = run.status === "error" ? run.errorMessage : "";
+      expect(message).toMatch(/^setup failed \(exit 3\):\n…/);
+      expect(message.trimEnd().endsWith("broke")).toBe(true);
+      expect(runnerCalls).toBe(0);
+    });
+
+    it("does not start the agent when setup runs out of time", async () => {
+      let runnerCalls = 0;
+      const run = await runAgent(
+        commandTarget,
+        "go",
+        {
+          runDir: path.join(tmp(), "run-setup-slow"),
+          traceId: "trace-setup-slow",
+          config: {},
+          setup: { command: "sleep 30", testDir: undefined, timeoutSec: 1 },
+        },
+        {
+          runner: async () => {
+            runnerCalls += 1;
+            return { ok: true };
+          },
+        },
+      );
+      expect(run.status === "error" ? run.errorMessage : "").toBe(
+        "setup failed: did not finish within 1s",
+      );
+      expect(runnerCalls).toBe(0);
+    });
+  });
 });

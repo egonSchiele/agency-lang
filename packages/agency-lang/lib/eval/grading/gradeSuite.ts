@@ -32,7 +32,7 @@ export async function gradeSuite(
   runDir: string,
   graders: GraderSource,
   config: AgencyConfig,
-  options: { record?: boolean; defaultGoal?: string } = {},
+  options: { record?: boolean; defaultGoal?: string; workdirOverride?: string } = {},
 ): Promise<GradeSuiteResult> {
   const snapshot = readRunDirectory(runDir, {
     reportWarning: (message) => console.warn(`grading: ${message}`),
@@ -43,9 +43,11 @@ export async function gradeSuite(
     runAgency,
     config,
     defaultGoal: options.defaultGoal,
+    workdirOverride: options.workdirOverride,
   });
   const drafts = scoreDrafts(scorecard);
   let passId: string | null = null;
+  // (A pass cut short by Ctrl-C never gets here: gradeSnapshot throws.)
   if (options.record !== false && drafts.length > 0) {
     passId = recordGradingPass({ dir: runDir, scores: drafts }).passId;
   }

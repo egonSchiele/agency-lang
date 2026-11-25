@@ -1,5 +1,4 @@
-import { spawn } from "child_process";
-
+import { outputTail, runShell } from "@/eval/shellCommand.js";
 import type { EvalRecord } from "@/eval/types.js";
 
 import type { BaseGrader } from "../grading/baseGrader.js";
@@ -161,8 +160,6 @@ function repeats(rows: CountRow[]): CountRow[] {
 // --- command ----------------------------------------------------------------
 
 const DEFAULT_COMMAND_TIMEOUT_SEC = 600;
-const COMMAND_OUTPUT_MAX_BYTES = 16 * 1024 * 1024;
-const FEEDBACK_MAX_CHARS = 2000;
 
 /** The environment variable a command reads the test's grader-only files
  *  through. Those files are stored apart from the agent's workdir. */
@@ -170,13 +167,15 @@ const GRADER_FILES_ENV = "AGENCY_GRADER_FILES";
 
 /** Run a shell command in the agent's working directory. Exit 0 passes.
  *  stdin is closed so a command that reads it sees end of file. At the
- *  timeout the shell is killed outright, since a command may ignore a
- *  polite signal. */
+ *  timeout the command and everything it started are killed outright, since
+ *  a command may ignore a polite signal. Feedback is the end of the output,
+ *  where a failing build or test prints its error. */
 function commandGrader(spec: CommandSpec): BaseGrader {
   const timeoutSec = spec.timeoutSec ?? DEFAULT_COMMAND_TIMEOUT_SEC;
   return grader(
     ({ workdir, graderFiles }) => runCommand(spec.command, workdir, graderFiles, timeoutSec),
-    optionsOf(spec),
+    // A command builds, tests or writes in the workdir. Two at once collide.
+    { ...optionsOf(spec), needsWorkdirToItself: true },
   );
 }
 
@@ -197,52 +196,8 @@ async function runCommand(
   if (result.timedOut) {
     return binary(false, `timed out after ${timeoutSec}s`);
   }
-  return binary(result.status === 0, cut(result.output));
-}
-
-type ShellOptions = { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number };
-type ShellResult = { status: number | null; output: string; timedOut: boolean };
-
-/** Run `sh -c command` without blocking the event loop, so the LLM judges
- *  grading beside it keep receiving their responses while it runs. Output
- *  is stdout and stderr interleaved in the order they arrive, and stops
- *  growing at the byte cap. At the timeout the shell is killed and the
- *  result is settled at once, so a process the command started in the
- *  background that still holds the output pipe cannot keep the grader
- *  waiting past the timeout. */
-function runShell(command: string, options: ShellOptions): Promise<ShellResult> {
-  return new Promise((resolve) => {
-    const child = spawn("sh", ["-c", command], {
-      cwd: options.cwd,
-      env: options.env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const chunks: Buffer[] = [];
-    let bytes = 0;
-    const collect = (chunk: Buffer): void => {
-      if (bytes < COMMAND_OUTPUT_MAX_BYTES) {
-        chunks.push(chunk);
-        bytes += chunk.length;
-      }
-    };
-    const output = (): string => Buffer.concat(chunks).toString("utf8");
-    child.stdout.on("data", collect);
-    child.stderr.on("data", collect);
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      resolve({ status: null, output: output(), timedOut: true });
-    }, options.timeoutMs);
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      resolve({ status: null, output: error.message, timedOut: false });
-    });
-    child.on("close", (status) => {
-      clearTimeout(timer);
-      resolve({ status, output: output(), timedOut: false });
-    });
-  });
-}
-
-function cut(text: string): string {
-  return text.length > FEEDBACK_MAX_CHARS ? `${text.slice(0, FEEDBACK_MAX_CHARS)}…` : text;
+  if (result.interrupted) {
+    return binary(false, "interrupted");
+  }
+  return binary(result.status === 0, outputTail(result.output));
 }

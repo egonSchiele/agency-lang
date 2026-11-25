@@ -1,3 +1,4 @@
+import { terminatingSignalSeen } from "@/eval/run/childSupervisor.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -53,6 +54,11 @@ export type GradingContext = {
    *  own (an ad-hoc trace, or a suite that never had goals). A test's own
    *  goal always wins. */
   defaultGoal?: string;
+  /** Grade against this folder as the run's workdir, in place of the copy
+   *  the run directory stores. Set only by `eval run --grade`, which grades
+   *  in the workdir the agent worked in, before it is removed: a built
+   *  repository is slow to copy, and a copy of one may not work. */
+  workdirOverride?: string;
 };
 
 /**
@@ -72,7 +78,7 @@ export async function gradeSnapshot(
 ): Promise<Scorecard> {
   const moduleCache = makeGraderModuleCache(ctx.config);
   const perInput = await Promise.all(
-    gradableEntries(snapshot).map(async (bare) => {
+    gradableEntries(snapshot, ctx.workdirOverride).map(async (bare) => {
       const entry = withDefaultGoal(bare, ctx.defaultGoal);
       const { graders, graderFiles } = await effectiveGraders(
         entry,
@@ -83,15 +89,33 @@ export async function gradeSnapshot(
       return gradeEntry(entry, ctx, graders, graderFiles);
     }),
   );
+  // A terminating signal reached this process. The command graders after it
+  // never ran and report "interrupted", so these grades are not the run's.
+  // Thrown here, where every caller passes: `eval grade`, `eval run --grade`
+  // and the optimizer, which would otherwise score candidates on them.
+  //
+  // A known cost, accepted: LLM judges already running beside those commands
+  // are not cancelled. They finish, are paid for, and their grades are thrown
+  // away here with the rest.
+  if (terminatingSignalSeen()) {
+    throw new GradingInterrupted();
+  }
   return new Scorecard(perInput);
+}
+
+/** Grading was cut short by a terminating signal. Nothing was recorded. */
+export class GradingInterrupted extends Error {
+  constructor() {
+    super("grading was interrupted; nothing was recorded");
+  }
 }
 
 /** Every trace, plus every harness `run` row whose trace never made it into
  *  the statelog (the agent died before its first event). Those runs are
  *  tests too; leaving them out would let a suite where half the tests never
  *  started score as if only the other half existed. */
-function gradableEntries(snapshot: RunDirectorySnapshot): Entry[] {
-  const entries = snapshot.traces.map((trace) => entryFor(snapshot, trace));
+function gradableEntries(snapshot: RunDirectorySnapshot, workdirOverride?: string): Entry[] {
+  const entries = snapshot.traces.map((trace) => entryFor(snapshot, trace, workdirOverride));
   const withTrace: Record<string, true> = Object.create(null);
   for (const trace of snapshot.traces) withTrace[trace.traceId] = true;
   for (const [traceId, effective] of Object.entries(snapshot.effectiveAnnotations)) {
@@ -327,14 +351,14 @@ type Entry = {
  * graders read from the workdir. Grading proceeds with `output: null` —
  * graders that need the output fail on their own terms against null.
  */
-function entryFor(snapshot: RunDirectorySnapshot, trace: Trace): Entry {
+function entryFor(snapshot: RunDirectorySnapshot, trace: Trace, workdirOverride?: string): Entry {
   const effective: EffectiveTraceAnnotations | undefined =
     snapshot.effectiveAnnotations[trace.traceId];
   const runRow = effective?.run ?? null;
   const test = testOf(runRow, trace.traceId);
   const record: EvalRecord = evalRecordFor(trace, snapshot.dir);
   const outputs = record.evalOutputs ?? [];
-  const workdir = runDirPaths(snapshot.dir).workdirDir;
+  const workdir = workdirOverride ?? runDirPaths(snapshot.dir).workdirDir;
   const run: LoadedRun = {
     output: outputs.length === 0 ? null : (outputs[outputs.length - 1].value as Json),
     traceId: trace.traceId,
@@ -421,14 +445,38 @@ async function gradeInput(
     }
   }
 
-  const advisoryGrades = await Promise.all(
-    advisory.map(async (grader) => ({
-      grader,
-      grade: await runGrader(grader, input, test),
-    })),
+  // Most graders only read, so they run together. A grader that works in
+  // the workdir (a command that builds or runs tests there) would collide
+  // with another doing the same, so those take turns, in the order listed.
+  const inTurn = advisory.filter((grader) => grader.needsWorkdirToItself());
+  const together = advisory.filter((grader) => !grader.needsWorkdirToItself());
+  const [turnGrades, togetherGrades] = await Promise.all([
+    runInTurn(inTurn, input, test),
+    Promise.all(
+      together.map(async (grader) => ({ grader, grade: await runGrader(grader, input, test) })),
+    ),
+  ]);
+  // Reported in the order the graders were listed, whichever way they ran.
+  // By position, not by looking the grader up: one grader may be listed twice.
+  const turns = [...turnGrades];
+  const others = [...togetherGrades];
+  const advisoryGrades = advisory.map(
+    (grader) => (grader.needsWorkdirToItself() ? turns.shift() : others.shift()) as GraderGrade,
   );
 
   return { test, run, grades: [...gateGrades, ...advisoryGrades], gatesPassed: true };
+}
+
+async function runInTurn(
+  graders: BaseGrader[],
+  input: GraderInput,
+  test: Test,
+): Promise<GraderGrade[]> {
+  const grades: GraderGrade[] = [];
+  for (const grader of graders) {
+    grades.push({ grader, grade: await runGrader(grader, input, test) });
+  }
+  return grades;
 }
 
 /** Ask the gate for its verdict. A gate that cannot decide (a scalar grade

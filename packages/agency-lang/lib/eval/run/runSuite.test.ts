@@ -11,6 +11,7 @@ import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
 import { grader } from "@/eval/grading/functionGrader.js";
 import { gradeRun } from "@/eval/grading/gradeRun.js";
 
+import { resetTerminatingSignalForTests, supervise } from "./childSupervisor.js";
 import { runSuite } from "./runSuite.js";
 import { loadInputs } from "@/eval/loadInputs.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
@@ -901,6 +902,275 @@ describe("runSuite", () => {
     expect(readRunDirectory(result.tests[0].runDir, quiet).traces).toHaveLength(1);
     // The listener is gone afterwards.
     expect(process.listeners("SIGINT")).toEqual(before);
+  });
+
+  describe("batch, trialNumber and workdirSnapshot", () => {
+    const options = (name: string) => ({
+      agent: path.join(proj, "agent.agency"),
+      inputs: [
+        { id: "a", goal: "g", input: "first" },
+        { id: "b", goal: "g", input: "second" },
+      ],
+      out: path.join(proj, "runs", name),
+      config: {},
+      perRun: { pipeOutput: false },
+    });
+    const runRow = (test: { runDir: string; traceId: string }) => {
+      const row = readRunDirectory(test.runDir, quiet).effectiveAnnotations[test.traceId].run;
+      return row?.kind === "run" ? row : undefined;
+    };
+
+    it("records the runs under a given batch id", async () => {
+      const result = await runSuite(
+        { ...options("batch"), batch: "nightly-abc" },
+        { runner: traceWritingRunner("done") },
+      );
+      expect(result.tests.map((test) => runRow(test)).map((row) => row?.batch)).toEqual([
+        "nightly-abc",
+        "nightly-abc",
+      ]);
+    });
+
+    it("refuses an empty batch id", async () => {
+      await expect(
+        runSuite({ ...options("batch-empty"), batch: "" }, { runner: traceWritingRunner("done") }),
+      ).rejects.toThrow("batch must not be empty");
+    });
+
+    it("records a given trial number, and writes that one trial flat", async () => {
+      const out = options("trial-3");
+      const result = await runSuite(
+        { ...out, trialNumber: 3 },
+        { runner: traceWritingRunner("done") },
+      );
+      expect(result.tests.map((test) => [test.testId, test.trial, test.runDir])).toEqual([
+        ["a", 3, path.join(out.out, "a")],
+        ["b", 3, path.join(out.out, "b")],
+      ]);
+      expect(runRow(result.tests[0])?.trial).toBe(3);
+    });
+
+    it("refuses a trial number together with more than one trial, or one that is not a positive integer", async () => {
+      const runner = traceWritingRunner("done");
+      await expect(
+        runSuite({ ...options("t1"), trialNumber: 2, trials: 2 }, { runner }),
+      ).rejects.toThrow("--trial-number runs one trial; it cannot be combined with --trials");
+      for (const bad of [0, 1.5, Number.NaN]) {
+        await expect(runSuite({ ...options("t2"), trialNumber: bad }, { runner })).rejects.toThrow(
+          "trial number must be a positive integer",
+        );
+      }
+      expect(runner).not.toHaveBeenCalled();
+    });
+
+    it("stores no workdir when workdirSnapshot is false", async () => {
+      const result = await runSuite(
+        { ...options("no-workdir"), workdirSnapshot: false },
+        { runner: traceWritingRunner("done") },
+      );
+      const paths = runDirPaths(result.tests[0].runDir);
+      expect(fs.existsSync(paths.workdirDir)).toBe(false);
+      expect(fs.existsSync(paths.workdirSidecar)).toBe(false);
+      expect(readRunDirectory(result.tests[0].runDir, quiet).traces).toHaveLength(1);
+    });
+  });
+
+  describe("gradeInPlace", () => {
+    const scoreRows = (runDir: string): { name: string; pass: boolean }[] =>
+      readRunDirectory(runDir, quiet).annotationRows.flatMap((row) =>
+        row.kind === "score"
+          ? [{ name: row.name, pass: row.score.kind === "binary" && row.score.pass }]
+          : [],
+      );
+    /** One test `a` whose graders.json holds these commands. */
+    const suiteWith = (name: string, commands: Record<string, string>) => {
+      const testDir = path.join(proj, "tests", name);
+      fs.mkdirSync(testDir, { recursive: true });
+      const jsonPath = path.join(testDir, "graders.json");
+      fs.writeFileSync(
+        jsonPath,
+        JSON.stringify(
+          Object.entries(commands).map(([graderName, command]) => ({
+            kind: "command",
+            name: graderName,
+            command,
+          })),
+        ),
+      );
+      return {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [{ id: "a", input: "t", graders: jsonPath }],
+        out: path.join(proj, "runs", name),
+        config: {},
+        perRun: { pipeOutput: false },
+      };
+    };
+
+    it("grades each run and writes the grades to its run directory", async () => {
+      const result = await runSuite(
+        { ...suiteWith("graded", { "touched-it": "test -f touched.txt" }), gradeInPlace: true },
+        { runner: traceWritingRunner("done") },
+      );
+      expect(scoreRows(result.tests[0].runDir)).toEqual([{ name: "touched-it", pass: true }]);
+      expect(result.tests[0].grading?.objective).toBe(1);
+    });
+
+    it("grades in the workdir the agent used, not the copy in the run directory", async () => {
+      const result = await runSuite(
+        {
+          ...suiteWith("live", {
+            "in-staging": 'case "$PWD" in */.staging/*) true;; *) false;; esac',
+          }),
+          gradeInPlace: true,
+        },
+        { runner: traceWritingRunner("done") },
+      );
+      expect(scoreRows(result.tests[0].runDir)).toEqual([{ name: "in-staging", pass: true }]);
+    });
+
+    it("grades a test whose agent started and then failed, as eval grade would", async () => {
+      const runner = vi.fn(async (job: EvalRunnerJob) => {
+        fs.writeFileSync(job.statelogPath, traceFor(job, "partial").join("\n") + "\n");
+        return { ok: false as const, errorMessage: "wall clock" };
+      });
+      const options = suiteWith("failed", { any: "true" });
+      const result = await runSuite({ ...options, gradeInPlace: true }, { runner });
+      const later = await gradeRun(result.tests[0].runDir, {
+        graders: { kind: "snapshot" },
+        runAgency: new AgencyRunner({}),
+        config: {},
+      });
+      expect(result.tests[0].status).toBe("error");
+      expect(result.tests[0].grading?.objective).toBe(later.objective());
+    });
+
+    it("scores a test whose agent never started 0 without running its graders, as eval grade would", async () => {
+      const result = await runSuite(
+        { ...suiteWith("never", { any: "true" }), gradeInPlace: true },
+        { runner: async () => ({ ok: false as const, errorMessage: "boom" }) },
+      );
+      expect(scoreRows(result.tests[0].runDir)).toEqual([]);
+      expect(result.tests[0].grading?.objective).toBe(0);
+    });
+
+    it("refuses an empty batch id before creating anything or listening for signals", async () => {
+      const before = process.listenerCount("SIGINT");
+      const options = { ...suiteWith("bad-batch", { any: "true" }), batch: "" };
+      await expect(runSuite(options, { runner: traceWritingRunner("done") })).rejects.toThrow(
+        "batch must not be empty",
+      );
+      expect(fs.existsSync(options.out)).toBe(false);
+      expect(process.listenerCount("SIGINT")).toBe(before);
+    });
+
+    it("does not grade once the suite has been interrupted", async () => {
+      const before = process.listeners("SIGINT");
+      const runner = vi.fn(async (job: EvalRunnerJob) => {
+        const added = process.listeners("SIGINT").filter((l) => !before.includes(l));
+        added[0]("SIGINT");
+        fs.writeFileSync(job.statelogPath, traceFor(job, "done").join("\n") + "\n");
+        return { ok: true as const };
+      });
+      const result = await runSuite(
+        { ...suiteWith("interrupted", { any: "true" }), gradeInPlace: true },
+        { runner },
+      );
+      expect(readRunDirectory(result.tests[0].runDir, quiet).traces).toHaveLength(1);
+      expect(scoreRows(result.tests[0].runDir)).toEqual([]);
+    });
+
+    it("neither grades nor starts the next test after a SIGTERM or SIGHUP reaches the agent", async () => {
+      for (const signal of ["SIGTERM", "SIGHUP"] as const) {
+        // What the real runners do: the agent is a supervised child, and the
+        // supervisor is what receives the signal while it runs.
+        const runner = vi.fn(async (job: EvalRunnerJob) => {
+          const settled = supervise(() => {});
+          process.emit(signal, signal);
+          settled();
+          fs.writeFileSync(job.statelogPath, traceFor(job, "done").join("\n") + "\n");
+          return { ok: true as const };
+        });
+        const options = suiteWith(`stopped-${signal}`, { any: "true" });
+        try {
+          const result = await runSuite(
+            {
+              ...options,
+              inputs: [options.inputs[0], { ...options.inputs[0], id: "b" }],
+              gradeInPlace: true,
+            },
+            { runner },
+          );
+          expect(runner).toHaveBeenCalledTimes(1);
+          expect(result.tests.map((test) => test.testId)).toEqual(["a"]);
+          expect(scoreRows(result.tests[0].runDir)).toEqual([]);
+        } finally {
+          resetTerminatingSignalForTests();
+        }
+      }
+    });
+
+    it("keeps the run ungraded and goes on to the next test when grading throws", async () => {
+      const testDir = path.join(proj, "tests", "throws");
+      fs.mkdirSync(testDir, { recursive: true });
+      const broken = path.join(testDir, "graders.ts");
+      // Loads when the suite is read, and throws when grading loads the copy
+      // the run directory stored: the agent's run is what flips the switch.
+      fs.writeFileSync(
+        broken,
+        'if ((globalThis as any).breakGraders === true) throw new Error("this grader module is broken");\n' +
+          "export default [];\n",
+      );
+      const running = traceWritingRunner("done", () => {
+        (globalThis as any).breakGraders = true;
+      });
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const result = await runSuite(
+          {
+            agent: path.join(proj, "agent.agency"),
+            inputs: [
+              { id: "a", input: "t", graders: broken },
+              { id: "b", input: "t", graders: broken },
+            ],
+            out: path.join(proj, "runs", "throws"),
+            config: {},
+            perRun: { pipeOutput: false },
+            gradeInPlace: true,
+          },
+          { runner: running },
+        );
+        expect(result.tests.map((test) => test.testId)).toEqual(["a", "b"]);
+        for (const test of result.tests) {
+          expect(readRunDirectory(test.runDir, quiet).traces).toHaveLength(1);
+          expect(scoreRows(test.runDir)).toEqual([]);
+          expect(test.grading).toBeUndefined();
+        }
+        expect(warn.mock.calls.flat().join("\n")).toContain("could not grade");
+      } finally {
+        delete (globalThis as any).breakGraders;
+        warn.mockRestore();
+      }
+    });
+
+    it("still grades in the live workdir when no workdir is stored", async () => {
+      const result = await runSuite(
+        {
+          ...suiteWith("live-only", { "touched-it": "test -f touched.txt" }),
+          gradeInPlace: true,
+          workdirSnapshot: false,
+        },
+        { runner: traceWritingRunner("done") },
+      );
+      expect(fs.existsSync(runDirPaths(result.tests[0].runDir).workdirDir)).toBe(false);
+      expect(scoreRows(result.tests[0].runDir)).toEqual([{ name: "touched-it", pass: true }]);
+    });
+
+    it("does not grade without gradeInPlace", async () => {
+      const result = await runSuite(suiteWith("ungraded", { any: "true" }), {
+        runner: traceWritingRunner("done"),
+      });
+      expect(scoreRows(result.tests[0].runDir)).toEqual([]);
+    });
   });
 
   it("progress: false prints nothing — the optimizer's --silent depends on it", async () => {

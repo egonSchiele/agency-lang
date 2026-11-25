@@ -174,6 +174,51 @@ describe("runs add", () => {
   });
 });
 
+describe("runs list --json", () => {
+  it("prints one entry per run: its directory, its summary, and its effective scores", () => {
+    const { group, a, b } = writeGroup();
+    recordGradingPass({
+      dir: a,
+      scores: [
+        {
+          traceId: "ta",
+          annotator: { kind: "grader", id: "inline:builds" },
+          name: "builds",
+          score: { kind: "binary", pass: true },
+          weight: 0,
+          mustPass: true,
+        },
+        {
+          traceId: "ta",
+          annotator: { kind: "grader", id: "inline:unit-values" },
+          name: "unit-values",
+          score: { kind: "binary", pass: false },
+          weight: 1,
+          mustPass: false,
+          feedback: "FAIL: 5s is not 5000",
+        },
+      ],
+    });
+    const listed: string[] = [];
+    runsList([group], { report: (m) => listed.push(m) }, { json: true });
+    expect(listed).toHaveLength(1);
+    const entries = JSON.parse(listed[0]);
+    expect(entries.map((entry: { dir: string }) => entry.dir)).toEqual([a, b]);
+    expect(entries[0].summary).toMatchObject({ testId: "a", traceId: "ta", latestScore: 0 });
+    expect(entries[0].scores).toEqual([
+      { name: "builds", score: { kind: "binary", pass: true }, weight: 0, mustPass: true },
+      {
+        name: "unit-values",
+        score: { kind: "binary", pass: false },
+        weight: 1,
+        mustPass: false,
+        feedback: "FAIL: 5s is not 5000",
+      },
+    ]);
+    expect(entries[1]).toMatchObject({ summary: { testId: "b", latestScore: null }, scores: [] });
+  });
+});
+
 describe("runs list NOTES column", () => {
   it("shows yes for a run whose notes.md has text, blank for a blank one", () => {
     const { group, a, b } = writeGroup();
@@ -281,6 +326,14 @@ describe("runs list over groups", () => {
     await programWith({ runsList: runsListMock }).parseAsync(["runs", "list", "/a", "/b"], {
       from: "user",
     });
-    expect(runsListMock).toHaveBeenCalledWith(["/a", "/b"]);
+    expect(runsListMock).toHaveBeenCalledWith(["/a", "/b"], undefined, {});
+  });
+
+  it("the CLI passes --json through", async () => {
+    const runsListMock = vi.fn(() => []);
+    await programWith({ runsList: runsListMock }).parseAsync(["runs", "list", "--json", "/a"], {
+      from: "user",
+    });
+    expect(runsListMock).toHaveBeenCalledWith(["/a"], undefined, { json: true });
   });
 });

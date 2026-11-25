@@ -7,7 +7,7 @@ deliberately.
 
 ## The rules
 
-**`eval run` never grades.** `agency eval run` loads the suite, runs it, and
+**`eval run` does not grade unless asked.** `agency eval run` loads the suite, runs it, and
 writes one run directory per test at `<out>/<testId>/`: the test's trace in
 `statelog.jsonl` (empty when the test died before its first event, so the
 directory is still a run directory), its workdir flat under `workdir/` with a
@@ -23,6 +23,35 @@ names the GROUP directory; each test's run directory is written at
 and renamed into place so a child appears whole or not at all. A child that
 already exists is an error result for that test (nothing overwritten; the
 others still run). Default `<eval.runsDir or runs>/<timestamp>-<random suffix>`.
+
+**Grading as part of the run: `--grade`.** With `--grade`, each test is
+graded as soon as its agent finishes, with the graders its run directory
+stored. The grades are written by the same code `eval grade` uses
+(`gradeSuite`), so the score rows are identical. One thing differs: graders
+are given the workdir the agent worked in, not the copy under `workdir/`
+(`GradingContext.workdirOverride`). That is the reason the flag exists. A
+built repository is slow to copy, a copy of one may not work, and a run in a
+container that is about to be deleted cannot be graded later. Three cases
+are not graded: a test whose agent never started, a suite that was
+interrupted (a build grader can run for most of an hour), and a pass that
+Ctrl-C cut short, which is never recorded. `eval grade` still grades any run
+directory afterwards, against its stored workdir.
+
+**Three flags for a tool that wraps `eval run`.** A wrapper that runs each
+test as its own `eval run` (one container per test, say) needs the pieces to
+add up to one batch. `--batch <id>` records the runs under a given batch id
+(`batchIdOf`); a person can use it too, to add re-run tests to an earlier
+batch. `--trial-number <n>` runs each test once, records it as trial `n`,
+and writes it flat at `<out>/<testId>/` (`trialNumberOf`); it is refused
+together with `--trials`. `--no-workdir-snapshot` stores no `workdir/`, for a
+workdir too large to copy. The run row records it (`flags.workdirSnapshot:
+false`), and `eval grade` skips such a run with a line on stderr
+(`gradableRunDirs`): grading it again would fail every grader that reads
+the workdir and record those failures over the real grades.
+`eval ls --json` prints the selected tests as `[{ id, timeoutSec? }]`, so
+the wrapper selects exactly what `eval run` would. The run row's
+`flags.trials` is the inner run's count, 1; nothing reads it (statelog
+derives a batch's trial count from the rows' `trial`).
 
 **Repeating a suite: `--trials k`.** Each test runs `k` times, trial-major
 (`a/1, b/1, a/2, b/2`), each repetition in its own run directory at

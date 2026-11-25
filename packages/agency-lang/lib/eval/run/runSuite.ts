@@ -32,8 +32,12 @@ import {
 import { readTraces } from "@/runDirectory/traces.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
 
+import { GradingInterrupted } from "@/eval/grading/gradeRun.js";
+import { gradeSuite } from "@/eval/grading/gradeSuite.js";
+
 import { agentRunPaths } from "./extract.js";
-import { runAgent, type AgentRun, type RunAgentOptions } from "./runAgent.js";
+import { terminatingSignalSeen } from "./childSupervisor.js";
+import { runAgent, SETUP_TIMEOUT_SEC, type AgentRun, type RunAgentOptions } from "./runAgent.js";
 import { seedFromAgentFile } from "./seed.js";
 import type { EvalInputRunner } from "./subprocess.js";
 
@@ -74,6 +78,23 @@ export type RunSuiteOptions = {
    *  A finite positive integer. */
   trials?: number;
   perRun?: PerRunOptions;
+  /** `eval run --grade`: grade each test as soon as its agent finishes, with
+   *  the graders its run directory stored, in the workdir the agent worked
+   *  in. The grades are written to the run directory as `eval grade` writes
+   *  them. For runs whose workdir cannot wait to be graded later: one in a
+   *  container that is about to be deleted, or one too large to copy. */
+  gradeInPlace?: boolean;
+  /** `eval run --batch`: record the runs under this batch id instead of a
+   *  new one, so runs from several invocations show as one batch. */
+  batch?: string;
+  /** `eval run --trial-number`: run each test once and record it as this
+   *  trial, written flat at `<out>/<testId>/`. For a tool that runs the
+   *  trials of one batch as separate invocations. Not with `trials`. */
+  trialNumber?: number;
+  /** Default true. False (`eval run --no-workdir-snapshot`) stores no copy
+   *  of the workdir in the run directory, for a workdir too large to copy.
+   *  Such a run cannot have its workdir graded later. */
+  workdirSnapshot?: boolean;
 };
 
 /** One unit of work: a test and which repetition of it this is (1-based). */
@@ -95,6 +116,7 @@ export async function runSuite(
   deps: RunSuiteDeps = {},
 ): Promise<SuiteRunResult> {
   const trials = trialCount(opts.trials);
+  const firstTrial = trialNumberOf(opts.trialNumber, trials);
   const target: EvalTarget =
     typeof opts.agent === "string" ? resolveEvalTarget({ agent: opts.agent }) : opts.agent;
   // Before any workdir is seeded or agent compiled: an agent whose shape
@@ -107,6 +129,9 @@ export async function runSuite(
   );
   const config = opts.config ?? {};
   const perRun = opts.perRun ?? {};
+  // One id per suite invocation, carried by every run row it writes. Here,
+  // before any directory or listener exists, since a bad one throws.
+  const batch = batchIdOf(opts.batch, groupDir);
 
   // Each test's graders, bundled now and stored in its run directory, so the
   // run grades later by the graders it ran with, wherever the directory goes.
@@ -145,7 +170,13 @@ export async function runSuite(
   process.once("SIGINT", onSigint);
 
   const budget = makeBatchBudget(batchCostCapFromConfig(config));
-  const shouldStop = () => interrupted || budget.exhausted();
+  // Ctrl-C is not the only way to be told to stop: `docker stop`, `timeout`
+  // and a closed terminal send SIGTERM or SIGHUP. While an agent or a command
+  // runs, the child supervisor receives all three and remembers; the SIGINT
+  // listener above covers the moments when nothing is running. After either,
+  // no test is graded and no further test starts.
+  const stopping = () => interrupted || terminatingSignalSeen();
+  const shouldStop = () => stopping() || budget.exhausted();
 
   const parallel = Math.max(1, Math.floor(opts.parallel ?? 1));
   // `agent` is the target's label (an agent file path or the command line),
@@ -154,13 +185,11 @@ export async function runSuite(
     parallel,
     agent: target.label,
     trials,
+    // Recorded so `eval grade` can tell this run from one that merely has
+    // no workdir, and leave its grades alone.
+    ...(opts.workdirSnapshot === false ? { workdirSnapshot: false } : {}),
   };
   const harness = { kind: "harness" as const, id: `agency-eval@${harnessVersion()}` };
-  // One id per suite invocation, carried by every run row it writes. The
-  // group name is the readable part; the suffix keeps two groups that happen
-  // to share a name (`team-a/nightly`, `team-b/nightly`) from merging once
-  // their rows sit side by side in a grade or on statelog.
-  const batch = `${path.basename(groupDir)}-${nanoid(8)}`;
 
   // One test, executed, folded into the run directory, and its staging
   // removed — shared by both scheduling modes. Prepare failures become error
@@ -200,37 +229,32 @@ export async function runSuite(
           seed: defaultSeed,
           pipeOutput,
           timeoutSec: test.timeoutSec,
+          setup: setupOf(test),
         },
         { runner: deps.runner },
       );
       if (budget.add(runCostUsd(run.statelogPath)) && progress) {
         console.warn(budget.exceededMessage());
       }
-      const assembled = `${stagingDir}.rundir`;
-      fs.rmSync(assembled, { recursive: true, force: true });
+      const fold = {
+        test,
+        traceId,
+        run,
+        harness,
+        suite: opts.suite,
+        snapshots: snapshotsByTest[testId] ?? {},
+        flags,
+        batch,
+        trial,
+        storeWorkdir: opts.workdirSnapshot ?? true,
+      };
       try {
-        foldIntoRunDirectory({
-          runDir: assembled,
-          test,
-          traceId,
-          run,
-          harness,
-          suite: opts.suite,
-          snapshots: snapshotsByTest[testId] ?? {},
-          flags,
-          batch,
-          trial,
-        });
+        placeRunDirectory(stagingDir, runDir, fold);
       } catch (err) {
-        keepStaging = true;
-        throw new Error(
-          `${err instanceof Error ? err.message : String(err)} The agent's files are kept at ${stagingDir} for diagnosis.`,
-        );
+        keepStaging = err instanceof FoldRefused;
+        throw err;
       }
-      // With trials, the test's directory is the parent of its runs.
-      fs.mkdirSync(path.dirname(runDir), { recursive: true });
-      fs.renameSync(assembled, runDir);
-      return {
+      const result: SuiteTestResult = {
         testId,
         trial,
         traceId,
@@ -238,6 +262,14 @@ export async function runSuite(
         status: run.status,
         errorMessage: run.status === "error" ? run.errorMessage : undefined,
       };
+      // Before the `finally` below removes the staging workdir. Not after
+      // an interrupt: a build grader can run for most of an hour, and
+      // whoever interrupted is waiting.
+      const graded =
+        opts.gradeInPlace === true && !stopping()
+          ? await gradeInPlace(runDir, run, config)
+          : undefined;
+      return graded === undefined ? result : { ...result, ...graded };
     } finally {
       if (!keepStaging) {
         const deleted = safeDeleteDirectoryWithin(stagingRoot, stagingDir);
@@ -249,7 +281,7 @@ export async function runSuite(
     }
   };
 
-  const jobs = scheduleJobs(opts.inputs, trials);
+  const jobs = scheduleJobs(opts.inputs, trials, firstTrial);
   let results: SuiteTestResult[] = [];
   try {
     if (parallel === 1) {
@@ -280,6 +312,32 @@ export async function runSuite(
   return suiteResult({ runDir: groupDir, agentLabel: target.label, results, budget });
 }
 
+/** Grade a finished run in the workdir its agent used, with the graders its
+ *  run directory stored. A run whose agent never started is graded as
+ *  `eval grade` grades it: 0, with no graders run. A grading failure is
+ *  reported and the run is kept, ungraded. */
+async function gradeInPlace(
+  runDir: string,
+  run: AgentRun,
+  config: AgencyConfig,
+): Promise<Pick<SuiteTestResult, "grading" | "judgeCostUsd"> | undefined> {
+  try {
+    const graded = await gradeSuite(runDir, { kind: "snapshot" }, config, {
+      workdirOverride: run.workdir,
+    });
+    return { grading: graded.grading, judgeCostUsd: graded.judgeCostUsd };
+  } catch (err) {
+    // Interrupted while grading: nothing was recorded, and that is not news.
+    if (err instanceof GradingInterrupted) {
+      return undefined;
+    }
+    console.warn(
+      `[runSuite] could not grade ${runDir}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return undefined;
+  }
+}
+
 function suiteResult(args: {
   runDir: string;
   agentLabel: string;
@@ -298,6 +356,67 @@ function suiteResult(args: {
   };
 }
 
+/** A test's setup command, as runAgent takes it. */
+function setupOf(test: Test): RunAgentOptions["setup"] {
+  return test.setup === undefined
+    ? undefined
+    : { command: test.setup, testDir: test.dir, timeoutSec: SETUP_TIMEOUT_SEC };
+}
+
+/** A fold that refused the agent's output (say, a statelog holding two
+ *  traces). The staging directory is kept when this is thrown. */
+class FoldRefused extends Error {}
+
+/** Assemble a finished run's directory beside its staging directory, then
+ *  rename it into place, so a run directory appears whole or not at all. */
+function placeRunDirectory(
+  stagingDir: string,
+  runDir: string,
+  fold: Omit<Parameters<typeof foldIntoRunDirectory>[0], "runDir">,
+): void {
+  const assembled = `${stagingDir}.rundir`;
+  fs.rmSync(assembled, { recursive: true, force: true });
+  try {
+    foldIntoRunDirectory({ ...fold, runDir: assembled });
+  } catch (err) {
+    throw new FoldRefused(
+      `${err instanceof Error ? err.message : String(err)} The agent's files are kept at ${stagingDir} for diagnosis.`,
+    );
+  }
+  // With trials, the test's directory is the parent of its runs.
+  fs.mkdirSync(path.dirname(runDir), { recursive: true });
+  fs.renameSync(assembled, runDir);
+}
+
+/** The batch id every run row of this invocation carries. A new one is the
+ *  group's name, the readable part, and a suffix that keeps two groups that
+ *  share a name (`team-a/nightly`, `team-b/nightly`) from merging once
+ *  their rows sit side by side in a grade or on statelog. */
+function batchIdOf(given: string | undefined, groupDir: string): string {
+  if (given === undefined) {
+    return `${path.basename(groupDir)}-${nanoid(8)}`;
+  }
+  if (given === "") {
+    throw new Error("batch must not be empty");
+  }
+  return given;
+}
+
+/** The number the first (and, with `trialNumber`, only) trial is recorded
+ *  under: 1 unless the caller named one. */
+function trialNumberOf(given: number | undefined, trials: number): number {
+  if (given === undefined) {
+    return 1;
+  }
+  if (!Number.isInteger(given) || given < 1) {
+    throw new Error("trial number must be a positive integer");
+  }
+  if (trials > 1) {
+    throw new Error("--trial-number runs one trial; it cannot be combined with --trials");
+  }
+  return given;
+}
+
 /** The trial count a caller asked for: 1 when unspecified, else a finite
  *  positive integer. The CLI parses its flag, but `runSuite` is an API. */
 function trialCount(value: number | undefined): number {
@@ -310,9 +429,9 @@ function trialCount(value: number | undefined): number {
 
 /** Trial-major order (`a/1, b/1, a/2, b/2`): an interrupted suite leaves
  *  whole trials behind rather than one test's every repetition. */
-function scheduleJobs(tests: Test[], trials: number): RunJob[] {
+function scheduleJobs(tests: Test[], trials: number, firstTrial: number): RunJob[] {
   const jobs: RunJob[] = [];
-  for (let trial = 1; trial <= trials; trial += 1) {
+  for (let trial = firstTrial; trial < firstTrial + trials; trial += 1) {
     for (const test of tests) {
       jobs.push({ test, trial });
     }
@@ -393,6 +512,8 @@ function foldIntoRunDirectory(args: {
   flags: Record<string, string | number | boolean>;
   batch: string;
   trial: number;
+  /** False leaves the workdir out of the run directory. */
+  storeWorkdir: boolean;
 }): void {
   const { run } = args;
   const graders = args.snapshots.module;
@@ -416,7 +537,10 @@ function foldIntoRunDirectory(args: {
     dir: args.runDir,
     stagedStatelogFile: run.statelogPath === null ? undefined : run.statelogPath,
     codeEntry,
-    workdir: traceRecorded && fs.existsSync(run.workdir) ? { sourceDir: run.workdir } : undefined,
+    workdir:
+      args.storeWorkdir && traceRecorded && fs.existsSync(run.workdir)
+        ? { sourceDir: run.workdir }
+        : undefined,
     gradersFiles: [
       ...(graders?.files ?? []),
       ...(harness?.files ?? []),

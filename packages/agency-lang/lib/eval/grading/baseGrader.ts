@@ -62,6 +62,13 @@ export abstract class BaseGrader {
     return this.options.weight ?? 1;
   }
 
+  /** True for a grader that works in the run's workdir and would collide
+   *  with another doing the same, such as two builds in one tree. Grading
+   *  runs these one at a time (see `gradeInput` in gradeRun.ts). */
+  needsWorkdirToItself(): boolean {
+    return this.options.needsWorkdirToItself ?? false;
+  }
+
   /** Orchestration: run `_run` k times, aggregate by score kind. */
   async run(input: GraderInput): Promise<Grade> {
     const samples = this.options.samples ?? 1;

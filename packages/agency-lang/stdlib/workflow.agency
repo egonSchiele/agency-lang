@@ -35,9 +35,10 @@ time. A skill is a set of instructions that the agent reads and then decides
 how to follow. A workflow is a fixed list of steps, so it runs the same way
 on every call, and a person can still read it as easily as a skill.
 
-A workflow has tool steps, LLM steps, and references from one step to an
-earlier step's result. Anything else belongs in an Agency function that a
-tool step calls.
+A workflow has tool steps, LLM steps, `match` steps that branch on a value,
+`each` steps that repeat for every item of a list, and references from one
+step to an earlier step's result. Any other logic belongs in an Agency
+function that a tool step calls.
 
 ```ts
 import { add } from "std::math"
@@ -837,7 +838,7 @@ export def listWorkflows(dir: string): Result<WorkflowEntry[]> raises <std::work
 // write it, without the saved file's outer `workflow` field, and leaves
 // out limits, which a host adds at its own save.
 static const DESIGN_TUTORIAL = """
-A workflow is a fixed list of steps written as JSON. Each step is either a tool call or an LLM call. The steps are compiled to an Agency program and run in order.
+A workflow is a list of steps written as JSON. A step is a tool call, an LLM call, a `match` that branches on a value, or an `each` that repeats steps for every item of a list. The steps are compiled to an Agency program and run in order.
 
 ## Your first workflow
 
@@ -935,6 +936,104 @@ The `result` field chooses what the workflow returns. If you leave it out, the w
   "doubled": { "$ref": "steps.doubled" }
 }
 ```
+
+## Branching with `match`
+
+A `match` step reads one value and runs the steps of the case whose `is` equals it. Here an LLM step sorts a support message, and only a refund request is forwarded:
+
+```json
+{
+  "format": 1,
+  "name": "routeSupportMessage",
+  "description": "Forward a refund request to the billing team.",
+  "inputs": "{ message: string }",
+  "steps": [
+    {
+      "id": "sort",
+      "kind": "llm",
+      "prompt": "Is this support message a refund request or a question?",
+      "context": [{ "$ref": "inputs.message" }],
+      "output": "{ kind: \"refund\" | \"question\" }"
+    },
+    {
+      "id": "branch",
+      "kind": "match",
+      "on": { "$ref": "steps.sort.kind" },
+      "cases": [
+        {
+          "is": "refund",
+          "steps": [
+            {
+              "id": "forward",
+              "kind": "tool",
+              "module": "./billing.agency",
+              "tool": "forwardToBilling",
+              "args": { "text": { "$ref": "inputs.message" } }
+            }
+          ]
+        },
+        { "is": "question", "steps": [] }
+      ]
+    }
+  ],
+  "result": { "$ref": "steps.sort" }
+}
+```
+
+Rules:
+1. `on` is a reference.
+2. Each `is` is a string, a number, or `true` or `false`. No two cases may have the same `is`.
+3. When no case fits and there is no `otherwise`, the workflow fails.
+4. Write `"otherwise": []` to ignore other values, or put steps in `otherwise` to run them for any other value.
+5. A step inside a case can be read only inside that case.
+6. A `match` has no value, so no reference may name it. When the last step is a `match`, set `result`.
+
+## Repeating with `each`
+
+An `each` step runs its steps once for every item of a list, in order. Inside the loop, `each.<loop id>` is the current item:
+
+```json
+{
+  "format": 1,
+  "name": "shipOrders",
+  "description": "Ship every order in the list.",
+  "inputs": "{ orders: { id: string; address: string }[] }",
+  "steps": [
+    {
+      "id": "order",
+      "kind": "each",
+      "over": { "$ref": "inputs.orders" },
+      "steps": [
+        {
+          "id": "ship",
+          "kind": "tool",
+          "module": "./shipping.agency",
+          "tool": "shipOrder",
+          "args": {
+            "orderId": { "$ref": "each.order.id" },
+            "address": { "$ref": "each.order.address" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "kind": "tool",
+      "module": "./shipping.agency",
+      "tool": "shippedToday",
+      "args": {}
+    }
+  ],
+  "result": { "$ref": "steps.report" }
+}
+```
+
+Rules:
+1. `over` is a reference to a list.
+2. Name the loop after one item, as `order` is here, so that `each.order.id` reads well.
+3. Read the current item as `each.<loop id>`.
+4. A step inside the loop can be read only inside it.
+5. An `each` has no value, so set `result` to a step outside it.
 
 ## Calling functions from local files
 

@@ -37,6 +37,16 @@ function harborTrial(overrides: Partial<FakeHarborTrial> & { name: string }): Fa
   };
 }
 
+const PI_TRIAL: Partial<FakeHarborTrial> = {
+  statelogLines: undefined,
+  agentInfo: { name: "pi", model: "z-ai/glm-5.3-flash" },
+  agentResult: { input: 57240, cache: 50944, output: 1404, cost: 0.00317472 },
+  agentExecution: {
+    startedAt: "2026-11-13T23:34:26.015034Z",
+    finishedAt: "2026-11-13T23:35:34.868438Z",
+  },
+};
+
 function summaryAt(dir: string) {
   return summarizeRunDirectory(readRunDirectory(dir, quiet));
 }
@@ -253,5 +263,40 @@ describe("importHarbor", () => {
     const message = "import-harbor: --batch is required unless importing one job folder";
     expect(() => importHarbor({ jobDirs: [root, root], outDir: root })).toThrow(message);
     expect(() => importHarbor({ jobDirs: [], trialsFile, outDir: root })).toThrow(message);
+  });
+
+  it("a Pi trial imports with its reported usage and agent name", () => {
+    const root = tempDir("harbor-");
+    const jobDir = path.join(root, "k1-pi");
+    writeHarborTrial(jobDir, harborTrial({ name: "a__1", ...PI_TRIAL }));
+    const outDir = path.join(root, "out");
+    const result = importHarbor({ jobDirs: [jobDir], outDir, reasoning: "high" });
+    const runDir = path.join(outDir, "k1-pi", "astropy__astropy-12907", "1");
+    expect(result.outcomes).toEqual([{ status: "imported", dir: runDir }]);
+    expect(summaryAt(runDir)).toMatchObject({
+      score: 1,
+      status: "ok",
+      eventCount: 0,
+      costUsd: 0.00317472,
+      inputTokens: 6296,
+      agentLabel: "pi",
+      endedAt: "2026-11-13T23:35:34.868Z",
+      models: [expect.objectContaining({ name: "z-ai/glm-5.3-flash", reasoning: "high" })],
+    });
+  });
+
+  it("re-importing a run under a different agent name fails, saying to delete the batch folder", () => {
+    const root = tempDir("harbor-");
+    const jobDir = path.join(root, "k1-pi");
+    writeHarborTrial(jobDir, harborTrial({ name: "a__1", ...PI_TRIAL }));
+    const outDir = path.join(root, "out");
+    importHarbor({ jobDirs: [jobDir], outDir });
+    const renamed = importHarbor({ jobDirs: [jobDir], outDir, agent: "pi-1.5.2" });
+    expect(renamed.outcomes).toEqual([
+      expect.objectContaining({
+        status: "failed",
+        error: expect.stringContaining("Delete the batch folder"),
+      }),
+    ]);
   });
 });

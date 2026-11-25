@@ -33,6 +33,7 @@ export function importHarbor({
   outDir,
   batch,
   reasoning,
+  agent,
   reportProgress = (): void => {},
 }: {
   jobDirs: string[];
@@ -40,12 +41,14 @@ export function importHarbor({
   outDir: string;
   batch?: string;
   reasoning?: string;
+  /** Names every run's agent; without it, each trial's `agent_info.name`. */
+  agent?: string;
   /** Called once per trial, as `[n/total] <status> <test>/<trial>`. */
   reportProgress?: (line: string) => void;
 }): ImportResult {
   const batchName = batchNameOf({ jobDirs, trialsFile, batch });
   const { trials, problems } = readHarborInputs({ jobDirs, trialsFile });
-  const plan = planHarborImport({ trials, batch: batchName, reasoning });
+  const plan = planHarborImport({ trials, batch: batchName, reasoning, agent });
   const uploadPath = path.join(outDir, batchName);
   const outcomes = plan.runs.map((run, index) => {
     const outcome = writeRun({ run, dir: path.join(uploadPath, run.relativeDir) });
@@ -129,6 +132,14 @@ function finishExisting({
     throw new Error(
       `${dir} holds Harbor trial ${found}, but this import puts ${wanted} there. ` +
         `The input changed order or contents; delete the batch folder and import again.`,
+    );
+  }
+  const oldAgent = existing.row.flags.agent;
+  const newAgent = run.payload.flags.agent;
+  if (oldAgent !== newAgent) {
+    throw new Error(
+      `${dir} was imported with agent ${String(oldAgent ?? "(none)")}; this import names ` +
+        `${String(newAgent ?? "(none)")}. Delete the batch folder and import again.`,
     );
   }
   if (existing.gradingPasses > 0 || run.scores.length === 0) {

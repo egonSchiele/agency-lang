@@ -88,12 +88,17 @@ annotations. The rules:
   models; its identity, outcome, batch, trial, and suite come from the
   `run` row. A directory with neither a trace nor a run row is not a run.
 - `status`: `ok` when the harness saw a clean finish. `killed` when it cut
-  the run short after events existed, meaning a timeout, cost cap, or
-  signal. `failed` for every other harness outcome, including a silent run.
+  the run short after the agent left a record (events, or usage the
+  harness reported), meaning a timeout, cost cap, or signal. `failed` for every other harness outcome, including a silent run.
   `trace` when there is no harness row at all, which means an ad-hoc
   directory. The `RunStatus` type also declares `partial`, but `statusOf`
   never returns it.
-- `endedAt`: the `run` row's `createdAt`, else the last event's timestamp.
+- `endedAt`: the last event's timestamp, else the `run` row's `createdAt`.
+  An imported run's row is written at import time, so the trace's own time
+  comes first.
+- A run with no events takes its usage and times from the `run` row's
+  `reported` field when there is one. An importer fills it for an agent
+  that writes no trace, such as Pi.
 - `latestScore` is the weighted mean of the scores on record; `score` is
   what the run counts as in a mean: the effective score when the run ended
   `ok`, null when it ended `void` (so accuracy leaves it out), and
@@ -209,7 +214,7 @@ Design: `docs/superpowers/specs/2026-11-24-results-only-upload-design.md`.
 `agency eval import-harbor` (hidden from `--help`) converts Harbor trials into run folders that `runs list` reads and `eval upload` sends. The code is in `lib/eval/harbor/`: a reader, a pure planner, and a writer that goes through `recordCompletedRun` and `recordGradingPass`. Design: `docs/superpowers/specs/2026-11-23-harbor-import-design.md`.
 
 ```
-agency eval import-harbor [<job folder>...] [--trials <file>] --out <dir> [--batch <name>] [--reasoning <level>]
+agency eval import-harbor [<job folder>...] [--trials <file>] --out <dir> [--batch <name>] [--reasoning <level>] [--agent <name>]
 ```
 
 - **Input:** job folders (every trial, by `started_at`), a `--trials` file (one trial folder per line, in order), or both. The command never picks or drops trials: choosing which reruns replace which attempts is done by hand, in the `--trials` file.
@@ -221,8 +226,10 @@ agency eval import-harbor [<job folder>...] [--trials <file>] --out <dir> [--bat
 - **Scoring:**
   - a reward is the score, even after a timeout;
   - no reward with `AgentTimeoutError` or `NonZeroAgentExitCodeError` (and a trace) scores 0;
-  - anything else with no reward, and every trial with no trace, ends `void` with no score. A void trial with no trace is a silent run with an empty `statelog.jsonl`.
-- **Re-running is safe:** a folder holding the same Harbor trial (`flags.harborJob`/`harborTrial`) is left alone or only gets its scores, and a folder holding a different one fails. Only planned folders are checked, so re-importing a smaller selection needs `<out>/<batch>` deleted first.
+  - anything else with no reward, and every trial with neither a trace nor reported tokens, ends `void` with no score. A void trial with no trace is a silent run with an empty `statelog.jsonl`.
+- **Agents that write no trace,** such as Pi, report their tokens and cost in `result.json`. The importer stores them, with the agent's start and finish times, as the run row's `reported` field. Fresh input is `n_input_tokens - n_cache_tokens`.
+- **Agent name:** `--agent` names every run's agent, as `flags.agent`. Without it, each run takes `agent_info.name` from its own `result.json`, such as `pi` or `agency-agent`. A trace's own `agentName` still wins, as `displayAgent` says.
+- **Re-running is safe:** a folder holding the same Harbor trial (`flags.harborJob`/`harborTrial`) under the same agent name is left alone or only gets its scores. A folder holding a different trial, or the same trial under another agent name, fails. Only planned folders are checked, so re-importing a smaller selection needs `<out>/<batch>` deleted first.
 
 ## Agent names are labels
 

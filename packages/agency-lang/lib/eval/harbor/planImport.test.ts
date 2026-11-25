@@ -13,8 +13,33 @@ function trial(overrides: Partial<HarborTrial> = {}): HarborTrial {
     rewards: { reward: 1 },
     exception: null,
     statelogPath: "/jobs/k1/astropy__astropy-12907__qk72YVE/agent/statelog.jsonl",
+    agentName: null,
+    reported: null,
     ...overrides,
   };
+}
+
+const REPORTED: HarborTrial["reported"] = {
+  models: [
+    {
+      name: "z-ai/glm-5.3-flash",
+      reasoning: null,
+      calls: 0,
+      inputTokens: 6296,
+      cachedInputTokens: 50944,
+      cacheCreationInputTokens: 0,
+      outputTokens: 1404,
+      costUsd: 0.00317472,
+    },
+  ],
+  startedAtMs: Date.parse("2026-11-13T23:34:26.015Z"),
+  durationMs: 68_853,
+  lastEventAt: "2026-11-13T23:35:34.868Z",
+};
+
+/** A Pi trial: no trace, but reported usage. */
+function piTrial(overrides: Partial<HarborTrial> = {}): HarborTrial {
+  return trial({ statelogPath: null, agentName: "pi", reported: REPORTED, ...overrides });
 }
 
 function failingWith(type: string): HarborTrial["exception"] {
@@ -161,5 +186,46 @@ describe("planHarborImport", () => {
       batch: "k",
     });
     expect(plan.unknownExceptions).toEqual(["SomethingNew"]);
+  });
+});
+
+describe("Pi trials and agent names", () => {
+  it("a trial with no trace but reported usage is not void, and its row carries the usage", () => {
+    expect(isVoid(piTrial())).toBe(false);
+    const [run] = planHarborImport({ trials: [piTrial()], batch: "k-pi" }).runs;
+    expect(run.payload.reported).toEqual(REPORTED);
+    expect(run.scores).toEqual([{ name: "reward", score: { kind: "binary", pass: true } }]);
+  });
+
+  it("a Pi trial that timed out with no reward scores a fail", () => {
+    const timedOut = piTrial({ rewards: null, exception: failingWith("AgentTimeoutError") });
+    expect(isVoid(timedOut)).toBe(false);
+    expect(scoresOf(timedOut)).toEqual([
+      { name: "reward", score: { kind: "binary", pass: false } },
+    ]);
+  });
+
+  it("a Pi trial whose verifier timed out is void", () => {
+    expect(isVoid(piTrial({ rewards: null, exception: failingWith("VerifierTimeoutError") }))).toBe(
+      true,
+    );
+  });
+
+  it("the agent flag wins over the trial's own agent name", () => {
+    const [run] = planHarborImport({ trials: [piTrial()], batch: "k", agent: "pi-1.5.2" }).runs;
+    expect(run.payload.flags.agent).toBe("pi-1.5.2");
+  });
+
+  it("without the flag, each run takes its own trial's agent name", () => {
+    const plan = planHarborImport({
+      trials: [piTrial({ testId: "A" }), trial({ testId: "B", agentName: "agency-agent" })],
+      batch: "mixed",
+    });
+    expect(plan.runs.map((run) => run.payload.flags.agent)).toEqual(["pi", "agency-agent"]);
+  });
+
+  it("a trial with no agent name and no flag has no agent flag", () => {
+    const [run] = planHarborImport({ trials: [trial()], batch: "k" }).runs;
+    expect(run.payload.flags).not.toHaveProperty("agent");
   });
 });

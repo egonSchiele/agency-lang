@@ -1381,10 +1381,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .requiredOption("--out <dir>", "Where to write <out>/<batch>/<test>/<trial>/")
     .option("--batch <name>", "Batch name; required unless importing one job folder")
     .option("--reasoning <level>", "Reasoning level for traces that don't record one")
+    .option("--agent <name>", "Agent name for every run; defaults to each trial's agent_info.name")
     .action(
       (
         jobs: string[],
-        opts: { trials?: string; out: string; batch?: string; reasoning?: string },
+        opts: { trials?: string; out: string; batch?: string; reasoning?: string; agent?: string },
       ) => {
         if (jobs.length === 0 && opts.trials === undefined) {
           console.error("import-harbor: give job folders, --trials, or both");
@@ -1399,6 +1400,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
             outDir: opts.out,
             batch: opts.batch,
             reasoning: opts.reasoning,
+            agent: opts.agent,
             reportProgress: (line) => console.log(line),
           });
         } catch (error) {

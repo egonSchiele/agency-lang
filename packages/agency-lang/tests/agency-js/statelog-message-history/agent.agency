@@ -1,0 +1,10 @@
+// Three calls on one thread. The statelog logs the first call's messages
+// whole and the next two as changes. See test.js.
+node main(): string {
+  thread {
+    const first: string = llm("one")
+    const second: string = llm("two")
+    const third: string = llm("three")
+  }
+  return "done"
+}

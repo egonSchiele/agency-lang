@@ -167,7 +167,7 @@ export function contextTokens(ev: EventEnvelope): number {
 }
 
 /** USD cost on a promptCompletion. Reads `cost.totalCost` (TokenCost
- *  shape from lib/statelogClient.ts). */
+ *  shape from lib/statelog/tokenUsage.ts). */
 export function cost(ev: EventEnvelope): number {
   return Number(ev.data.cost?.totalCost ?? 0);
 }

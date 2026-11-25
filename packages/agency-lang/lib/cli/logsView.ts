@@ -16,6 +16,7 @@ import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { resolveTraceIdArgument, type Trace } from "@/runDirectory/traces.js";
 import { makeLineSplitter } from "@/statelog/lineReader.js";
 import { parseStatelogLines, type ParseResult } from "@/statelog/parse.js";
+import type { RebuildState } from "@/statelog/threadMessages/read.js";
 import { commentsPathFor, commentsSourceForStatelog } from "@/runDirectory/commentsPath.js";
 import { nodeHost } from "@/host/node/nodeHost.js";
 import { sessionsDir } from "@/logsViewer/session/registry.js";
@@ -390,9 +391,10 @@ export async function parseStatelogStream(
 ): Promise<ParseResult> {
   const splitter = makeLineSplitter();
   const log: ParseResult = { events: [], errors: [] };
+  const rebuild: RebuildState = {};
   let lineCount = 0;
   const addLines = (lines: string[]): void => {
-    const parsed = parseStatelogLines(lines, lineCount + 1);
+    const parsed = parseStatelogLines(lines, lineCount + 1, rebuild);
     lineCount += lines.length;
     parsed.lines.forEach((entry) => log.events.push(entry.event));
     parsed.errors.forEach((error) => log.errors.push(error));

@@ -1,3 +1,4 @@
+import { rebuildAllMessages, rebuildMessages, type RebuildState } from "./threadMessages/read.js";
 import { EventEnvelope } from "./wireTypes.js";
 
 const SUPPORTED_VERSION = 1;
@@ -13,9 +14,14 @@ export type ParseResult = {
   errors: ParseError[];
 };
 
-/** One validated event together with the exact line it came from. */
+/** One validated event together with the exact line it came from. A caller
+ *  picks `event` to show a log and `stored` to send it somewhere. */
 export type ParsedEventLine = {
+  /** The event with a `promptCompletion`'s whole message list rebuilt. */
   event: EventEnvelope;
+  /** The event as the file holds it. The same object as `event` unless the
+   *  line is a `promptCompletion` that logged only its changed messages. */
+  stored: EventEnvelope;
   raw: string;
   /** One-based line number in the source text. */
   line: number;
@@ -35,7 +41,11 @@ export type ParsedStatelogLine =
 
 /** The one owner of statelog line decoding: JSON, version check, envelope
  *  validation. Callers that need the original bytes (per-trace digests,
- *  extracting a trace verbatim) read `entry.raw`. */
+ *  extracting a trace verbatim) read `entry.raw`.
+ *
+ *  It reads one line alone, so it does not rebuild message lists: `event`
+ *  and `stored` are the same object. A caller reading more than one line
+ *  uses `parseStatelogLines`. */
 export function parseStatelogLine(raw: string, lineNumber: number): ParsedStatelogLine {
   if (raw.trim() === "") {
     return { kind: "blank" };
@@ -53,21 +63,29 @@ export function parseStatelogLine(raw: string, lineNumber: number): ParsedStatel
   if ("error" in checked) {
     return { kind: "error", error: { line: lineNumber, ...checked.error } };
   }
-  return { kind: "event", entry: { event: checked.event, raw, line: lineNumber } };
+  return {
+    kind: "event",
+    entry: { event: checked.event, stored: checked.event, raw, line: lineNumber },
+  };
 }
 
 /** Lines of a statelog in file order, the first of them numbered
- *  `firstLineNumber`. Blank lines are skipped but still counted. */
+ *  `firstLineNumber`. Blank lines are skipped but still counted.
+ *
+ *  `rebuild` carries what earlier lines held across calls, so a caller
+ *  reading a file in chunks passes the same object for every chunk, and
+ *  starts a new one when it starts the file again. */
 export function parseStatelogLines(
   lines: readonly string[],
   firstLineNumber: number,
+  rebuild: RebuildState,
 ): ParseWithLinesResult {
   const parsedLines: ParsedEventLine[] = [];
   const errors: ParseError[] = [];
   lines.forEach((raw, index) => {
     const parsed = parseStatelogLine(raw, firstLineNumber + index);
     if (parsed.kind === "event") {
-      parsedLines.push(parsed.entry);
+      parsedLines.push({ ...parsed.entry, event: rebuildMessages(rebuild, parsed.entry.event) });
     } else if (parsed.kind === "error") {
       errors.push(parsed.error);
     }
@@ -77,7 +95,9 @@ export function parseStatelogLines(
 
 /** Statelog records that are already decoded, such as the logs a statelog
  *  server returns, checked the way a line from a file is. Record `i` is
- *  reported as line `i + 1`. */
+ *  reported as line `i + 1`. A server returns live uploads in the order
+ *  they arrived, which can differ from the order they were written, so the
+ *  message lists are rebuilt over the whole batch. */
 export function parseStatelogRecords(records: readonly unknown[]): ParseResult {
   const events: EventEnvelope[] = [];
   const errors: ParseError[] = [];
@@ -89,7 +109,7 @@ export function parseStatelogRecords(records: readonly unknown[]): ParseResult {
       events.push(checked.event);
     }
   });
-  return { events, errors };
+  return { events: rebuildAllMessages(events), errors };
 }
 
 /** Statelog text, for tests and callers that already hold it. A file is read
@@ -100,7 +120,7 @@ export function parseStatelogJsonl(text: string): ParseResult {
 }
 
 export function parseStatelogJsonlWithLines(text: string): ParseWithLinesResult {
-  return parseStatelogLines(text.split("\n"), 1);
+  return parseStatelogLines(text.split("\n"), 1, {});
 }
 
 type CheckedRecord = { event: EventEnvelope } | { error: Omit<ParseError, "line"> };

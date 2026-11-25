@@ -7,6 +7,7 @@ import {
   type ParseError,
   type ParseWithLinesResult,
 } from "@/statelog/parse.js";
+import type { RebuildState } from "@/statelog/threadMessages/read.js";
 import type { EventEnvelope } from "@/statelog/wireTypes.js";
 import { canonicalize } from "@/utils/canonicalize.js";
 import { sha256Text } from "@/utils/hash.js";
@@ -15,7 +16,11 @@ import { sha256Text } from "@/utils/hash.js";
  *  lines it came from and a digest of its content. */
 export type Trace = {
   traceId: string;
+  /** The events with every `promptCompletion`'s whole message list rebuilt:
+   *  what a reader shows. */
   events: EventEnvelope[];
+  /** The same events as the file holds them: what an upload sends. */
+  storedEvents: EventEnvelope[];
   lines: string[];
   digest: string;
 };
@@ -99,10 +104,11 @@ function makeTraceCollector(): {
 } {
   const grouper = makeTraceGrouper();
   const errors: ParseError[] = [];
+  const rebuild: RebuildState = {};
   let lineCount = 0;
   return {
     addLines(lines: string[]): void {
-      addParsedLines(parseStatelogLines(lines, lineCount + 1), grouper, errors);
+      addParsedLines(parseStatelogLines(lines, lineCount + 1, rebuild), grouper, errors);
       lineCount += lines.length;
     },
     result: () => ({ traces: grouper.traces(), errors }),
@@ -135,7 +141,12 @@ type TraceGrouper = {
 
 /** `seen` holds a hash of each line already kept, so a long line is not also
  *  an object key. */
-type TraceGroup = { events: EventEnvelope[]; lines: string[]; seen: Record<string, true> };
+type TraceGroup = {
+  events: EventEnvelope[];
+  storedEvents: EventEnvelope[];
+  lines: string[];
+  seen: Record<string, true>;
+};
 
 function makeTraceGrouper(): TraceGrouper {
   const byId: Record<string, TraceGroup> = Object.create(null);
@@ -145,7 +156,7 @@ function makeTraceGrouper(): TraceGrouper {
       const traceId = entry.event.trace_id;
       let group = byId[traceId];
       if (group === undefined) {
-        group = { events: [], lines: [], seen: Object.create(null) };
+        group = { events: [], storedEvents: [], lines: [], seen: Object.create(null) };
         byId[traceId] = group;
         order.push(traceId);
       }
@@ -155,6 +166,7 @@ function makeTraceGrouper(): TraceGrouper {
       }
       group.seen[lineHash] = true;
       group.events.push(entry.event);
+      group.storedEvents.push(entry.stored);
       group.lines.push(entry.raw);
     },
     traces(): Trace[] {
@@ -163,6 +175,7 @@ function makeTraceGrouper(): TraceGrouper {
         return {
           traceId,
           events: group.events,
+          storedEvents: group.storedEvents,
           lines: group.lines,
           digest: traceDigest(group.events),
         };

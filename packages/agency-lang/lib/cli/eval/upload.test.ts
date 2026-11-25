@@ -12,6 +12,7 @@ import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
 import type { Annotation } from "@/runDirectory/annotations.js";
 import { recordGradingPass } from "@/runDirectory/mutations.js";
 import { statelogLine, tempDir } from "@/runDirectory/testFixtures.js";
+import { threeCallLines } from "@/statelog/threadMessages/testFixtures.js";
 
 import type { TraceDigest } from "@/runDirectory/traceDigest.js";
 
@@ -194,6 +195,21 @@ describe("evalUpload", () => {
     expect(posted[1].events[0].envelope.data.n).toBe(500);
     // No annotation rows, so no annotation request.
     expect(annotations).toEqual([]);
+  });
+
+  it("uploads change events as the file holds them", async () => {
+    const dir = tempDir("upload-");
+    const lines = [
+      statelogLine("chat", "agentStart", { entryNode: "main", args: {} }),
+      ...threeCallLines({ trace: "chat" }),
+    ];
+    fs.writeFileSync(path.join(dir, "statelog.jsonl"), lines.join("\n") + "\n");
+    const { client, posted } = fakeClient({});
+    await evalUpload([dir], target, { client });
+    const third = posted[0].events[3].envelope.data;
+    expect(third.keptMessages).toBe(3);
+    expect(third.newMessages).toHaveLength(2);
+    expect(third.messages).toBeUndefined();
   });
 
   it("resumes a proven bulk prefix at its next sequence", async () => {

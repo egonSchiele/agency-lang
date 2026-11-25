@@ -1,5 +1,6 @@
 import { makeLineReader } from "./lineReader.js";
 import { parseStatelogLines } from "./parse.js";
+import type { RebuildState } from "./threadMessages/read.js";
 import type { EventEnvelope } from "./wireTypes.js";
 
 /**
@@ -11,11 +12,12 @@ import type { EventEnvelope } from "./wireTypes.js";
  */
 export function makeStatelogTailer(path: string): { poll(): EventEnvelope[] } {
   const reader = makeLineReader(path);
+  const rebuild: RebuildState = {};
   return {
     poll(): EventEnvelope[] {
       const events: EventEnvelope[] = [];
       reader.readToEnd((lines) => {
-        for (const entry of parseStatelogLines(lines, 1).lines) {
+        for (const entry of parseStatelogLines(lines, 1, rebuild).lines) {
           events.push(entry.event);
         }
       });

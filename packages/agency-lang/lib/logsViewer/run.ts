@@ -11,6 +11,7 @@ import type { InputSource } from "../tui/input/types.js";
 import type { OutputTarget } from "../tui/output/types.js";
 import { currentFileSize, makeLineReader } from "../statelog/lineReader.js";
 import { parseStatelogLines, type ParseResult } from "../statelog/parse.js";
+import type { RebuildState } from "../statelog/threadMessages/read.js";
 import type { CommentsStore } from "../runDirectory/commentsStore.js";
 import { formatAddress } from "./address.js";
 import { findRow } from "./detailTarget.js";
@@ -1000,6 +1001,7 @@ export function makeFollowWatcher(opts: RunViewerOpts): {
   let reader = followPath !== undefined ? makeLineReader(followPath, 0) : undefined;
   let lastSize = followPath !== undefined ? currentFileSize(followPath) : 0;
   let log: ParseResult = { events: [], errors: [] };
+  let rebuild: RebuildState = {};
   let lineCount = 0;
   let pollTimer: ReturnType<typeof setInterval> | undefined;
   // The callback is bound at start(), never at construction — so the
@@ -1012,7 +1014,7 @@ export function makeFollowWatcher(opts: RunViewerOpts): {
   const readAppended = (): boolean => {
     const appended: ParseResult = { events: [], errors: [] };
     reader?.readToEnd((lines) => {
-      const parsed = parseStatelogLines(lines, lineCount + 1);
+      const parsed = parseStatelogLines(lines, lineCount + 1, rebuild);
       lineCount += lines.length;
       parsed.lines.forEach((entry) => appended.events.push(entry.event));
       parsed.errors.forEach((error) => appended.errors.push(error));
@@ -1037,6 +1039,7 @@ export function makeFollowWatcher(opts: RunViewerOpts): {
     if (truncated) {
       reader = makeLineReader(followPath, 0);
       log = { events: [], errors: [] };
+      rebuild = {};
       lineCount = 0;
     }
     lastSize = size;
@@ -1051,7 +1054,11 @@ export function makeFollowWatcher(opts: RunViewerOpts): {
     if (reader === undefined) {
       return opts.parsed ?? { events: [], errors: [] };
     }
-    return opts.initialFollow ? log : withParsedLines(log, reader.finish(), lineCount + 1);
+    // A copy of the state: this parses the partial last line for the boot
+    // view only, and a later poll parses it again once its newline arrives.
+    return opts.initialFollow
+      ? log
+      : withParsedLines(log, reader.finish(), lineCount + 1, { ...rebuild });
   };
 
   readAppended();
@@ -1082,8 +1089,9 @@ function withParsedLines(
   log: ParseResult,
   lines: readonly string[],
   firstLineNumber: number,
+  rebuild: RebuildState,
 ): ParseResult {
-  const parsed = parseStatelogLines(lines, firstLineNumber);
+  const parsed = parseStatelogLines(lines, firstLineNumber, rebuild);
   return {
     events: log.events.concat(parsed.lines.map((entry) => entry.event)),
     errors: log.errors.concat(parsed.errors),

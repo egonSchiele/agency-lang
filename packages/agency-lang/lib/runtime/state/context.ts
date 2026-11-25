@@ -7,6 +7,11 @@ import type { LogLevel } from "../../logger.js";
 import type { TrustedModules } from "../../compiler/trustedModules.js";
 import { SimpleMachine } from "../../simplemachine/index.js";
 import { StatelogClient, StatelogConfig, type RootLog } from "../../statelogClient.js";
+import {
+  newKeptLogWriters,
+  writerForRun,
+  type KeptLogWriters,
+} from "../../statelog/threadMessages/writers.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
 import type { CoverageCollector } from "../coverageCollector.js";
 import { newCoverageCollector } from "#platform";
@@ -214,6 +219,12 @@ export class RuntimeContext<T> {
    *  `InvocationOptions.onJobStarted`, per execution, and never saved. */
   onJobStarted?: (job: HeldJob) => void;
   private traceWriter: TraceWriter | null;
+  /** The log writers of recent runs, so a resume in this process logs its
+   *  threads as changes from before the interrupt. Made by the base
+   *  context and shared with every execution context it creates. Never
+   *  serialized. See "Messages: full copies and changes" in
+   *  docs/dev/hosting/statelog.md. */
+  private logWriters: KeptLogWriters;
 
   // we need a single statelog client instance that can be used across the entire execution of the graph,
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
@@ -418,6 +429,7 @@ export class RuntimeContext<T> {
     this.failurePropagation = args.failurePropagation ?? "on";
     this.budget = args.budget;
     this.statelogClient = new StatelogClient(statelogConfig);
+    this.logWriters = newKeptLogWriters();
     this.stateStack = new StateStack();
     this.globals = GlobalStore.withTokenStats();
     // Out-of-frame posts (e.g. agentEnd) redact against the CURRENT top-level
@@ -629,9 +641,12 @@ export class RuntimeContext<T> {
     execCtx.verbose = this.verbose;
     execCtx.logLevel = this.logLevel;
     execCtx.abortController = new AbortController();
+    // Shared, so a context made from this one finds the same writers.
+    execCtx.logWriters = this.logWriters;
     execCtx.statelogClient = new StatelogClient({
       ...execCtx.statelogConfig,
       traceId: runId,
+      writer: writerForRun(this.logWriters, runId),
     });
     // Out-of-frame posts (e.g. agentEnd) redact against the CURRENT top-level
     // store — a getter because restore reassigns execCtx.globals.

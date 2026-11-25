@@ -11,6 +11,7 @@ import { makeFollowWatcher, runViewer } from "./run.js";
 import type { ParseResult } from "../statelog/parse.js";
 import { commentsPathFor } from "../runDirectory/commentsPath.js";
 import { openCommentsStore } from "../runDirectory/commentsStore.js";
+import { THREE_CALLS, threeCallLines } from "../statelog/threadMessages/testFixtures.js";
 
 function envelope(
   spanId: string,
@@ -329,6 +330,33 @@ describe("makeFollowWatcher", () => {
       watcher.stop();
     }
     expect(logs.at(-1)!.errors).toEqual([expect.objectContaining({ line: 4 })]);
+  });
+
+  it("rebuilds a change event the boot read saw without its newline", async () => {
+    // The boot read parses a last line with no newline for the first view,
+    // and a later poll parses it again once the newline arrives. The first
+    // parse must not count as this thread's previous call.
+    const [first, second, third] = threeCallLines();
+    fs.writeFileSync(file, `${first}\n${second}\n${third}`);
+    const watcher = makeFollowWatcher({
+      followPath: file,
+      followIntervalMs: 20,
+      input: new ScriptedInput([]),
+      output: new FrameRecorder(),
+      viewport: { rows: 20, cols: 100 },
+    });
+    expect(watcher.boot.events[2].data.messages).toEqual(THREE_CALLS[2]);
+    const logs: ParseResult[] = [];
+    watcher.start((log) => logs.push(log));
+    try {
+      fs.appendFileSync(file, "\n");
+      await until(() => logs.length > 0);
+    } finally {
+      watcher.stop();
+    }
+    const last = logs.at(-1)!.events.at(-1)!;
+    expect(last.data.missingMessages).toBeUndefined();
+    expect(last.data.messages).toEqual(THREE_CALLS[2]);
   });
 });
 

@@ -9,13 +9,19 @@ import { expandEffectNames } from "../../runtime/effectSets.js";
 import { stepEffects } from "./effects.js";
 import { inputNames } from "./typeText.js";
 import {
+  allSteps,
+  isBlockStep,
   isRef,
   refsIn,
   signatureKey,
+  stepChildren,
+  type BlockStep,
   type Binding,
+  type EachStep,
   type ImportGroup,
   type Limits,
   type LlmStep,
+  type MatchStep,
   type Problem,
   type ResolvedRef,
   type ResolvedStep,
@@ -88,25 +94,38 @@ export function names(id: string) {
     contextText: (index: number) => `step_${id}_context${index + 1}_text`,
     reply: `step_${id}_reply`,
     typeName: `Step_${id}_output`,
+    on: `step_${id}_on`,
+    caseTest: (index: number) => `step_${id}_case${index + 1}`,
+    over: `step_${id}_over`,
+    item: `step_${id}_item`,
   };
 }
 
 export { signatureKey };
 
+/** Every tool step in the tree, in document order. */
 function toolSteps(workflow: Workflow): ToolStep[] {
-  return workflow.steps.filter((step): step is ToolStep => step.kind === "tool");
+  return allSteps(workflow).filter((step): step is ToolStep => step.kind === "tool");
+}
+
+/** "a match step" or "an each step", for messages. */
+function blockName(step: BlockStep): string {
+  return step.kind === "match" ? "a match step" : "an each step";
 }
 
 function sortedArgs(step: ToolStep): string[] {
   return Object.keys(step.args).sort();
 }
 
-const REF_PARTS = /^(inputs|steps)\.([A-Za-z_][A-Za-z0-9_]*)(.*)$/;
+const REF_PARTS = /^(inputs|steps|each)\.([A-Za-z_][A-Za-z0-9_]*)(.*)$/;
 
 function resolveRef(path: string): ResolvedRef {
   const [, root, name, rest] = REF_PARTS.exec(path)!;
-  return root === "inputs"
-    ? { kind: "input", name, path: rest }
+  if (root === "inputs") {
+    return { kind: "input", name, path: rest };
+  }
+  return root === "each"
+    ? { kind: "item", loop: name, path: rest }
     : { kind: "step", step: name, path: rest };
 }
 
@@ -156,25 +175,50 @@ const toolRule: Rule = ({ workflow, refs, signatures }) =>
     return [];
   });
 
-/** The problem with one reference made at step `position` (the number of
- *  steps for `result`), or null when it names something earlier. */
-function refMessage(path: string, position: number, context: Context): string | null {
+/** What a reference may name at one place in the tree. `visible` holds the
+ *  tool and LLM steps it may read, `loops` the enclosing `each` steps, and
+ *  `later` the steps after it in its own list or an enclosing one. */
+type Scope = { visible: string[]; loops: string[]; later: string[] };
+
+/** The problem with one reference made by step `self` (null for `result`),
+ *  or null when the scope allows it. */
+function refMessage(
+  path: string,
+  self: string | null,
+  scope: Scope,
+  context: Context,
+): string | null {
   const ref = resolveRef(path);
   if (ref.kind === "input") {
     return inputNames(context.workflow.inputs).includes(ref.name)
       ? null
       : `reference "${path}" names no declared input`;
   }
-  const target = context.workflow.steps.findIndex((step) => step.id === ref.step);
-  if (target === -1) {
+  const steps = allSteps(context.workflow);
+  if (ref.kind === "item") {
+    if (!steps.some((step) => step.id === ref.loop && step.kind === "each")) {
+      return `reference "${path}" names no each step`;
+    }
+    return scope.loops.includes(ref.loop)
+      ? null
+      : `reference "${path}" names loop "${ref.loop}", which this step is not inside`;
+  }
+  const target = steps.find((step) => step.id === ref.step);
+  if (target === undefined) {
     return `reference "${path}" names no step`;
   }
-  if (target === position) {
+  if (target.id === self) {
     return `reference "${path}" names step "${ref.step}", which is this step`;
   }
-  return target > position
+  if (isBlockStep(target)) {
+    return `reference "${path}" names step "${ref.step}", ${blockName(target)}, which has no value`;
+  }
+  if (scope.visible.includes(ref.step)) {
+    return null;
+  }
+  return scope.later.includes(ref.step)
     ? `reference "${path}" names step "${ref.step}", which comes after this step`
-    : null;
+    : `reference "${path}" names step "${ref.step}", which is inside a block this step is not in`;
 }
 
 function refProblems(
@@ -182,39 +226,106 @@ function refProblems(
   step: string | null,
   field: string,
   value: unknown,
-  position: number,
+  scope: Scope,
 ) {
   return refsIn(value).flatMap((ref): Problem[] => {
-    const message = refMessage(ref.$ref, position, context);
+    const message = refMessage(ref.$ref, step, scope, context);
     return message === null ? [] : [{ step, field, message }];
   });
 }
 
+/** The fields of a step that may hold references. */
 function stepFields(step: Step): [string, unknown][] {
-  if (step.kind === "tool") {
-    return sortedArgs(step).map((name) => [`args.${name}`, step.args[name]]);
+  switch (step.kind) {
+    case "tool":
+      return sortedArgs(step).map((name) => [`args.${name}`, step.args[name]]);
+    case "llm":
+      return step.context.map((value, index) => [`context[${index}]`, value]);
+    case "match":
+      return [["on", step.on]];
+    case "each":
+      return [["over", step.over]];
   }
-  if (step.kind === "llm") {
-    return step.context.map((value, index) => [`context[${index}]`, value]);
-  }
-  return [];
+}
+
+/** The reference problems in one step list. A step's own fields see the
+ *  scope before it; a tool or LLM step becomes visible to the steps after
+ *  it in the same list; a block's lists start from the scope at the block,
+ *  and nothing they add leaves them. Returns the scope after the list too,
+ *  which is what `result` sees. */
+function listProblems(
+  context: Context,
+  list: Step[],
+  scope: Scope,
+): { problems: Problem[]; visible: string[] } {
+  let visible = scope.visible;
+  const problems = list.flatMap((step, index): Problem[] => {
+    const later = [...list.slice(index + 1).map((other) => other.id), ...scope.later];
+    const here = { visible, loops: scope.loops, later };
+    const own = stepFields(step).flatMap(([field, value]) =>
+      refProblems(context, step.id, field, value, here),
+    );
+    const loops = step.kind === "each" ? [...scope.loops, step.id] : scope.loops;
+    const inner = stepChildren(step).flatMap(
+      (child) => listProblems(context, child, { ...here, loops }).problems,
+    );
+    if (!isBlockStep(step)) {
+      visible = [...visible, step.id];
+    }
+    return [...own, ...inner];
+  });
+  return { problems, visible };
 }
 
 const referenceRule: Rule = (context) => {
-  const steps = context.workflow.steps;
-  const inSteps = steps.flatMap((step, position) =>
-    stepFields(step).flatMap(([field, value]) =>
-      refProblems(context, step.id, field, value, position),
-    ),
-  );
-  const inResult = refProblems(context, null, "result", context.workflow.result, steps.length);
-  return [...inSteps, ...inResult];
+  const top = listProblems(context, context.workflow.steps, { visible: [], loops: [], later: [] });
+  const afterAll = { visible: top.visible, loops: [], later: [] };
+  const inResult = refProblems(context, null, "result", context.workflow.result, afterAll);
+  return [...top.problems, ...inResult];
+};
+
+/** With no `result`, a workflow returns its last top-level step's value,
+ *  and a block has none. */
+const resultRule: Rule = ({ workflow }) => {
+  const last = workflow.steps[workflow.steps.length - 1];
+  if (workflow.result != null || !isBlockStep(last)) {
+    return [];
+  }
+  const message = `the last step, "${last.id}", is ${blockName(last)} and has no value; set result`;
+  return [{ step: null, field: "result", message }];
 };
 
 /** One name the generated program declares, and where it came from. */
 type Declared = { name: string; step: string | null; field: string; what: string };
 
+/** A block declares no value of its own: only the locals its lines read. */
+function declaredByBlock(step: BlockStep): Declared[] {
+  const stepNames = names(step.id);
+  if (step.kind === "each") {
+    return [
+      { name: stepNames.over, step: step.id, field: "over", what: `the list of loop "${step.id}"` },
+      { name: stepNames.item, step: step.id, field: "id", what: `the item of loop "${step.id}"` },
+    ];
+  }
+  const tests = step.cases.map((_, index) => ({
+    name: stepNames.caseTest(index),
+    step: step.id,
+    field: `cases[${index}].is`,
+    what: `the test of case ${index + 1} of step "${step.id}"`,
+  }));
+  const on = {
+    name: stepNames.on,
+    step: step.id,
+    field: "on",
+    what: `the value step "${step.id}" tests`,
+  };
+  return [on, ...tests];
+}
+
 function declaredBy(step: Step): Declared[] {
+  if (isBlockStep(step)) {
+    return declaredByBlock(step);
+  }
   const stepNames = names(step.id);
   const value = { name: stepNames.value, step: step.id, field: "id", what: `step id "${step.id}"` };
   if (step.kind === "tool") {
@@ -225,9 +336,6 @@ function declaredBy(step: Step): Declared[] {
       what: `argument "${arg}" of step "${step.id}"`,
     }));
     return [value, ...args];
-  }
-  if (step.kind !== "llm") {
-    return [value];
   }
   const contexts = step.context.flatMap((_, index) => [
     {
@@ -267,7 +375,7 @@ const collisionRule: Rule = ({ workflow }) => {
     field: "tool",
     what: `tool "${step.tool}"`,
   }));
-  const declared = [...tools, ...workflow.steps.flatMap(declaredBy)];
+  const declared = [...tools, ...allSteps(workflow).flatMap(declaredBy)];
   return declared.flatMap((entry, index): Problem[] => {
     const earlier = declared
       .slice(0, index)
@@ -306,12 +414,12 @@ const raisesRule: Rule = ({ workflow, signatures }) => {
   );
 };
 
-const RULES: Rule[] = [toolRule, referenceRule, collisionRule, raisesRule];
+const RULES: Rule[] = [toolRule, referenceRule, resultRule, collisionRule, raisesRule];
 
-/** The ids of the steps some step field or the result references. */
+/** The ids of the steps some step field, `on`, `over`, or the result references. */
 function referencedSteps(workflow: Workflow): string[] {
   const values = [
-    ...workflow.steps.flatMap((step) => stepFields(step).map(([, value]) => value)),
+    ...allSteps(workflow).flatMap((step) => stepFields(step).map(([, value]) => value)),
     workflow.result,
   ];
   return values.flatMap(refsIn).flatMap((ref) => {
@@ -333,6 +441,31 @@ function untypedWarnings({ workflow, signatures }: Context): Problem[] {
     const message = `${step.tool} ${untypedReason(returnType)}, so a reference into its value is checked only when the workflow runs`;
     return [{ step: step.id, field: "tool", message }];
   });
+}
+
+const COST_MESSAGE =
+  "this loop runs a model once per item, and the workflow sets no limits.maxCost, so its cost depends on the length of the list";
+
+/** The outermost loops: `each` steps that no other `each` step holds. */
+function outerLoops(steps: Step[]): EachStep[] {
+  return steps.flatMap((step) =>
+    step.kind === "each" ? [step] : stepChildren(step).flatMap(outerLoops),
+  );
+}
+
+/** A warning on each outermost loop that runs a model, when the workflow
+ *  has no `maxCost`: an LLM step, or a tool the catalog marks `handoff`.
+ *  A loop inside it adds nothing new, so it gets no warning of its own. */
+function costWarnings({ workflow, signatures }: Context): Problem[] {
+  if (typeof workflow.limits?.maxCost === "number") {
+    return [];
+  }
+  const runsModel = (step: Step) =>
+    step.kind === "llm" ||
+    (step.kind === "tool" && signatures[signatureKey(step.module, step.tool)]?.handoff === true);
+  return outerLoops(workflow.steps)
+    .filter((loop) => allSteps({ ...workflow, steps: loop.steps }).some(runsModel))
+    .map((loop) => ({ step: loop.id, field: "over", message: COST_MESSAGE }));
 }
 
 function binding(local: string, field: string, value: unknown): Binding {
@@ -387,6 +520,46 @@ function resolveLlmStep(step: LlmStep): ResolvedStep {
   };
 }
 
+function resolveMatchStep(step: MatchStep, signatures: Record<string, Signature>): ResolvedStep {
+  const stepNames = names(step.id);
+  const resolveList = (list: Step[]) => list.map((item) => resolveStep(item, signatures));
+  return {
+    id: step.id,
+    kind: "match",
+    on: binding(stepNames.on, "on", step.on),
+    cases: step.cases.map((item, index) => ({
+      is: item.is,
+      test: stepNames.caseTest(index),
+      steps: resolveList(item.steps),
+    })),
+    otherwise: step.otherwise == null ? null : resolveList(step.otherwise),
+  };
+}
+
+function resolveEachStep(step: EachStep, signatures: Record<string, Signature>): ResolvedStep {
+  const stepNames = names(step.id);
+  return {
+    id: step.id,
+    kind: "each",
+    over: binding(stepNames.over, "over", step.over),
+    item: stepNames.item,
+    steps: step.steps.map((item) => resolveStep(item, signatures)),
+  };
+}
+
+function resolveStep(step: Step, signatures: Record<string, Signature>): ResolvedStep {
+  switch (step.kind) {
+    case "tool":
+      return resolveToolStep(step, signatures);
+    case "llm":
+      return resolveLlmStep(step);
+    case "match":
+      return resolveMatchStep(step, signatures);
+    case "each":
+      return resolveEachStep(step, signatures);
+  }
+}
+
 function importGroups(workflow: Workflow): ImportGroup[] {
   const steps = toolSteps(workflow);
   const modules = steps
@@ -408,23 +581,14 @@ export function resolveWorkflow(
   if (problems.length > 0) {
     return { resolved: null, problems };
   }
-  const steps = workflow.steps.map((step) => {
-    if (step.kind === "tool") {
-      return resolveToolStep(step, signatures);
-    }
-    if (step.kind === "llm") {
-      return resolveLlmStep(step);
-    }
-    throw new Error("block steps are resolved in a later task");
-  });
   const resolved: ResolvedWorkflow = {
     name: workflow.name,
     inputsType: workflow.inputs,
     imports: importGroups(workflow),
-    steps,
+    steps: workflow.steps.map((step) => resolveStep(step, signatures)),
     result: workflow.result == null ? null : resolveValue(workflow.result),
     limits: workflow.limits ?? null,
-    warnings: untypedWarnings(context),
+    warnings: [...untypedWarnings(context), ...costWarnings(context)],
   };
   return { resolved, problems: [] };
 }

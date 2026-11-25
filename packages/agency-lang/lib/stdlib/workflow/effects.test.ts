@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { stepEffects } from "./effects.js";
 import { signatureKey } from "./types.js";
-import { mealPlan, mealSignatures } from "./testFixtures.js";
+import { matchPlan, mealPlan, mealSignatures } from "./testFixtures.js";
 
 describe("stepEffects", () => {
   it("gives one entry per tool step, in step order, with its tool's effects", () => {
@@ -31,5 +31,13 @@ describe("stepEffects", () => {
   it("gives a step whose signature is missing no effects", () => {
     const [first] = stepEffects(mealPlan, {});
     expect(first).toEqual({ step: "note", tool: "searchNotes", effects: [] });
+  });
+
+  it("lists a tool step inside a case", () => {
+    expect(stepEffects(matchPlan, mealSignatures).map((entry) => entry.step)).toEqual([
+      "note",
+      "add",
+      "done",
+    ]);
   });
 });

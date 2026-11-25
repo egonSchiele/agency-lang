@@ -22,6 +22,7 @@ import {
   type ResolvedStep,
   type ResolvedToolStep,
   type ResolvedValue,
+  type ResolvedValueStep,
   type ResolvedWorkflow,
   type TypeDecl,
 } from "./types.js";
@@ -30,7 +31,11 @@ import {
  *  Parse already matched it; this is checked again where it is written. */
 const REF_TAIL = /^(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$/;
 
-type StepsById = Record<string, ResolvedStep>;
+type StepsById = Record<string, ResolvedValueStep>;
+
+function isValueStep(step: ResolvedStep): step is ResolvedValueStep {
+  return step.kind === "tool" || step.kind === "llm";
+}
 
 export function importLine({ module, names }: ImportGroup): string {
   if (!MODULE_PATH.test(module) || !names.every(isIdentifier)) {
@@ -47,6 +52,9 @@ function reference(ref: ResolvedRef, steps: StepsById): Code {
   }
   if (ref.kind === "input") {
     return _parseExpr(`inputs.${ref.name}${ref.path}`);
+  }
+  if (ref.kind === "item") {
+    throw new Error("item references are lowered in a later task");
   }
   const target = steps[ref.step];
   if (!isIdentifier(target.value)) {
@@ -97,13 +105,13 @@ function limitsText(limits: Limits): string {
 }
 
 /** `const <value> = guard(label: "<id>", <limits>) { <body> }`. */
-function guarded(step: ResolvedStep, limits: Limits, body: Code): Code {
+function guarded(step: ResolvedValueStep, limits: Limits, body: Code): Code {
   const names = { value: step.value, limits: limitsText(limits) };
   return statement("guarded", names, { label: literal(step.id), body });
 }
 
 /** The failure check after a step. `tool` names what the message blames. */
-function checkFragment(step: ResolvedStep, tool: string, owner: Owner): Fragment {
+function checkFragment(step: ResolvedValueStep, tool: string, owner: Owner): Fragment {
   const shape = step.holdsResult ? "check" : "checkPlain";
   const names = { value: step.value, id: step.id, tool };
   return { code: statement(shape, names, { id: literal(step.id) }), owner };
@@ -189,10 +197,14 @@ function typeDecls(resolved: ResolvedWorkflow): TypeDecl[] {
 }
 
 export function lowerWorkflow(resolved: ResolvedWorkflow): Lowered {
-  const steps: StepsById = Object.fromEntries(resolved.steps.map((step) => [step.id, step]));
-  const body = resolved.steps.flatMap((step) =>
-    step.kind === "tool" ? toolFragments(step, steps) : llmFragments(step, steps),
-  );
+  const values = resolved.steps.filter(isValueStep);
+  const steps: StepsById = Object.fromEntries(values.map((step) => [step.id, step]));
+  const body = resolved.steps.flatMap((step) => {
+    if (!isValueStep(step)) {
+      throw new Error("block steps are lowered in a later task");
+    }
+    return step.kind === "tool" ? toolFragments(step, steps) : llmFragments(step, steps);
+  });
   const last = resolved.steps[resolved.steps.length - 1];
   const result = resolved.result ?? { kind: "step", step: last.id, path: "" };
   return {
@@ -204,7 +216,7 @@ export function lowerWorkflow(resolved: ResolvedWorkflow): Lowered {
     guardLabel: resolved.name,
     guardLabels: [
       ...(resolved.limits === null ? [] : [resolved.name]),
-      ...resolved.steps.filter((step) => step.limits !== null).map((step) => step.id),
+      ...values.filter((step) => step.limits !== null).map((step) => step.id),
     ],
   };
 }

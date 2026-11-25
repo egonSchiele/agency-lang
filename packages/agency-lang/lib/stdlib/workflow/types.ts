@@ -165,6 +165,18 @@ export function isBlockStep(step: Step): step is BlockStep {
   return step.kind === "match" || step.kind === "each";
 }
 
+/** The step lists a parsed block holds: each case's, then `otherwise`. */
+export function stepChildren(step: Step): Step[][] {
+  if (step.kind === "each") {
+    return [step.steps];
+  }
+  if (step.kind === "match") {
+    const otherwise = step.otherwise == null ? [] : [step.otherwise];
+    return [...step.cases.map((item) => item.steps), ...otherwise];
+  }
+  return [];
+}
+
 /** What `describe` says about one tool, keyed by `"<module>.<name>"`.
  *  `returnsResult` is resolved through the tool module's own aliases. */
 export type Signature = {
@@ -185,7 +197,9 @@ export type Signature = {
  *  `[0].id`, `.body`, or the empty string. */
 export type InputRef = { kind: "input"; name: string; path: string };
 export type StepRef = { kind: "step"; step: string; path: string };
-export type ResolvedRef = InputRef | StepRef;
+/** The current item of the loop named `loop`. */
+export type ItemRef = { kind: "item"; loop: string; path: string };
+export type ResolvedRef = InputRef | StepRef | ItemRef;
 
 /** A JSON value with no reference anywhere inside it. */
 export type Literal = { kind: "literal"; value: unknown };
@@ -233,7 +247,44 @@ export type ResolvedLlmStep = {
   model: string | null;
   provider: string | null;
 };
-export type ResolvedStep = ResolvedToolStep | ResolvedLlmStep;
+export type ResolvedValueStep = ResolvedToolStep | ResolvedLlmStep;
+
+export type ResolvedCase = { is: CaseValue; test: string; steps: ResolvedStep[] };
+/** `on` binds the tested value to `step_<id>_on`. `test` on each case is
+ *  the local that holds its comparison, `step_<id>_case<n>`. */
+export type ResolvedMatchStep = {
+  id: string;
+  kind: "match";
+  on: Binding;
+  cases: ResolvedCase[];
+  otherwise: ResolvedStep[] | null;
+};
+/** `over` binds the list to `step_<id>_over`. `item` is the loop variable. */
+export type ResolvedEachStep = {
+  id: string;
+  kind: "each";
+  over: Binding;
+  item: string;
+  steps: ResolvedStep[];
+};
+export type ResolvedStep = ResolvedValueStep | ResolvedMatchStep | ResolvedEachStep;
+
+/** The step lists a resolved block holds: each case's, then `otherwise`. */
+export function resolvedChildren(step: ResolvedStep): ResolvedStep[][] {
+  if (step.kind === "each") {
+    return [step.steps];
+  }
+  if (step.kind === "match") {
+    const otherwise = step.otherwise === null ? [] : [step.otherwise];
+    return [...step.cases.map((item) => item.steps), ...otherwise];
+  }
+  return [];
+}
+
+/** Every resolved step in the tree, in document order, a block before its steps. */
+export function allResolved(steps: ResolvedStep[]): ResolvedStep[] {
+  return steps.flatMap((step) => [step, ...resolvedChildren(step).flatMap(allResolved)]);
+}
 
 export type ImportGroup = { module: string; names: string[] };
 

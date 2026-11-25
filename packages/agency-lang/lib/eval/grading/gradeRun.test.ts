@@ -10,7 +10,7 @@ import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 
 import { AgencyRunner } from "./agencyRunner.js";
 import { grader } from "./functionGrader.js";
-import { resetShellInterruptForTests } from "../shellCommand.js";
+import { resetTerminatingSignalForTests } from "../run/childSupervisor.js";
 import { gradeRun, GradingInterrupted, type GradingContext } from "./gradeRun.js";
 import { snapshotHarness } from "./harnessSnapshot.js";
 import { snapshotGraderFiles } from "./graderFilesSnapshot.js";
@@ -511,7 +511,7 @@ describe("grading after an interrupt", () => {
     await expect(grading).rejects.toThrow(GradingInterrupted);
     // Until the flag is cleared, grading keeps refusing instead of failing commands.
     await expect(gradeRun(runDir, ctx(graders))).rejects.toThrow(GradingInterrupted);
-    resetShellInterruptForTests();
+    resetTerminatingSignalForTests();
   });
 
   it("reports grades in listed order even when one grader object is listed twice", async () => {

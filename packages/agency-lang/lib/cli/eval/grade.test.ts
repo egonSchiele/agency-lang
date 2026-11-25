@@ -8,7 +8,7 @@ import { writeRunDirectory } from "@/eval/runDirectoryFixture.js";
 import { buildRunsListing, summarizeRuns } from "@/runDirectory/list.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
 
-import { evalGrade, graderSourceFor, madeWithoutWorkdir, validateGradeTarget } from "./grade.js";
+import { evalGrade, graderSourceFor, validateGradeTarget } from "./grade.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -393,8 +393,6 @@ describe("runs made with --no-workdir-snapshot", () => {
     writeRunDirectory({ test: lenTest("kept"), output: "hello" }, path.join(group, "kept"));
     writeRunDirectory({ test: lenTest("gone"), output: "hello" }, path.join(group, "gone"));
     flagged(path.join(group, "gone"));
-    expect(madeWithoutWorkdir(path.join(group, "gone"))).toBe(true);
-    expect(madeWithoutWorkdir(path.join(group, "kept"))).toBe(false);
 
     const result = await evalGrade([group], {});
 

@@ -439,6 +439,19 @@ describe("extractEvalRecord", () => {
       expect(entry.data).toEqual({ filename: "a.txt" });
     });
 
+    it("reads the effect from `kind` in a log from before the field was renamed", () => {
+      const events: EventEnvelope[] = [
+        ev("interruptResolved", {
+          interruptId: "i-k",
+          outcome: "approved",
+          resolvedBy: "handler",
+          interrupt: { kind: "std::read", message: "Read a.txt?", data: { filename: "a.txt" } },
+        }),
+      ];
+      const [entry] = extractEvalRecord(events, "test:old-kind").interrupts;
+      expect(entry.kind).toBe("std::read");
+    });
+
     it("falls back to handlerDecision for an old log", () => {
       const events: EventEnvelope[] = [
         ev("handlerDecision", {

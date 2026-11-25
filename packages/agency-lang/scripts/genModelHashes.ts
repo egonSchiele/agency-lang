@@ -16,25 +16,35 @@ export function parseHfUri(uri: string): { user: string; repo: string; quant: st
   return { user: m[1], repo: m[2], quant: m[3] };
 }
 
+/** One file in a Hugging Face repo. `file` may include a subfolder. */
+export type HfFile = { user: string; repo: string; file: string };
+
 /** Split `hf:user/repo/file.gguf` (the file form, used where a quant tag
  *  matches more than one file). The file may sit in a subfolder. Returns
  *  null for any other URI. */
-export function parseHfFileUri(uri: string): { user: string; repo: string; file: string } | null {
-  const m = /^hf:([^/:]+)\/([^/:]+)\/([^:]+\.gguf)$/.exec(uri);
-  if (!m) return null;
-  return { user: m[1], repo: m[2], file: m[3] };
+export function parseHfFileUri(uri: string): HfFile | null {
+  const match = /^hf:([^/:]+)\/([^/:]+)\/([^:]+\.gguf)$/.exec(uri);
+  if (!match) {
+    return null;
+  }
+  return { user: match[1], repo: match[2], file: match[3] };
 }
 
 /** The repo and the one file a curated URI names, or why there is none. */
-async function pinnedFile(
-  uri: string,
-): Promise<{ user: string; repo: string; file: string } | string> {
+async function pinnedFile(uri: string): Promise<HfFile | string> {
   const named = parseHfFileUri(uri);
-  if (named) return named;
+  if (named) {
+    return named;
+  }
   const parsed = parseHfUri(uri);
-  if (!parsed) return "not an hf: uri";
-  const file = pickSingleQuantFile(await repoFiles(parsed.user, parsed.repo), parsed.quant);
-  if (!file) return `not a single-file ${parsed.quant} gguf (sharded?)`;
+  if (!parsed) {
+    return "not an hf: uri";
+  }
+  const files = await repoFiles(parsed.user, parsed.repo);
+  const file = pickSingleQuantFile(files, parsed.quant);
+  if (!file) {
+    return `not a single-file ${parsed.quant} gguf (sharded?)`;
+  }
   return { user: parsed.user, repo: parsed.repo, file };
 }
 

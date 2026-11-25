@@ -320,7 +320,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 262144,
     license: "apache-2.0",
     description:
-      "PrismML's ternary qwen3.8-27b, about 2 bits a weight. A 7.7 GB file, near the full model on coding tests.",
+      "PrismML's ternary qwen3.8-27b, about 2 bits a weight. A 7.7 GB file, near the full model on coding tests. Needs smoltalk-llama-cpp with llama.cpp b11556 or later; an older one writes garbage.",
     sha256: "84496171ca79d4d33fb45612a2afd8303ec494baf916281023b7dc9cb3b3b9fa",
     sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },

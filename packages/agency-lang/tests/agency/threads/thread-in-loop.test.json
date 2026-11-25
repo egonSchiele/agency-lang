@@ -1,0 +1,26 @@
+{
+  "tests": [
+    {
+      "nodeName": "forLoop",
+      "description": "a thread block inside a for loop starts empty in every round",
+      "input": "",
+      "expectedOutput": "[0,0,0]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "whileLoop",
+      "description": "a thread block inside a while loop starts empty in every round",
+      "input": "",
+      "expectedOutput": "[0,0,0]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "resumesInTheRoundsThread",
+      "description": "a run paused inside a round resumes in that round's thread, and the next round starts empty",
+      "input": "",
+      "expectedOutput": "[1,1,1]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

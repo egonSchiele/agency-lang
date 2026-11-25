@@ -1,0 +1,51 @@
+import { currentThreadId, getThread, userMessage } from "std::thread"
+
+// A `thread` block inside a loop starts a new, empty conversation in every
+// round. Each round records how many messages its thread held on entry,
+// then adds one.
+
+def messageCount(): number {
+  const messages = getThread(currentThreadId()) catch []
+  return messages.length
+}
+
+node forLoop() {
+  let counts: number[] = []
+  for (name in ["a", "b", "c"]) {
+    thread {
+      counts = [...counts, messageCount()]
+      userMessage("hello from ${name}")
+    }
+  }
+  return counts
+}
+
+node whileLoop() {
+  let counts: number[] = []
+  let round = 0
+  while (round < 3) {
+    thread {
+      counts = [...counts, messageCount()]
+      userMessage("hello from round ${round}")
+    }
+    round = round + 1
+  }
+  return counts
+}
+
+// A run paused inside a round resumes in that round's thread: after the
+// pause, round b still sees the message it added before it. Round c then
+// starts empty.
+node resumesInTheRoundsThread() {
+  let counts: number[] = []
+  for (name in ["a", "b", "c"]) {
+    thread {
+      userMessage("hello from ${name}")
+      if (name == "b") {
+        interrupt("pause in round b?")
+      }
+      counts = [...counts, messageCount()]
+    }
+  }
+  return counts
+}

@@ -1,0 +1,8 @@
+import { setTraceTitle } from "std::statelog"
+
+node main() {
+  setTraceTitle("First title")
+  setTraceTitle("Second title")
+  setTraceTitle("   ")
+  return "done"
+}

@@ -30,7 +30,8 @@ Enable observability and configure a log file to save eval annotations.
   }
   ```
 
-  `setAgentName` groups runs by agent. `turnStart` marks messages from a
+  `setAgentName` groups runs by agent, and `setTraceTitle` names one run.
+  `turnStart` marks messages from a
   person for the logs viewer. `emit` sends custom data to the host's
   `onEmit` callback.
 
@@ -81,7 +82,7 @@ export type StatelogEvalValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L94))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L96))
 
 ### StatelogEvalRecord
 
@@ -109,7 +110,7 @@ export type StatelogEvalRecord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L104))
 
 ### StatelogTraceSelection
 
@@ -131,7 +132,7 @@ export type StatelogTraceSelection = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L264))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L281))
 
 ### StatelogTrace
 
@@ -157,7 +158,7 @@ export type StatelogTrace = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L272))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L289))
 
 ### StatelogTraceList
 
@@ -174,7 +175,7 @@ export type StatelogTraceList = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L290))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L307))
 
 ### StatelogRow
 
@@ -191,7 +192,7 @@ export type StatelogRow = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L299))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L316))
 
 ### StatelogRows
 
@@ -204,7 +205,7 @@ export type StatelogRows = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L308))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L325))
 
 ### StatelogOutlinedTrace
 
@@ -215,7 +216,7 @@ A trace's fields with its rows beside them.
 export type StatelogOutlinedTrace = StatelogTrace & StatelogRows
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L313))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L330))
 
 ### StatelogOutline
 
@@ -230,7 +231,7 @@ export type StatelogOutline = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L316))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L333))
 
 ### StatelogHit
 
@@ -249,7 +250,7 @@ export type StatelogHit = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L323))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L340))
 
 ### StatelogSearchResult
 
@@ -268,7 +269,7 @@ export type StatelogSearchResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L334))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L351))
 
 ### StatelogExpandedRow
 
@@ -287,7 +288,7 @@ export type StatelogExpandedRow = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L345))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L362))
 
 ## Effects
 
@@ -301,7 +302,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L90))
 
 ## Functions
 
@@ -321,7 +322,7 @@ Use with the host's `onEmit` callback to deliver progress or other application e
 |---|---|---|---|
 | data | `any` |  | The payload the host's `onEmit` callback should receive. |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L124))
 
 ### setAgentName
 
@@ -341,7 +342,28 @@ Call once near startup so the runs explorer and statelog's eval pages
 |---|---|---|---|
 | name | `string` |  | Use 1–200 ASCII letters, digits, ".", "_", "-", or "/", with no empty, ".", or ".." path segments. |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L138))
+
+### setTraceTitle
+
+```ts
+setTraceTitle(title: string)
+```
+
+Set a short human-readable title for this trace. The last nonblank call wins. `setAgentName("bmo")` groups many runs; `setTraceTitle("Morning workout reminder")` names this one.
+
+Give this trace a short title, such as the topic of a chat. The logs
+  viewer and statelog show it as the trace's heading. The last nonblank
+  call wins, and a blank call does nothing. Whitespace is folded to one
+  line and the title is cut to 200 characters.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| title | `string` |  | The title, such as "Morning workout reminder". |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L153))
 
 ### turnStart
 
@@ -365,7 +387,7 @@ Records a `turnStart` event. The logs viewer splits a session into turns
 |---|---|---|---|
 | message | `string` |  | The message the person sent. |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L171))
 
 ### evalValue
 
@@ -390,7 +412,7 @@ Mark the actual input at the point your agent receives it, so evaluators
 |---|---|---|---|
 | value | `any` |  | A JSON-serializable value representing the input the user supplied. |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L173))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L190))
 
 ### evalOutput
 
@@ -415,7 +437,7 @@ Use when the response to grade differs from the entry node's return
 |---|---|---|---|
 | value | `any` |  | A JSON-serializable value representing the response the user receives. |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L192))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L209))
 
 ### evalRecord
 
@@ -442,7 +464,7 @@ Inspect a previous run from Agency code without invoking the CLI.
 
 **Returns:** [StatelogEvalRecord](#statelogevalrecord)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L207))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L224))
 
 ### evalValues
 
@@ -467,7 +489,7 @@ Read the inputs used for evaluation without the full run record.
 
 **Returns:** `StatelogEvalValue[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L221))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L238))
 
 ### evalOutputs
 
@@ -493,7 +515,7 @@ Read all outputs used for evaluation, preserving their order.
 
 **Returns:** `StatelogEvalValue[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L236))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L253))
 
 ### finalEvalOutput
 
@@ -518,7 +540,7 @@ Select the last entry from `evalOutputs` for a judge that needs one answer.
 
 **Returns:** `StatelogEvalValue | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L250))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L267))
 
 ### logTraces
 
@@ -550,7 +572,7 @@ List the traces in a log, newest first: when each started, how long it
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L380))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L397))
 
 ### logOutline
 
@@ -583,7 +605,7 @@ Every row of a trace with its address, as `agency logs outline` prints
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L404))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L421))
 
 ### logSearch
 
@@ -625,7 +647,7 @@ Find the rows whose own text matches, as `agency logs search` does. A
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L431))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L448))
 
 ### logRow
 
@@ -661,4 +683,4 @@ Open one row by the address `logOutline` or `logSearch` gave, as the logs
 
 **Needs:** `fileRead`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L468))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L485))

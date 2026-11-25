@@ -6,6 +6,7 @@ import {
   _evalOutputs,
   _finalEvalOutput,
   _setAgentName,
+  _setTraceTitle,
   _turnStart,
 } from "agency-lang/stdlib-lib/statelog.js"
 import {
@@ -46,7 +47,8 @@ import { dirname, basename } from "std::path"
   }
   ```
 
-  `setAgentName` groups runs by agent. `turnStart` marks messages from a
+  `setAgentName` groups runs by agent, and `setTraceTitle` names one run.
+  `turnStart` marks messages from a
   person for the logs viewer. `emit` sends custom data to the host's
   `onEmit` callback.
 
@@ -140,6 +142,21 @@ export def setAgentName(name: string) {
   @param name - Use 1–200 ASCII letters, digits, ".", "_", "-", or "/", with no empty, ".", or ".." path segments.
   """
   _setAgentName(name)
+}
+
+/**
+  Give this trace a short title, such as the topic of a chat. The logs
+  viewer and statelog show it as the trace's heading. The last nonblank
+  call wins, and a blank call does nothing. Whitespace is folded to one
+  line and the title is cut to 200 characters.
+*/
+export def setTraceTitle(title: string) {
+  """
+  Set a short human-readable title for this trace. The last nonblank call wins. `setAgentName("bmo")` groups many runs; `setTraceTitle("Morning workout reminder")` names this one.
+
+  @param title - The title, such as "Morning workout reminder".
+  """
+  _setTraceTitle(title)
 }
 
 /**

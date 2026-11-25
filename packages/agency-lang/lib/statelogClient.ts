@@ -1070,6 +1070,15 @@ export class StatelogClient {
     });
   }
 
+  /** A short title for this trace, set by `std::statelog`'s `setTraceTitle`.
+   *  The last one logged wins. */
+  async traceTitle({ title }: { title: string }): Promise<void> {
+    await this.post({
+      type: "traceTitle",
+      title,
+    });
+  }
+
   async evalValueRecorded({
     value,
     threadId,

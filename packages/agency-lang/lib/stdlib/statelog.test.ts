@@ -20,6 +20,7 @@ import {
   _finalEvalOutput,
   _isLogging,
   _setAgentName,
+  _setTraceTitle,
   _turnStart,
   _debug,
   _promptOpened,
@@ -69,6 +70,7 @@ function spyClient(ctx: RuntimeContext<any>) {
   const evalValueRecorded = vi.fn(async () => undefined);
   const evalOutputRecorded = vi.fn(async () => undefined);
   const agentName = vi.fn(async () => undefined);
+  const traceTitle = vi.fn(async () => undefined);
   const turnStart = vi.fn(async () => undefined);
   const debug = vi.fn(async () => undefined);
   const promptWait = vi.fn(async () => undefined);
@@ -77,11 +79,12 @@ function spyClient(ctx: RuntimeContext<any>) {
     evalValueRecorded,
     evalOutputRecorded,
     agentName,
+    traceTitle,
     turnStart,
     debug,
     promptWait,
   } as any;
-  return { evalValueRecorded, evalOutputRecorded, agentName, turnStart, debug, promptWait };
+  return { evalValueRecorded, evalOutputRecorded, agentName, traceTitle, turnStart, debug, promptWait };
 }
 
 async function withFrame(
@@ -133,6 +136,25 @@ describe("std::statelog eval annotations", () => {
 
     expect(spies.agentName).toHaveBeenCalledOnce();
     expect(spies.agentName).toHaveBeenCalledWith({ name: "gcode-v2" });
+  });
+
+  it("setTraceTitle posts a cleaned, capped title", async () => {
+    const ctx = makeCtx();
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const spies = spyClient(ctx);
+
+    // The test frame is current only until its first await, so each call
+    // gets its own frame.
+    for (const title of ["  Fix\n the\t parser  ", "a\u0007b", "x".repeat(250), "   "]) {
+      await runInTestContext(ctx, new StateStack(), threads, () => _setTraceTitle(title));
+    }
+
+    expect(spies.traceTitle.mock.calls).toEqual([
+      [{ title: "Fix the parser" }],
+      [{ title: "a b" }],
+      [{ title: "x".repeat(200) }],
+    ]);
+    await expect(_setTraceTitle("outside a frame")).resolves.toBeUndefined();
   });
 
   it("turnStart posts the person's message as a turnStart event", async () => {

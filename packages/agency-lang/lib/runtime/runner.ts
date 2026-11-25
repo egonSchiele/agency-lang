@@ -1032,8 +1032,11 @@ export class Runner {
     this.frame.clearLocalsWithPrefix(`__condbranch_${pathPrefix}`);
     this.frame.clearLocalsWithPrefix(`__iteration_${pathPrefix}`);
     this.frame.clearLocalsWithPrefix(`__interruptId_${pathPrefix}`);
-    this.frame.clearLocalsWithPrefix(`__thread_${pathPrefix}`);
-    this.frame.clearLocalsWithPrefix(`__thread_resumed_${pathPrefix}`);
+    // A thread id names a conversation, so clearing a sibling's would reopen
+    // it as a new one. Every key inside the loop starts with `<path>.`, and
+    // that dot keeps `__thread_1.` from matching step 10's `__thread_10`.
+    this.frame.clearLocalsWithPrefix(`__thread_${pathPrefix}.`);
+    this.frame.clearLocalsWithPrefix(`__thread_resumed_${pathPrefix}.`);
     this.frame.clearLocalsWithPrefix(`__pipe_result_`);
   }
 

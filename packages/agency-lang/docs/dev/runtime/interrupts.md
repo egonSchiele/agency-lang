@@ -131,7 +131,7 @@ At the end of each iteration the runner does three things:
 - `__condbranch_<path>` — cached branch decisions from if/else and match blocks
 - `__iteration_<path>` — iteration counters from nested loops
 - `__interruptId_<path>` — persisted interrupt ids from nested interrupt sites
-- `__thread_<path>` and `__thread_resumed_<path>` — the id of each nested `thread` block's conversation, and whether it was reopened. Without these, every round of a loop would reopen the first round's conversation instead of starting an empty one.
+- `__thread_<path>.` and `__thread_resumed_<path>.` — the id of each nested `thread` block's conversation, and whether it was reopened. Without these, every round of a loop would reopen the first round's conversation instead of starting an empty one. These two prefixes end in a dot. A thread id names a conversation, so clearing a sibling's by mistake would turn it into a new one, and without the dot loop `1` would also match `__thread_10`, the thread block at step 10. The counter prefixes have no dot; a later sibling holds no counter while an earlier loop runs, so the looser match is harmless for them.
 - `__pipe_result_` — pipe-chain intermediates
 
 A round that pauses keeps its locals until it finishes, so a resume inside a `thread` block finds the same conversation. `tests/agency/threads/thread-in-loop.agency` checks both.

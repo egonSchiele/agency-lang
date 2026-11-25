@@ -49,3 +49,28 @@ node resumesInTheRoundsThread() {
   }
   return counts
 }
+
+// A session named per round opens a session per round, so each starts empty.
+node sessionPerRound() {
+  let counts: number[] = []
+  for (name in ["a", "b", "c"]) {
+    thread(session: "review-${name}") {
+      counts = [...counts, messageCount()]
+      userMessage("hello from ${name}")
+    }
+  }
+  return counts
+}
+
+// A session with the same name every round is reopened every round, so it
+// holds the messages of the rounds before.
+node sameSessionEveryRound() {
+  let counts: number[] = []
+  for (name in ["a", "b", "c"]) {
+    thread(session: "shared") {
+      counts = [...counts, messageCount()]
+      userMessage("hello from ${name}")
+    }
+  }
+  return counts
+}

@@ -29,7 +29,11 @@ index file. `findRunDirectories(paths)` (`findRuns.ts`) is the one walk rule:
 a run directory is itself; a directory of run directories yields them, sorted,
 at most two levels down (`<group>/<testId>/` for a plain suite run,
 `<group>/<testId>/<trial>/` when `eval run --trials` repeated a test), never
-entering `.staging`; anything else is an error. `eval grade`, `runs list` and
+entering `.staging`; anything else is an error. `runs list --json` prints
+each run as `{ dir, summary, scores }` (`ListedRun` in
+`lib/cli/runDirectory/list.ts`): the `RunSummary` and the effective score
+rows, one per grader. It is how a program outside agency-lang reads a run's
+results, since no run directory reader is exported. `eval grade`, `runs list` and
 the logs explorer and `label` use it (`uniqueRunDirectories` drops aliases of
 one physical directory where a command mutates or keys by run). The reader
 refuses a `statelog.jsonl` holding more than one trace id (`assertOneRun`,

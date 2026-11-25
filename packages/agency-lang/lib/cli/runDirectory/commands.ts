@@ -83,9 +83,10 @@ export function addRunDirectoryCommands(
     .command("list")
     .description("One line per run: when, how it ended, cost, score, notes")
     .argument("<paths...>", "Run directories, or directories of run directories")
-    .action((paths: string[]) => {
+    .option("--json", "Print each run as JSON: its directory, its summary, and its scores")
+    .action((paths: string[], options: { json?: boolean }) => {
       try {
-        dependencies.runsList(paths);
+        dependencies.runsList(paths, undefined, options);
       } catch (error) {
         dependencies.fail((error as Error).message);
       }

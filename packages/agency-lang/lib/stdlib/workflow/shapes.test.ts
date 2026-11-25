@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { _parseExpr, _parseStatements, _toSource } from "../template.js";
-import { expression, guardArgs, list, literal, record, statement } from "./shapes.js";
+import {
+  expression,
+  forLine,
+  guardArgs,
+  ifLine,
+  list,
+  literal,
+  record,
+  statement,
+} from "./shapes.js";
 
 describe("guardArgs", () => {
   it("prints one piece per limit that is set, time first", () => {
@@ -178,5 +187,46 @@ describe("list and record", () => {
     expect(() => record([{ key: "a-b", value: literal(1) }])).toThrow(
       'record key "a-b" is not an identifier',
     );
+  });
+});
+
+describe("match and each shapes", () => {
+  it("writes a case test with the value as a literal", () => {
+    const code = statement(
+      "caseTest",
+      { local: "step_r_case1", on: "step_r_on" },
+      { is: literal("urgent") },
+    );
+    expect(_toSource(code)).toBe('const step_r_case1 = step_r_on == "urgent"\n');
+  });
+
+  it("keeps a quote and an interpolation in a case value as text", () => {
+    const code = statement("caseTest", { local: "a", on: "b" }, { is: literal('${evil} " }') });
+    expect(_toSource(code)).toBe('const a = b == "\\${evil} \\" }"\n');
+  });
+
+  it("writes a boolean and a number case", () => {
+    expect(_toSource(statement("caseTest", { local: "a", on: "b" }, { is: literal(true) }))).toBe(
+      "const a = b == true\n",
+    );
+    expect(_toSource(statement("caseTest", { local: "a", on: "b" }, { is: literal(3) }))).toBe(
+      "const a = b == 3\n",
+    );
+  });
+
+  it("writes the no-case failure", () => {
+    const text = _toSource(
+      statement("noCase", { id: "route", on: "step_route_on" }, { id: literal("route") }),
+    );
+    expect(text).toContain('"step route: no case matches ${JSON.stringify(step_route_on)}"');
+    expect(text).toContain('step: "route"');
+  });
+
+  it("writes block lines from identifiers only", () => {
+    expect(ifLine("step_r_case1", true)).toBe("if (step_r_case1) {");
+    expect(ifLine("step_r_case2", false)).toBe("} else if (step_r_case2) {");
+    expect(forLine("step_n_item", "step_n_over")).toBe("for (step_n_item in step_n_over) {");
+    expect(() => ifLine("a) { evil() } if (b", true)).toThrow();
+    expect(() => forLine("a", "b) { evil(")).toThrow();
   });
 });

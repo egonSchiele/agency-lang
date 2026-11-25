@@ -32,6 +32,9 @@ import {
 import { readTraces } from "@/runDirectory/traces.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
 
+import { gradeSuite } from "@/eval/grading/gradeSuite.js";
+import { shellInterrupted } from "@/eval/shellCommand.js";
+
 import { agentRunPaths } from "./extract.js";
 import { runAgent, SETUP_TIMEOUT_SEC, type AgentRun, type RunAgentOptions } from "./runAgent.js";
 import { seedFromAgentFile } from "./seed.js";
@@ -74,6 +77,12 @@ export type RunSuiteOptions = {
    *  A finite positive integer. */
   trials?: number;
   perRun?: PerRunOptions;
+  /** `eval run --grade`: grade each test as soon as its agent finishes, with
+   *  the graders its run directory stored, in the workdir the agent worked
+   *  in. The grades are written to the run directory as `eval grade` writes
+   *  them. For runs whose workdir cannot wait to be graded later: one in a
+   *  container that is about to be deleted, or one too large to copy. */
+  gradeInPlace?: boolean;
 };
 
 /** One unit of work: a test and which repetition of it this is (1-based). */
@@ -234,7 +243,7 @@ export async function runSuite(
       // With trials, the test's directory is the parent of its runs.
       fs.mkdirSync(path.dirname(runDir), { recursive: true });
       fs.renameSync(assembled, runDir);
-      return {
+      const result: SuiteTestResult = {
         testId,
         trial,
         traceId,
@@ -242,6 +251,14 @@ export async function runSuite(
         status: run.status,
         errorMessage: run.status === "error" ? run.errorMessage : undefined,
       };
+      // Before the `finally` below removes the staging workdir. Not after
+      // an interrupt: a build grader can run for most of an hour, and
+      // whoever interrupted is waiting.
+      const graded =
+        opts.gradeInPlace === true && !interrupted
+          ? await gradeInPlace(runDir, run, config)
+          : undefined;
+      return graded === undefined ? result : { ...result, ...graded };
     } finally {
       if (!keepStaging) {
         const deleted = safeDeleteDirectoryWithin(stagingRoot, stagingDir);
@@ -282,6 +299,34 @@ export async function runSuite(
   }
 
   return suiteResult({ runDir: groupDir, agentLabel: target.label, results, budget });
+}
+
+/** Grade a finished run in the workdir its agent used, with the graders its
+ *  run directory stored. Nothing to grade when the agent never started. A
+ *  grading failure is reported and the run is kept, ungraded. */
+async function gradeInPlace(
+  runDir: string,
+  run: AgentRun,
+  config: AgencyConfig,
+): Promise<Pick<SuiteTestResult, "grading" | "judgeCostUsd"> | undefined> {
+  if (run.statelogPath === null) {
+    return undefined;
+  }
+  try {
+    const graded = await gradeSuite(runDir, { kind: "snapshot" }, config, {
+      workdirOverride: run.workdir,
+    });
+    // Interrupted while grading: the pass was not recorded, so there is
+    // no grade to report.
+    return shellInterrupted()
+      ? undefined
+      : { grading: graded.grading, judgeCostUsd: graded.judgeCostUsd };
+  } catch (err) {
+    console.warn(
+      `[runSuite] could not grade ${runDir}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return undefined;
+  }
 }
 
 function suiteResult(args: {

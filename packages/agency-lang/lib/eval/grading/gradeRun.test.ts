@@ -499,3 +499,20 @@ describe("graders that need the workdir to themselves", () => {
     expect(Date.now() - started).toBeLessThan(800);
   });
 });
+
+describe("a workdir override", () => {
+  it("gives graders the override in place of the run directory's stored copy", async () => {
+    const runDir = makeRun({ output: "x", workdirFiles: { marker: "snapshot" } });
+    const live = fs.mkdtempSync(path.join(os.tmpdir(), "live-workdir-"));
+    fs.writeFileSync(path.join(live, "marker"), "live");
+    const graders = buildGraders([
+      { kind: "command", name: "is-live", command: "grep -q live marker" },
+    ]);
+    const passed = async (context: GradingContext): Promise<boolean> => {
+      const { score } = (await gradeRun(runDir, context)).perInput[0].grades[0].grade;
+      return score.kind === "binary" && score.pass;
+    };
+    expect(await passed({ ...ctx(graders), workdirOverride: live })).toBe(true);
+    expect(await passed(ctx(graders))).toBe(false);
+  });
+});

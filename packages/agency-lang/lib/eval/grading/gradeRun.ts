@@ -53,6 +53,11 @@ export type GradingContext = {
    *  own (an ad-hoc trace, or a suite that never had goals). A test's own
    *  goal always wins. */
   defaultGoal?: string;
+  /** Grade against this folder as the run's workdir, in place of the copy
+   *  the run directory stores. Set only by `eval run --grade`, which grades
+   *  in the workdir the agent worked in, before it is removed: a built
+   *  repository is slow to copy, and a copy of one may not work. */
+  workdirOverride?: string;
 };
 
 /**
@@ -72,7 +77,7 @@ export async function gradeSnapshot(
 ): Promise<Scorecard> {
   const moduleCache = makeGraderModuleCache(ctx.config);
   const perInput = await Promise.all(
-    gradableEntries(snapshot).map(async (bare) => {
+    gradableEntries(snapshot, ctx.workdirOverride).map(async (bare) => {
       const entry = withDefaultGoal(bare, ctx.defaultGoal);
       const { graders, graderFiles } = await effectiveGraders(
         entry,
@@ -90,8 +95,8 @@ export async function gradeSnapshot(
  *  the statelog (the agent died before its first event). Those runs are
  *  tests too; leaving them out would let a suite where half the tests never
  *  started score as if only the other half existed. */
-function gradableEntries(snapshot: RunDirectorySnapshot): Entry[] {
-  const entries = snapshot.traces.map((trace) => entryFor(snapshot, trace));
+function gradableEntries(snapshot: RunDirectorySnapshot, workdirOverride?: string): Entry[] {
+  const entries = snapshot.traces.map((trace) => entryFor(snapshot, trace, workdirOverride));
   const withTrace: Record<string, true> = Object.create(null);
   for (const trace of snapshot.traces) withTrace[trace.traceId] = true;
   for (const [traceId, effective] of Object.entries(snapshot.effectiveAnnotations)) {
@@ -327,14 +332,14 @@ type Entry = {
  * graders read from the workdir. Grading proceeds with `output: null` —
  * graders that need the output fail on their own terms against null.
  */
-function entryFor(snapshot: RunDirectorySnapshot, trace: Trace): Entry {
+function entryFor(snapshot: RunDirectorySnapshot, trace: Trace, workdirOverride?: string): Entry {
   const effective: EffectiveTraceAnnotations | undefined =
     snapshot.effectiveAnnotations[trace.traceId];
   const runRow = effective?.run ?? null;
   const test = testOf(runRow, trace.traceId);
   const record: EvalRecord = evalRecordFor(trace, snapshot.dir);
   const outputs = record.evalOutputs ?? [];
-  const workdir = runDirPaths(snapshot.dir).workdirDir;
+  const workdir = workdirOverride ?? runDirPaths(snapshot.dir).workdirDir;
   const run: LoadedRun = {
     output: outputs.length === 0 ? null : (outputs[outputs.length - 1].value as Json),
     traceId: trace.traceId,

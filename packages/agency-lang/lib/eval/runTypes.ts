@@ -104,6 +104,10 @@ export type SuiteTestResult = {
   runDir: string;
   status: "success" | "error";
   errorMessage?: string;
+  /** The run's grades, when `eval run --grade` graded it. */
+  grading?: EvalRunGrading;
+  /** What that grading spent on LLM judges, in USD. */
+  judgeCostUsd?: number;
 };
 
 export type SuiteRunResult = {

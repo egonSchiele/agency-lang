@@ -102,6 +102,32 @@ describe("eval run CLI", () => {
     ).rejects.toThrow(/no test provides an input/);
   });
 
+  it("--grade grades each run as it finishes and writes its score rows", async () => {
+    const agentFile = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(agentFile, "node main(input: string) {}\n");
+    const testDir = path.join(tmpDir, "suite", "a");
+    fs.mkdirSync(testDir, { recursive: true });
+    fs.writeFileSync(path.join(testDir, "test.json"), JSON.stringify({ input: "do it" }));
+    fs.writeFileSync(
+      path.join(testDir, "graders.json"),
+      JSON.stringify([{ kind: "command", name: "ran", command: "true" }]),
+    );
+
+    const result = await evalRun(
+      {
+        agent: agentFile,
+        suite: path.join(tmpDir, "suite"),
+        out: path.join(tmpDir, "runs", "g"),
+        grade: true,
+      },
+      { runner: okRunner },
+    );
+
+    expect(result.tests[0].grading?.objective).toBe(1);
+    const snapshot = readRunDirectory(result.tests[0].runDir, quiet);
+    expect(snapshot.annotationRows.map((row) => row.kind)).toEqual(["run", "score"]);
+  });
+
   it("compiles, runs each test through the injected runner, and writes a run directory — never grading", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
     fs.writeFileSync(agentFile, "node main(input: string) {}\n");

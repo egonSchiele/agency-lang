@@ -1,3 +1,4 @@
+import { shellInterrupted } from "@/eval/shellCommand.js";
 import type { AgencyConfig } from "@/config/config.js";
 import type { EvalRunGrading } from "@/eval/runTypes.js";
 import { recordGradingPass, type ScoreDraft } from "@/runDirectory/mutations.js";
@@ -32,7 +33,7 @@ export async function gradeSuite(
   runDir: string,
   graders: GraderSource,
   config: AgencyConfig,
-  options: { record?: boolean; defaultGoal?: string } = {},
+  options: { record?: boolean; defaultGoal?: string; workdirOverride?: string } = {},
 ): Promise<GradeSuiteResult> {
   const snapshot = readRunDirectory(runDir, {
     reportWarning: (message) => console.warn(`grading: ${message}`),
@@ -43,10 +44,13 @@ export async function gradeSuite(
     runAgency,
     config,
     defaultGoal: options.defaultGoal,
+    workdirOverride: options.workdirOverride,
   });
   const drafts = scoreDrafts(scorecard);
   let passId: string | null = null;
-  if (options.record !== false && drafts.length > 0) {
+  // A pass cut short by Ctrl-C holds "interrupted" failures for the commands
+  // that never ran. Recording it would store those as the run's grades.
+  if (options.record !== false && drafts.length > 0 && !shellInterrupted()) {
     passId = recordGradingPass({ dir: runDir, scores: drafts }).passId;
   }
   return { grading: toGrading(scorecard), scorecard, passId, judgeCostUsd: runAgency.costUsd };

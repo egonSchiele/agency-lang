@@ -40,6 +40,9 @@ export type EvalRunCliOptions = {
   tags?: string[];
   /** `--trials`: run every selected test this many times (default 1). */
   trials?: number;
+  /** `--grade`: grade each test as soon as its agent finishes, in the
+   *  workdir it worked in. */
+  grade?: boolean;
 };
 
 /** `--suite` runs a suite; otherwise the run is one inline test, with
@@ -92,6 +95,7 @@ export async function evalRun(
       config: opts.config,
       parallel: opts.parallel,
       trials: opts.trials,
+      gradeInPlace: opts.grade,
     },
     { runner: deps.runner },
   );

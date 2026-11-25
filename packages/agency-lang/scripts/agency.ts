@@ -69,7 +69,7 @@ import {
 } from "@/cli/runDirectory/commands.js";
 import { addLogsSessionCommands } from "@/cli/logsSession/register.js";
 import { addLogsQueryCommands, defaultLogsQueryDeps } from "@/cli/logsQuery/register.js";
-import { runGradeCommand } from "@/cli/eval/grade.js";
+import { inPlaceGradeReport, runGradeCommand } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalLs } from "@/cli/eval/ls.js";
 import { runEvalEdit } from "@/cli/eval/edit.js";
@@ -1191,6 +1191,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Run every test this many times (default 1); each repetition is its own run directory at <out>/<test>/<trial>",
       parsePositiveInt,
     )
+    .option("--grade", "Grade each test as soon as its agent finishes, in the workdir it worked in")
     .action(
       async (
         agent: string | undefined,
@@ -1203,6 +1204,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           out?: string;
           parallel?: number;
           trials?: number;
+          grade?: boolean;
         },
       ) => {
         // Every test in the suite always runs, whatever the others did: an
@@ -1224,7 +1226,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
           );
         }
         console.log(`runs written under ${result.runDir}`);
-        console.log(`grade it with: agency eval grade ${result.runDir}`);
+        if (opts.grade === true) {
+          for (const line of inPlaceGradeReport(result.tests)) {
+            console.log(line);
+          }
+        } else {
+          console.log(`grade it with: agency eval grade ${result.runDir}`);
+        }
         // The run is complete and written; exit 2 still reports that not
         // every test ran to an end (a harness refusal or an agent crash) —
         // distinct from 1, which is "could not run at all", so a caller can

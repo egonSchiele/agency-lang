@@ -62,6 +62,8 @@ The harness runs the command with `sh` in the workdir. It runs after `files` is 
 
 If the command exits with an error, or runs for more than 30 minutes, the test is recorded as an error and the agent does not start. The error shows the end of the command's output. Setup is code the harness runs, like a grading module, so pulling a remote suite means trusting it.
 
+To grade as part of the run, add `--grade`. Each test is then graded as soon as its agent finishes, in the workdir the agent worked in. Use it when that workdir cannot be graded later, for example because it holds a large built project.
+
 For a single ad-hoc run, use `--input` instead of `--suite` (grade it afterwards with `eval grade --goal`):
 
 ```bash

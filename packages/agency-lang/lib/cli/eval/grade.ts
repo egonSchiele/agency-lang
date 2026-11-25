@@ -7,7 +7,8 @@ import {
   type IncompleteBatch,
 } from "@/eval/batchStatistics.js";
 import { gradeSuite } from "@/eval/grading/gradeSuite.js";
-import type { EvalRunGrading } from "@/eval/runTypes.js";
+import type { EvalRunGrading, SuiteTestResult } from "@/eval/runTypes.js";
+import { shellInterrupted } from "@/eval/shellCommand.js";
 import { findRunDirectories, uniqueRunDirectories } from "@/runDirectory/findRuns.js";
 import { summarizeRunDirectory } from "@/runDirectory/list.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";
@@ -127,6 +128,11 @@ export async function evalGrade(
     const { grading, judgeCostUsd } = await gradeSuite(dir, graders, config, {
       defaultGoal: opts.goal,
     });
+    // Ctrl-C reached a grader's command. The pass was not recorded, and the
+    // remaining directories would only spend money on judges nobody waits for.
+    if (shellInterrupted()) {
+      throw new Error("eval grade was interrupted; the interrupted run was not graded");
+    }
     doneCount += 1;
     opts.progress?.(
       `graded ${doneCount}/${runDirs.length} ${dir} — objective ${grading.objective.toFixed(3)}` +
@@ -134,19 +140,38 @@ export async function evalGrade(
     );
     return { dir, grading, judgeCostUsd };
   });
-  const runs: EvalGradeResult["runs"] = graded.map(({ dir, grading }) => ({ dir, grading }));
-  const result: EvalGradeResult = {
-    runs,
-    mean: runs.reduce((sum, run) => sum + run.grading.objective, 0) / runs.length,
-    judgeCostUsd: graded.reduce((sum, entry) => sum + entry.judgeCostUsd, 0),
-    gatesPassed: runs.every((run) => run.grading.gatesPassed),
-    ...trialBatches(runDirs),
-  };
+  const result = gradeResultOf(graded);
 
   if (opts.out !== undefined) {
     fs.writeFileSync(opts.out, JSON.stringify(result, null, 2));
   }
   return result;
+}
+
+/** The report for a set of graded run directories. Shared by `eval grade`
+ *  and `eval run --grade`, so the two print the same thing. */
+export function gradeResultOf(
+  graded: { dir: string; grading: EvalRunGrading; judgeCostUsd: number }[],
+): EvalGradeResult {
+  const runs: EvalGradeResult["runs"] = graded.map(({ dir, grading }) => ({ dir, grading }));
+  return {
+    runs,
+    mean: runs.reduce((sum, run) => sum + run.grading.objective, 0) / runs.length,
+    judgeCostUsd: graded.reduce((sum, entry) => sum + entry.judgeCostUsd, 0),
+    gatesPassed: runs.every((run) => run.grading.gatesPassed),
+    ...trialBatches(runs.map((run) => run.dir)),
+  };
+}
+
+/** The lines `eval run --grade` prints after the suite: the same report
+ *  `eval grade` prints, for the tests that were graded. Empty when none was. */
+export function inPlaceGradeReport(tests: SuiteTestResult[]): string[] {
+  const graded = tests.flatMap((test) =>
+    test.grading === undefined
+      ? []
+      : [{ dir: test.runDir, grading: test.grading, judgeCostUsd: test.judgeCostUsd ?? 0 }],
+  );
+  return graded.length === 0 ? [] : formatGradeResult(gradeResultOf(graded));
 }
 
 /**

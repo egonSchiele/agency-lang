@@ -277,6 +277,9 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (spec.setup !== undefined && (typeof spec.setup !== "string" || spec.setup.length === 0)) {
     throw new Error("Eval input setup must be a non-empty command string when provided");
   }
+  if (spec.gradeWhenAgentFails !== undefined && typeof spec.gradeWhenAgentFails !== "boolean") {
+    throw new Error("Eval input gradeWhenAgentFails must be true or false when provided");
+  }
   if (spec.metadata !== undefined && !isPlainObject(spec.metadata)) {
     throw new Error("Eval input metadata must be an object when provided");
   }
@@ -328,6 +331,9 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (typeof spec.setup === "string") {
     out.setup = spec.setup;
     out.dir = baseDir;
+  }
+  if (spec.gradeWhenAgentFails === true) {
+    out.gradeWhenAgentFails = true;
   }
   if (typeof spec.harnessMaxCost === "number") out.harnessMaxCost = spec.harnessMaxCost;
   if (typeof spec.harnessMustPass === "boolean") {

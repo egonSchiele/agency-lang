@@ -159,6 +159,48 @@ describe("gradeRun", () => {
     expect(card.perInput[0].ungradedReason).toMatch(/timeout/);
   });
 
+  it("grades a run that did not end cleanly when its test asks for that, and keeps the ending", async () => {
+    const lenient: Test = { ...capital, gradeWhenAgentFails: true };
+    for (const ended of ["error", "timeout", "cost-cap"] as const) {
+      const runDir = makeRun({ output: "partial", ended, errorMessage: "boom", test: lenient });
+      let sawWorkdir = "";
+      const disk = grader(
+        ({ workdir }) => {
+          sawWorkdir = workdir;
+          return 0.5;
+        },
+        { name: "disk" },
+      );
+
+      const card = await gradeRun(runDir, ctx([disk]));
+
+      expect(fs.existsSync(sawWorkdir), ended).toBe(true);
+      expect(card.perInput[0].ungradedReason, ended).toBeUndefined();
+      expect(card.objective(), ended).toBe(0.5);
+      const run = readRunDirectory(runDir, { reportWarning: () => {} }).annotationRows[0];
+      expect(run, ended).toMatchObject({ kind: "run", ended });
+    }
+  });
+
+  it("still scores a run with no trace 0 when its test asks for failed runs to be graded", async () => {
+    const runDir = writeRunDirectory({
+      test: { ...capital, gradeWhenAgentFails: true },
+      wroteStatelog: false,
+      ended: "error",
+    });
+    let graderRan = false;
+    const spy = grader(
+      () => {
+        graderRan = true;
+        return 1;
+      },
+      { name: "spy" },
+    );
+    const card = await gradeRun(runDir, ctx([spy]));
+    expect(graderRan).toBe(false);
+    expect(card.objective()).toBe(0);
+  });
+
   it("a suite where every test died before its first event does not pass gates vacuously", async () => {
     const runDir = writeRunDirectory({ test: capital, wroteStatelog: false, ended: "timeout" });
     // Still a run directory by the walk rule: an empty statelog, as the harness writes.

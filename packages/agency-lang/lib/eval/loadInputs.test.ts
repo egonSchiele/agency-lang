@@ -261,6 +261,25 @@ describe("eval run input loading", () => {
     }
   });
 
+  it("gradeWhenAgentFails is loaded as given, and must be a boolean", () => {
+    const file = writeJson("lenient.json", {
+      inputs: [
+        { id: "t", goal: "g", input: "x", gradeWhenAgentFails: true },
+        { id: "u", goal: "g", input: "x" },
+      ],
+    });
+    const [lenient, strict] = loadInputs(file);
+    expect(lenient.gradeWhenAgentFails).toBe(true);
+    expect(strict.gradeWhenAgentFails).toBeUndefined();
+    expect(() =>
+      loadInputs(
+        writeJson("bad-lenient.json", {
+          inputs: [{ id: "t", goal: "g", input: "x", gradeWhenAgentFails: "yes" }],
+        }),
+      ),
+    ).toThrow(/gradeWhenAgentFails must be true or false/);
+  });
+
   it("setup is a command, loaded with the folder its paths resolve from", () => {
     const file = writeJson("setup.json", {
       inputs: [{ id: "t", goal: "g", input: "x", setup: "make deps" }],

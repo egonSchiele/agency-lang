@@ -344,6 +344,8 @@ type Entry = {
  * when present (it alone knows about a timeout or cost-cap kill); without one
  * (an ad-hoc directory), the trace's own ending decides. A run that almost
  * finished must not earn points from a judge that cannot tell it crashed.
+ * The one exception is a test that sets `gradeWhenAgentFails`: its graders
+ * check the workdir, and can tell for themselves.
  *
  * A trace with NO recorded output is not a failure: command agents (the
  * agency CLI under --agent-cmd) do not emit the output event file agents do,
@@ -370,7 +372,9 @@ function entryFor(snapshot: RunDirectorySnapshot, trace: Trace, workdirOverride?
   const harness = runRow !== null && runRow.kind === "run" ? runRow.harness : undefined;
   const graderFiles = runRow !== null && runRow.kind === "run" ? runRow.graderFiles : undefined;
   const ended = runRow !== null && runRow.kind === "run" ? runRow.ended : traceEnding(trace);
-  if (ended === "ok") {
+  // A test may ask for its graders to see a run that stopped early. The run
+  // row still says how it ended; only the automatic zero is given up.
+  if (ended === "ok" || test.gradeWhenAgentFails === true) {
     return { test, run, humanFeedback, graders, harness, graderFiles };
   }
   const detail =

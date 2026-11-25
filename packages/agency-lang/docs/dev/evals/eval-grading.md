@@ -191,12 +191,25 @@ package's own root, where the name resolves to the package itself. A module's
 revision is `<source>@<sha256 of the bundle>` in both paths, so snapshot and
 unchanged-live grading agree on the annotator.
 
-**A run that did not end cleanly scores zero, always.** The harness's `run`
+**A run that did not end cleanly scores zero, unless its test opts out.** The harness's `run`
 row is authoritative when present — only it knows about a wall-clock or
 cost-cap kill (`ended: "timeout" | "cost-cap" | "killed" | "error"`); without
 one, the trace's own ending decides (`traceEnding`). Such a trace is never
 shown to graders: a run that almost finished must not earn points from a judge
 that cannot tell it crashed. `gradeRun.test.ts` pins this with a spy grader.
+
+The opt-out is per test: `"gradeWhenAgentFails": true` in `test.json`
+(`Test.gradeWhenAgentFails`, read in `entryFor`). Its graders then see a run
+with any ending, as long as there is a trace. It exists for tests whose
+graders check the workdir, where a coding agent that stopped at its own time
+or cost limit may have done most of the work. The worry above is about
+judges, so the default stays zero and every suite that does not ask is
+unchanged, the optimizer's candidates included. Nothing else changes: the
+run row keeps the real `ended`, and the run summary already scores a run
+that did not end `ok` as "what it was given, or 0 if it was never graded"
+(`scoreOf` in `runDirectory/list.ts`). Before this, a suite got the same
+effect by making its agent command always exit 0, which recorded every
+crash as `ok`.
 
 **A test that never produced a trace still counts.** When an agent dies
 before its first event (a compile failure, a kill before start), the harness

@@ -1,0 +1,11 @@
+import { forkSession, renameSession, setCurrentRecord } from "../../../lib/agents/agency-agent/lib/record.agency"
+
+// A resumed session with a title, a rename, a fork, then a new session
+// with no title yet.
+node main() {
+  setCurrentRecord({ id: "s1", cwd: "/work", brain: "", created: 1, lastActive: 1, turns: 1, title: "Resumed chat" })
+  renameSession("Fix the parser")
+  forkSession()
+  setCurrentRecord({ id: "s2", cwd: "/work", brain: "", created: 1, lastActive: 1, turns: 0, title: "" })
+  return "done"
+}

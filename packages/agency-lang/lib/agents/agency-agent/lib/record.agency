@@ -5,6 +5,7 @@
   terminal. The session core reports the record at every pause.
 */
 import { now } from "std::date"
+import { setTraceTitle } from "std::statelog"
 
 import {
   SessionRecord,
@@ -52,6 +53,19 @@ export def sessionTitle(): string {
   return displayTitle(record)
 }
 
+/** Set the session title, and show it as this run's trace title too. */
+def titleSession(record: SessionRecord, title: string) {
+  record.title = title
+  setTraceTitle(displayTitle(record))
+}
+
+/** A session that already has a title gives it to this run's trace. */
+def traceTitleFrom(record: SessionRecord) {
+  if (record.title != "") {
+    setTraceTitle(displayTitle(record))
+  }
+}
+
 export def markTurnDone() {
   _turnDone = true
 }
@@ -81,7 +95,7 @@ export def renameSession(title: string): Result<Renamed> {
   if (clean == "") {
     return failure("empty title")
   }
-  record.title = clean
+  titleSession(record, clean)
   _renamed = true
   _titlePinned = true
   return success({ title: clean })
@@ -137,7 +151,7 @@ export def forkSession(): Result<Forked> {
   }
   const t = now()
   const id = newSessionId()
-  _current = {
+  const forked: SessionRecord = {
     id: id,
     cwd: record.cwd,
     brain: record.brain,
@@ -147,6 +161,8 @@ export def forkSession(): Result<Forked> {
     title: record.title,
     forkedFrom: record.id
   }
+  _current = forked
+  traceTitleFrom(forked)
   // Marks the record changed, so it is saved without a turn.
   _renamed = true
   return success({ id: id, forkedFrom: record.id })
@@ -168,6 +184,9 @@ export def isIncognito(): boolean {
   not saved. */
 export def setCurrentRecord(record: SessionRecord | null) {
   _current = record
+  if (record != null) {
+    traceTitleFrom(record)
+  }
 }
 
 /** The session this run writes to, or null when it is not saved. */
@@ -208,7 +227,7 @@ export def recordTurn(userMsg: string): SaveTarget | null {
     }
     const title = titleFor(source)
     if (title != "") {
-      record.title = title
+      titleSession(record, title)
     }
   }
   return {

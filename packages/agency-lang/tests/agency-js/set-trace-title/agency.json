@@ -1,0 +1,6 @@
+{
+  "observability": true,
+  "log": {
+    "logFile": "statelog.log"
+  }
+}

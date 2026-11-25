@@ -697,6 +697,7 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   "std::statelog": [
     "emit",
     "setAgentName",
+    "setTraceTitle",
     "turnStart",
     "evalValue",
     "evalOutput",

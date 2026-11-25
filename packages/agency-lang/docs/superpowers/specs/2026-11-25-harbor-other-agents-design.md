@@ -107,7 +107,7 @@ The same idea decides two things in the run summary. Today both require events:
 - A run cut short by a timeout, cost cap or kill counts as "killed" only when it has events. Otherwise it counts as "failed". A Pi run never has events, so its timeouts would count as failures while Agency's count as kills.
 - `runs list` counts a run without events as one that "wrote no trace". It would say that of every Pi run.
 
-Both now ask whether the agent left a record: events, or reported usage. After the overlay, a Pi run has a model entry, so the check is `eventCount > 0 || models.length > 0`. The run explorer reads `summary.status` instead of repeating the rule.
+Both now ask whether the agent left a record: events, or reported usage. After the overlay, a Pi run has a model entry, so the check is `eventCount > 0 || models.length > 0`. `list.ts` exports it as `agentLeftRecord`, and the run explorer uses it too. The explorer keeps its own list of endings that count as cut short, which also includes `unknown`. Reading `summary.status` there instead would turn a run folder with events but no run row from killed into failed, because its status is `trace`.
 
 ### Take end times from the trace
 

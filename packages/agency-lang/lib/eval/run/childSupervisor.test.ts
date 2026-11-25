@@ -40,6 +40,25 @@ describe("child supervisor", () => {
     expect(h.emitter.listenerCount("SIGINT")).toBe(0);
   });
 
+  it("signals every live child even when one of them settles, and stops being supervised, inside its own kill", () => {
+    const h = harness();
+    const seen: string[] = [];
+    const stops: (() => void)[] = [];
+    for (const name of ["a", "b", "c"]) {
+      stops.push(
+        h.supervise((signal) => {
+          seen.push(`${name}:${signal}`);
+          // What a shell command does: it settles at once and unregisters.
+          if (name === "a") {
+            stops[0]();
+          }
+        }),
+      );
+    }
+    h.emitter.emit("SIGINT");
+    expect(seen).toEqual(["a:SIGINT", "b:SIGINT", "c:SIGINT"]);
+  });
+
   it("a second signal force-quits: SIGKILL to every live child, then exit 130", () => {
     const h = harness();
     const settled = h.child();

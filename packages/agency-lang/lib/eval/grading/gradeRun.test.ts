@@ -10,7 +10,8 @@ import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 
 import { AgencyRunner } from "./agencyRunner.js";
 import { grader } from "./functionGrader.js";
-import { gradeRun, type GradingContext } from "./gradeRun.js";
+import { resetShellInterruptForTests } from "../shellCommand.js";
+import { gradeRun, GradingInterrupted, type GradingContext } from "./gradeRun.js";
 import { snapshotHarness } from "./harnessSnapshot.js";
 import { snapshotGraderFiles } from "./graderFilesSnapshot.js";
 import { buildGraders } from "../gradersJson/build.js";
@@ -497,6 +498,30 @@ describe("graders that need the workdir to themselves", () => {
       ]),
     );
     expect(Date.now() - started).toBeLessThan(800);
+  });
+});
+
+describe("grading after an interrupt", () => {
+  it("throws, so no caller scores a run on commands that never ran", async () => {
+    const runDir = makeRun({ output: "x" });
+    const graders = buildGraders([{ kind: "command", name: "c", command: "sleep 5" }]);
+    const grading = gradeRun(runDir, ctx(graders));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    process.emit("SIGINT");
+    await expect(grading).rejects.toThrow(GradingInterrupted);
+    // Until the flag is cleared, grading keeps refusing instead of failing commands.
+    await expect(gradeRun(runDir, ctx(graders))).rejects.toThrow(GradingInterrupted);
+    resetShellInterruptForTests();
+  });
+
+  it("reports grades in listed order even when one grader object is listed twice", async () => {
+    const runDir = makeRun({ output: "x" });
+    const twice = grader(() => true, { name: "same" });
+    const card = await gradeRun(
+      runDir,
+      ctx([twice, grader(() => false, { name: "other" }), twice]),
+    );
+    expect(card.perInput[0].grades.map((g) => g.grader.name())).toEqual(["same", "other", "same"]);
   });
 });
 

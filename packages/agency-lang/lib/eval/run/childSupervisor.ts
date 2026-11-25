@@ -58,13 +58,16 @@ export function makeChildSupervisor(proc: SupervisedProcess): (kill: ChildKill) 
   let signalled = false;
 
   const onSignal = (signal: NodeJS.Signals) => {
+    // Over a copy each time: a child may settle inside its own kill and
+    // unregister, which removes it from `live` while this loop is running,
+    // and the child after it would then be skipped.
     if (signalled) {
-      for (const kill of live) kill("SIGKILL");
+      for (const kill of [...live]) kill("SIGKILL");
       proc.exit(128 + os.constants.signals[signal]);
       return;
     }
     signalled = true;
-    for (const kill of live) kill(signal);
+    for (const kill of [...live]) kill(signal);
   };
   const listeners = Object.fromEntries(
     TERMINATING.map((signal) => [signal, () => onSignal(signal)]),
@@ -78,7 +81,7 @@ export function makeChildSupervisor(proc: SupervisedProcess): (kill: ChildKill) 
     if (!exitHookInstalled) {
       exitHookInstalled = true;
       proc.on("exit", () => {
-        for (const k of live) k("SIGKILL");
+        for (const k of [...live]) k("SIGKILL");
       });
     }
     live.push(kill);

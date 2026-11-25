@@ -1,3 +1,4 @@
+import { shellInterrupted } from "@/eval/shellCommand.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -88,7 +89,21 @@ export async function gradeSnapshot(
       return gradeEntry(entry, ctx, graders, graderFiles);
     }),
   );
+  // A terminating signal reached a grader's command. The commands after it
+  // never ran and report "interrupted", so these grades are not the run's.
+  // Thrown here, where every caller passes: `eval grade`, `eval run --grade`
+  // and the optimizer, which would otherwise score candidates on them.
+  if (shellInterrupted()) {
+    throw new GradingInterrupted();
+  }
   return new Scorecard(perInput);
+}
+
+/** Grading was cut short by a terminating signal. Nothing was recorded. */
+export class GradingInterrupted extends Error {
+  constructor() {
+    super("grading was interrupted; nothing was recorded");
+  }
 }
 
 /** Every trace, plus every harness `run` row whose trace never made it into
@@ -438,9 +453,11 @@ async function gradeInput(
     ),
   ]);
   // Reported in the order the graders were listed, whichever way they ran.
-  const finished = [...turnGrades, ...togetherGrades];
+  // By position, not by looking the grader up: one grader may be listed twice.
+  const turns = [...turnGrades];
+  const others = [...togetherGrades];
   const advisoryGrades = advisory.map(
-    (grader) => finished.find((entry) => entry.grader === grader) as GraderGrade,
+    (grader) => (grader.needsWorkdirToItself() ? turns.shift() : others.shift()) as GraderGrade,
   );
 
   return { test, run, grades: [...gateGrades, ...advisoryGrades], gatesPassed: true };

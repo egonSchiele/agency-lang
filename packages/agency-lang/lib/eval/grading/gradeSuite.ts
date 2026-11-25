@@ -1,4 +1,3 @@
-import { shellInterrupted } from "@/eval/shellCommand.js";
 import type { AgencyConfig } from "@/config/config.js";
 import type { EvalRunGrading } from "@/eval/runTypes.js";
 import { recordGradingPass, type ScoreDraft } from "@/runDirectory/mutations.js";
@@ -48,9 +47,8 @@ export async function gradeSuite(
   });
   const drafts = scoreDrafts(scorecard);
   let passId: string | null = null;
-  // A pass cut short by Ctrl-C holds "interrupted" failures for the commands
-  // that never ran. Recording it would store those as the run's grades.
-  if (options.record !== false && drafts.length > 0 && !shellInterrupted()) {
+  // (A pass cut short by Ctrl-C never gets here: gradeSnapshot throws.)
+  if (options.record !== false && drafts.length > 0) {
     passId = recordGradingPass({ dir: runDir, scores: drafts }).passId;
   }
   return { grading: toGrading(scorecard), scorecard, passId, judgeCostUsd: runAgency.costUsd };

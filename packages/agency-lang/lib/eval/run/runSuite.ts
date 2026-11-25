@@ -32,6 +32,7 @@ import {
 import { readTraces } from "@/runDirectory/traces.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
 
+import { GradingInterrupted } from "@/eval/grading/gradeRun.js";
 import { gradeSuite } from "@/eval/grading/gradeSuite.js";
 import { shellInterrupted } from "@/eval/shellCommand.js";
 
@@ -128,6 +129,9 @@ export async function runSuite(
   );
   const config = opts.config ?? {};
   const perRun = opts.perRun ?? {};
+  // One id per suite invocation, carried by every run row it writes. Here,
+  // before any directory or listener exists, since a bad one throws.
+  const batch = batchIdOf(opts.batch, groupDir);
 
   // Each test's graders, bundled now and stored in its run directory, so the
   // run grades later by the graders it ran with, wherever the directory goes.
@@ -166,7 +170,10 @@ export async function runSuite(
   process.once("SIGINT", onSigint);
 
   const budget = makeBatchBudget(batchCostCapFromConfig(config));
-  const shouldStop = () => interrupted || budget.exhausted();
+  // SIGTERM and SIGHUP reach this process only through a running setup or
+  // grader command, which records them: no further test may start then
+  // either, since its commands would all refuse to run.
+  const shouldStop = () => interrupted || shellInterrupted() || budget.exhausted();
 
   const parallel = Math.max(1, Math.floor(opts.parallel ?? 1));
   // `agent` is the target's label (an agent file path or the command line),
@@ -180,8 +187,6 @@ export async function runSuite(
     ...(opts.workdirSnapshot === false ? { workdirSnapshot: false } : {}),
   };
   const harness = { kind: "harness" as const, id: `agency-eval@${harnessVersion()}` };
-  // One id per suite invocation, carried by every run row it writes.
-  const batch = batchIdOf(opts.batch, groupDir);
 
   // One test, executed, folded into the run directory, and its staging
   // removed — shared by both scheduling modes. Prepare failures become error
@@ -258,7 +263,7 @@ export async function runSuite(
       // an interrupt: a build grader can run for most of an hour, and
       // whoever interrupted is waiting.
       const graded =
-        opts.gradeInPlace === true && !interrupted
+        opts.gradeInPlace === true && !interrupted && !shellInterrupted()
           ? await gradeInPlace(runDir, run, config)
           : undefined;
       return graded === undefined ? result : { ...result, ...graded };
@@ -305,26 +310,24 @@ export async function runSuite(
 }
 
 /** Grade a finished run in the workdir its agent used, with the graders its
- *  run directory stored. Nothing to grade when the agent never started. A
- *  grading failure is reported and the run is kept, ungraded. */
+ *  run directory stored. A run whose agent never started is graded as
+ *  `eval grade` grades it: 0, with no graders run. A grading failure is
+ *  reported and the run is kept, ungraded. */
 async function gradeInPlace(
   runDir: string,
   run: AgentRun,
   config: AgencyConfig,
 ): Promise<Pick<SuiteTestResult, "grading" | "judgeCostUsd"> | undefined> {
-  if (run.statelogPath === null) {
-    return undefined;
-  }
   try {
     const graded = await gradeSuite(runDir, { kind: "snapshot" }, config, {
       workdirOverride: run.workdir,
     });
-    // Interrupted while grading: the pass was not recorded, so there is
-    // no grade to report.
-    return shellInterrupted()
-      ? undefined
-      : { grading: graded.grading, judgeCostUsd: graded.judgeCostUsd };
+    return { grading: graded.grading, judgeCostUsd: graded.judgeCostUsd };
   } catch (err) {
+    // Interrupted while grading: nothing was recorded, and that is not news.
+    if (err instanceof GradingInterrupted) {
+      return undefined;
+    }
     console.warn(
       `[runSuite] could not grade ${runDir}: ${err instanceof Error ? err.message : String(err)}`,
     );

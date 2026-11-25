@@ -1,4 +1,5 @@
 import type { DecisionAnswer, DecisionQuestion, DecisionState } from "smoltalk";
+import { z } from "zod";
 
 // Wire format produced by StatelogClient.post(). Mirrors the envelope
 // shape we read from the JSONL file; do NOT depend on the runtime
@@ -52,20 +53,28 @@ export type DecisionLog = {
   answers: Record<string, DecisionAnswer>;
 };
 
-/** A whole message list on a `promptCompletion`, logged as it was before
- *  change events existed. See "Messages: full copies and changes" in
+/** The writer fields a `promptCompletion` on a thread with an identity
+ *  carries. See "Messages: full copies and changes" in
  *  docs/dev/hosting/statelog.md. */
-export type FullCopyFields = { messages: unknown[]; logWriter: string; threadCall: number };
+export const WriterFieldsSchema = z.object({
+  logWriter: z.string(),
+  threadCall: z.number().int().positive(),
+});
 
-/** The messages that changed since this writer's previous call on the
- *  thread: the first `keptMessages` are the same as in that call, and
- *  `newMessages` follow them. */
-export type ChangeFields = {
-  keptMessages: number;
-  newMessages: unknown[];
-  logWriter: string;
-  threadCall: number;
-};
+/** A `promptCompletion` that logs its thread's whole message list. */
+export const FullCopyFieldsSchema = WriterFieldsSchema.extend({
+  messages: z.array(z.unknown()),
+});
+export type FullCopyFields = z.infer<typeof FullCopyFieldsSchema>;
+
+/** A `promptCompletion` whose first `keptMessages` messages are the same as
+ *  in this writer's previous call on the thread, and `newMessages` follow
+ *  them. A change always keeps at least one message. */
+export const ChangeFieldsSchema = WriterFieldsSchema.extend({
+  keptMessages: z.number().int().positive(),
+  newMessages: z.array(z.unknown()),
+});
+export type ChangeFields = z.infer<typeof ChangeFieldsSchema>;
 
 export type EventData = {
   type: string;

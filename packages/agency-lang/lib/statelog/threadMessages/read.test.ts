@@ -71,6 +71,18 @@ describe("rebuildMessages", () => {
     expect(fourth.data.newMessages).toBeUndefined();
   });
 
+  it("leaves a malformed change as it is and marks the next change on its thread", () => {
+    const events = written([
+      [user("1")],
+      [user("1"), user("2")],
+      [user("1"), user("2"), user("3")],
+    ]);
+    const malformed = { ...events[1], data: { ...events[1].data, keptMessages: "1" } };
+    const [, second, third] = inOrder([events[0], malformed, events[2]]);
+    expect(second).toBe(malformed);
+    expect(third.data.missingMessages).toBe(events[2].data.keptMessages);
+  });
+
   it("leaves events without writer fields untouched", () => {
     const old: EventEnvelope = {
       format_version: 1,

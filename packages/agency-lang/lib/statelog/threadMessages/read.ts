@@ -4,12 +4,19 @@
  * copy, so readers keep reading `data.messages`. See "Messages: full copies
  * and changes" in docs/dev/hosting/statelog.md.
  */
-import type { EventEnvelope } from "../wireTypes.js";
+import { z } from "zod";
+import { ChangeFieldsSchema, WriterFieldsSchema, type EventEnvelope } from "../wireTypes.js";
 
 /** What a reader has rebuilt so far, by trace, writer, and thread. */
 export type RebuildState = Record<string, { call: number; messages: unknown[] }>;
 
-/** The fields every tracked `promptCompletion` carries, full copy or change. */
+/** A `promptCompletion` a reader can follow from call to call: one on a
+ *  thread with an identity, logged with the writer fields. */
+const TrackedSchema = WriterFieldsSchema.extend({
+  type: z.literal("promptCompletion"),
+  threadIdentity: z.string(),
+});
+
 type Tracked = { key: string; threadCall: number };
 
 /**
@@ -21,7 +28,8 @@ type Tracked = { key: string; threadCall: number };
  * `missingMessages`, the number of messages at the start that are not in
  * the log. The thread's record is dropped, so every later change on it is
  * marked too, until the next full copy. A gap never yields a list that
- * looks complete.
+ * looks complete. A change whose fields are malformed is returned as it is
+ * and drops the record the same way.
  */
 export function rebuildMessages(state: RebuildState, event: EventEnvelope): EventEnvelope {
   const tracked = trackedOf(event);
@@ -38,17 +46,21 @@ export function rebuildMessages(state: RebuildState, event: EventEnvelope): Even
     state[key] = { call: threadCall, messages: data.messages };
     return event;
   }
-  const kept: number = data.keptMessages;
-  const newMessages: unknown[] = Array.isArray(data.newMessages) ? data.newMessages : [];
+  const change = ChangeFieldsSchema.safeParse(data);
+  if (!change.success) {
+    delete state[key];
+    return event;
+  }
+  const { keptMessages, newMessages } = change.data;
   const { newMessages: _new, ...rest } = data;
   const base = state[key];
   const canRebuild =
-    base !== undefined && base.call === threadCall - 1 && base.messages.length >= kept;
+    base !== undefined && base.call === threadCall - 1 && base.messages.length >= keptMessages;
   if (!canRebuild) {
     delete state[key];
-    return { ...event, data: { ...rest, messages: newMessages, missingMessages: kept } };
+    return { ...event, data: { ...rest, messages: newMessages, missingMessages: keptMessages } };
   }
-  const messages = base.messages.slice(0, kept).concat(newMessages);
+  const messages = base.messages.slice(0, keptMessages).concat(newMessages);
   state[key] = { call: threadCall, messages };
   return { ...event, data: { ...rest, messages } };
 }
@@ -77,17 +89,10 @@ export function rebuildAllMessages(events: readonly EventEnvelope[]): EventEnvel
 }
 
 function trackedOf(event: EventEnvelope): Tracked | null {
-  const data = event.data;
-  if (
-    data.type !== "promptCompletion" ||
-    typeof data.logWriter !== "string" ||
-    typeof data.threadCall !== "number" ||
-    typeof data.threadIdentity !== "string"
-  ) {
+  const parsed = TrackedSchema.safeParse(event.data);
+  if (!parsed.success) {
     return null;
   }
-  return {
-    key: JSON.stringify([event.trace_id, data.logWriter, data.threadIdentity]),
-    threadCall: data.threadCall,
-  };
+  const { logWriter, threadIdentity, threadCall } = parsed.data;
+  return { key: JSON.stringify([event.trace_id, logWriter, threadIdentity]), threadCall };
 }

@@ -1054,7 +1054,11 @@ export function makeFollowWatcher(opts: RunViewerOpts): {
     if (reader === undefined) {
       return opts.parsed ?? { events: [], errors: [] };
     }
-    return opts.initialFollow ? log : withParsedLines(log, reader.finish(), lineCount + 1, rebuild);
+    // A copy of the state: this parses the partial last line for the boot
+    // view only, and a later poll parses it again once its newline arrives.
+    return opts.initialFollow
+      ? log
+      : withParsedLines(log, reader.finish(), lineCount + 1, { ...rebuild });
   };
 
   readAppended();

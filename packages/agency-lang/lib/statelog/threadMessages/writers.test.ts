@@ -7,6 +7,11 @@ describe("writerForRun", () => {
     expect(writerForRun(kept, "run-a")).toBe(writerForRun(kept, "run-a"));
   });
 
+  it("keeps a writer for a run id named __proto__", () => {
+    const kept = newKeptLogWriters();
+    expect(writerForRun(kept, "__proto__")).toBe(writerForRun(kept, "__proto__"));
+  });
+
   it("gives different run ids different writers", () => {
     const kept = newKeptLogWriters();
     expect(writerForRun(kept, "run-a").logWriter).not.toBe(writerForRun(kept, "run-b").logWriter);

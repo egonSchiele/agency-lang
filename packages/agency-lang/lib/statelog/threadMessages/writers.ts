@@ -50,7 +50,9 @@ export const MAX_KEPT_LOG_WRITERS = 20;
 export type KeptLogWriters = { order: string[]; byRunId: Record<string, LogWriterState> };
 
 export function newKeptLogWriters(): KeptLogWriters {
-  return { order: [], byRunId: {} };
+  // A run id can come from outside the program (a trace id in the
+  // environment or the invocation), so the keys get no prototype.
+  return { order: [], byRunId: Object.create(null) };
 }
 
 /** The writer for a run id: the kept one, or a new one. Marks the run id as

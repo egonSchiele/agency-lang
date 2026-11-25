@@ -607,8 +607,11 @@ Memory: `memoryRemember`, `memoryRecall`, `memoryForget`, `memoryCompaction`.
 Interrupts: `interruptThrown`, `handlerDecision`, `interruptResolved`.
 `handlerDecision` carries the interrupt's `effect` and `message`, and
 `interruptResolved` carries its whole summary, with `data`. Every handler in
-the chain logs a `handlerDecision`, and every interrupt the chain sees logs an
-`interruptResolved`, so the data is in the log once. It can be large: an
+the chain logs a `handlerDecision`, and every interrupt whose chain finishes
+logs an `interruptResolved`, so the data is in the log once. A chain that
+throws partway (a handler aborted, or returned something that is not a
+response) logs no `interruptResolved`, so that interrupt's data is not in the
+log; the run is failing at that point anyway. The data can be large: an
 edit's interrupt carries the whole file before and after the edit. Eval
 extraction takes the summary from `interruptResolved`, and from
 `handlerDecision` in older logs that carried it there.

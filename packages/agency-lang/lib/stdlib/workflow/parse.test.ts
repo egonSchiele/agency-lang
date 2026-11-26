@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { _workflowNameProblem, parseWorkflow } from "./parse.js";
 import { isIdentifier, refsIn } from "./types.js";
-import { mealPlan, withArg, withFields, withStep } from "./testFixtures.js";
+import {
+  eachPlan,
+  edited,
+  matchPlan,
+  mealPlan,
+  withArg,
+  withFields,
+  withStep,
+} from "./testFixtures.js";
 
 describe("parseWorkflow", () => {
   it("accepts the meal plan", () => {
@@ -74,7 +82,11 @@ describe("parseWorkflow", () => {
 
   it("refuses an unknown kind", () => {
     expect(parseWorkflow(withStep(mealPlan, 0, { kind: "shell" })).problems).toEqual([
-      { step: "note", field: "kind", message: 'kind must be "tool" or "llm", got "shell"' },
+      {
+        step: "note",
+        field: "kind",
+        message: 'kind must be "tool", "llm", "match", or "each", got "shell"',
+      },
     ]);
   });
 
@@ -331,6 +343,156 @@ describe("parseWorkflow", () => {
   it("reports every problem, not the first", () => {
     const wf = withStep(withStep(mealPlan, 0, { id: "a b" }), 1, { id: "c d" });
     expect(parseWorkflow(wf).problems.map((p) => p.step)).toEqual(["a b", "c d"]);
+  });
+});
+
+describe("parseWorkflow match and each", () => {
+  it("accepts the each and match fixtures", () => {
+    expect(parseWorkflow(eachPlan).problems).toEqual([]);
+    expect(parseWorkflow(matchPlan).problems).toEqual([]);
+    expect(parseWorkflow(matchPlan).workflow).toEqual(matchPlan);
+  });
+
+  it("refuses an on that is not a reference", () => {
+    const wf = edited(matchPlan, (copy) => (copy.steps[1].on = "inputs.level"));
+    expect(parseWorkflow(wf).problems).toEqual([
+      {
+        step: "route",
+        field: "on",
+        message: 'on must be a reference, such as { "$ref": "steps.triage.level" }',
+      },
+    ]);
+  });
+
+  it("refuses an over that is not a reference", () => {
+    const wf = edited(eachPlan, (copy) => (copy.steps[1].over = ["a", "b"]));
+    expect(parseWorkflow(wf).problems).toEqual([
+      {
+        step: "note",
+        field: "over",
+        message: 'over must be a reference to a list, such as { "$ref": "steps.search" }',
+      },
+    ]);
+  });
+
+  it("refuses missing or empty cases", () => {
+    const expected = [
+      { step: "route", field: "cases", message: "cases must hold at least one case" },
+    ];
+    expect(parseWorkflow(edited(matchPlan, (copy) => (copy.steps[1].cases = []))).problems).toEqual(
+      expected,
+    );
+    expect(parseWorkflow(edited(matchPlan, (copy) => delete copy.steps[1].cases)).problems).toEqual(
+      expected,
+    );
+  });
+
+  it("refuses an is that is not a string, a number, or a boolean", () => {
+    for (const value of [null, [1], { a: 1 }, Infinity]) {
+      const wf = edited(matchPlan, (copy) => (copy.steps[1].cases[1].is = value));
+      expect(parseWorkflow(wf).problems).toEqual([
+        {
+          step: "route",
+          field: "cases[1].is",
+          message: "is must be a string, a number, or true or false",
+        },
+      ]);
+    }
+  });
+
+  it("refuses an is an earlier case already handles", () => {
+    const wf = edited(matchPlan, (copy) => (copy.steps[1].cases[1].is = "urgent"));
+    expect(parseWorkflow(wf).problems).toEqual([
+      {
+        step: "route",
+        field: "cases[1].is",
+        message: 'case "urgent" is already handled by an earlier case',
+      },
+    ]);
+  });
+
+  it('treats 1 and "1" as different cases', () => {
+    const wf = edited(matchPlan, (copy) => {
+      copy.steps[1].cases[0].is = 1;
+      copy.steps[1].cases[1].is = "1";
+    });
+    expect(parseWorkflow(wf).problems).toEqual([]);
+  });
+
+  it("refuses an each with no steps", () => {
+    const wf = edited(eachPlan, (copy) => (copy.steps[1].steps = []));
+    expect(parseWorkflow(wf).problems).toEqual([
+      { step: "note", field: "steps", message: "steps must hold at least one step" },
+    ]);
+  });
+
+  it("refuses limits on a match or an each", () => {
+    const onMatch = edited(matchPlan, (copy) => (copy.steps[1].limits = { maxCost: 1 }));
+    expect(parseWorkflow(onMatch).problems).toEqual([
+      {
+        step: "route",
+        field: "limits",
+        message: "a match step takes no limits; set limits on the steps inside it",
+      },
+    ]);
+    const onEach = edited(eachPlan, (copy) => (copy.steps[1].limits = { maxCost: 1 }));
+    expect(parseWorkflow(onEach).problems).toEqual([
+      {
+        step: "note",
+        field: "limits",
+        message: "an each step takes no limits; set limits on the steps inside it",
+      },
+    ]);
+  });
+
+  it("reads null limits on a match or an each as absent, as a tool step does", () => {
+    const wf = edited(eachPlan, (copy) => {
+      copy.steps[1].limits = null;
+      copy.steps[1].steps[0].limits = null;
+    });
+    expect(parseWorkflow(wf).problems).toEqual([]);
+    const onMatch = edited(matchPlan, (copy) => (copy.steps[1].limits = null));
+    expect(parseWorkflow(onMatch).problems).toEqual([]);
+  });
+
+  it("names a nested step by its own id", () => {
+    const wf = edited(eachPlan, (copy) => (copy.steps[1].steps[0].args.id = { $ref: "bad path" }));
+    expect(parseWorkflow(wf).problems).toEqual([
+      { step: "text", field: "args.id", message: 'reference "bad path" is not a well-formed path' },
+    ]);
+  });
+
+  it("reports a nested step with no id on the block that holds it", () => {
+    const wf = edited(matchPlan, (copy) => (copy.steps[1].cases[0].steps[0] = { kind: "tool" }));
+    const problems = parseWorkflow(wf).problems;
+    expect(problems.length).toBeGreaterThan(0);
+    for (const problem of problems) {
+      expect(problem.step).toBe("route");
+      expect(problem.field).toMatch(/^cases\[0\]\.steps\[0\]/);
+    }
+  });
+
+  it("refuses a duplicate id across levels", () => {
+    const wf = edited(eachPlan, (copy) => (copy.steps[2].id = "text"));
+    expect(parseWorkflow(wf).problems).toEqual([
+      { step: "text", field: "id", message: 'step id "text" is used by an earlier step' },
+    ]);
+  });
+
+  it("refuses a nested step maxTime when the workflow sets none", () => {
+    const wf = edited(eachPlan, (copy) => (copy.steps[1].steps[0].limits = { maxTime: 5000 }));
+    expect(parseWorkflow(wf).problems).toEqual([
+      {
+        step: "text",
+        field: "limits.maxTime",
+        message: expect.stringContaining("needs the workflow to set a maxTime"),
+      },
+    ]);
+  });
+
+  it("accepts an empty case and an empty otherwise", () => {
+    const wf = edited(matchPlan, (copy) => (copy.steps[1].otherwise = []));
+    expect(parseWorkflow(wf).problems).toEqual([]);
   });
 });
 

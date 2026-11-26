@@ -23,6 +23,16 @@ export const TYPES_THAT_DONT_TRIGGER_NEW_PART: AgencyNode["type"][] = [
  */
 export const BUILTIN_FUNCTIONS: Record<string, string> = {};
 
+/** The TypeScript name of a built-in, or undefined for any other name. It
+ *  reads only the table's own keys: a plain index would find `valueOf` or
+ *  `toString` on every object, and a user's def by that name would be read
+ *  as a built-in. */
+export function builtinFunctionName(functionName: string): string | undefined {
+  return Object.hasOwn(BUILTIN_FUNCTIONS, functionName)
+    ? BUILTIN_FUNCTIONS[functionName]
+    : undefined;
+}
+
 export const BUILTIN_TOOLS: string[] = [];
 
 export const BUILTIN_VARIABLES = ["color", "__dirname"];

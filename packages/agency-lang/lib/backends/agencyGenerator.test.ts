@@ -1674,3 +1674,18 @@ describe("parameter aliases", () => {
     expect(output).toContain('c | d = "x"');
   });
 });
+
+describe("AgencyGenerator - object keys", () => {
+  it("keeps a key quoted when the parser would not read it bare", () => {
+    // A workflow reference is `{ "$ref": ... }`; a bare `$ref` does not parse.
+    const source =
+      'node main() {\n  const x = { "$ref": "a", "b-c": 1, "1st": 2, plain: 3 }\n  return x\n}\n';
+    const formatted = formatSource(source);
+    expect(formatted).not.toBeNull();
+    expect(formatted).toContain('"$ref": "a"');
+    expect(formatted).toContain('"b-c": 1');
+    expect(formatted).toContain('"1st": 2');
+    expect(formatted).toContain("plain: 3");
+    expect(formatSource(formatted!)).toBe(formatted);
+  });
+});

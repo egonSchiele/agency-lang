@@ -590,6 +590,29 @@ describe("Runner", () => {
       expect(collected).toEqual([]);
       expect(frame.step).toBe(1);
     });
+
+    it("clears its own thread blocks' ids each round and leaves a sibling's alone", async () => {
+      // Loop 1's thread block is step 1.0. The thread blocks at steps 10 and
+      // 12.3 sit beside loop 1, and share its digits but not its path.
+      const frame = makeFrame();
+      frame.step = 1;
+      frame.locals.__thread_10 = "t10";
+      frame.locals["__thread_12.3"] = "t12";
+      frame.locals["__thread_resumed_10"] = true;
+      const runner = new Runner(makeMockCtx(), frame);
+      const seen: unknown[] = [];
+
+      await runner.loop(1, testRun(), ["a", "b"], async () => {
+        seen.push(frame.locals["__thread_1.0"]);
+        frame.locals["__thread_1.0"] = "round";
+        frame.locals["__thread_resumed_1.0"] = true;
+      });
+
+      expect(seen).toEqual([undefined, undefined]);
+      expect(frame.locals.__thread_10).toBe("t10");
+      expect(frame.locals["__thread_12.3"]).toBe("t12");
+      expect(frame.locals["__thread_resumed_10"]).toBe(true);
+    });
   });
 
   describe("whileLoop()", () => {

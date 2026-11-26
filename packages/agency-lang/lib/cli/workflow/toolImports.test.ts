@@ -84,6 +84,38 @@ describe("importsForSteps", () => {
     const plan = importsForSteps(stepsOf(["g", "./withHelper.agency", "greet"]), FIXTURES, []);
     expect(plan.imports).toEqual([{ module: "./withHelper.agency", names: ["greet"] }]);
   });
+
+  /** One std::math `add` step, the only tool step in the workflow. */
+  const addStep = { id: "sum", kind: "tool", module: "std::math", tool: "add", args: {} };
+  /** A match whose one case holds `steps`. */
+  const caseHolding = (steps: unknown[]) => ({
+    id: "route",
+    kind: "match",
+    on: { $ref: "inputs.level" },
+    cases: [{ is: "urgent", steps }],
+  });
+
+  it("imports a tool used only inside a case", () => {
+    const plan = importsForSteps({ steps: [caseHolding([addStep])] }, FIXTURES, []);
+    expect(plan.problems).toEqual([]);
+    expect(plan.imports).toEqual([{ module: "std::math", names: ["add"] }]);
+  });
+
+  it("imports a tool used only inside a loop inside a case", () => {
+    const loop = { id: "item", kind: "each", over: { $ref: "inputs.items" }, steps: [addStep] };
+    const plan = importsForSteps({ steps: [caseHolding([loop])] }, FIXTURES, []);
+    expect(plan.imports).toEqual([{ module: "std::math", names: ["add"] }]);
+  });
+
+  it("plans no import for a workflow with malformed nesting, and does not throw", () => {
+    const malformed = { steps: [{ id: "r", kind: "match", cases: "x" }] };
+    expect(() => importsForSteps(malformed, FIXTURES, [])).not.toThrow();
+    expect(importsForSteps(malformed, FIXTURES, [])).toEqual({
+      imports: [],
+      signatures: {},
+      problems: [],
+    });
+  });
 });
 
 describe("modules in a temp folder", () => {

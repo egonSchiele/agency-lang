@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { resolveWorkflow } from "./resolve.js";
-import type { Workflow } from "./types.js";
+import type {
+  ResolvedEachStep,
+  ResolvedMatchStep,
+  ResolvedToolStep,
+  Signature,
+  Workflow,
+} from "./types.js";
 import {
+  eachPlan,
+  edited,
+  matchPlan,
   mealPlan,
   mealRefs,
   mealSignatures,
@@ -478,5 +487,341 @@ describe("resolveWorkflow raises", () => {
       [key]: { ...mealSignatures[key], effects: ["std::guard"] },
     };
     expect(problemsWith(["std::read", "test::lists::add"], signatures)).toEqual([]);
+  });
+});
+
+/** A copy of mealSignatures with one tool's signature changed. */
+function withSignature(key: string, patch: Partial<Signature>): Record<string, Signature> {
+  return { ...mealSignatures, [key]: { ...mealSignatures[key], ...patch } };
+}
+
+const SEARCH = "./notes.agency.searchNotes";
+const READ = "./notes.agency.readNote";
+
+/** An LLM step that reads the current note, for the loop tests. */
+const summarize = {
+  id: "summary",
+  kind: "llm",
+  prompt: "Summarize the note.",
+  context: [{ $ref: "each.note.body" }],
+  output: "string",
+};
+
+/** An outer loop over groups and an inner loop over each group's items. */
+const nestedLoops = {
+  format: 1,
+  name: "nested",
+  description: "Add every item of every group.",
+  inputs: "{ groups: { name: string; items: string[] }[] }",
+  steps: [
+    {
+      id: "group",
+      kind: "each",
+      over: { $ref: "inputs.groups" },
+      steps: [
+        {
+          id: "item",
+          kind: "each",
+          over: { $ref: "each.group.items" },
+          steps: [
+            {
+              id: "add",
+              kind: "tool",
+              module: "./lists.agency",
+              tool: "addListItems",
+              args: {
+                listId: { $ref: "each.group.name" },
+                items: [{ $ref: "each.item" }],
+                section: "Items",
+              },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "done",
+      kind: "tool",
+      module: "./lists.agency",
+      tool: "findLists",
+      args: { query: "done" },
+    },
+  ],
+};
+
+describe("resolveWorkflow match and each", () => {
+  it("lets a step read an earlier step in its list, an enclosing list, and its loop's item", () => {
+    expect(resolveWorkflow(eachPlan, mealRefs, mealSignatures).problems).toEqual([]);
+    expect(resolveWorkflow(matchPlan, mealRefs, mealSignatures).problems).toEqual([]);
+  });
+
+  it("lets a step in an inner loop read both loops' items", () => {
+    expect(resolve(nestedLoops).problems).toEqual([]);
+  });
+
+  it("refuses a step reference to a match or an each, which has no value", () => {
+    const wf = edited(matchPlan, (copy) => (copy.steps[2].args.query = { $ref: "steps.route" }));
+    expect(resolve(wf).problems).toEqual([
+      {
+        step: "done",
+        field: "args.query",
+        message: 'reference "steps.route" names step "route", a match step, which has no value',
+      },
+    ]);
+    const loop = edited(eachPlan, (copy) => (copy.steps[2].args.query = { $ref: "steps.note" }));
+    expect(resolve(loop).problems[0].message).toBe(
+      'reference "steps.note" names step "note", an each step, which has no value',
+    );
+  });
+
+  it("refuses a reference to a later step in the step's own list or an enclosing one", () => {
+    const own = edited(
+      eachPlan,
+      (copy) => (copy.steps[1].steps[0].args.id = { $ref: "steps.add" }),
+    );
+    expect(resolve(own).problems).toEqual([
+      {
+        step: "text",
+        field: "args.id",
+        message: 'reference "steps.add" names step "add", which comes after this step',
+      },
+    ]);
+    const enclosing = edited(
+      eachPlan,
+      (copy) => (copy.steps[1].steps[0].args.id = { $ref: "steps.done" }),
+    );
+    expect(resolve(enclosing).problems[0].message).toBe(
+      'reference "steps.done" names step "done", which comes after this step',
+    );
+  });
+
+  it("refuses a reference from outside a block to a step inside it", () => {
+    const wf = edited(eachPlan, (copy) => (copy.steps[2].args.query = { $ref: "steps.text.body" }));
+    expect(resolve(wf).problems).toEqual([
+      {
+        step: "done",
+        field: "args.query",
+        message:
+          'reference "steps.text.body" names step "text", which is inside a block this step is not in',
+      },
+    ]);
+  });
+
+  it("refuses a reference from one case into another, in both directions", () => {
+    const later = {
+      id: "later",
+      kind: "tool",
+      module: "./lists.agency",
+      tool: "findLists",
+      args: { query: { $ref: "steps.add" } },
+    };
+    const wf = edited(matchPlan, (copy) => {
+      copy.steps[1].cases[1].steps = [later];
+      copy.steps[1].cases[0].steps[0].args.listId = { $ref: "steps.later" };
+    });
+    expect(resolve(wf).problems).toEqual([
+      {
+        step: "add",
+        field: "args.listId",
+        message:
+          'reference "steps.later" names step "later", which is inside a block this step is not in',
+      },
+      {
+        step: "later",
+        field: "args.query",
+        message:
+          'reference "steps.add" names step "add", which is inside a block this step is not in',
+      },
+    ]);
+  });
+
+  it("refuses a reference from result into a loop", () => {
+    const wf = edited(eachPlan, (copy) => (copy.result = { $ref: "steps.add" }));
+    expect(resolve(wf).problems).toEqual([
+      {
+        step: null,
+        field: "result",
+        message:
+          'reference "steps.add" names step "add", which is inside a block this step is not in',
+      },
+    ]);
+  });
+
+  it("refuses an item reference to a step that is not a loop", () => {
+    const wf = edited(
+      eachPlan,
+      (copy) => (copy.steps[1].steps[0].args.id = { $ref: "each.search.id" }),
+    );
+    expect(resolve(wf).problems).toEqual([
+      { step: "text", field: "args.id", message: 'reference "each.search.id" names no each step' },
+    ]);
+    const none = edited(
+      eachPlan,
+      (copy) => (copy.steps[1].steps[0].args.id = { $ref: "each.x.id" }),
+    );
+    expect(resolve(none).problems[0].message).toBe('reference "each.x.id" names no each step');
+  });
+
+  it("refuses an item reference from outside its loop", () => {
+    const wf = edited(eachPlan, (copy) => (copy.steps[2].args.query = { $ref: "each.note.id" }));
+    expect(resolve(wf).problems).toEqual([
+      {
+        step: "done",
+        field: "args.query",
+        message: 'reference "each.note.id" names loop "note", which this step is not inside',
+      },
+    ]);
+    const own = edited(eachPlan, (copy) => (copy.steps[1].over = { $ref: "each.note" }));
+    expect(resolve(own).problems[0]).toEqual({
+      step: "note",
+      field: "over",
+      message: 'reference "each.note" names loop "note", which this step is not inside',
+    });
+  });
+
+  it("asks for a result when the last top-level step is a block", () => {
+    const wf = edited(matchPlan, (copy) => {
+      copy.steps.pop();
+      delete copy.result;
+    });
+    expect(resolve(wf).problems).toEqual([
+      {
+        step: null,
+        field: "result",
+        message: 'the last step, "route", is a match step and has no value; set result',
+      },
+    ]);
+  });
+
+  it("resolves an each step to a tree with its names", () => {
+    const each = resolve(eachPlan).resolved!.steps[1] as ResolvedEachStep;
+    expect(each.over).toEqual({
+      local: "step_note_over",
+      field: "over",
+      value: { kind: "step", step: "search", path: "" },
+    });
+    expect(each.item).toBe("step_note_item");
+    expect(each.steps.map((step) => step.id)).toEqual(["text", "add"]);
+  });
+
+  it("resolves a match step to a tree with its names", () => {
+    const match = resolve(matchPlan).resolved!.steps[1] as ResolvedMatchStep;
+    expect(match.on.local).toBe("step_route_on");
+    expect(match.cases.map((item) => [item.is, item.test, item.steps.length])).toEqual([
+      ["urgent", "step_route_case1", 1],
+      ["normal", "step_route_case2", 0],
+    ]);
+    expect(match.otherwise).toBeNull();
+  });
+
+  it("resolves each.note.id to an item reference", () => {
+    const each = resolve(eachPlan).resolved!.steps[1] as ResolvedEachStep;
+    const text = each.steps[0] as ResolvedToolStep;
+    expect(text.bindings[0].value).toEqual({ kind: "item", loop: "note", path: ".id" });
+  });
+
+  it("refuses a step id that equals a block's generated name", () => {
+    const wf = edited(matchPlan, (copy) =>
+      copy.steps.push({
+        id: "route_on",
+        kind: "tool",
+        module: "./lists.agency",
+        tool: "findLists",
+        args: { query: "x" },
+      }),
+    );
+    expect(resolve(wf).problems[0].message).toContain("produces the same local as");
+  });
+
+  it("refuses a nested step whose generated name collides with a top-level one", () => {
+    const wf = edited(eachPlan, (copy) =>
+      copy.steps.push({
+        id: "text_id",
+        kind: "tool",
+        module: "./lists.agency",
+        tool: "findLists",
+        args: { query: "x" },
+      }),
+    );
+    expect(resolve(wf).problems[0].message).toContain("produces the same local as");
+  });
+
+  it("imports a tool used only inside a case", () => {
+    expect(resolve(matchPlan).resolved!.imports).toContainEqual({
+      module: "./lists.agency",
+      names: ["addListItems", "findLists"],
+    });
+  });
+
+  it("refuses a tool inside a case that the host did not pass", () => {
+    const refs = mealRefs.filter((ref) => ref.name !== "addListItems");
+    expect(resolve(matchPlan, refs).problems[0]).toEqual({
+      step: "add",
+      field: "tool",
+      message:
+        'tool "addListItems" from "./lists.agency" is not among the tools passed to this workflow',
+    });
+  });
+
+  it("warns about an untyped tool that only an over reads", () => {
+    const signatures = withSignature(SEARCH, { returnType: "Json", returnsResult: false });
+    const r = resolve(eachPlan, mealRefs, signatures);
+    expect(r.problems).toEqual([]);
+    expect(r.resolved!.warnings).toContainEqual({
+      step: "search",
+      field: "tool",
+      message: expect.stringContaining("searchNotes returns Json"),
+    });
+  });
+
+  const costMessage =
+    "this loop runs a model once per item, and the workflow sets no limits.maxCost, so its cost depends on the length of the list";
+
+  it("warns once, on the outer loop, for an LLM step in a nested loop", () => {
+    const wf = edited(nestedLoops, (copy) =>
+      copy.steps[0].steps[0].steps.push({
+        id: "summary",
+        kind: "llm",
+        prompt: "Describe the item.",
+        context: [{ $ref: "each.item" }],
+        output: "string",
+      }),
+    );
+    expect(resolve(wf).resolved!.warnings).toEqual([
+      { step: "group", field: "over", message: costMessage },
+    ]);
+  });
+
+  it("warns for an LLM step in a loop", () => {
+    const wf = edited(eachPlan, (copy) => copy.steps[1].steps.push(summarize));
+    expect(resolve(wf).resolved!.warnings).toEqual([
+      { step: "note", field: "over", message: costMessage },
+    ]);
+  });
+
+  it("warns for a handoff tool in a loop", () => {
+    const signatures = withSignature(READ, { handoff: true });
+    expect(resolve(eachPlan, mealRefs, signatures).resolved!.warnings).toEqual([
+      { step: "note", field: "over", message: costMessage },
+    ]);
+  });
+
+  it("gives no cost warning when the workflow sets maxCost", () => {
+    const signatures = withSignature(READ, { handoff: true });
+    const wf = withFields(eachPlan, { limits: { maxCost: 1 } });
+    expect(resolve(wf, mealRefs, signatures).resolved!.warnings).toEqual([]);
+  });
+
+  it("gives no cost warning for a loop of plain tools", () => {
+    expect(resolve(eachPlan).resolved!.warnings).toEqual([]);
+  });
+
+  it("reports a tool inside a loop that raises an effect raises does not allow", () => {
+    const wf = withFields(eachPlan, { raises: [] });
+    expect(resolve(wf).problems).toContainEqual({
+      step: "add",
+      field: "tool",
+      message: expect.stringContaining('raises "test::lists::add"'),
+    });
   });
 });

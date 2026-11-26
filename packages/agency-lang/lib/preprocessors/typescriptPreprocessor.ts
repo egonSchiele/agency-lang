@@ -1,5 +1,5 @@
 import { declaredName } from "../types/hole.js";
-import { AgencyConfig, BUILTIN_FUNCTIONS } from "@/config/config.js";
+import { AgencyConfig, builtinFunctionName } from "@/config/config.js";
 import type { CompilationUnit, ImportedFunctionSignature } from "@/compilationUnit.js";
 import {
   AgencyMultiLineComment,
@@ -466,7 +466,7 @@ export class TypescriptPreprocessor {
   }
 
   protected isBuiltinFunction(functionName: string): boolean {
-    return BUILTIN_FUNCTIONS[functionName] !== undefined;
+    return builtinFunctionName(functionName) !== undefined;
   }
 
   private prettifyName(call: FunctionCall): string {

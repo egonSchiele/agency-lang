@@ -1021,6 +1021,25 @@ export class Runner {
     }
   }
 
+  /** Clear the tracking locals of everything inside loop `id`, so the next
+   *  round starts fresh. A `thread` block's id is one of them: without it,
+   *  every round would reopen the first round's conversation. A round that
+   *  pauses keeps its locals until it finishes, so a resume still finds its
+   *  thread. */
+  private clearIterationLocals(id: number): void {
+    const pathPrefix = this.path.length === 0 ? `${id}` : `${this.key()}.${id}`;
+    this.frame.clearLocalsWithPrefix(`__substep_${pathPrefix}`);
+    this.frame.clearLocalsWithPrefix(`__condbranch_${pathPrefix}`);
+    this.frame.clearLocalsWithPrefix(`__iteration_${pathPrefix}`);
+    this.frame.clearLocalsWithPrefix(`__interruptId_${pathPrefix}`);
+    // A thread id names a conversation, so clearing a sibling's would reopen
+    // it as a new one. Every key inside the loop starts with `<path>.`, and
+    // that dot keeps `__thread_1.` from matching step 10's `__thread_10`.
+    this.frame.clearLocalsWithPrefix(`__thread_${pathPrefix}.`);
+    this.frame.clearLocalsWithPrefix(`__thread_resumed_${pathPrefix}.`);
+    this.frame.clearLocalsWithPrefix(`__pipe_result_`);
+  }
+
   // ── Specialized: loop (for) ──
 
   async loop(
@@ -1099,12 +1118,7 @@ export class Runner {
       if (this.halted) return;
 
       // Reset all nested tracking variables for next iteration
-      const pathPrefix = this.path.length === 0 ? `${id}` : `${this.key()}.${id}`;
-      this.frame.clearLocalsWithPrefix(`__substep_${pathPrefix}`);
-      this.frame.clearLocalsWithPrefix(`__condbranch_${pathPrefix}`);
-      this.frame.clearLocalsWithPrefix(`__iteration_${pathPrefix}`);
-      this.frame.clearLocalsWithPrefix(`__interruptId_${pathPrefix}`);
-      this.frame.clearLocalsWithPrefix(`__pipe_result_`);
+      this.clearIterationLocals(id);
       this.frame.locals[iterKey] = i + 1;
 
       if (this._break) break;
@@ -1164,12 +1178,7 @@ export class Runner {
 
       if (this.halted) return;
 
-      const pathPrefix = this.path.length === 0 ? `${id}` : `${this.key()}.${id}`;
-      this.frame.clearLocalsWithPrefix(`__substep_${pathPrefix}`);
-      this.frame.clearLocalsWithPrefix(`__condbranch_${pathPrefix}`);
-      this.frame.clearLocalsWithPrefix(`__iteration_${pathPrefix}`);
-      this.frame.clearLocalsWithPrefix(`__interruptId_${pathPrefix}`);
-      this.frame.clearLocalsWithPrefix(`__pipe_result_`);
+      this.clearIterationLocals(id);
       this.frame.locals[iterKey] = currentIter + 1;
       currentIter++;
 

@@ -2,16 +2,30 @@ import { describe, expect, it } from "vitest";
 import { _toSource } from "../template.js";
 import { lowerWorkflow } from "./lower.js";
 import { resolveWorkflow } from "./resolve.js";
-import type { Fragment, ResolvedWorkflow, Workflow } from "./types.js";
-import { mealPlan, mealRefs, mealSignatures, withArg, withStep } from "./testFixtures.js";
+import { isLine, type Fragment, type ResolvedWorkflow, type Workflow } from "./types.js";
+import {
+  eachPlan,
+  edited,
+  matchPlan,
+  mealPlan,
+  mealRefs,
+  mealSignatures,
+  withArg,
+  withStep,
+} from "./testFixtures.js";
 
 const resolved = (wf: unknown = mealPlan, signatures = mealSignatures): ResolvedWorkflow =>
   resolveWorkflow(wf as Workflow, mealRefs, signatures).resolved!;
-const print = (f: Fragment) => [_toSource(f.code), f.owner] as const;
-const printAll = (r: ResolvedWorkflow) =>
-  lowerWorkflow(r)
-    .body.map((f) => _toSource(f.code))
-    .join("");
+/** A fragment as text: a block line with its newline, or a printed statement. */
+const textOf = (f: Fragment) => (isLine(f) ? f.line + "\n" : _toSource(f.code));
+const print = (f: Fragment) => [textOf(f), f.owner] as const;
+const printAll = (r: ResolvedWorkflow) => lowerWorkflow(r).body.map(textOf).join("");
+/** Every block line, with its depth and owner. */
+const lines = (body: Fragment[]) =>
+  body.filter(isLine).map((f) => [f.line, f.depth, f.owner] as const);
+/** The statement whose print starts with `text`. */
+const fragmentFor = (body: Fragment[], text: string) =>
+  body.find((f) => !isLine(f) && textOf(f).startsWith(text))!;
 
 describe("lowerWorkflow", () => {
   it("lowers the meal plan to fragments", () => {
@@ -43,7 +57,7 @@ describe("lowerWorkflow", () => {
       ].join("\n"),
       { step: "note", field: "args" },
     ]);
-    expect(_toSource(lowered.body[3].code)).toBe("const step_text_id = step_note.value[0].id\n");
+    expect(textOf(lowered.body[3])).toBe("const step_text_id = step_note.value[0].id\n");
     expect(_toSource(lowered.result)).toBe("step_add.value\n");
     expect(lowered.guard).toEqual({ maxCost: 1, maxTime: 300000 });
   });
@@ -113,7 +127,7 @@ describe("lowerWorkflow", () => {
       { step: "add", field: "args" },
       { step: "add", field: "args" },
     ]);
-    const [guardText, checkText] = add.map((f) => _toSource(f.code));
+    const [guardText, checkText] = add.map(textOf);
     expect(guardText).toContain('const step_add = guard(label: "add", time: 120000, cost: 0.5) {');
     expect(guardText).toContain("  return addListItems(");
     expect(guardText).toContain("    section: step_add_section,");
@@ -125,7 +139,7 @@ describe("lowerWorkflow", () => {
     const lowered = lowerWorkflow(resolved(withStep(mealPlan, 3, { limits: { maxTime: 60000 } })));
     const meals = lowered.body
       .filter((f) => f.owner?.step === "meals" && f.owner.field === "prompt")
-      .map((f) => _toSource(f.code));
+      .map(textOf);
     expect(meals[0]).toBe(
       [
         'const step_meals = guard(label: "meals", time: 60000) {',
@@ -198,5 +212,105 @@ describe("lowerWorkflow guard labels", () => {
   it("leaves out the workflow's name when it has no limits", () => {
     const lowered = lowerWorkflow(resolved({ ...mealPlan, limits: null }));
     expect(lowered.guardLabels).toEqual([]);
+  });
+});
+
+/** An LLM step inside eachPlan's loop that reads the current note. */
+const summary = {
+  id: "meals",
+  kind: "llm",
+  prompt: "Summarize the note.",
+  context: [{ $ref: "each.note.body" }],
+  output: "string",
+};
+
+describe("lowerWorkflow match and each", () => {
+  it("lowers a match to a binding, one test per case, and an if chain", () => {
+    const body = lowerWorkflow(resolved(matchPlan)).body;
+    const texts = body.map(textOf);
+    expect(texts).toContain("const step_route_on = inputs.level\n");
+    expect(texts).toContain('const step_route_case1 = step_route_on == "urgent"\n');
+    expect(texts).toContain('const step_route_case2 = step_route_on == "normal"\n');
+    expect(lines(body)).toEqual([
+      ["if (step_route_case1) {", 0, { step: "route", field: "cases[0].is" }],
+      ["} else if (step_route_case2) {", 0, { step: "route", field: "cases[1].is" }],
+      ["} else {", 0, { step: "route", field: "cases" }],
+      ["}", 0, null],
+    ]);
+    const noCase = body.find((f) => textOf(f).includes("no case matches"))!;
+    expect([noCase.depth, noCase.owner]).toEqual([1, { step: "route", field: "cases" }]);
+  });
+
+  it("owns the binding and each case test by the field that wrote it", () => {
+    const body = lowerWorkflow(resolved(matchPlan)).body;
+    expect(fragmentFor(body, "const step_route_on =").owner).toEqual({
+      step: "route",
+      field: "on",
+    });
+    expect(fragmentFor(body, "const step_route_case2 =").owner).toEqual({
+      step: "route",
+      field: "cases[1].is",
+    });
+  });
+
+  it("puts a case's steps one level deeper than the match", () => {
+    const body = lowerWorkflow(resolved(matchPlan)).body;
+    expect(fragmentFor(body, "const step_add =").depth).toBe(1);
+    expect(fragmentFor(body, "const step_done =").depth).toBe(0);
+  });
+
+  it("keeps a quote and an interpolation in a case value as text", () => {
+    const wf = edited(matchPlan, (copy) => (copy.steps[1].cases[0].is = '${evil} " }'));
+    expect(printAll(resolved(wf))).toContain(
+      'const step_route_case1 = step_route_on == "\\${evil} \\" }"\n',
+    );
+  });
+
+  it("gives otherwise the last else and writes no failure line", () => {
+    const wf = edited(matchPlan, (copy) => (copy.steps[1].otherwise = []));
+    const body = lowerWorkflow(resolved(wf)).body;
+    expect(lines(body)[2]).toEqual(["} else {", 0, { step: "route", field: "otherwise" }]);
+    expect(body.map(textOf).join("")).not.toContain("no case matches");
+  });
+
+  it("lowers an each to a for line holding a thread line", () => {
+    const body = lowerWorkflow(resolved(eachPlan)).body;
+    expect(lines(body)).toEqual([
+      ["for (step_note_item in step_note_over) {", 0, { step: "note", field: "over" }],
+      ["thread {", 1, { step: "note", field: "over" }],
+      ["}", 1, null],
+      ["}", 0, null],
+    ]);
+    expect(fragmentFor(body, "const step_note_over =").owner).toEqual({
+      step: "note",
+      field: "over",
+    });
+    expect(fragmentFor(body, "const step_text_id =").depth).toBe(2);
+  });
+
+  it("writes an item reference with no .value", () => {
+    expect(printAll(resolved(eachPlan))).toContain("const step_text_id = step_note_item.id\n");
+  });
+
+  it("reads a step in an enclosing list through its own local", () => {
+    expect(printAll(resolved(eachPlan))).toContain("const step_note_over = step_search.value\n");
+    expect(printAll(resolved(eachPlan))).toContain(
+      "const step_add_items = [step_text.value.body]\n",
+    );
+  });
+
+  it("labels a context value read from an item", () => {
+    const wf = edited(eachPlan, (copy) => copy.steps[1].steps.push(summary));
+    expect(printAll(resolved(wf))).toContain("(each.note.body)");
+  });
+
+  it("collects guard labels and output types from nested steps", () => {
+    const wf = edited(eachPlan, (copy) => {
+      copy.steps[1].steps[1].limits = { maxCost: 0.5 };
+      copy.steps[1].steps.push(summary);
+    });
+    const lowered = lowerWorkflow(resolved(wf));
+    expect(lowered.guardLabels).toContain("add");
+    expect(lowered.types.map((decl) => decl.name)).toContain("Step_meals_output");
   });
 });

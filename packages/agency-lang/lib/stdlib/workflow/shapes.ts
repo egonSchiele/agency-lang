@@ -47,6 +47,12 @@ export const SHAPES = {
     "const {{local}} = if {{value}} is string then {{value}} else JSON.stringify({{value}})",
   concat: "#left + #right",
   local: "{{name}}",
+  // One case of a match: the comparison, bound before the `if` chain so the
+  // `if` lines hold a generated name and nothing else. `#is` is the case's
+  // value as a literal.
+  caseTest: "const {{local}} = {{on}} == #is",
+  // A match with no `otherwise` whose value no case fits.
+  noCase: 'return failure("step {{id}}: no case matches ${JSON.stringify({{on}})}", { step: #id })',
 } as const;
 
 export type Shape = keyof typeof SHAPES;
@@ -163,6 +169,33 @@ export function list(items: Code[]): Code {
   const holes = items.map((_item, index) => `#item${index}`);
   const values = Object.fromEntries(items.map((item, index) => [`item${index}`, item]));
   return _fill(_parseExpr(`[${holes.join(", ")}]`), values);
+}
+
+/** A block's own lines. An opening line does not parse without its body,
+ *  so these are fixed text, like the scaffold, holding generated names
+ *  and nothing else. */
+export const ELSE_LINE = "} else {";
+export const THREAD_LINE = "thread {";
+export const CLOSE_LINE = "}";
+
+function checkedNames(names: string[]): void {
+  for (const name of names) {
+    if (!isIdentifier(name)) {
+      throw new Error(`a block line cannot hold ${JSON.stringify(name)}`);
+    }
+  }
+}
+
+/** `if (<test>) {` for the first case, `} else if (<test>) {` after it. */
+export function ifLine(test: string, first: boolean): string {
+  checkedNames([test]);
+  return first ? `if (${test}) {` : `} else if (${test}) {`;
+}
+
+/** `for (<item> in <over>) {`. */
+export function forLine(item: string, over: string): string {
+  checkedNames([item, over]);
+  return `for (${item} in ${over}) {`;
 }
 
 export type RecordEntry = { key: string; value: Code };

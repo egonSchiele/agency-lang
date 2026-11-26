@@ -1,0 +1,94 @@
+{
+  "tests": [
+    {
+      "nodeName": "matchTakesTheFittingCase",
+      "description": "a match on a mocked LLM step's value runs only the fitting case",
+      "input": "",
+      "expectedOutput": "[\"urgent\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": { "level": "urgent" } }]
+    },
+    {
+      "nodeName": "matchWithNoCaseFails",
+      "description": "with no case for the value and no otherwise, the workflow fails naming the match; the number 1 does not match the string \"1\"",
+      "input": "",
+      "expectedOutput": "[true,\"route\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "matchOtherwiseEmptyContinues",
+      "description": "an empty otherwise lets a value no case fits pass, and the workflow continues",
+      "input": "",
+      "expectedOutput": "[\"after\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "eachRunsInOrder",
+      "description": "an each runs its steps once per item in order, and zero times over an empty list",
+      "input": "",
+      "expectedOutput": "[[\"a\",\"b\",\"c\"],[]]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "eachFailureStops",
+      "description": "a failure in the second round stops the workflow and names the step",
+      "input": "",
+      "expectedOutput": "[true,\"check\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "eachResumesMidLoop",
+      "description": "each round's interrupt pauses the run; the resumed run finishes every round without repeating one",
+      "input": "",
+      "expectedOutput": "[\"a\",\"b\",\"c\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" },
+        { "action": "approve" }
+      ]
+    },
+    {
+      "nodeName": "eachStepLimitIsHard",
+      "description": "a caller that approves std::guard with more time cannot extend the limit of a step inside a loop",
+      "input": "",
+      "expectedOutput": "[\"slow\",\"timeoutFailure\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "matchInsideEach",
+      "description": "for every email, an LLM step reads the item and a match on its answer records the urgent ones",
+      "input": "",
+      "expectedOutput": "[\"e1\",\"e3\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "urgent": true } },
+        { "return": { "urgent": false } },
+        { "return": { "urgent": true } }
+      ]
+    },
+    {
+      "nodeName": "eachRoundHasItsOwnThread",
+      "description": "every round of a loop starts with an empty conversation",
+      "input": "",
+      "expectedOutput": "[\"a\",\"b\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "freshThreadOnlyFailsOnASharedThread",
+      "description": "the control for the test above: two top-level steps share a conversation, so the second fails",
+      "input": "",
+      "expectedOutput": "[true,\"second\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "nestedTypeErrorNamesItsStep",
+      "description": "a type error in a step inside a case inside a loop is reported on that step and argument",
+      "input": "",
+      "expectedOutput": "[\"save\",\"args.text\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

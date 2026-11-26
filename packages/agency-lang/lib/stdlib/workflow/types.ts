@@ -30,7 +30,23 @@ export type LlmStep = {
   provider?: string | null;
   limits?: Limits | null;
 };
-export type Step = ToolStep | LlmStep;
+/** A value a `match` case is tested against with `==`. */
+export type CaseValue = string | number | boolean;
+export type MatchCase = { is: CaseValue; steps: Step[] };
+/** `otherwise` reads null as absent. */
+export type MatchStep = {
+  id: string;
+  kind: "match";
+  on: Ref;
+  cases: MatchCase[];
+  otherwise?: Step[] | null;
+};
+export type EachStep = { id: string; kind: "each"; over: Ref; steps: Step[] };
+/** A step with a value a later step can read. */
+export type ValueStep = ToolStep | LlmStep;
+/** A step that holds step lists of its own, and has no value. */
+export type BlockStep = MatchStep | EachStep;
+export type Step = ValueStep | BlockStep;
 /** `result` and `limits` read null as absent. */
 export type Workflow = {
   format: 1;
@@ -51,7 +67,7 @@ export type ToolRef = { module: string; name: string };
 
 /** A reference path: a root, a name, then `.field` and `[n]` segments. */
 export const REF_PATH =
-  /^(inputs|steps)\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$/;
+  /^(inputs|steps|each)\.[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*|\[[0-9]+\])*$/;
 
 /** An effect name as a `raises` entry spells it: `std::read`, a set name
  *  such as `FileRead`, or a bare effect such as `unknown`. */
@@ -100,6 +116,72 @@ export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** An object found in a step list, and its JSON path from the workflow,
+ *  such as `["steps", 2, "cases", 0, "steps", 1]`. */
+export type Located = { step: Record<string, unknown>; path: (string | number)[] };
+
+/** Every object in every step list of a workflow that may not be well
+ *  formed, in document order: a block before the steps inside it, a
+ *  match's cases in order, then its `otherwise`. Anything that is not an
+ *  object or not a list is skipped, so this never throws.
+ *
+ *  Three functions know where a step list can be, and they must agree:
+ *  `childSteps` below (unchecked JSON, with paths), `stepChildren` (a
+ *  parsed step), and `resolvedChildren` (a resolved step). A new block kind
+ *  goes in all three. `types.test.ts` checks that their walks visit the
+ *  same steps. */
+export function locatedSteps(workflow: unknown): Located[] {
+  return isObject(workflow) ? stepsIn(workflow.steps, ["steps"]) : [];
+}
+
+function stepsIn(list: unknown, path: (string | number)[]): Located[] {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  return list.flatMap((item, index) => {
+    if (!isObject(item)) {
+      return [];
+    }
+    const here = [...path, index];
+    return [{ step: item, path: here }, ...childSteps(item, here)];
+  });
+}
+
+function childSteps(step: Record<string, unknown>, path: (string | number)[]): Located[] {
+  if (step.kind === "each") {
+    return stepsIn(step.steps, [...path, "steps"]);
+  }
+  if (step.kind !== "match") {
+    return [];
+  }
+  const cases = Array.isArray(step.cases) ? step.cases : [];
+  const inCases = cases.flatMap((item, index) =>
+    isObject(item) ? stepsIn(item.steps, [...path, "cases", index, "steps"]) : [],
+  );
+  return [...inCases, ...stepsIn(step.otherwise, [...path, "otherwise"])];
+}
+
+/** Every step of a parsed workflow, in the order `locatedSteps` gives. */
+export function allSteps(workflow: Workflow): Step[] {
+  return locatedSteps(workflow).map((entry) => entry.step as Step);
+}
+
+export function isBlockStep(step: Step): step is BlockStep {
+  return step.kind === "match" || step.kind === "each";
+}
+
+/** The step lists a parsed block holds: each case's, then `otherwise`. */
+export function stepChildren(step: Step): Step[][] {
+  if (step.kind === "each") {
+    return [step.steps];
+  }
+  if (step.kind === "match") {
+    const otherwise = step.otherwise == null ? [] : [step.otherwise];
+    return [...step.cases.map((item) => item.steps), ...otherwise];
+  }
+  return [];
+}
+
 /** What `describe` says about one tool, keyed by `"<module>.<name>"`.
  *  `returnsResult` is resolved through the tool module's own aliases. */
 export type Signature = {
@@ -120,7 +202,9 @@ export type Signature = {
  *  `[0].id`, `.body`, or the empty string. */
 export type InputRef = { kind: "input"; name: string; path: string };
 export type StepRef = { kind: "step"; step: string; path: string };
-export type ResolvedRef = InputRef | StepRef;
+/** The current item of the loop named `loop`. */
+export type ItemRef = { kind: "item"; loop: string; path: string };
+export type ResolvedRef = InputRef | StepRef | ItemRef;
 
 /** A JSON value with no reference anywhere inside it. */
 export type Literal = { kind: "literal"; value: unknown };
@@ -168,7 +252,44 @@ export type ResolvedLlmStep = {
   model: string | null;
   provider: string | null;
 };
-export type ResolvedStep = ResolvedToolStep | ResolvedLlmStep;
+export type ResolvedValueStep = ResolvedToolStep | ResolvedLlmStep;
+
+export type ResolvedCase = { is: CaseValue; test: string; steps: ResolvedStep[] };
+/** `on` binds the tested value to `step_<id>_on`. `test` on each case is
+ *  the local that holds its comparison, `step_<id>_case<n>`. */
+export type ResolvedMatchStep = {
+  id: string;
+  kind: "match";
+  on: Binding;
+  cases: ResolvedCase[];
+  otherwise: ResolvedStep[] | null;
+};
+/** `over` binds the list to `step_<id>_over`. `item` is the loop variable. */
+export type ResolvedEachStep = {
+  id: string;
+  kind: "each";
+  over: Binding;
+  item: string;
+  steps: ResolvedStep[];
+};
+export type ResolvedStep = ResolvedValueStep | ResolvedMatchStep | ResolvedEachStep;
+
+/** The step lists a resolved block holds: each case's, then `otherwise`. */
+export function resolvedChildren(step: ResolvedStep): ResolvedStep[][] {
+  if (step.kind === "each") {
+    return [step.steps];
+  }
+  if (step.kind === "match") {
+    const otherwise = step.otherwise === null ? [] : [step.otherwise];
+    return [...step.cases.map((item) => item.steps), ...otherwise];
+  }
+  return [];
+}
+
+/** Every resolved step in the tree, in document order, a block before its steps. */
+export function allResolved(steps: ResolvedStep[]): ResolvedStep[] {
+  return steps.flatMap((step) => [step, ...resolvedChildren(step).flatMap(allResolved)]);
+}
 
 export type ImportGroup = { module: string; names: string[] };
 
@@ -184,7 +305,16 @@ export type ResolvedWorkflow = {
 
 /** The step and field a generated statement belongs to. */
 export type Owner = { step: string | null; field: string | null };
-export type Fragment = { code: Code; owner: Owner | null };
+/** A statement, and how many blocks it is inside. */
+export type CodeFragment = { code: Code; owner: Owner | null; depth: number };
+/** One line of a block's own text, such as `for (a in b) {` or `}`. Such a
+ *  line does not parse without its body, so it is text, not `Code`. */
+export type LineFragment = { line: string; owner: Owner | null; depth: number };
+export type Fragment = CodeFragment | LineFragment;
+
+export function isLine(fragment: Fragment): fragment is LineFragment {
+  return "line" in fragment;
+}
 /** A type the program declares. Its text is canonicalized in render. */
 export type TypeDecl = { name: string; text: string; owner: Owner };
 export type Lowered = {

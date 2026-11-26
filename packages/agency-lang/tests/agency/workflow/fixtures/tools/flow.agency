@@ -1,0 +1,72 @@
+import { currentThreadId, getThread, userMessage } from "std::thread"
+
+/** Tools for the match and each run tests. A block has no value, so a test
+  sees what a run did through this list, which a last step returns. */
+let recordedItems: string[] = []
+
+/** Recording through `recordAsking` asks first, so a test can leave each
+  round's interrupt unanswered and resume the run. */
+effect test::flow::record {
+  text: string
+}
+
+export def record(text: string): Result<string> {
+  """
+  Add text to the list of recorded items.
+
+  @param text - The text to record
+  """
+  recordedItems = [...recordedItems, text]
+  return success(text)
+}
+
+export def recordAsking(text: string): Result<string> {
+  """
+  Ask first, then add text to the list of recorded items.
+
+  @param text - The text to record
+  """
+  return interrupt test::flow::record("Record ${text}?", {
+    text: text
+  })
+  recordedItems = [...recordedItems, text]
+  return success(text)
+}
+
+export def recorded(): string[] {
+  """
+  Return every item recorded so far, in order.
+  """
+  return recordedItems
+}
+
+export def failOn(text: string, bad: string): Result<string> {
+  """
+  Fail when the text is the bad one, and succeed with it otherwise.
+
+  @param text - The text to check
+  @param bad - The text that fails
+  """
+  if (text == bad) {
+    return failure("bad item: ${text}")
+  }
+  return success(text)
+}
+
+export def freshThreadOnly(text: string): Result<string> {
+  """
+  Fail when the current conversation already holds a message. Otherwise
+  add one user message, so a second call on the same conversation fails.
+
+  @param text - The message to add
+  """
+  const messages = getThread(currentThreadId())
+  if (messages is failure) {
+    return failure("cannot read the thread: ${messages.error}")
+  }
+  if (messages.value.length > 0) {
+    return failure("the thread already holds a message")
+  }
+  userMessage(text)
+  return success(text)
+}

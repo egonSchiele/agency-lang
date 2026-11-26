@@ -13,9 +13,15 @@ import {
   EFFECT_NAME,
   isIdentifier,
   isObject,
+  isRef,
+  locatedSteps,
   REF_PATH,
   refsIn,
+  type CaseValue,
+  type Located,
   type Problem,
+  type Ref,
+  type Step,
   type Workflow,
 } from "./types.js";
 
@@ -196,25 +202,103 @@ const llmStep = z.object({
   limits,
 });
 
-const step = z.discriminatedUnion("kind", [toolStep, llmStep], {
-  error: (issue) =>
-    isObject(issue.input)
-      ? `kind must be "tool" or "llm", got ${JSON.stringify(issue.input.kind)}`
-      : "a step must be an object",
-});
+/** `on` and `over`: a reference whose path is well formed, and nothing else. */
+function reference(message: string) {
+  return z.custom<Ref>((item) => isObject(item) && isRef(item) && refMessages(item).length === 0, {
+    error: message,
+  });
+}
 
-const steps = z
-  .array(step, { error: "steps must be a list" })
-  .min(1, { error: "steps must hold at least one step" })
+const IS_MESSAGE = "is must be a string, a number, or true or false";
+
+/** A case's value: what `==` can compare with a literal written into the program. */
+const caseValue = z.custom<CaseValue>(
+  (item) =>
+    typeof item === "string" ||
+    typeof item === "boolean" ||
+    (typeof item === "number" && Number.isFinite(item)),
+  { error: IS_MESSAGE },
+);
+
+/** A block names `limits` only to refuse it: zod drops a key it does not name. */
+function noLimits(kind: string) {
+  const message = `${kind} step takes no limits; set limits on the steps inside it`;
+  // null reads as absent, as it does for a tool or LLM step's limits.
+  return z.never({ error: message }).nullish();
+}
+
+/** A step list inside a block. The schema is recursive through it. */
+function nestedSteps() {
+  return z.array(
+    z.lazy(() => step),
+    { error: "steps must be a list" },
+  );
+}
+
+const CASES_MESSAGE = "cases must hold at least one case";
+
+const matchCase = z.object({ is: caseValue, steps: nestedSteps() });
+
+/** Two cases are the same when their values are `===`: `1` and `"1"` differ. */
+const cases = z
+  .array(matchCase, { error: CASES_MESSAGE })
+  .min(1, { error: CASES_MESSAGE })
   .superRefine((list, ctx) => {
-    const ids = list.map((item) => item.id);
-    ids.forEach((id, index) => {
-      if (ids.indexOf(id) < index) {
-        const message = `step id "${id}" is used by an earlier step`;
-        ctx.addIssue({ code: "custom", message, path: [index, "id"] });
+    list.forEach((item, index) => {
+      if (list.findIndex((other) => other.is === item.is) < index) {
+        const message = `case ${JSON.stringify(item.is)} is already handled by an earlier case`;
+        ctx.addIssue({ code: "custom", message, path: [index, "is"] });
       }
     });
   });
+
+const matchStep = z.object({
+  id: identifier("step id"),
+  kind: z.literal("match"),
+  on: reference('on must be a reference, such as { "$ref": "steps.triage.level" }'),
+  cases,
+  otherwise: nestedSteps().nullish(),
+  limits: noLimits("a match"),
+});
+
+const eachStep = z.object({
+  id: identifier("step id"),
+  kind: z.literal("each"),
+  over: reference('over must be a reference to a list, such as { "$ref": "steps.search" }'),
+  steps: nestedSteps().min(1, { error: "steps must hold at least one step" }),
+  limits: noLimits("an each"),
+});
+
+const step: z.ZodType<Step> = z.discriminatedUnion(
+  "kind",
+  [toolStep, llmStep, matchStep, eachStep],
+  {
+    error: (issue) =>
+      isObject(issue.input)
+        ? `kind must be "tool", "llm", "match", or "each", got ${JSON.stringify(issue.input.kind)}`
+        : "a step must be an object",
+  },
+);
+
+const steps = z
+  .array(step, { error: "steps must be a list" })
+  .min(1, { error: "steps must hold at least one step" });
+
+/** A step id is unique across the whole tree, so every generated name and
+ *  guard label stays unique. Reported on the later step. */
+function duplicateIdIssues(located: Located[]): Issue[] {
+  const ids = located.map((entry) => entry.step.id);
+  return located.flatMap((entry, index) =>
+    ids.indexOf(entry.step.id) < index
+      ? [
+          {
+            path: [...entry.path, "id"],
+            message: `step id "${String(entry.step.id)}" is used by an earlier step`,
+          },
+        ]
+      : [],
+  );
+}
 
 /** A step's limit can trip only if the workflow's own limit does not trip
  *  first, so it may be no larger. A step `maxTime` also needs a workflow
@@ -273,31 +357,69 @@ const workflow = z
     raises,
   })
   .superRefine((parsed, ctx) => {
-    parsed.steps.forEach((step, index) => {
-      for (const key of LIMIT_FIELDS) {
-        const stepLimit = step.limits?.[key];
-        if (typeof stepLimit !== "number") {
-          continue;
-        }
-        const message = stepLimitMessage(key, stepLimit, parsed.limits?.[key]);
-        if (message !== null) {
-          ctx.addIssue({ code: "custom", message, path: ["steps", index, "limits", key] });
-        }
-      }
-    });
+    const located = locatedSteps(parsed);
+    const issues = [...duplicateIdIssues(located), ...stepLimitIssues(located, parsed.limits)];
+    for (const { path, message } of issues) {
+      ctx.addIssue({ code: "custom", message, path });
+    }
   });
 
-/** A problem's place from an issue's path: `steps[i]...` belongs to that
- *  step, named by its id when it has one; anything else to the workflow. */
+/** Every step's limits, nested or not, checked against the workflow's. */
+function stepLimitIssues(
+  located: Located[],
+  workflowLimits: Record<string, unknown> | null | undefined,
+): Issue[] {
+  return located.flatMap(({ step: item, path }) => {
+    const limits = isObject(item.limits) ? item.limits : {};
+    return LIMIT_FIELDS.flatMap((key) => {
+      const stepLimit = limits[key];
+      if (typeof stepLimit !== "number") {
+        return [];
+      }
+      const message = stepLimitMessage(key, stepLimit, workflowLimits?.[key]);
+      return message === null ? [] : [{ path: [...path, "limits", key], message }];
+    });
+  });
+}
+
+function startsWith(path: PropertyKey[], prefix: PropertyKey[]): boolean {
+  return prefix.length <= path.length && prefix.every((segment, index) => path[index] === segment);
+}
+
+/** The located step whose path is the longest prefix of `path`, among those `keep` accepts. */
+function innermost(
+  located: Located[],
+  path: PropertyKey[],
+  keep: (entry: Located) => boolean,
+): Located | null {
+  return located
+    .filter((entry) => keep(entry) && startsWith(path, entry.path))
+    .reduce<Located | null>(
+      (best, entry) => (best === null || entry.path.length > best.path.length ? entry : best),
+      null,
+    );
+}
+
+/** A problem's place from an issue's path. It belongs to the innermost
+ *  step with an id that holds the path, and its field is the rest of the
+ *  path. An issue on the step itself is named by the step's place in its
+ *  list: `steps[3]`, or `cases[0].steps[1]` inside a block. Anything that
+ *  is in no step belongs to the workflow. */
 function problemAt(raw: Record<string, unknown>, issue: Issue): Problem {
-  const [root, index, ...rest] = issue.path;
-  if (root === "steps" && typeof index === "number") {
-    const item = Array.isArray(raw.steps) ? raw.steps[index] : undefined;
-    const id = isObject(item) && typeof item.id === "string" ? item.id : null;
-    const field = rest.length === 0 ? `steps[${index}]` : fieldText(rest);
-    return { step: id, field, message: issue.message };
+  const located = locatedSteps(raw);
+  const owner = innermost(located, issue.path, (entry) => typeof entry.step.id === "string");
+  if (owner === null) {
+    return { step: null, field: placeOrField(located, issue.path), message: issue.message };
   }
-  return { step: null, field: fieldText(issue.path), message: issue.message };
+  const rest = issue.path.slice(owner.path.length);
+  const field = rest.length === 0 ? placeOrField(located, owner.path) : fieldText(rest);
+  return { step: owner.step.id as string, field, message: issue.message };
+}
+
+/** A path as a field, read from the innermost step that strictly holds it. */
+function placeOrField(located: Located[], path: PropertyKey[]): string {
+  const holder = innermost(located, path, (entry) => entry.path.length < path.length);
+  return fieldText(holder === null ? path : path.slice(holder.path.length));
 }
 
 /** `args.query`, `context[0]`, `limits.maxCost`. */

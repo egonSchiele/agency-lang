@@ -1,0 +1,453 @@
+import { Json } from "std::validation"
+import { checkWorkflow, runWorkflow, Workflow } from "std::workflow"
+
+import {
+  record,
+  recordAsking,
+  recorded,
+  failOn,
+  freshThreadOnly,
+ } from "./fixtures/tools/flow.agency"
+import { busyEcho } from "./fixtures/tools/slow.agency"
+
+const DIR = __dirname + "/fixtures/tools"
+const TOOLS = [record, recordAsking, recorded, failOn, freshThreadOnly]
+
+/** The effects every run of a workflow raises on its way to the steps. */
+def isPlumbing(effect: string): boolean {
+  return effect == "std::read" || effect == "std::workflow::run" || effect == "std::run"
+}
+
+/** A step that records `text`, which may be a reference. */
+def recordStep(id: string, text: Json): Json {
+  return {
+    id: id,
+    kind: "tool",
+    module: "./flow.agency",
+    tool: "record",
+    args: {
+      text: text
+    }
+  }
+}
+
+/** The last step of every run test: what the run recorded. */
+def doneStep(): Json {
+  return {
+    id: "done",
+    kind: "tool",
+    module: "./flow.agency",
+    tool: "recorded",
+    args: {}
+  }
+}
+
+/** Run a workflow, approving everything, and return its value or its failure. */
+def runApproved(workflow: Workflow, inputs: Json): Result<Json> {
+  let result: Result<Json> = failure("not run")
+  handle {
+    result = runWorkflow(workflow, inputs, TOOLS, DIR)
+  } with approve
+  return result
+}
+
+/** The workflow's value, or null after printing why it failed. */
+def valueOrNull(result: Result<Json>): Json {
+  if (result is failure) {
+    print("failed: ${result.error}")
+    return null
+  }
+  return result.value
+}
+
+/** Whether the failure's message starts with `prefix`, and the step it names. */
+def failureOf(result: Result<Json>, prefix: string): Json {
+  if (result is success) {
+    print("unexpected success: ${JSON.stringify(result.value)}")
+    return null
+  }
+  return [result.error.startsWith(prefix), result.data.step]
+}
+
+/** A match on `inputs.level` with a number case and a string case. */
+def levelMatch(otherwise: Json): Workflow {
+  const route: Json = {
+    id: "route",
+    kind: "match",
+    on: {
+      "$ref": "inputs.level"
+    },
+    cases: [
+      {
+        is: 1,
+        steps: [recordStep("one", "one")]
+      },
+      {
+        is: "urgent",
+        steps: [recordStep("urgent", "urgent")]
+      },
+    ]
+  }
+  if (otherwise != null) {
+    route.otherwise = otherwise
+  }
+  return {
+    format: 1,
+    name: "routeLevel",
+    description: "Record which level came in.",
+    inputs: "{ level: string }",
+    steps: [route, recordStep("after", "after"), doneStep()]
+  }
+}
+
+/** An each over `inputs.items` running `steps`, then what was recorded. */
+def itemLoop(steps: Json[]): Workflow {
+  return {
+    format: 1,
+    name: "everyItem",
+    description: "Run the steps for every item.",
+    inputs: "{ items: string[] }",
+    steps: [
+      {
+        id: "item",
+        kind: "each",
+        over: {
+          "$ref": "inputs.items"
+        },
+        steps: steps
+      },
+      doneStep(),
+    ]
+  }
+}
+
+node matchTakesTheFittingCase(): Json {
+  const workflow: Workflow = {
+    format: 1,
+    name: "triageEmail",
+    description: "Record how urgent an email is.",
+    inputs: "{ email: string }",
+    steps: [
+      {
+        id: "triage",
+        kind: "llm",
+        prompt: "How urgent is this email?",
+        context: [{
+          "$ref": "inputs.email"
+        }],
+        output: "{ level: \"urgent\" | \"normal\" }"
+      },
+      {
+        id: "route",
+        kind: "match",
+        on: {
+          "$ref": "steps.triage.level"
+        },
+        cases: [
+          {
+            is: "urgent",
+            steps: [recordStep("urgentCase", "urgent")]
+          },
+          {
+            is: "normal",
+            steps: [recordStep("normalCase", "normal")]
+          },
+        ]
+      },
+      doneStep(),
+    ]
+  }
+  return valueOrNull(runApproved(workflow, {
+    email: "The server is down."
+  }))
+}
+
+/** The number 1 does not match the string "1", so no case fits. */
+node matchWithNoCaseFails(): Json {
+  const result = runApproved(levelMatch(null), {
+    level: "1"
+  })
+  return failureOf(result, "step route: no case matches \"1\"")
+}
+
+node matchOtherwiseEmptyContinues(): Json {
+  return valueOrNull(runApproved(levelMatch([]), {
+    level: "1"
+  }))
+}
+
+node eachRunsInOrder(): Json {
+  const workflow = itemLoop([recordStep("rec", {
+    "$ref": "each.item"
+  })])
+  const three = valueOrNull(runApproved(workflow, {
+    items: ["a", "b", "c"]
+  }))
+  const none = valueOrNull(runApproved(workflow, {
+    items: []
+  }))
+  return [three, none]
+}
+
+node eachFailureStops(): Json {
+  const workflow = itemLoop(
+    [
+      {
+        id: "check",
+        kind: "tool",
+        module: "./flow.agency",
+        tool: "failOn",
+        args: {
+          text: {
+            "$ref": "each.item"
+          },
+          bad: "b"
+        }
+      },
+      recordStep("rec", {
+        "$ref": "each.item"
+      }),
+    ],
+  )
+  const result = runApproved(workflow, {
+    items: ["a", "b", "c"]
+  })
+  return failureOf(result, "step check (failOn): bad item: b")
+}
+
+/** Each round's interrupt is answered by nobody here, so it pauses the
+  child and reaches the test runner, which approves it. A resumed run that
+  repeated a finished round would record its item twice. */
+node eachResumesMidLoop(): Json {
+  const workflow = itemLoop(
+    [
+      {
+        id: "ask",
+        kind: "tool",
+        module: "./flow.agency",
+        tool: "recordAsking",
+        args: {
+          text: {
+            "$ref": "each.item"
+          }
+        }
+      },
+    ],
+  )
+  let result: Result<Json> = failure("not run")
+  handle {
+    result = runWorkflow(workflow, {
+      items: ["a", "b", "c"]
+    }, TOOLS, DIR)
+  } with (intr) {
+    if (isPlumbing(intr.effect)) {
+      return approve()
+    }
+  }
+  return valueOrNull(result)
+}
+
+/** A caller that approves `std::guard` with more time cannot extend the
+  limit of a step inside a loop. */
+node eachStepLimitIsHard(): Json {
+  const workflow: Workflow = {
+    format: 1,
+    name: "busyEach",
+    description: "Echo every item after some work.",
+    inputs: "{ items: string[] }",
+    steps: [
+      {
+        id: "item",
+        kind: "each",
+        over: {
+          "$ref": "inputs.items"
+        },
+        steps: [
+          {
+            id: "slow",
+            kind: "tool",
+            module: "./slow.agency",
+            tool: "busyEcho",
+            args: {
+              text: {
+                "$ref": "each.item"
+              }
+            },
+            limits: {
+              maxTime: 100
+            }
+          },
+        ]
+      },
+    ],
+    result: "done",
+    limits: {
+      maxTime: 5000
+    }
+  }
+  let result: Result<Json> = failure("not run")
+  handle {
+    result = runWorkflow(workflow, {
+      items: ["hi"]
+    }, [busyEcho], DIR)
+  } with (intr) {
+    if (intr.effect == "std::guard") {
+      return approve({
+        maxTime: 60000
+      })
+    }
+    return approve()
+  }
+  if (result is success) {
+    print("unexpected success: ${JSON.stringify(result.value)}")
+    return null
+  }
+  return [result.data.step, result.data.cause.data.type]
+}
+
+/** For every email, if a mocked model says it is urgent, record its id. */
+node matchInsideEach(): Json {
+  const workflow: Workflow = {
+    format: 1,
+    name: "flagUrgent",
+    description: "Record the id of every urgent email.",
+    inputs: "{ emails: { id: string; body: string }[] }",
+    steps: [
+      {
+        id: "email",
+        kind: "each",
+        over: {
+          "$ref": "inputs.emails"
+        },
+        steps: [
+          {
+            id: "triage",
+            kind: "llm",
+            prompt: "Is this email urgent?",
+            context: [{
+              "$ref": "each.email.body"
+            }],
+            output: "{ urgent: boolean }"
+          },
+          {
+            id: "route",
+            kind: "match",
+            on: {
+              "$ref": "steps.triage.urgent"
+            },
+            cases: [
+              {
+                is: true,
+                steps: [
+                  recordStep(
+                    "flag",
+                    {
+                      "$ref": "each.email.id"
+                    },
+                  ),
+                ]
+              },
+            ],
+            otherwise: []
+          },
+        ]
+      },
+      doneStep(),
+    ]
+  }
+  const emails = [
+    {
+      id: "e1",
+      body: "The server is down."
+    },
+    {
+      id: "e2",
+      body: "Lunch on Friday?"
+    },
+    {
+      id: "e3",
+      body: "The payment failed."
+    },
+  ]
+  return valueOrNull(runApproved(workflow, {
+    emails: emails
+  }))
+}
+
+def freshStep(id: string, text: Json): Json {
+  return {
+    id: id,
+    kind: "tool",
+    module: "./flow.agency",
+    tool: "freshThreadOnly",
+    args: {
+      text: text
+    }
+  }
+}
+
+/** Every round runs in a thread of its own, so a tool that fails on a
+  conversation that already holds a message runs in every round. */
+node eachRoundHasItsOwnThread(): Json {
+  const workflow = itemLoop(
+    [
+      freshStep("fresh", {
+        "$ref": "each.item"
+      }),
+      recordStep("rec", {
+        "$ref": "each.item"
+      }),
+    ],
+  )
+  return valueOrNull(runApproved(workflow, {
+    items: ["a", "b"]
+  }))
+}
+
+/** The control for the test above: two top-level calls share `main`'s
+  conversation, so the second one fails. */
+node freshThreadOnlyFailsOnASharedThread(): Json {
+  const workflow: Workflow = {
+    format: 1,
+    name: "twoFresh",
+    description: "Call the tool twice on one conversation.",
+    inputs: "{ text: string }",
+    steps: [freshStep("first", "a"), freshStep("second", "b")]
+  }
+  const result = runApproved(workflow, {
+    text: "x"
+  })
+  return failureOf(
+    result,
+    "step second (freshThreadOnly): the thread already holds a message",
+  )
+}
+
+/** A type error in a step inside a case inside a loop names that step and
+  its argument. */
+node nestedTypeErrorNamesItsStep(): Json {
+  const workflow = itemLoop(
+    [
+      {
+        id: "kind",
+        kind: "match",
+        on: {
+          "$ref": "each.item"
+        },
+        cases: [
+          {
+            is: "x",
+            steps: [recordStep("save", 5)]
+          },
+        ],
+        otherwise: []
+      },
+    ],
+  )
+  const checked = checkWorkflow(workflow, TOOLS, DIR) with approve
+  if (checked is success) {
+    return "no problems"
+  }
+  const first = checked.data.problems[0]
+  return [first.step, first.field]
+}

@@ -7,7 +7,7 @@
 import { _toSource, type Code } from "../template.js";
 import { guardArgs } from "./shapes.js";
 import { parseTypeText, printType } from "./typeText.js";
-import type { Lowered, Owner, Range, TypeDecl } from "./types.js";
+import { isLine, type Lowered, type Owner, type Range, type TypeDecl } from "./types.js";
 
 export type RenderResult = { source: string; ranges: Range[]; typeOwners: Record<string, Owner> };
 
@@ -149,7 +149,12 @@ export function renderWorkflow(lowered: Lowered): RenderResult {
   const args = limits === null ? "" : guardArgs(limits).join(", ");
   const scaffold = args === "" ? SCAFFOLD : GUARDED_SCAFFOLD;
   const depth = args === "" ? 2 : 3;
-  const prints = lowered.body.map((fragment) => printLines(fragment.code));
+  // A block line prints as itself; a statement through the printer. Each is
+  // indented by the scaffold's depth plus the number of blocks it is inside.
+  const prints = lowered.body.map((fragment) => {
+    const lines = isLine(fragment) ? [fragment.line] : printLines(fragment.code);
+    return indent(lines, depth + fragment.depth);
+  });
   const resultLines = printLines(lowered.result);
   resultLines[0] = `return success(${resultLines[0]}`;
   resultLines[resultLines.length - 1] += ")";
@@ -162,7 +167,7 @@ export function renderWorkflow(lowered: Lowered): RenderResult {
     // identifiers, so JSON writes them as plain Agency string literals.
     guardLabel: JSON.stringify(lowered.guardLabel),
     guardLabels: JSON.stringify(lowered.guardLabels),
-    body: indent([...prints.flat(), ...resultLines], depth).join("\n"),
+    body: [...prints.flat(), ...indent(resultLines, depth)].join("\n"),
     outputSchemas: outputSchemasText(lowered.types),
   };
   const typeBlocks = lowered.types.map((decl, index) => ({

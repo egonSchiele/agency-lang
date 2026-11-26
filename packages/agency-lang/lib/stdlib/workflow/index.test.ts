@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { _pickSignatures, _signatureSources, compileWorkflowSource } from "./index.js";
-import { mealPlan, mealRefs, mealSignatures, withFields } from "./testFixtures.js";
+import { problemsFromDiagnostics } from "./problems.js";
+import {
+  eachPlan,
+  edited,
+  mealPlan,
+  mealRefs,
+  mealSignatures,
+  withFields,
+} from "./testFixtures.js";
 
 const MEAL_PLAN_SOURCE = [
   'import { Json } from "std::validation"',
@@ -186,5 +194,39 @@ describe("_pickSignatures", () => {
     const group = { module: "./a.agency", names: ["T"], reExport: null };
     const result = _pickSignatures(group, [exportInfo("T", "type", null)]);
     expect(!result.success && result.error).toBe('"./a.agency" exports no function named "T"');
+  });
+});
+
+describe("compileWorkflowSource with blocks", () => {
+  it("maps a diagnostic on a nested argument's line to its step and argument", () => {
+    // A tool step inside a case inside a loop.
+    const save = {
+      id: "save",
+      kind: "tool",
+      module: "./lists.agency",
+      tool: "addListItems",
+      args: { listId: { $ref: "inputs.listId" }, items: ["x"], section: "Saved" },
+    };
+    const wf = edited(eachPlan, (copy) => {
+      copy.steps[1].steps = [
+        {
+          id: "kind",
+          kind: "match",
+          on: { $ref: "each.note.title" },
+          cases: [{ is: "keep", steps: [save] }],
+          otherwise: [],
+        },
+      ];
+    });
+    const result = compileWorkflowSource(wf, mealRefs, mealSignatures);
+    expect(result.problems).toEqual([]);
+    const { source, ranges, typeOwners } = result.compiled!;
+    const line =
+      source.split("\n").findIndex((text) => text.includes("const step_save_listId =")) + 1;
+    expect(line).toBeGreaterThan(0);
+    const diagnostic = { code: "AG2001", message: "bad type", loc: { line: line - 1 } };
+    expect(problemsFromDiagnostics([diagnostic], ranges, typeOwners)).toEqual([
+      { step: "save", field: "args.listId", message: "bad type" },
+    ]);
   });
 });

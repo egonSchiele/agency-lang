@@ -3,7 +3,7 @@
  * `agency workflow check` listing, and `agency workflow run`'s approval
  * prompt all read this one list.
  */
-import { signatureKey, type Signature, type ToolStep, type Workflow } from "./types.js";
+import { allSteps, signatureKey, type Signature, type ToolStep, type Workflow } from "./types.js";
 
 /** One tool step and the effects its tool can raise. */
 export type StepEffects = { step: string; tool: string; effects: string[] };
@@ -13,14 +13,15 @@ export type StepEffects = { step: string; tool: string; effects: string[] };
  *  tool's to answer. Neither belongs in `raises` or the run's prompt. */
 const BUDGET_EFFECT = "std::guard";
 
-/** The effects each tool step raises, in step order. `std::guard` is left
- *  out, since it is a question about budget, not a permission. A step whose signature is missing raises nothing here;
+/** The effects each tool step raises, nested ones included, in document
+ *  order. `std::guard` is left out, since it is a question about budget,
+ *  not a permission. A step whose signature is missing raises nothing here;
  *  resolve reports that step on its own. */
 export function stepEffects(
   workflow: Workflow,
   signatures: Record<string, Signature>,
 ): StepEffects[] {
-  return workflow.steps
+  return allSteps(workflow)
     .filter((step): step is ToolStep => step.kind === "tool")
     .map((step) => {
       const signature = signatures[signatureKey(step.module, step.tool)];

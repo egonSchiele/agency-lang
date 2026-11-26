@@ -88,6 +88,38 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
     const broken = addOne("steps.lists[0].id");
     broken.workflow.name = "broken";
     save("broken", broken);
+    // The only tool step is inside a case of a match.
+    save("nested", {
+      workflow: {
+        format: 1,
+        name: "nested",
+        description: "Add soup to a list when the level is urgent.",
+        inputs: "{ level: string }",
+        steps: [
+          {
+            id: "route",
+            kind: "match",
+            on: { $ref: "inputs.level" },
+            cases: [
+              {
+                is: "urgent",
+                steps: [
+                  {
+                    id: "urgentAdd",
+                    kind: "tool",
+                    module: "./tools/lists.agency",
+                    tool: "addListItems",
+                    args: { listId: "l1", items: ["soup"], section: "Meals" },
+                  },
+                ],
+              },
+            ],
+            otherwise: [],
+          },
+        ],
+        result: "done",
+      },
+    });
     writeFileSync(
       path.join(project, "reject-add.json"),
       JSON.stringify({ "test::lists::add": [{ action: "reject" }] }),
@@ -271,6 +303,15 @@ describe.skipIf(!existsSync(CLI))("agency workflow (end-to-end)", () => {
     } finally {
       rmSync(split, { recursive: true, force: true });
     }
+  });
+
+  it("check imports a tool used only inside a case, and lists what that step can raise", async () => {
+    const r = await runCli(project, ["check", "nested"]);
+    expect(r.stderr).toBe("");
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("workflows/nested.json: no problems");
+    expect(r.stdout).toMatch(/test::lists::add\s+urgentAdd\s+addListItems/);
+    noDriverLeft();
   });
 
   it("check reports a broken reference on its step and exits 1", async () => {

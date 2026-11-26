@@ -411,8 +411,10 @@ it: the two differ only in the tool and the sentences.
   working directory, then in the stdlib folder, so the model can pass a
   line of the list as it is written. A file inside the stdlib folder is
   learned as its `std::` module, so the approval prompt and a policy rule
-  see `module: "std::data/tech/hackernews"`. Any other file is learned as
-  a file, which is how a folder of the user's own Agency files is used.
+  see `module: "std::data/tech/hackernews"`. The module name must be one
+  in `STDLIB_MODULES`, spelled the same way, so a file in that folder that
+  is not a stdlib module is refused. Any other file is learned as a file,
+  which is how a folder of the user's own Agency files is used.
 - **Only a `.agency` file is accepted.** `learn` reads and parses the file
   in the agent's own process before it raises its first interrupt. The
   rule limits that read to Agency source files.

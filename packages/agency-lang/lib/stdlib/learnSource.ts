@@ -7,6 +7,7 @@ import type { AgencySourceValue } from "./agencyFunctions.js";
 import { expandPath } from "./expandPath.js";
 import { isContained } from "./isContained.js";
 import { _stdlibDir } from "./skills.js";
+import { isKnownStdlibModule } from "./stdlibModules.js";
 
 function fileExists(file: string): boolean {
   const located = wholePath(file);
@@ -40,9 +41,24 @@ export function learnSourceIn(
     if (found === undefined) {
       return failure(`There is no Agency file at ${places.join(" or at ")}.`);
     }
-    const source: AgencySourceValue = isContained(found, stdlibDir)
-      ? { kind: "module", module: stdlibModuleName(found) }
-      : { kind: "file", dir: path.dirname(found), filename: path.basename(found) };
+    if (!isContained(found, stdlibDir)) {
+      const source: AgencySourceValue = {
+        kind: "file",
+        dir: path.dirname(found),
+        filename: path.basename(found),
+      };
+      return success(source);
+    }
+    // A module source is trusted code and its name is what an approval
+    // shows, so the name must be one the stdlib really has, spelled as the
+    // stdlib spells it.
+    const module = stdlibModuleName(found);
+    if (!isKnownStdlibModule(module)) {
+      return failure(
+        `'${found}' is in the stdlib folder but is not a stdlib module. Give the path as the list of learnable tools or grep printed it.`,
+      );
+    }
+    const source: AgencySourceValue = { kind: "module", module };
     return success(source);
   } catch (error) {
     return failure(error instanceof Error ? error.message : String(error));

@@ -112,6 +112,20 @@ describe("learnSourceIn", () => {
     });
   });
 
+  it("refuses a file in the stdlib folder that is not a stdlib module", () => {
+    const fakeStdlib = path.join(dir, "stdlib");
+    const file = write(path.join(fakeStdlib, "planted.agency"));
+    const result = learnSourceIn(file, cwd, home, fakeStdlib);
+    expect(result.success).toBe(false);
+    expect(result.success ? "" : String(result.error)).toContain("is not a stdlib module");
+  });
+
+  // On a file system that ignores letter case this file exists, and its
+  // spelling must not become the module name an approval shows.
+  it("refuses a stdlib path spelled in another letter case", () => {
+    expect(learnSourceIn("Math.agency", cwd, home, stdlib).success).toBe(false);
+  });
+
   it("expands a leading ~ to the home folder", () => {
     write(path.join(home, "x.agency"));
     expect(source("~/x.agency")).toEqual({ kind: "file", dir: home, filename: "x.agency" });

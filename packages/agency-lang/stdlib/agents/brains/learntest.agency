@@ -64,7 +64,7 @@ handoff def learnFromFile(
   with them. Find the file and the names of its exported functions first,
   with grep or the list of learnable tools. Learning starts a separate
   process and can ask for approval, as each call of a learned tool does.
-  When learning fails, nothing has changed.
+  When a learn is refused, nothing has changed.
 
   @param file - The path of the Agency file, as grep or the list printed it
   @param names - The exported functions to learn, at least one

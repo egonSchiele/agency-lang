@@ -120,11 +120,14 @@ describe("learnSourceIn", () => {
     expect(result.success ? "" : String(result.error)).toContain("is not a stdlib module");
   });
 
-  // On a file system that ignores letter case this file exists, and its
-  // spelling must not become the module name an approval shows.
-  it("refuses a stdlib path spelled in another letter case", () => {
-    expect(learnSourceIn("Math.agency", cwd, home, stdlib).success).toBe(false);
-  });
+  // Only a file system that ignores letter case has this file. Its spelling
+  // must not become the module name an approval shows.
+  it.skipIf(!fs.existsSync(path.join(stdlib, "Math.agency")))(
+    "refuses a stdlib path spelled in another letter case",
+    () => {
+      expect(error("Math.agency")).toContain("is not a stdlib module");
+    },
+  );
 
   it("expands a leading ~ to the home folder", () => {
     write(path.join(home, "x.agency"));

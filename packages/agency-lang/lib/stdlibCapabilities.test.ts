@@ -128,6 +128,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "simpleBrain",
     "spawntestBrain",
     "scripttestBrain",
+    "learntestBrain",
     "codeAgent",
     "agencyCodeAgent",
     "researchAgent",
@@ -160,6 +161,7 @@ const TOUCHES_NOTHING: Record<string, string[]> = {
     "exit",
   ],
   "run state and conversation threads, which live in memory": [
+    "getGeneratedTools",
     "keepOutput",
     "readSpill",
     "grepSpill",

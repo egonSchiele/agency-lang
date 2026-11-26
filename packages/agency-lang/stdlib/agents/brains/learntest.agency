@@ -76,7 +76,11 @@ handoff def learnFromFile(
   }
   const before = minimalOptions(settings, learntestExtras(settings, extraTools)).tools
   const offered = [tool.name for tool in before]
+  const alreadyLearned = [tool.name for tool in getGeneratedTools()]
   for (name in names) {
+    if (alreadyLearned.includes(name)) {
+      return failure("You already learned '${name}'. Call it directly.")
+    }
     if (offered.includes(name)) {
       return failure(
         "A tool named '${name}' is already in your tools, so this function cannot be learned in this conversation.",

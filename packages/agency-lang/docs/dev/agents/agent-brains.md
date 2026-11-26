@@ -402,10 +402,8 @@ it: the two differ only in the tool and the sentences.
 - **`learn` is a handoff.** The tool list of a running `llm` call is
   fixed, so a tool learned during a call cannot join it. `learnFromFile`
   learns, makes its own `llm` call on the caller's thread with the longer
-  tool list, and calls `endTurn()`. The model sees it as `learn`; the
-  function has another name because `std::agency` exports a `learn` with
-  a different signature. Its `llm` call uses `minimalOptions`, the same
-  options `minimalBrain` uses, so the model keeps every tool it had.
+  tool list, and calls `endTurn()`. That call uses `minimalOptions`, the
+  same options `minimalBrain` uses, so the model keeps every tool it had.
 - **The path rules** are in `_learnSource` (`lib/stdlib/learnSource.ts`).
   A leading `~` is expanded. A relative path is looked up in the agent's
   working directory, then in the stdlib folder, so the model can pass a
@@ -418,10 +416,10 @@ it: the two differ only in the tool and the sentences.
 - **Only a `.agency` file is accepted.** `learn` reads and parses the file
   in the agent's own process before it raises its first interrupt. The
   rule limits that read to Agency source files.
-- **A name already in the model's tools is refused**, with a message that
-  says the function cannot be learned in this conversation. `wikipedia`
-  and `web/search` both export `search`, so a model that learned one
-  cannot learn the other.
+- **A name already in the model's tools is refused.** `wikipedia` and
+  `web/search` both export `search`, so a model that learned one cannot
+  learn the other. A name the model already learned gets a different
+  message, which tells it to call the tool.
 - **An empty `names` list is refused.** The library's `learn` takes it to
   mean every public function, which would add a whole module to the
   context.
@@ -434,15 +432,11 @@ it: the two differ only in the tool and the sentences.
 - **Learned tools belong to the run.** The records are in a global in
   `std::agents/lib/learning`. Two `agencyAgent` calls in one run share
   them, even on separate threads.
-- **The list is checked.** `lib/stdlib/learnableIndex.test.ts` fails when
-  a line names a file that is gone or a module with no public function.
-  The descriptions are written by hand.
+- **The list is written by hand.** `lib/stdlib/learnableIndex.test.ts`
+  fails when a line names a file that is gone or a module with no public
+  function.
 - **The harness treats it as the minimal brain.** `agency agent` gives it
   no CLI tools, no REPL style line, and no `--agent` start targets.
-
-`tests/agency-js/learntest-brain` drives the tool with a scripted model:
-a learn and a call in one turn, the next turn, a stdlib path, three
-refused learns, and a run that pauses on a learned call and resumes.
 
 ## Adding a brain
 

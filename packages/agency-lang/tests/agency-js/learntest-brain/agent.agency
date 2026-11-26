@@ -25,8 +25,8 @@ def settingsWith(context: string): AgentSettings {
   }
 }
 
-def turn(message: string): string {
-  const reply = learntestBrain(message, settingsWith("CALLER-CONTEXT-MARKER"), [])
+def turn(message: string, callerTools: any[] = []): string {
+  const reply = learntestBrain(message, settingsWith("CALLER-CONTEXT-MARKER"), callerTools)
   if (reply is success(text)) {
     return text
   }
@@ -34,6 +34,9 @@ def turn(message: string): string {
 }
 
 def learnedNames(): string[] {
+  """
+  List the tools learned in this run.
+  """
   return [tool.name for tool in getGeneratedTools()]
 }
 
@@ -52,12 +55,15 @@ node main() {
   }
 }
 
-// A path inside the stdlib folder is learned as its std:: module.
+// A path inside the stdlib folder is learned as its std:: module. Learning
+// the same function again on a later turn is refused before anything runs.
 node stdlibPath() {
   handle {
     const reply = turn("Add one and two with the stdlib's add.")
+    const again = turn("Learn add again.")
     return {
       reply: reply,
+      again: again,
       tools: learnedNames(),
       runs: runs
     }
@@ -105,9 +111,11 @@ node failedLearns() {
 
 // The inspection is approved here. The learned call's std::run gets no
 // answer, so the run pauses inside the learn handoff and test.js resumes it.
+// The caller passes a tool of its own, so the checkpoint holds a `learn`
+// tool with a function bound into it.
 node pausesInsideTheHandoff() {
   handle {
-    const reply = turn("Learn the series tool and call it.")
+    const reply = turn("Learn the series tool and call it.", [learnedNames])
     return {
       reply: reply,
       tools: learnedNames()

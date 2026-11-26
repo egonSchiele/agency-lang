@@ -16,6 +16,7 @@
   "nextTurnCallRan": true,
   "fromStdlib": {
     "reply": "three",
+    "again": "already learned; conversation continues",
     "tools": ["add"],
     "runs": [
       { "module": "std::math", "function": "<inspect>" },
@@ -29,16 +30,18 @@
     "tools": [],
     "runCount": 0
   },
+  "alreadyLearnedMessage": true,
   "emptyNamesMessage": true,
   "missingFileMessage": true,
   "takenNameMessage": true,
   "pausedOnce": true,
   "pausedOn": "std::run",
-  "requestsBeforeResume": 16,
+  "requestsBeforeResume": 18,
   "resumed": {
     "reply": "answer after resume",
     "tools": ["seriesInfo"]
   },
   "resumedCallRan": true,
-  "requestCount": 17
+  "callerToolAfterResume": true,
+  "requestCount": 19
 }

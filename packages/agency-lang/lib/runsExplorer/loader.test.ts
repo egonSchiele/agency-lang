@@ -56,7 +56,7 @@ describe("createRunsLoader", () => {
     expect(advances).toBe(3);
     const rows = upserts(events);
     expect(rows).toHaveLength(1);
-    expect(rows[0].score).toBe(0.5);
+    expect(rows[0].score).toBe(0); // the fixture's must-pass gate failed
     expect(rows[0].tests).toHaveLength(1);
     expect(rows[0].backfilled).toBe(true);
     expect(events[events.length - 1].kind).toBe("done");

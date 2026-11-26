@@ -53,10 +53,12 @@ describe("buildRunRowFromDirectory", () => {
 
   it("per-test rows carry the test id, trace id, and the effective scores", () => {
     const row = rowFor(writeGradedRun(tmpDir));
+    // The fixture's must-pass gate failed, so the run scores 0 as grading
+    // scores it, not the 0.5 its weighted mean would be.
     expect(
       row.tests.map((test) => [test.inputId, test.traceId, test.score, test.gatesPassed]),
-    ).toEqual([["t1", "t1", 0.5, false]]);
-    expect(row.score).toBe(0.5);
+    ).toEqual([["t1", "t1", 0, false]]);
+    expect(row.score).toBe(0);
     expect(row.gatesPassed).toBe(false);
   });
 

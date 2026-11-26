@@ -139,6 +139,47 @@ describe("summarizeRuns", () => {
     expect(summarizeRuns(readRunDirectory(dir, quiet))[0].gatesPassed).toBeNull();
   });
 
+  // Grading scores an input whose must-pass gate failed as 0 (Scorecard), so
+  // the listing must too. A failed gate stops grading, which often leaves the
+  // gate as the only row; with weight 0 the weighted mean has nothing to
+  // divide by, and the run used to show as ungraded and drop out of the mean.
+  it("scores a run whose must-pass gate failed as 0, even when the gate has weight 0 and is the only score", () => {
+    const finished = (traceId: string) => {
+      const dir = tempDir();
+      writeStatelog(
+        dir,
+        statelogLine(traceId, "agentStart", { entryNode: "main", args: {} }),
+        statelogLine(traceId, "agentEnd", { result: "done", timeTaken: 1 }),
+      );
+      return dir;
+    };
+    const row = (traceId: string, name: string, pass: boolean, weight: number, mustPass: boolean) => ({
+      traceId,
+      annotator: { kind: "grader" as const, id: "g@1" },
+      name,
+      score: { kind: "binary" as const, pass },
+      weight,
+      mustPass,
+    });
+
+    const gateOnly = finished("t1");
+    recordGradingPass({ dir: gateOnly, scores: [row("t1", "builds", false, 0, true)] });
+    const [onlyGate] = summarizeRuns(readRunDirectory(gateOnly, quiet));
+    expect(onlyGate).toMatchObject({ gatesPassed: false, latestScore: 0, score: 0 });
+    expect(annotationSummaryText(onlyGate)).toBe("score 0.00");
+
+    const gateAndChecks = finished("t2");
+    recordGradingPass({
+      dir: gateAndChecks,
+      scores: [row("t2", "builds", false, 0, true), row("t2", "check", true, 1, false)],
+    });
+    expect(summarizeRuns(readRunDirectory(gateAndChecks, quiet))[0]).toMatchObject({
+      gatesPassed: false,
+      latestScore: 0,
+      score: 0,
+    });
+  });
+
   it("prefers the harness verdict over the trace's own ending", () => {
     const dir = tempDir();
     writeStatelog(dir, agentStartLine("t1"));

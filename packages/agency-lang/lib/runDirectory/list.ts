@@ -67,7 +67,8 @@ export type RunSummary = {
   /** The harness's verdict when it recorded one, else read from the trace. */
   ended: string;
   status: RunStatus;
-  /** The weighted mean of the effective scores on record; null with none. */
+  /** The weighted mean of the effective scores on record; 0 when a
+   *  must-pass gate failed; null with none. */
   latestScore: number | null;
   /** What this run counts as in a mean: `latestScore`, except null for a
    *  `void` run and 0 for any other unfinished run with no score. */
@@ -367,10 +368,14 @@ function gatesPassed(effective: EffectiveTraceAnnotations | undefined): boolean 
   return true;
 }
 
-/** Weighted mean of the effective scores, on 0..1; null when there are none. */
+/** Weighted mean of the effective scores, on 0..1; null when there are none.
+ *  A failed must-pass gate makes it 0, as grading scores it (`Scorecard`):
+ *  a failed gate stops grading, so the gate may be the only score, and with
+ *  weight 0 the mean would otherwise be null and the run look ungraded. */
 function latestScore(effective: EffectiveTraceAnnotations | undefined): number | null {
   const rows = Object.values(effective?.scores ?? {});
   if (rows.length === 0) return null;
+  if (gatesPassed(effective) === false) return 0;
   let total = 0;
   let weight = 0;
   for (const row of rows) {

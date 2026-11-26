@@ -127,6 +127,9 @@ Configuration for `agency eval` commands:
 - `runsDir` — where run directories land (default `runs/` under the cwd).
 - `limits.wallClockSec` — wall clock per agent run (default 60; a test's
   `timeoutSec` overrides it for that test).
+- `limits.memoryMb` — V8 heap cap per agent run, in MB (default 512). For
+  `--agent-cmd` agents it is passed in `NODE_OPTIONS`, so it also applies
+  to every Node process the agent starts.
 - `limits.maxCostUsd` — defensive LLM-spend ceiling per agent run (default
   50). The harness watches cost as the run happens and kills the run's whole
   process tree past the cap. Enforcement lags by one LLM call, so treat it

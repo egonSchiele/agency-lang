@@ -179,6 +179,7 @@ export interface AgencyConfig {
      *  built-in defaults (lib/eval/run/subprocess.ts). */
     limits?: {
       wallClockSec?: number; // max seconds per agent run (default 60)
+      memoryMb?: number; // V8 heap cap per agent run, in MB (default 512)
       maxCostUsd?: number; // max LLM spend per agent run (default 50)
       maxBatchCostUsd?: number; // max LLM spend per `eval run` invocation, all tests × trials (no default)
     };
@@ -632,10 +633,12 @@ export const AgencyConfigSchema = z
         sourceCacheRoot: z.string().optional(),
         // Positive int only: the value feeds setTimeout (×1000), where 0 and
         // negatives don't mean "no limit" — they fire immediately and fail
-        // every run with a wall_clock limit error.
+        // every run with a wall_clock limit error. memoryMb becomes
+        // --max-old-space-size=<mb>, which takes a whole number of MB.
         limits: z
           .object({
             wallClockSec: z.number().int().positive(),
+            memoryMb: z.number().int().positive(),
             maxCostUsd: z.number().positive(),
             maxBatchCostUsd: z.number().positive(),
           })

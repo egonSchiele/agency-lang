@@ -331,7 +331,7 @@ Type-checker settings live under `typechecker`, not at the top level.
 | `doc.outDir` / `doc.baseUrl` | `string` | Output directory and source-link base URL for `agency doc` |
 | `coverage` | object | `outDir`, `threshold`, `perFileThreshold`, `exclude` |
 | `pack` | object | `format` (`esm`/`cjs`), `target`, `external` |
-| `eval` | object | `runsDir`, `optimizeRunsDir`, `sourceCacheRoot`, `limits.wallClockSec`, `limits.maxCostUsd`, and the `optimize` block. See [`docs/dev/evals/eval-tracking.md`](../evals/eval-tracking.md) |
+| `eval` | object | `runsDir`, `optimizeRunsDir`, `sourceCacheRoot`, `limits.wallClockSec`, `limits.memoryMb`, `limits.maxCostUsd`, and the `optimize` block. See [`docs/dev/evals/eval-tracking.md`](../evals/eval-tracking.md) |
 
 ## Example
 

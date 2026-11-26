@@ -14,6 +14,11 @@ function stdlibDir(): string {
   return path.join(installDir, "stdlib");
 }
 
+/** The folder that holds the stdlib's Agency sources. */
+export function _stdlibDir(): string {
+  return stdlibDir();
+}
+
 /**
  * Absolute path to a section of the packaged Agency docs. `make` stages
  * `docs/site/{guide,cli}` into `stdlib/docs/` (see stage-stdlib-docs in

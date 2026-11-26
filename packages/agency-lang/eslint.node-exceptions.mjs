@@ -44,6 +44,8 @@ export const NODE_ONLY = {
   "lib/stdlib/agencyFunctions.ts":
     "prepares source closures for std::agency subprocess function calls",
   "lib/stdlib/agencyEval.ts": "runs evals of agents from run directories on disk",
+  "lib/stdlib/learnSource.ts":
+    "finds the file a std::agency learn call names, which then runs in a subprocess",
   "lib/stdlib/args.ts":
     "std::args parses the command line with node:util's parseArgs and ends the process; a browser has no command line",
   "lib/stdlib/calendar.ts": "std::calendar signs in through std::oauth",

@@ -1,4 +1,4 @@
-import { getGeneratedTools, learnSessionTools } from "../../../lib/agents/agency-agent/lib/learn.agency"
+import { getGeneratedTools, learnSessionTools } from "std::agents/lib/learning"
 import { assistantMessage, userMessage } from "std::thread"
 
 // Two turns of one session with a pause between them, as a session run

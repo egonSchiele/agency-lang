@@ -63,7 +63,8 @@ node eachBrainAnswers(): string {
   const simple = agencyAgent("hello", brain: "simple") with approve
   const spawntest = agencyAgent("hello", brain: "spawntest") with approve
   const scripttest = agencyAgent("hello", brain: "scripttest") with approve
-  return "${textOf(minimal)}|${textOf(simple)}|${textOf(spawntest)}|${textOf(scripttest)}"
+  const learntest = agencyAgent("hello", brain: "learntest") with approve
+  return "${textOf(minimal)}|${textOf(simple)}|${textOf(spawntest)}|${textOf(scripttest)}|${textOf(learntest)}"
 }
 
 node brainCount(): number {

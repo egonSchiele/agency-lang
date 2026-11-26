@@ -39,6 +39,7 @@ runtime callbacks, and through `onEmit`, which receives an event with
 */
 import { AgentSettings } from "std::agents/brains/settings"
 import { coordinatorBrain } from "std::agents/brains/coordinator"
+import { learntestBrain } from "std::agents/brains/learntest"
 import { minimalBrain } from "std::agents/brains/minimal"
 import { scripttestBrain } from "std::agents/brains/scripttest"
 import { simpleBrain } from "std::agents/brains/simple"
@@ -47,7 +48,7 @@ import { guarded } from "std::decorators"
 import { Attachment } from "std::thread"
 
 /** Which brain answers. */
-export type AgencyAgentBrain = "coordinator" | "minimal" | "simple" | "spawntest" | "scripttest"
+export type AgencyAgentBrain = "coordinator" | "minimal" | "simple" | "spawntest" | "scripttest" | "learntest"
 
 /** Extra tools, one optional list per agent that can take them. */
 export type AgentExtraTools = {
@@ -89,6 +90,10 @@ export def agencyAgentBrains(): BrainInfo[] {
       name: "scripttest",
       description: "A trial: the minimal brain, plus tools that write and run a short Agency program in place of a node or shell script"
     },
+    {
+      name: "learntest",
+      description: "A trial: the minimal brain, plus a tool that learns new tools from Agency files on disk"
+    },
   ]
 }
 
@@ -124,7 +129,7 @@ export def agencyAgent(
 
   @param task - What the user wants, as they would say it to an assistant
   @param context - Extra text for the agent, such as the user's own instructions, or ""
-  @param brain - Which brain answers: "coordinator", "minimal", "simple", "spawntest", or "scripttest"
+  @param brain - Which brain answers: "coordinator", "minimal", "simple", "spawntest", "scripttest", or "learntest"
   @param maxCost - Cost budget in USD
   @param maxTime - Time budget in milliseconds
   @param model - The main model, or "" for the ambient model
@@ -161,6 +166,7 @@ export def agencyAgent(
     "simple" => simpleBrain(message, settings, mainTools)
     "spawntest" => spawntestBrain(message, settings, mainTools)
     "scripttest" => scripttestBrain(message, settings, mainTools)
+    "learntest" => learntestBrain(message, settings, mainTools)
     _ => coordinatorBrain(message, settings, mainTools)
   }
 }

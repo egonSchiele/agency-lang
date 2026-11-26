@@ -1,6 +1,6 @@
 import { answerTurn } from "../../../lib/agents/agency-agent/lib/answer.agency"
 import { setGrounding } from "../../../lib/agents/agency-agent/lib/grounding.agency"
-import { getGeneratedTools, learnSessionTools } from "../../../lib/agents/agency-agent/lib/learn.agency"
+import { getGeneratedTools, learnSessionTools } from "std::agents/lib/learning"
 import test { _setLearnedRoot } from "../../../lib/agents/agency-agent/lib/learned.agency"
 import { setInteractive } from "../../../lib/agents/agency-agent/lib/trace.agency"
 

@@ -1,0 +1,44 @@
+{
+  "learned": {
+    "first": "same-turn answer",
+    "second": "next-turn answer",
+    "tools": ["seriesInfo"]
+  },
+  "firstTools": ["read", "bash", "edit", "write", "learn"],
+  "learnParameters": ["file", "names"],
+  "sameTurnOffered": true,
+  "handoffKeepsRequest": true,
+  "handoffKeepsPrimer": true,
+  "handoffKeepsContext": true,
+  "handoffKeepsLearn": true,
+  "learnedCallRan": true,
+  "nextTurnOffered": true,
+  "nextTurnCallRan": true,
+  "fromStdlib": {
+    "reply": "three",
+    "tools": ["add"],
+    "runs": [
+      { "module": "std::math", "function": "<inspect>" },
+      { "module": "std::math", "function": "add" }
+    ]
+  },
+  "failed": {
+    "empty": "no names; conversation continues",
+    "missing": "missing file; conversation continues",
+    "taken": "name taken; conversation continues",
+    "tools": [],
+    "runCount": 0
+  },
+  "emptyNamesMessage": true,
+  "missingFileMessage": true,
+  "takenNameMessage": true,
+  "pausedOnce": true,
+  "pausedOn": "std::run",
+  "requestsBeforeResume": 16,
+  "resumed": {
+    "reply": "answer after resume",
+    "tools": ["seriesInfo"]
+  },
+  "resumedCallRan": true,
+  "requestCount": 17
+}

@@ -10,6 +10,23 @@ import { AGENT_SPILL_OVER } from "std::agents/lib/shared"
 import { codingFileAndShellTools, CODING_RULES } from "std::agents/lib/toolkits"
 import { Attachment, ensureSystemMessage, systemMessage } from "std::thread"
 
+/** A brain built on this one calls this for an `llm` call of its own, so
+  the call gets the same model, tools, and spill limit as `minimalBrain`'s. */
+export def minimalOptions(settings: AgentSettings, extraTools: any[]): any {
+  """
+  Return the `llm` options of the minimal brain: the main model, the four
+  coding tools followed by `extraTools`, and the spill limit.
+
+  @param settings - The call's settings
+  @param extraTools - Tools added to the four
+  """
+  return {
+    ...modelOptions(settings.model, settings.provider),
+    tools: [...codingFileAndShellTools(commandJudgeOf(settings)), ...extraTools],
+    spillToolResultsOver: AGENT_SPILL_OVER
+  }
+}
+
 export def minimalBrain(
   prompt: string | (string | Attachment)[],
   settings: AgentSettings,
@@ -27,11 +44,6 @@ export def minimalBrain(
   if (settings.context != "") {
     systemMessage(settings.context, expires: "llmCall")
   }
-  const options = {
-    ...modelOptions(settings.model, settings.provider),
-    tools: [...codingFileAndShellTools(commandJudgeOf(settings)), ...extraTools],
-    spillToolResultsOver: AGENT_SPILL_OVER
-  }
-  const reply: string = llm(prompt, options)
+  const reply: string = llm(prompt, minimalOptions(settings, extraTools))
   return success(reply)
 }

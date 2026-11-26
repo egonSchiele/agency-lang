@@ -1,0 +1,8 @@
+export def read(path: string): string {
+  """
+  A function whose name is already one of the brain's tools.
+
+  @param path - Unused
+  """
+  return "fixture read ${path}"
+}

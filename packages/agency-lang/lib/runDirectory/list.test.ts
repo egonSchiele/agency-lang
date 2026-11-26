@@ -178,6 +178,59 @@ describe("summarizeRuns", () => {
       latestScore: 0,
       score: 0,
     });
+
+    // Grading stops at the first failed gate, so the failed gate is the last
+    // row and a scalar gate (whose threshold is not on the row) can come
+    // before it. The failed binary gate settles it either way.
+    const scalarGateFirst = finished("t3");
+    recordGradingPass({
+      dir: scalarGateFirst,
+      scores: [
+        {
+          traceId: "t3",
+          annotator: { kind: "grader" as const, id: "g@1" },
+          name: "judge",
+          score: { kind: "scalar" as const, value: 0.8 },
+          weight: 1,
+          mustPass: true,
+        },
+        row("t3", "builds", false, 0, true),
+      ],
+    });
+    expect(summarizeRuns(readRunDirectory(scalarGateFirst, quiet))[0]).toMatchObject({
+      gatesPassed: false,
+      latestScore: 0,
+      score: 0,
+    });
+  });
+
+  // Grading's inputObjective gives 0 when the weights add up to 0, so the
+  // listing does too, rather than showing the run as ungraded.
+  it("scores a run whose graders all have weight 0 as 0, even when they all passed", () => {
+    const dir = tempDir();
+    writeStatelog(
+      dir,
+      statelogLine("t1", "agentStart", { entryNode: "main", args: {} }),
+      statelogLine("t1", "agentEnd", { result: "done", timeTaken: 1 }),
+    );
+    recordGradingPass({
+      dir,
+      scores: [
+        {
+          traceId: "t1",
+          annotator: { kind: "grader", id: "g@1" },
+          name: "informational",
+          score: { kind: "binary", pass: true },
+          weight: 0,
+          mustPass: false,
+        },
+      ],
+    });
+    expect(summarizeRuns(readRunDirectory(dir, quiet))[0]).toMatchObject({
+      gatesPassed: true,
+      latestScore: 0,
+      score: 0,
+    });
   });
 
   it("prefers the harness verdict over the trace's own ending", () => {

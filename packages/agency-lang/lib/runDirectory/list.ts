@@ -351,39 +351,42 @@ function testIdOf(runRow: RunRow | null): string | null {
   return typeof test.id === "string" ? test.id : null;
 }
 
-/** False when an effective must-pass binary score failed, true when every
- *  gate is binary and passed. Null with no scores, and null when any gate is
- *  scalar: a scalar gate's threshold lives on the grader, not the row, so it
- *  cannot be judged here, and "unknown" is more honest than "passed". */
+/** False when any effective must-pass binary score failed, true when every
+ *  gate is binary and passed. Null with no scores, and otherwise null when a
+ *  gate is scalar: a scalar gate's threshold lives on the grader, not the
+ *  row, so it cannot be judged here, and "unknown" is more honest than
+ *  "passed". A failed binary gate is checked first because it settles the
+ *  question whatever the scalar gates say; grading stops at the first failed
+ *  gate, so it is the last row and may follow a scalar gate. */
 function gatesPassed(effective: EffectiveTraceAnnotations | undefined): boolean | null {
-  const gates = Object.values(effective?.scores ?? {}).filter(
-    (row) => row.kind === "score" && row.mustPass,
+  const rows = Object.values(effective?.scores ?? {});
+  if (rows.length === 0) return null;
+  const gates = rows.filter(
+    (row): row is Annotation & { kind: "score" } => row.kind === "score" && row.mustPass,
   );
-  if (Object.keys(effective?.scores ?? {}).length === 0) return null;
-  for (const gate of gates) {
-    if (gate.kind !== "score") continue;
-    if (gate.score.kind !== "binary") return null;
-    if (!gate.score.pass) return false;
-  }
+  if (gates.some((gate) => gate.score.kind === "binary" && !gate.score.pass)) return false;
+  if (gates.some((gate) => gate.score.kind !== "binary")) return null;
   return true;
 }
 
 /** Weighted mean of the effective scores, on 0..1; null when there are none.
- *  A failed must-pass gate makes it 0, as grading scores it (`Scorecard`):
- *  a failed gate stops grading, so the gate may be the only score, and with
- *  weight 0 the mean would otherwise be null and the run look ungraded. */
+ *  It scores a run the way grading does (`Scorecard`, `inputObjective`): 0
+ *  when a must-pass gate failed, and 0 when the weights add up to 0. A
+ *  failed gate stops grading, so a weight-0 gate is often the only score;
+ *  without these the run would show as ungraded and drop out of the mean. */
 function latestScore(effective: EffectiveTraceAnnotations | undefined): number | null {
-  const rows = Object.values(effective?.scores ?? {});
+  const rows = Object.values(effective?.scores ?? {}).filter(
+    (row): row is Annotation & { kind: "score" } => row.kind === "score",
+  );
   if (rows.length === 0) return null;
   if (gatesPassed(effective) === false) return 0;
   let total = 0;
   let weight = 0;
   for (const row of rows) {
-    if (row.kind !== "score") continue;
     total += scoreValue(row) * row.weight;
     weight += row.weight;
   }
-  return weight === 0 ? null : total / weight;
+  return weight === 0 ? 0 : total / weight;
 }
 
 function scoreValue(row: Annotation & { kind: "score" }): number {

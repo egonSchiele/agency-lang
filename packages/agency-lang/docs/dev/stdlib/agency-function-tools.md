@@ -160,8 +160,10 @@ refused. With a stale table, a module that exists still loads.
 
 ## Coordinator records
 
-The coordinator's learning module keeps `learnedState` in an Agency
-global. Its `programs` array stores each learning batch's prepared code
+`std::agents/lib/learning` (`stdlib/agents/lib/learning.agency`) keeps
+`learnedState` in an Agency global. The coordinator's `learnTools` and the
+`learntest` brain's `learn` both record there, through
+`learnSessionTools`. Its `programs` array stores each learning batch's prepared code
 once. Each entry in `records` contains a `programIndex` plus the
 advertised name, definition, export name, and execution options. These
 values contain no functions. `getGeneratedTools()` looks up each

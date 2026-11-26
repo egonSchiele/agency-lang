@@ -1,0 +1,8 @@
+export def seriesInfo(seriesId: string): string {
+  """
+  Describe one data series.
+
+  @param seriesId - The series to describe
+  """
+  return "series:${seriesId}"
+}

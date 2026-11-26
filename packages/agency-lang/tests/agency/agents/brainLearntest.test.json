@@ -1,0 +1,23 @@
+{
+  "sourceFile": "brainLearntest.agency",
+  "tests": [
+    {
+      "nodeName": "offersLearnAfterTheFourTools",
+      "description": "The learntest brain offers read, bash, edit, and write, then learn, then the caller's tools.",
+      "input": "",
+      "expectedOutput": "[\"read\",\"bash\",\"edit\",\"write\",\"learn\",\"requestHasSystemText\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    },
+    {
+      "nodeName": "givesTheModelThePrimer",
+      "description": "The system prompt says the model can gain tools, names the list of learnable tools and the learn tool, and keeps the minimal brain's coding rules.",
+      "input": "",
+      "expectedOutput": "\"true|true|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "hi" }]
+    }
+  ]
+}

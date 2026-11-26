@@ -16,7 +16,7 @@ import { claudeSkillTools } from "../lib/claudeSkills.agency"
 import { cliTools } from "../lib/cliTools.agency"
 import { learnedExtras } from "../lib/learned.agency"
 import { getMcpTools } from "../lib/mcp.agency"
-import { getGeneratedTools } from "../lib/learn.agency"
+import { getGeneratedTools } from "std::agents/lib/learning"
 
 node everyAgentToolHasARow(): string {
   const dynamic = map(

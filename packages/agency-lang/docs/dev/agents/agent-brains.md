@@ -46,7 +46,7 @@ export def agencyAgent(
 - `context` is extra text, such as the user's instructions. Each brain adds
   it as a system message that expires with the call, and each subagent
   wrapper passes it to its stdlib agent.
-- `brain` picks one of five brains (`stdlib/agents/brains/`):
+- `brain` picks one of six brains (`stdlib/agents/brains/`):
   - `coordinator`, the default: one model that answers itself or hands
     the turn to the code, Agency code, research, oracle, explorer, review,
     writing, and rewrite subagents.
@@ -58,6 +58,8 @@ export def agencyAgent(
   - `scripttest`: a trial. The minimal brain, plus tools that write and
     run a short Agency program in place of a node or shell script.
     See "The scripttest brain" below.
+  - `learntest`: a trial. The minimal brain, plus a tool that learns new
+    tools from Agency files on disk. See "The learntest brain" below.
 
   `agencyAgentBrains()` lists them with a one-line description each.
 - `maxCost` and `maxTime` are the budget for the whole call. A negative
@@ -366,6 +368,77 @@ it: the two differ only in the two tools and the primer.
 - **The harness treats it as the minimal brain.** `agency agent` gives it
   no CLI tools, no REPL style line, no session facts rule, and no
   `--agent` start targets, as for `minimal`.
+
+## The learntest brain
+
+A trial of an agent that starts with few tools and learns the rest. Every
+tool an agent is given is sent with every request, so a large tool list
+costs context on every call. This brain is given five tools and is told
+where more are.
+
+`learntestBrain` in `stdlib/agents/brains/learntest.agency` is the minimal
+brain with one more tool and four sentences in its system message:
+
+- `learn(file, names)` takes the path of an Agency file and the names of
+  functions in it. Those functions become tools for the rest of the
+  conversation.
+- The sentences give the path of the stdlib's Agency files and the path
+  of `stdlib/agents/prompts/learnable-tools.md`, which lists the modules
+  worth learning, one per line.
+
+The model finds a tool with its own `read` and `bash` tools, then calls
+`learn`:
+
+```
+read   <stdlib>/agents/prompts/learnable-tools.md
+bash   grep -n "export def" <stdlib>/data/tech/hackernews.agency
+learn  file: "data/tech/hackernews.agency", names: ["hnStories"]
+hnStories ...
+```
+
+It is built on the minimal brain so that it can be benchmarked against
+it: the two differ only in the tool and the sentences.
+
+- **`learn` is a handoff.** The tool list of a running `llm` call is
+  fixed, so a tool learned during a call cannot join it. `learnFromFile`
+  learns, makes its own `llm` call on the caller's thread with the longer
+  tool list, and calls `endTurn()`. That call uses `minimalOptions`, the
+  same options `minimalBrain` uses, so the model keeps every tool it had.
+- **The path rules** are in `_learnSource` (`lib/stdlib/learnSource.ts`).
+  A leading `~` is expanded. A relative path is looked up in the agent's
+  working directory, then in the stdlib folder, so the model can pass a
+  line of the list as it is written. A file inside the stdlib folder is
+  learned as its `std::` module, so the approval prompt and a policy rule
+  see `module: "std::data/tech/hackernews"`. The module name must be one
+  in `STDLIB_MODULES`, spelled the same way, so a file in that folder that
+  is not a stdlib module is refused. Any other file is learned as a file,
+  which is how a folder of the user's own Agency files is used.
+- **Only a `.agency` file is accepted.** `learn` reads and parses the file
+  in the agent's own process before it raises its first interrupt. The
+  rule limits that read to Agency source files.
+- **A name already in the model's tools is refused.** `wikipedia` and
+  `web/search` both export `search`, so a model that learned one cannot
+  learn the other. The check is by name alone, so it cannot tell the same
+  function from another one with that name. The message for a learned
+  name says both: call the tool if it is the one you want, and a second
+  function with that name cannot be learned.
+- **An empty `names` list is refused.** The library's `learn` takes it to
+  mean every public function, which would add a whole module to the
+  context.
+- **The brain installs no handler.** Reading the list and the stdlib
+  folder raises the ordinary read effects, and the folder is outside the
+  working directory. `learn` raises `std::run` once to inspect the file,
+  with `function: "<inspect>"`. Each call of a learned tool raises
+  `std::run` again, then the function's own effects from inside the child
+  process (`docs/dev/stdlib/agency-function-tools.md`).
+- **Learned tools belong to the run.** The records are in a global in
+  `std::agents/lib/learning`. Two `agencyAgent` calls in one run share
+  them, even on separate threads.
+- **The list is written by hand.** `lib/stdlib/learnableIndex.test.ts`
+  fails when a line names a file that is gone or a module with no public
+  function.
+- **The harness treats it as the minimal brain.** `agency agent` gives it
+  no CLI tools, no REPL style line, and no `--agent` start targets.
 
 ## Adding a brain
 

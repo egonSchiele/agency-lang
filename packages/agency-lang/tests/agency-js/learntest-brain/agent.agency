@@ -1,0 +1,128 @@
+// The learntest brain from std::agents/brains/learntest, driven by a
+// scripted model in test.js. Every scenario reaches the `learn` tool the
+// way a model does, through a tool call.
+import { learntestBrain } from "std::agents/brains/learntest"
+import { AgentSettings } from "std::agents/brains/settings"
+import { getGeneratedTools } from "std::agents/lib/learning"
+
+// Every std::run the scenario raised, in order.
+let runs: any[] = []
+
+def settingsWith(context: string): AgentSettings {
+  return {
+    context: context,
+    model: "",
+    provider: "",
+    reasoningModel: "",
+    reasoningProvider: "",
+    routerModel: "",
+    routerProvider: "",
+    judgeModel: "",
+    judgeProvider: "",
+    imageModel: "",
+    imageProvider: "",
+    coderTools: []
+  }
+}
+
+def turn(message: string, callerTools: any[] = []): string {
+  const reply = learntestBrain(message, settingsWith("CALLER-CONTEXT-MARKER"), callerTools)
+  if (reply is success(text)) {
+    return text
+  }
+  return "failed: ${reply.error}"
+}
+
+def learnedNames(): string[] {
+  """
+  List the tools learned in this run.
+  """
+  return [tool.name for tool in getGeneratedTools()]
+}
+
+// Learn a function from a file, call it, and call it again on the next turn.
+node main() {
+  handle {
+    const first = turn("Learn the series tool and answer ORIGINAL-REQUEST-MARKER with it.")
+    const second = turn("Call the same series tool for GDP.")
+    return {
+      first: first,
+      second: second,
+      tools: learnedNames()
+    }
+  } with (intr) {
+    return approve()
+  }
+}
+
+// A path inside the stdlib folder is learned as its std:: module. Learning
+// the same function again on a later turn is refused before anything runs.
+node stdlibPath() {
+  handle {
+    const reply = turn("Add one and two with the stdlib's add.")
+    const again = turn("Learn add again.")
+    return {
+      reply: reply,
+      again: again,
+      tools: learnedNames(),
+      runs: runs
+    }
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      runs = [
+        ...runs,
+        {
+          module: intr.data.module,
+          function: intr.data.function
+        },
+      ]
+    }
+    return approve()
+  }
+}
+
+// Three learns that fail before anything runs: no names, a missing file,
+// and a name that is already one of the brain's tools.
+node failedLearns() {
+  handle {
+    const empty = turn("Learn with no names.")
+    const missing = turn("Learn from a file that does not exist.")
+    const taken = turn("Learn a function named read.")
+    return {
+      empty: empty,
+      missing: missing,
+      taken: taken,
+      tools: learnedNames(),
+      runCount: runs.length
+    }
+  } with (intr) {
+    if (intr.effect == "std::run") {
+      runs = [
+        ...runs,
+        {
+          module: intr.data.module,
+          function: intr.data.function
+        },
+      ]
+    }
+    return approve()
+  }
+}
+
+// The inspection is approved here. The learned call's std::run gets no
+// answer, so the run pauses inside the learn handoff and test.js resumes it.
+// The caller passes a tool of its own, so the checkpoint holds a `learn`
+// tool with a function bound into it.
+node pausesInsideTheHandoff() {
+  handle {
+    const reply = turn("Learn the series tool and call it.", [learnedNames])
+    return {
+      reply: reply,
+      tools: learnedNames()
+    }
+  } with (intr) {
+    if (intr.effect == "std::run" && intr.data.function == "<inspect>") {
+      return approve()
+    }
+  }
+}

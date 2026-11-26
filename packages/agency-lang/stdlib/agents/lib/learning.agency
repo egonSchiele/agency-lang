@@ -1,0 +1,73 @@
+/** @module
+  @summary The tools an agent has learned in this run, kept as plain
+  records so they survive a checkpoint and a saved session.
+
+  `learn` in `std::agency` returns tools and keeps nothing. An agent that
+  wants a learned tool on its next turn keeps it here: `learnSessionTools`
+  learns and records, and `getGeneratedTools` rebuilds the tools each time
+  the agent assembles its tool list.
+
+  The records belong to the run. Two agents in one run share them.
+*/
+import { AgencySource, _executePrepared, learn } from "std::agency"
+import { MAX_TOOL_NAME_LEN } from "std::skills"
+
+import {
+  _addLearnedRecords,
+  _learnedRecords,
+  _toolsFromRecords,
+ } from "agency-lang/stdlib-lib/sessionTools.js"
+
+// Plain records survive the session checkpoint. Each turn rebuilds its
+// callable values without rereading or recompiling the original source.
+type LearnedRecord = {
+  advertisedName: string;
+  definition: any;
+  programIndex: number;
+  exportName: string;
+  options: any
+}
+
+type LearnedState = {
+  programs: any[];
+  records: LearnedRecord[]
+}
+
+let learnedState: LearnedState = {
+  programs: [],
+  records: []
+}
+
+/** Rebuild the learned tools from their records. Call it each time the
+  agent assembles its tool list. */
+export def getGeneratedTools(): any[] {
+  """
+  Return every tool learned in this run, in the order they were learned.
+  """
+  return _toolsFromRecords(learnedState, _executePrepared)
+}
+
+/** Learn the functions and record them. The whole batch is refused when a
+  new name is in `offeredNames` or is already learned, so an existing tool
+  is never replaced. */
+export def learnSessionTools(
+  source: AgencySource,
+  names: string[] = [],
+  namespace: string = "session",
+  offeredNames: string[] = [],
+): Result<string[]> {
+  """
+  Learn exported Agency functions and keep them for the rest of the run.
+  Returns the names the tools are offered under.
+
+  @param source - A std:: module, an Agency file, or Agency source text
+  @param names - The exported functions to learn, or empty for every public function
+  @param namespace - A prefix for each tool's name, as `namespace_name`, or "" for none
+  @param offeredNames - Names the agent already offers, which a learned tool may not take
+  """
+  const learned = learn(source, names, namespace)?
+  const candidates = _learnedRecords(learned)
+  const updated = _addLearnedRecords(learnedState, candidates, offeredNames, MAX_TOOL_NAME_LEN)?
+  learnedState = updated
+  return success([record.advertisedName for record in candidates.records])
+}

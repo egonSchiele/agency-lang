@@ -127,7 +127,11 @@ export const STDLIB_MODULES: Record<string, string[]> = {
   "std::agents/brains/coordinator/writing": [
     "writingAgent"
   ],
+  "std::agents/brains/learntest": [
+    "learntestBrain"
+  ],
   "std::agents/brains/minimal": [
+    "minimalOptions",
     "minimalBrain"
   ],
   "std::agents/brains/scripttest": [
@@ -188,6 +192,10 @@ export const STDLIB_MODULES: Record<string, string[]> = {
     "renderFeedback",
     "feedbackHasErrors",
     "failOpenFeedback"
+  ],
+  "std::agents/lib/learning": [
+    "getGeneratedTools",
+    "learnSessionTools"
   ],
   "std::agents/lib/search": [
     "setSearchMode",

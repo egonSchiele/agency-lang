@@ -1,0 +1,117 @@
+/** @module
+  @summary A trial brain: the minimal brain, plus a tool that learns new
+  tools from Agency files on disk.
+
+  A brain of the Agency agent. It is the minimal brain with one more tool
+  and a few lines in its system message:
+
+  - `learn` takes the path of an Agency file and the names of functions in
+    it, and continues the turn with those functions as tools.
+  - The lines say where the stdlib's Agency files are, and where the list
+    of the ones worth learning is.
+
+  The model finds a tool with its own `read` and `bash` tools, so the
+  whole library costs a few lines of context until a tool is learned.
+
+  The brain installs no handler. Reading the stdlib folder raises the
+  ordinary read effects. `learn` raises `std::run` to inspect the file, and
+  each call of a learned tool raises `std::run` and then the function's own
+  effects. Learned tools belong to the run, so two calls of `agencyAgent`
+  in one run share them.
+*/
+import { minimalBrain, minimalOptions } from "std::agents/brains/minimal"
+import { AgentSettings } from "std::agents/brains/settings"
+import { getGeneratedTools, learnSessionTools } from "std::agents/lib/learning"
+import { getAgentCwd } from "std::index"
+import { Attachment, endTurn, ensureSystemMessage } from "std::thread"
+
+import { _learnSource } from "agency-lang/stdlib-lib/learnSource.js"
+import { _agentPromptsDir, _stdlibDir } from "agency-lang/stdlib-lib/skills.js"
+
+/** The lines the brain adds to the system message. They hold the install
+  path, so they are built in a function: a top-level variable in a brain
+  may only read the packaged prompts and skills. */
+def learnPrimer(): string {
+  const stdlib = _stdlibDir()
+  const index = "${_agentPromptsDir()}/learnable-tools.md"
+  return """
+You can gain tools. The Agency files under ${stdlib} hold tools for data sources, the web, images, OCR, speech, GitHub, calendar, and weather. ${index} lists them, one per line, and you can grep the folder for anything else. When a task needs one, call learn with the file's path and the names of the functions you want. The tools stay for the rest of the conversation.
+"""
+}
+
+/** The tools the brain adds to the minimal brain's four. Learned tools go
+  last, so a tool that was offered before a learn keeps its place. */
+def learntestExtras(settings: AgentSettings, extraTools: any[]): any[] {
+  return [
+    learnFromFile.partial(settings: settings, extraTools: extraTools).rename("learn"),
+    ...extraTools,
+    ...getGeneratedTools(),
+  ]
+}
+
+/**
+A running `llm` call cannot gain a tool, so this is a handoff: it learns,
+then makes its own call on the caller's thread with the longer tool list.
+*/
+handoff def learnFromFile(
+  settings: AgentSettings,
+  extraTools: any[],
+  file: string,
+  names: string[],
+): Result<string> {
+  """
+  Gain new tools from an Agency file, then continue the user's request
+  with them. Find the file and the names of its exported functions first,
+  with grep or the list of learnable tools. Learning starts a separate
+  process and can ask for approval, as each call of a learned tool does.
+  When a learn is refused, nothing has changed.
+
+  @param file - The path of the Agency file, as grep or the list printed it
+  @param names - The exported functions to learn, at least one
+  """
+  if (names.length == 0) {
+    return failure(
+      "Name the functions to learn. Grep the file for `export def` to see them.",
+    )
+  }
+  const before = minimalOptions(settings, learntestExtras(settings, extraTools)).tools
+  const offered = [tool.name for tool in before]
+  const alreadyLearned = [tool.name for tool in getGeneratedTools()]
+  for (name in names) {
+    if (alreadyLearned.includes(name)) {
+      return failure(
+        "You already learned a tool named '${name}'. If it is the function you want, call it. A second function with that name cannot be learned in this conversation.",
+      )
+    }
+    if (offered.includes(name)) {
+      return failure(
+        "A tool named '${name}' is already in your tools, so this function cannot be learned in this conversation.",
+      )
+    }
+  }
+  const source = _learnSource(file, getAgentCwd())?
+  const learned = learnSessionTools(source, names, "", offered)?
+  const answer: string = llm(
+    "The tools ${learned.join(", ")} are now available. Continue the user's request with them.",
+    minimalOptions(settings, learntestExtras(settings, extraTools)),
+  )
+  endTurn()
+  return success(answer)
+}
+
+export def learntestBrain(
+  prompt: string | (string | Attachment)[],
+  settings: AgentSettings,
+  extraTools: any[],
+): Result<string> {
+  """
+  Answer one message with the minimal brain, plus a tool that learns new
+  tools from Agency files on disk.
+
+  @param prompt - The message, alone or followed by its attachments
+  @param settings - The call's settings
+  @param extraTools - Tools added to the brain's own
+  """
+  ensureSystemMessage(learnPrimer())
+  return minimalBrain(prompt, settings, learntestExtras(settings, extraTools))
+}

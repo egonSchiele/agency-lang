@@ -153,7 +153,13 @@ describe("summarizeRuns", () => {
       );
       return dir;
     };
-    const row = (traceId: string, name: string, pass: boolean, weight: number, mustPass: boolean) => ({
+    const row = (
+      traceId: string,
+      name: string,
+      pass: boolean,
+      weight: number,
+      mustPass: boolean,
+    ) => ({
       traceId,
       annotator: { kind: "grader" as const, id: "g@1" },
       name,

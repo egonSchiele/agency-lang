@@ -108,7 +108,10 @@ writeFileSync(
       nextTurnCallRan: contains(4, "series:GDP"),
       fromStdlib: fromStdlib.data,
       failed: failed.data,
-      alreadyLearnedMessage: contains(9, "You already learned 'add'. Call it directly."),
+      alreadyLearnedMessage: contains(
+        9,
+        "You already learned a tool named 'add'. If it is the function you want, call it. A second function with that name cannot be learned in this conversation.",
+      ),
       emptyNamesMessage: contains(11, "Name the functions to learn"),
       missingFileMessage: contains(13, "There is no Agency file at"),
       takenNameMessage: contains(

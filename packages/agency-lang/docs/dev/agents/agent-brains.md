@@ -418,8 +418,10 @@ it: the two differ only in the tool and the sentences.
   rule limits that read to Agency source files.
 - **A name already in the model's tools is refused.** `wikipedia` and
   `web/search` both export `search`, so a model that learned one cannot
-  learn the other. A name the model already learned gets a different
-  message, which tells it to call the tool.
+  learn the other. The check is by name alone, so it cannot tell the same
+  function from another one with that name. The message for a learned
+  name says both: call the tool if it is the one you want, and a second
+  function with that name cannot be learned.
 - **An empty `names` list is refused.** The library's `learn` takes it to
   mean every public function, which would add a whole module to the
   context.

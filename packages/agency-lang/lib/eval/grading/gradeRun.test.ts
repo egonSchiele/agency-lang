@@ -159,48 +159,6 @@ describe("gradeRun", () => {
     expect(card.perInput[0].ungradedReason).toMatch(/timeout/);
   });
 
-  it("grades a run that did not end cleanly when its test asks for that, and keeps the ending", async () => {
-    const lenient: Test = { ...capital, gradeWhenAgentFails: true };
-    for (const ended of ["error", "timeout", "cost-cap"] as const) {
-      const runDir = makeRun({ output: "partial", ended, errorMessage: "boom", test: lenient });
-      let sawWorkdir = "";
-      const disk = grader(
-        ({ workdir }) => {
-          sawWorkdir = workdir;
-          return 0.5;
-        },
-        { name: "disk" },
-      );
-
-      const card = await gradeRun(runDir, ctx([disk]));
-
-      expect(fs.existsSync(sawWorkdir), ended).toBe(true);
-      expect(card.perInput[0].ungradedReason, ended).toBeUndefined();
-      expect(card.objective(), ended).toBe(0.5);
-      const run = readRunDirectory(runDir, { reportWarning: () => {} }).annotationRows[0];
-      expect(run, ended).toMatchObject({ kind: "run", ended });
-    }
-  });
-
-  it("still scores a run with no trace 0 when its test asks for failed runs to be graded", async () => {
-    const runDir = writeRunDirectory({
-      test: { ...capital, gradeWhenAgentFails: true },
-      wroteStatelog: false,
-      ended: "error",
-    });
-    let graderRan = false;
-    const spy = grader(
-      () => {
-        graderRan = true;
-        return 1;
-      },
-      { name: "spy" },
-    );
-    const card = await gradeRun(runDir, ctx([spy]));
-    expect(graderRan).toBe(false);
-    expect(card.objective()).toBe(0);
-  });
-
   it("a suite where every test died before its first event does not pass gates vacuously", async () => {
     const runDir = writeRunDirectory({ test: capital, wroteStatelog: false, ended: "timeout" });
     // Still a run directory by the walk rule: an empty statelog, as the harness writes.
@@ -581,5 +539,96 @@ describe("a workdir override", () => {
     };
     expect(await passed({ ...ctx(graders), workdirOverride: live })).toBe(true);
     expect(await passed(ctx(graders))).toBe(false);
+  });
+});
+
+describe("gradeWhenAgentFails", () => {
+  const lenient: Test = { ...capital, gradeWhenAgentFails: true };
+
+  /** The kind of grader the flag is for: a command that checks the workdir
+   *  (`makeRun` leaves `note.txt` there). Returned as a path, for `--suite`,
+   *  and as the stored copy a run row names. */
+  async function workdirGraders() {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "grade-failed-"));
+    const jsonPath = path.join(dir, "graders.json");
+    fs.writeFileSync(
+      jsonPath,
+      JSON.stringify([{ kind: "command", name: "note", command: "test -f note.txt" }]),
+    );
+    const snapshot = { ...(await snapshotGradersJson(jsonPath)), origin: "test" as const };
+    return { jsonPath, snapshot };
+  }
+
+  function graded(card: Awaited<ReturnType<typeof gradeRun>>) {
+    return card.perInput[0].grades.map((g) => [g.grader.name(), g.grade.score]);
+  }
+
+  it("grades a run that did not end cleanly when its test asks for that, and keeps the ending", async () => {
+    const { snapshot } = await workdirGraders();
+    for (const ended of ["error", "timeout", "cost-cap", "killed"] as const) {
+      const runDir = makeRun({ output: "partial", ended, test: lenient, graders: snapshot });
+
+      const card = await gradeRun(runDir, { ...ctx([]), graders: { kind: "snapshot" } });
+
+      expect(card.perInput[0].ungradedReason, ended).toBeUndefined();
+      expect(graded(card), ended).toEqual([["note", { kind: "binary", pass: true }]]);
+      const run = readRunDirectory(runDir, { reportWarning: () => {} }).annotationRows[0];
+      expect(run, ended).toMatchObject({ kind: "run", ended });
+    }
+  });
+
+  it("still scores a run with no trace 0", async () => {
+    const { snapshot } = await workdirGraders();
+    const runDir = writeRunDirectory({
+      test: lenient,
+      wroteStatelog: false,
+      ended: "error",
+      graders: snapshot,
+    });
+    const card = await gradeRun(runDir, { ...ctx([]), graders: { kind: "snapshot" } });
+    expect(graded(card)).toEqual([]);
+    expect(card.perInput[0].ungradedReason).toMatch(/no trace/);
+    expect(card.objective()).toBe(0);
+  });
+
+  it("never grades a void run, whose sandbox broke", async () => {
+    const { snapshot } = await workdirGraders();
+    const runDir = makeRun({ output: "x", ended: "void", test: lenient, graders: snapshot });
+    const card = await gradeRun(runDir, { ...ctx([]), graders: { kind: "snapshot" } });
+    expect(graded(card)).toEqual([]);
+    expect(card.perInput[0].ungradedReason).toMatch(/ended with void/);
+  });
+
+  it("under --suite, follows the suite's test as it is now, not the recorded one", async () => {
+    const { jsonPath } = await workdirGraders();
+    const withFlag = makeRun({ output: "x", ended: "error", test: lenient });
+    const dropped = await gradeRun(withFlag, {
+      ...ctx([]),
+      graders: { kind: "suite", tests: [{ ...capital, graders: jsonPath }] },
+    });
+    expect(graded(dropped)).toEqual([]);
+    expect(dropped.perInput[0].ungradedReason).toMatch(/ended with error/);
+
+    const withoutFlag = makeRun({ output: "x", ended: "error" });
+    const added = await gradeRun(withoutFlag, {
+      ...ctx([]),
+      graders: { kind: "suite", tests: [{ ...lenient, graders: jsonPath }] },
+    });
+    expect(graded(added)).toEqual([["note", { kind: "binary", pass: true }]]);
+  });
+
+  it("does not apply to graders passed in to replace the test's own", async () => {
+    let graderRan = false;
+    const spy = grader(
+      () => {
+        graderRan = true;
+        return 1;
+      },
+      { name: "spy" },
+    );
+    const runDir = makeRun({ output: "partial", ended: "error", test: lenient });
+    const card = await gradeRun(runDir, ctx([spy]));
+    expect(graderRan).toBe(false);
+    expect(card.perInput[0].ungradedReason).toMatch(/ended with error/);
   });
 });

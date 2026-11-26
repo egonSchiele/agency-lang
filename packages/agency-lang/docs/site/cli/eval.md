@@ -349,7 +349,14 @@ left a trace. The run is still recorded with how it really ended. Use it
 when the graders check what the agent left in the workdir: a coding agent
 that ran out of time may have built most of what was asked, and its tests
 can say so. Do not use it for a test graded by a judge reading the agent's
-reply, because a judge cannot tell that the reply was cut short.
+reply, because a judge cannot tell that the reply was cut short. For the same
+reason, a test that sets it must have graders of its own: one with none would
+be graded by the default goal judge, so it is refused when the suite loads.
+
+The field covers the test's own graders only. `eval grade --suite` reads it
+from the suite as it is now, so adding or removing it changes how earlier
+runs are graded again. Graders passed to `eval optimize --graders` never see
+a run that stopped early.
 
 ## Judging output by hand
 

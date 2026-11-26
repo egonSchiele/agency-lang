@@ -94,7 +94,9 @@ export type Test<T = TestInput> = {
    *  grader sees it. For a test whose graders check what the agent left in
    *  the workdir, where a run that stopped early may still have done most
    *  of the work. Not for a test graded by a judge reading the agent's
-   *  reply: a judge cannot tell that the reply was cut short. */
+   *  reply: a judge cannot tell that the reply was cut short. Loading
+   *  refuses it on a test with no graders of its own, and it does not
+   *  apply to graders passed in to replace the test's. */
   gradeWhenAgentFails?: boolean;
   /** Freeform, grader-agnostic metadata (tags, expectedOutput, …). */
   metadata?: Record<string, any>;

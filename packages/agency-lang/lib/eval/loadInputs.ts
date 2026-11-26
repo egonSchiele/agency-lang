@@ -420,6 +420,20 @@ function validateInputs(inputs: Test[]): Test[] {
       throw new Error(`Duplicate id "${id}"`);
     }
     seen[id] = true;
+    assertGradersForFailedRuns(input);
   }
   return inputs;
+}
+
+/** A test that asks for failed runs to be graded must bring graders of its
+ *  own. Without them it gets the default goal judge, which reads the reply
+ *  and cannot tell that it was cut short. Checked on the finished test, once
+ *  `graders.ts`, `graders.json` and Agency test pairs have been found. */
+function assertGradersForFailedRuns(test: Test): void {
+  if (test.gradeWhenAgentFails !== true) return;
+  if (test.graders !== undefined || (test.agencyTests ?? []).length > 0) return;
+  throw new Error(
+    `Test ${test.id}: gradeWhenAgentFails needs graders of its own; ` +
+      `the default goal judge cannot tell that a run was cut short`,
+  );
 }

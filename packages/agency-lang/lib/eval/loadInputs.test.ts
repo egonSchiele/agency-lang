@@ -262,9 +262,10 @@ describe("eval run input loading", () => {
   });
 
   it("gradeWhenAgentFails is loaded as given, and must be a boolean", () => {
+    fs.writeFileSync(path.join(tmpDir, "graders.ts"), "export default [];");
     const file = writeJson("lenient.json", {
       inputs: [
-        { id: "t", goal: "g", input: "x", gradeWhenAgentFails: true },
+        { id: "t", goal: "g", input: "x", graders: "./graders.ts", gradeWhenAgentFails: true },
         { id: "u", goal: "g", input: "x" },
       ],
     });
@@ -278,6 +279,23 @@ describe("eval run input loading", () => {
         }),
       ),
     ).toThrow(/gradeWhenAgentFails must be true or false/);
+  });
+
+  it("refuses gradeWhenAgentFails on a test the default goal judge would grade", () => {
+    const file = writeJson("judged.json", {
+      inputs: [{ id: "t", goal: "g", input: "x", gradeWhenAgentFails: true }],
+    });
+    expect(() => loadInputs(file)).toThrow(/Test t: gradeWhenAgentFails needs graders of its own/);
+  });
+
+  it("accepts gradeWhenAgentFails on a test folder graded by its Agency test pairs", () => {
+    const testDir = path.join(tmpDir, "suite", "paired");
+    writeJson("suite/paired/test.json", { input: "x", gradeWhenAgentFails: true });
+    writeJson("suite/paired/files/check.test.json", { tests: [] });
+    fs.writeFileSync(path.join(testDir, "files", "check.agency"), "node main() {}\n");
+    const [test] = loadInputs(path.join(tmpDir, "suite"));
+    expect(test.gradeWhenAgentFails).toBe(true);
+    expect(test.agencyTests?.map((pair) => pair.name)).toEqual(["check"]);
   });
 
   it("setup is a command, loaded with the folder its paths resolve from", () => {

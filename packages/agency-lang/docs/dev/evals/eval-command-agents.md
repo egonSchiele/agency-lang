@@ -115,8 +115,10 @@ parent no matter how it dies; that chain covers every money-spending
 descendant.)
 
 Limits: `wallClock` from `eval.limits.wallClockSec` (per-test `timeoutSec`
-overrides it), enforced by a SIGTERM-then-SIGKILL timer. Memory via
-`NODE_OPTIONS --max-old-space-size` — V8 heap of Node processes only,
+overrides it), enforced by a SIGTERM-then-SIGKILL timer. Memory from
+`eval.limits.memoryMb` (default 512) via
+`NODE_OPTIONS --max-old-space-size`, so every Node process the agent
+starts inherits the same cap — V8 heap of Node processes only,
 weaker than the fork sandbox, acceptable because command targets are
 Agency (Node) CLIs. Stdout is drained always (an unread pipe blocks a
 chatty agent at ~64KB) and capped for display only — a deliberate

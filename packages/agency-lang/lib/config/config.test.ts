@@ -96,6 +96,23 @@ describe("AgencyConfigSchema", () => {
     }
   });
 
+  it("accepts eval.limits.memoryMb", () => {
+    const result = AgencyConfigSchema.safeParse({
+      eval: { limits: { memoryMb: 4096 } },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.eval?.limits?.memoryMb).toBe(4096);
+    }
+  });
+
+  it("rejects an eval.limits.memoryMb that is not a positive integer", () => {
+    for (const bad of [0, -1, 1.5]) {
+      const result = AgencyConfigSchema.safeParse({ eval: { limits: { memoryMb: bad } } });
+      expect(result.success).toBe(false);
+    }
+  });
+
   describe("memory block", () => {
     it("accepts a minimal memory block (only `dir`)", () => {
       const result = AgencyConfigSchema.safeParse({

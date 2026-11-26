@@ -53,19 +53,25 @@ const DEFAULT_EVAL_RUN_LIMITS: RunLimits = {
 };
 
 /** The run limits a suite's config asks for: `eval.limits` overlaid on the
- *  defaults. Only wall clock is configurable so far. The schema already
+ *  defaults. Wall clock (`wallClockSec`) and memory (`memoryMb`) are
+ *  configurable; the IPC payload and stdout caps are not. The schema already
  *  rejects non-positive values at config load; the guard here covers configs
  *  built programmatically, where 0/-1/NaN would otherwise reach setTimeout
- *  and fail every run instantly with a wall_clock limit error. */
+ *  (failing every run instantly with a wall_clock limit error) or
+ *  --max-old-space-size. */
 export function limitsFromConfig(config: AgencyConfig, timeoutSecOverride?: number): RunLimits {
   // Per-test override (the input's timeoutSec) beats the suite-level config.
   const wallClockSec = timeoutSecOverride ?? config.eval?.limits?.wallClockSec;
-  const valid =
-    typeof wallClockSec === "number" && Number.isFinite(wallClockSec) && wallClockSec > 0;
+  const memoryMb = config.eval?.limits?.memoryMb;
   return {
     ...DEFAULT_EVAL_RUN_LIMITS,
-    ...(valid ? { wallClock: wallClockSec * 1000 } : {}),
+    ...(isPositiveNumber(wallClockSec) ? { wallClock: wallClockSec * 1000 } : {}),
+    ...(isPositiveNumber(memoryMb) ? { memory: memoryMb * 1024 * 1024 } : {}),
   };
+}
+
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
 /** Defensive per-run LLM spend ceiling — an accident stopper, not a budget

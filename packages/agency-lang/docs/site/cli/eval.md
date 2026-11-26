@@ -102,8 +102,10 @@ grade it with: agency eval grade runs/smoke
 Each run's agent process gets a wall-clock limit of 60 seconds unless `eval.limits.wallClockSec` in `agency.json` raises it:
 
 ```json
-{ "eval": { "limits": { "wallClockSec": 900, "maxCostUsd": 50, "maxBatchCostUsd": 100 } } }
+{ "eval": { "limits": { "wallClockSec": 900, "memoryMb": 4096, "maxCostUsd": 50, "maxBatchCostUsd": 100 } } }
 ```
+
+`memoryMb` caps each run's V8 heap, 512 MB by default. It must be a positive whole number. An agent that goes over it dies with "JavaScript heap out of memory" and the run fails. A compiled `.agency` agent gets the cap as `--max-old-space-size` on its own process only. A `--agent-cmd` agent gets it through `NODE_OPTIONS=--max-old-space-size=<mb>`, so it also applies to every Node process the agent starts: `tsc`, `vitest`, a `pnpm` build, each with its own heap of that size. Raise it for coding agents that run builds and tests.
 
 `maxCostUsd` is a per-run LLM spend ceiling, $50 by default. The harness watches each run's cost as it happens and kills the run when it passes the cap. Enforcement lags by one LLM call, because a call's cost is known only when it returns, so treat it as an accident stopper rather than an exact budget.
 
@@ -158,8 +160,10 @@ Rules that follow from the mechanism:
   the child inherits your environment, so API keys need no argv.
 - **Limits:** the wall clock applies (enforced by the harness); memory is
   capped via `NODE_OPTIONS --max-old-space-size` (V8 heap of Node
-  processes — weaker than the file-target sandbox); output is drained and
-  capped for display but never fails the run.
+  processes — weaker than the file-target sandbox). `eval.limits.memoryMb`
+  sets it (default 512), and because it travels in `NODE_OPTIONS` it
+  applies to every Node process the agent starts, not just the agent.
+  Output is drained and capped for display but never fails the run.
 - `eval optimize` does not accept `--agent-cmd`: the optimizer mutates
   agent files, which a command target does not expose.
 

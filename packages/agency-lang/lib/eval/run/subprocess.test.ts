@@ -37,6 +37,28 @@ describe("limitsFromConfig", () => {
       expect(limitsFromConfig({ eval: { limits: { wallClockSec: bad } } }).wallClock).toBe(60_000);
     }
   });
+
+  it("overrides the memory limit from eval.limits.memoryMb", () => {
+    const limits = limitsFromConfig({ eval: { limits: { memoryMb: 4096 } } });
+    expect(limits.memory).toBe(4096 * 1024 * 1024);
+    // the other limits stay at their defaults
+    expect(limits.wallClock).toBe(60_000);
+    expect(limits.stdout).toBe(1024 * 1024);
+  });
+
+  it("sets memory and wall clock together", () => {
+    const limits = limitsFromConfig({ eval: { limits: { memoryMb: 2048, wallClockSec: 600 } } });
+    expect(limits.memory).toBe(2048 * 1024 * 1024);
+    expect(limits.wallClock).toBe(600_000);
+  });
+
+  it("ignores invalid memory values (0, negative, NaN) and keeps the default", () => {
+    for (const bad of [0, -1, NaN, Infinity]) {
+      expect(limitsFromConfig({ eval: { limits: { memoryMb: bad } } }).memory).toBe(
+        512 * 1024 * 1024,
+      );
+    }
+  });
 });
 
 describe("costCapFromConfig", () => {

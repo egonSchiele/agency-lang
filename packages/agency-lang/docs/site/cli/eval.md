@@ -42,7 +42,7 @@ A test says nothing about the agent. Tests describe the work; whoever runs the e
 
 `input` is what the agent is told: a string, or a JSON object for agents that take structured data. The runner passes it as the entry node's single parameter, whatever it is named. An agent that takes no input runs a test with none — then the entry node takes no parameter. Within one suite, either every test has an input or none does; the runner checks the parameter count before anything runs.
 
-`goal` is the success criterion. The agent never sees it. The default LLM judge needs it; a test with its own graders makes it optional (see [Custom graders](#custom-graders)). `id` defaults to a generated id and must be filesystem-safe when you supply one. `expected` is an optional gold output that match graders read. `files` names the test's fixture directory (see [Test files and suites](#test-files-and-suites)). `timeoutSec` overrides the suite's wall clock for one test. `setup` is a shell command that prepares the workdir (see [Test setup](#test-setup)). `graders` names the test's own grading module, resolved relative to the test; in the test-directory form a `graders.ts` beside `test.json` is picked up automatically. Graders are code the harness runs, so pulling a remote suite means trusting it.
+`goal` is the success criterion. The agent never sees it. The default LLM judge needs it; a test with its own graders makes it optional (see [Custom graders](#custom-graders)). `id` defaults to a generated id and must be filesystem-safe when you supply one. `expected` is an optional gold output that match graders read. `files` names the test's fixture directory (see [Test files and suites](#test-files-and-suites)). `timeoutSec` overrides the suite's wall clock for one test. `setup` is a shell command that prepares the workdir (see [Test setup](#test-setup)). `gradeWhenAgentFails` lets the graders run on a run that stopped early (see [Pass and fail](#pass-and-fail)). `graders` names the test's own grading module, resolved relative to the test; in the test-directory form a `graders.ts` beside `test.json` is picked up automatically. Graders are code the harness runs, so pulling a remote suite means trusting it.
 
 ### Test setup
 
@@ -341,6 +341,22 @@ every gate. It is counted, not skipped: one bad test out of fifty pulls the mean
 down by its share rather than zeroing the whole run. A test that produced no
 output still grades, with `output` set to `null`, because for file-writing agents
 the deliverable is the workdir.
+
+A test can opt out of that zero with `"gradeWhenAgentFails": true` in its
+`test.json`. Its graders then run on a run that stopped early (the agent
+exited non-zero, or hit the time limit or the cost cap), as long as the run
+left a trace. The run is still recorded with how it really ended. Use it
+when the graders check what the agent left in the workdir: a coding agent
+that ran out of time may have built most of what was asked, and its tests
+can say so. Do not use it for a test graded by a judge reading the agent's
+reply, because a judge cannot tell that the reply was cut short. For the same
+reason, a test that sets it must have graders of its own: one with none would
+be graded by the default goal judge, so it is refused when the suite loads.
+
+The field covers the test's own graders only. `eval grade --suite` reads it
+from the suite as it is now, so adding or removing it changes how earlier
+runs are graded again. Graders passed to `eval optimize --graders` never see
+a run that stopped early.
 
 ## Judging output by hand
 

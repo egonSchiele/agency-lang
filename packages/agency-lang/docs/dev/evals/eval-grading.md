@@ -191,12 +191,44 @@ package's own root, where the name resolves to the package itself. A module's
 revision is `<source>@<sha256 of the bundle>` in both paths, so snapshot and
 unchanged-live grading agree on the annotator.
 
-**A run that did not end cleanly scores zero, always.** The harness's `run`
+**A run that did not end cleanly scores zero, unless its test opts out.** The harness's `run`
 row is authoritative when present — only it knows about a wall-clock or
 cost-cap kill (`ended: "timeout" | "cost-cap" | "killed" | "error"`); without
 one, the trace's own ending decides (`traceEnding`). Such a trace is never
 shown to graders: a run that almost finished must not earn points from a judge
 that cannot tell it crashed. `gradeRun.test.ts` pins this with a spy grader.
+
+The opt-out is per test: `"gradeWhenAgentFails": true` in `test.json`
+(`Test.gradeWhenAgentFails`, read by `gradesFailedRuns` in `gradeRun.ts`).
+Its graders then see a run that ended `error`, `timeout`, `cost-cap` or
+`killed`, as long as there is a trace. A `void` run is never graded: its
+sandbox broke, which says nothing about the agent. It exists for tests whose
+graders check the workdir, where a coding agent that stopped at its own time
+or cost limit may have done most of the work. The worry above is about
+judges, so the default stays zero and every suite that does not ask is
+unchanged, the optimizer's candidates included. Nothing else changes: the
+run row keeps the real `ended`, and the run summary already scores a run
+that did not end `ok` as "what it was given, or 0 if it was never graded"
+(`scoreOf` in `runDirectory/list.ts`). Before this, a suite got the same
+effect by making its agent command always exit 0, which recorded every
+crash as `ok`.
+
+The flag is a promise about the test's own graders, so it is read from the
+test the graders come from:
+
+- With the stored graders (`eval grade`, `eval run --grade`), the recorded
+  test decides.
+- Under `eval grade --suite`, the suite's test as it is now decides, not the
+  recorded one. Suppose a test drops the flag when its workdir grader is
+  swapped for an LLM judge. Grading an old run again with `--suite` must
+  not show that judge a crashed run.
+- Graders passed in to replace the test's (`eval optimize --graders`) were
+  not part of that promise, so the flag does not apply to them.
+
+Loading refuses the flag on a test with no graders of its own (no
+`graders` path, no `graders.ts` or `graders.json`, no Agency test pairs),
+because such a test is graded by the default goal judge
+(`assertGradersForFailedRuns` in `loadInputs.ts`).
 
 **A test that never produced a trace still counts.** When an agent dies
 before its first event (a compile failure, a kill before start), the harness

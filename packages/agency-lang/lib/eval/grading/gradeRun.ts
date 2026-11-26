@@ -78,7 +78,7 @@ export async function gradeSnapshot(
 ): Promise<Scorecard> {
   const moduleCache = makeGraderModuleCache(ctx.config);
   const perInput = await Promise.all(
-    gradableEntries(snapshot, ctx.workdirOverride).map(async (bare) => {
+    gradableEntries(snapshot, ctx).map(async (bare) => {
       const entry = withDefaultGoal(bare, ctx.defaultGoal);
       const { graders, graderFiles } = await effectiveGraders(
         entry,
@@ -114,8 +114,8 @@ export class GradingInterrupted extends Error {
  *  the statelog (the agent died before its first event). Those runs are
  *  tests too; leaving them out would let a suite where half the tests never
  *  started score as if only the other half existed. */
-function gradableEntries(snapshot: RunDirectorySnapshot, workdirOverride?: string): Entry[] {
-  const entries = snapshot.traces.map((trace) => entryFor(snapshot, trace, workdirOverride));
+function gradableEntries(snapshot: RunDirectorySnapshot, ctx: GradingContext): Entry[] {
+  const entries = snapshot.traces.map((trace) => entryFor(snapshot, trace, ctx));
   const withTrace: Record<string, true> = Object.create(null);
   for (const trace of snapshot.traces) withTrace[trace.traceId] = true;
   for (const [traceId, effective] of Object.entries(snapshot.effectiveAnnotations)) {
@@ -175,7 +175,7 @@ async function effectiveGraders(
 ): Promise<{ graders: BaseGrader[]; graderFiles?: string }> {
   const source = ctx.graders;
   if (source.kind === "suite") {
-    const test = suiteTestFor(entry, source.tests);
+    const test = suiteTestFor(entry.test, source.tests);
     const harness = liveHarnessGraders(test);
     return {
       graders: [...(await suiteModuleGraders(test, cache, harness.length > 0)), ...harness],
@@ -248,9 +248,9 @@ function loadSnapshot(runDir: string, snapshot: GradersIdentity): Promise<BaseGr
   return graderSourceForRecord(snapshot).loadSnapshot(runDirPaths(runDir).gradersDir, snapshot);
 }
 
-/** The suite test this run belongs to, by test id. */
-function suiteTestFor(entry: Entry, tests: Test[]): Test {
-  const id = entry.test.id;
+/** The suite test this run belongs to, by the recorded test's id. */
+function suiteTestFor(recorded: Test, tests: Test[]): Test {
+  const id = recorded.id;
   const test = tests.find((candidate) => candidate.id === id);
   if (test === undefined) {
     throw new Error(
@@ -344,6 +344,9 @@ type Entry = {
  * when present (it alone knows about a timeout or cost-cap kill); without one
  * (an ad-hoc directory), the trace's own ending decides. A run that almost
  * finished must not earn points from a judge that cannot tell it crashed.
+ * The one exception is a test that sets `gradeWhenAgentFails` (see
+ * `gradesFailedRuns`): its graders check the workdir, and can tell for
+ * themselves.
  *
  * A trace with NO recorded output is not a failure: command agents (the
  * agency CLI under --agent-cmd) do not emit the output event file agents do,
@@ -351,14 +354,14 @@ type Entry = {
  * graders read from the workdir. Grading proceeds with `output: null` —
  * graders that need the output fail on their own terms against null.
  */
-function entryFor(snapshot: RunDirectorySnapshot, trace: Trace, workdirOverride?: string): Entry {
+function entryFor(snapshot: RunDirectorySnapshot, trace: Trace, ctx: GradingContext): Entry {
   const effective: EffectiveTraceAnnotations | undefined =
     snapshot.effectiveAnnotations[trace.traceId];
   const runRow = effective?.run ?? null;
   const test = testOf(runRow, trace.traceId);
   const record: EvalRecord = evalRecordFor(trace, snapshot.dir);
   const outputs = record.evalOutputs ?? [];
-  const workdir = workdirOverride ?? runDirPaths(snapshot.dir).workdirDir;
+  const workdir = ctx.workdirOverride ?? runDirPaths(snapshot.dir).workdirDir;
   const run: LoadedRun = {
     output: outputs.length === 0 ? null : (outputs[outputs.length - 1].value as Json),
     traceId: trace.traceId,
@@ -370,7 +373,10 @@ function entryFor(snapshot: RunDirectorySnapshot, trace: Trace, workdirOverride?
   const harness = runRow !== null && runRow.kind === "run" ? runRow.harness : undefined;
   const graderFiles = runRow !== null && runRow.kind === "run" ? runRow.graderFiles : undefined;
   const ended = runRow !== null && runRow.kind === "run" ? runRow.ended : traceEnding(trace);
-  if (ended === "ok") {
+  // The run row still says how a run ended; letting the graders see a run
+  // that stopped early gives up only the automatic zero. A void run broke
+  // for reasons that say nothing about the agent, so it is never graded.
+  if (ended === "ok" || (ended !== "void" && gradesFailedRuns(test, ctx.graders))) {
     return { test, run, humanFeedback, graders, harness, graderFiles };
   }
   const detail =
@@ -385,6 +391,17 @@ function entryFor(snapshot: RunDirectorySnapshot, trace: Trace, workdirOverride?
     graderFiles,
     ungradedReason: `the run ended with ${ended}${detail}`,
   };
+}
+
+/** Whether a run that stopped early still goes to the graders. The test that
+ *  supplies the graders decides, because the flag is a promise about them:
+ *  under `--suite`, the suite's test as it is now, not the recorded one.
+ *  Graders passed in to replace the test's (`--graders`) are not the ones the
+ *  test promised about, so the flag does not apply to them. */
+function gradesFailedRuns(recorded: Test, source: GraderSource): boolean {
+  if (source.kind === "override") return false;
+  const test = source.kind === "suite" ? suiteTestFor(recorded, source.tests) : recorded;
+  return test.gradeWhenAgentFails === true;
 }
 
 /** The test a trace ran, from the harness's `run` row; an ad-hoc trace with

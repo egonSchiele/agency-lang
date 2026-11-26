@@ -1044,6 +1044,28 @@ describe("runSuite", () => {
       expect(result.tests[0].grading?.objective).toBe(later.objective());
     });
 
+    it("runs the graders on a failed agent's workdir when the test sets gradeWhenAgentFails", async () => {
+      const runner = vi.fn(async (job: EvalRunnerJob) => {
+        fs.writeFileSync(path.join(job.cwd, "touched.txt"), "half done");
+        fs.writeFileSync(job.statelogPath, traceFor(job, "partial").join("\n") + "\n");
+        return { ok: false as const, errorMessage: "exited 1" };
+      });
+      const options = suiteWith("failed-but-graded", { "touched-it": "test -f touched.txt" });
+      const result = await runSuite(
+        {
+          ...options,
+          inputs: [{ ...options.inputs[0], gradeWhenAgentFails: true }],
+          gradeInPlace: true,
+        },
+        { runner },
+      );
+      expect(result.tests[0].status).toBe("error");
+      expect(scoreRows(result.tests[0].runDir)).toEqual([{ name: "touched-it", pass: true }]);
+      expect(result.tests[0].grading?.objective).toBe(1);
+      const run = readRunDirectory(result.tests[0].runDir, quiet).annotationRows[0];
+      expect(run).toMatchObject({ kind: "run", ended: "error" });
+    });
+
     it("scores a test whose agent never started 0 without running its graders, as eval grade would", async () => {
       const result = await runSuite(
         { ...suiteWith("never", { any: "true" }), gradeInPlace: true },

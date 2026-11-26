@@ -88,6 +88,16 @@ export type Test<T = TestInput> = {
   /** The folder this test's relative paths resolve from: the test's own
    *  folder in the directory form. Set by loading, when `setup` is given. */
   dir?: string;
+  /** Run this test's graders even when the agent's run did not end cleanly
+   *  (it exited non-zero, or was stopped at the time limit or the cost cap),
+   *  as long as it left a trace. Without it such a run scores 0 and no
+   *  grader sees it. For a test whose graders check what the agent left in
+   *  the workdir, where a run that stopped early may still have done most
+   *  of the work. Not for a test graded by a judge reading the agent's
+   *  reply: a judge cannot tell that the reply was cut short. Loading
+   *  refuses it on a test with no graders of its own, and it does not
+   *  apply to graders passed in to replace the test's. */
+  gradeWhenAgentFails?: boolean;
   /** Freeform, grader-agnostic metadata (tags, expectedOutput, …). */
   metadata?: Record<string, any>;
 };

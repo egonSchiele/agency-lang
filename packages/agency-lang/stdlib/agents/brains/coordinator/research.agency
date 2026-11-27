@@ -16,7 +16,7 @@ import { memoryTools } from "std::agents/lib/toolkits"
 import { researcherAgent } from "std::agents/researcher"
 import { setMemoryId } from "std::memory"
 import { emit } from "std::statelog"
-import { endTurn } from "std::thread"
+import { handBack } from "std::thread"
 
 def researchTools(): any[] {
   return memoryTools()
@@ -77,15 +77,24 @@ export handoff def researchAgent(
       offerSaveDraft: false,
     )
   }
-  // A finished answer is the user's reply as written. A coordinator
-  // follow-up read it as a message to itself and wrote about it ("the
-  // report above stands") to a user who never saw it. A run the budget cut
-  // short is a failure (keepDraft: false), not a draft passed off as the
-  // answer, so it hands back like any failure and the coordinator can say
-  // what is unfinished. researchTurn calls this from code, where there is
-  // no llm() call to end.
+  // Research never ends the coordinator's turn: it may be a first step
+  // toward a bigger task. The user has not seen the answer, because the
+  // terminal prints only the turn's reply, so the hand-back says so. Without
+  // that, the coordinator can write about the answer ("the report above
+  // stands") to a user who never saw it. A run the budget cut short is a
+  // failure (keepDraft: false) and hands back like any failure. Called from
+  // code by the router, research is the turn's reply already, and there is
+  // no hand-back.
   if (_insideToolCall() && isSuccess(answer)) {
-    endTurn()
+    handBack(researchHandBack(answer.value))
   }
   return answer
+}
+
+// The message that returns control to the coordinator after a finished
+// research call.
+def researchHandBack(answer: string): string {
+  return """[researchAgent finished. The user has not seen this answer.]
+${answer}
+If it answers the user's request, reply with it in full. Otherwise continue with the request."""
 }

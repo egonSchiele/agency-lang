@@ -123,8 +123,24 @@ export def answerTurn(
 ): string {
   """
   Answer one turn with agencyAgent. A failure becomes the text the user
-  reads. The grounding goes on the conversation thread, where it stays and
-  is cached, rather than in the per-call context.
+  reads.
+
+  @param brainName - The brain that answers
+  @param message - The user's message, after slash expansion
+  @param attachments - The files the message referenced
+  """
+  return replyText("The agent", answerTurnResult(brainName, message, attachments))
+}
+
+export def answerTurnResult(
+  brainName: string,
+  message: string,
+  attachments: Attachment[],
+): Result<string> {
+  """
+  Answer one turn with agencyAgent, and return its result. The grounding
+  goes on the conversation thread, where it stays and is cached, rather
+  than in the per-call context.
 
   @param brainName - The brain that answers
   @param message - The user's message, after slash expansion
@@ -165,5 +181,5 @@ export def answerTurn(
     },
     attachments: attachments,
   )
-  return replyText("The agent", result)
+  return result
 }

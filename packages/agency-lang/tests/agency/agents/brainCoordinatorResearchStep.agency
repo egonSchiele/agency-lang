@@ -1,0 +1,72 @@
+// researchAgent called as the coordinator's tool: it hands back to the
+// coordinator instead of ending the turn, so research can be a first step.
+import { coordinatorBrain } from "std::agents/brains/coordinator"
+import { AgentSettings } from "std::agents/brains/settings"
+
+static const HAND_BACK = "[researchAgent finished. The user has not seen this answer.]"
+
+// Every model request, in order: its messages.
+let requests: any[] = []
+
+callback("onLLMCallStart") as data {
+  requests = [...requests, data.messages]
+}
+
+def plainSettings(): AgentSettings {
+  return {
+    context: "",
+    model: "",
+    provider: "",
+    reasoningModel: "",
+    reasoningProvider: "",
+    routerModel: "",
+    routerProvider: "",
+    judgeModel: "",
+    judgeProvider: "",
+    imageModel: "",
+    imageProvider: "",
+    coderTools: []
+  }
+}
+
+def contentOf(message: any): string {
+  return "${message.content}"
+}
+
+// The last research hand-back that any request carried, or "".
+def handBackText(): string {
+  let found = ""
+  for (messages in requests) {
+    for (message in messages) {
+      const content = contentOf(message)
+      if (content.startsWith(HAND_BACK)) {
+        found = content
+      }
+    }
+  }
+  return found
+}
+
+def textOf(result: Result<string>): string {
+  if (isFailure(result)) {
+    return "failed: ${result.error}"
+  }
+  return result.value
+}
+
+// The coordinator asks research for a check, then hands the work to the
+// coder. The turn's reply is the coordinator's last one, so the turn went on
+// past research.
+node researchThenCode(): string {
+  const result = coordinatorBrain("Check the layout module, then fix it.", plainSettings(), [])
+  return textOf(result)
+}
+
+// The coordinator reads the research answer in the hand-back, which says the
+// user has not seen it and carries the whole answer, last line included.
+node handBackCarriesTheAnswer(): string {
+  const result = coordinatorBrain("What does the layout module do?", plainSettings(), [])
+  const text = handBackText()
+  const hasAnswer = text.includes("The layout module draws tables.") && text.includes("LAST LINE 42")
+  return "${textOf(result)}|${hasAnswer}"
+}

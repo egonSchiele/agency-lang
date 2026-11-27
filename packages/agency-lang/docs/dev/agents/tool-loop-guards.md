@@ -25,8 +25,9 @@ attempts of thirty rounds each is sixty rounds, not thirty.
 What the count leaves out: a provider-hosted tool round (a search the
 provider ran inside one request) never comes through this loop, so it is
 not a round; a validation retry re-sends the same turn and is counted by
-`validationRetries` instead; and an intrinsic call (`saveDraft`) is
-handled inline and ignores the cap.
+`validationRetries` instead. An intrinsic call (`saveDraft`) is handled
+inline and does not need a round of its own below the cap, but a round
+that calls only `saveDraft` still counts, like any round.
 
 Where the cap comes from. The call's own `llm(..., { maxToolCallRounds })`
 and a branch default from `setLlmOptions` (a fork or tool branch inherits
@@ -46,9 +47,11 @@ how trace wX5GvrUq ran 43 rounds under a researcher that asked for 30:
 43 is under 50 (ADI-46).
 
 The cap allows rounds 0 to cap - 1. The request after the last allowed
-round, and every request after it in the call, offers only the intrinsic
-tools (`toolsOffered` in `toolLoopGuards.ts`) and no provider-hosted
-tools (`configOffered` drops `hostedTools`, which travel in the config).
+round, and every request after it in the call, offers no tools at all,
+intrinsic tools included (`toolsOffered` in `toolLoopGuards.ts`), and no
+provider-hosted tools (`configOffered` drops `hostedTools`, which travel
+in the config). `saveDraft` is not offered there because the next thing
+the model writes is the call's answer, which is newer than any draft.
 With nothing to call or search, the model can only answer. Anthropic
 accepts a request whose history has `tool_use` and `tool_result` blocks
 but no `tools` field, so the empty list is safe there. The decision reads
@@ -64,6 +67,20 @@ verdict for every call in that round, with this message:
 The message is a tool result, so it stays in the thread after the call
 returns. It names "this request" because a later `llm()` call on the
 same thread starts its own count and offers tools again.
+
+Past the cap, an intrinsic call is refused like any other: no call is
+intrinsic there (`partitionIntrinsicCalls`), so every call goes to the
+gate. If the next request sends tool calls again, the loop refuses them
+too and then ends the `llm()` call with a failure (`pastRoundCap`):
+
+> The model kept calling tools after its 30 tool rounds were used up.
+
+Without that, a model that kept sending calls would be refused forever.
+The check reads the persisted round counter, so a resumed pass decides
+the same way. It runs after the round's refusals are written, so the
+thread never ends on an unanswered tool call. A draft the model saved
+earlier in the call is lost in this case: the `@guarded` decorator hands
+back a draft only when a budget trips.
 
 ## The round warning
 
@@ -396,8 +413,7 @@ reply says it stopped to call a tool, the call was lost, and
 | Stop reason `"tool_use"`, no tool calls, and the request offered no tools | Return the reply as before |
 
 A request offers no tools in an `llm()` call that has none, and at the
-round cap, where only intrinsic tools like `saveDraft` are offered and
-usually there are none. There the note would ask the model to call a
+round cap. There the note would ask the model to call a
 tool it does not have, so the reply is the answer, as it was before the
 retry existed. Hosted tools do not count: their calls run at the
 provider and never reach the tool loop, so none can be lost on the way.

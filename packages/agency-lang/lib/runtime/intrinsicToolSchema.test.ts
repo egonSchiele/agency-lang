@@ -3,8 +3,8 @@ import { z } from "zod";
 import * as smoltalk from "smoltalk";
 import { ToolCall } from "smoltalk";
 import type { Result, PromptResult, StreamChunk } from "smoltalk";
-import { AgencyFunction } from "./agencyFunction.js";
 import { runInTestContext, type Run } from "./asyncContext.js";
+import { stdlibShapedSaveDraft } from "./promptTestHelpers.js";
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
 import { runPrompt } from "./prompt.js";
 import { RuntimeContext } from "./state/context.js";
@@ -81,27 +81,6 @@ class ScriptedClient implements LLMClient {
   ): Promise<Result<EmbedResult>> {
     throw new Error("not used");
   }
-}
-
-function stdlibShapedSaveDraft(): AgencyFunction {
-  return new AgencyFunction({
-    name: "saveDraft",
-    module: "stdlib/index.agency",
-    fn: () => null,
-    params: [
-      {
-        name: "value",
-        hasDefault: false,
-        defaultValue: undefined,
-        variadic: false,
-      } as any,
-    ],
-    toolDefinition: {
-      name: "saveDraft",
-      description: "the def's own description",
-      schema: z.object({ value: z.any() }),
-    },
-  });
 }
 
 async function runSaveDraftPrompt(opts: { draftSchema: unknown; save: unknown }) {

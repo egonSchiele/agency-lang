@@ -13,6 +13,7 @@ import { agencyAgentBrains } from "std::agents/agency"
 import { agentNameFor } from "./lib/agentName.agency"
 import { parseAgentArgs } from "./lib/args.agency"
 import { checkCliBundles } from "./lib/cliTools.agency"
+import { finishUnfinishedTask } from "./lib/endCheck.agency"
 import { mergedPalette } from "./lib/commandPalette.agency"
 import { groundingText, setGrounding } from "./lib/grounding.agency"
 import { getHeader } from "./lib/header.agency"
@@ -44,7 +45,7 @@ import {
   setBrainName,
   resolveBrainName,
   resolveStartTarget,
-  runTurn,
+  runTurnResult,
   startTargetsFor,
  } from "./lib/turn.agency"
 import { formatTurnFailure } from "./lib/utils.agency"
@@ -68,11 +69,17 @@ def oneShot(args: any, brainName: string, target: string, prompt: string) {
   let reply = ""
   handle {
     checkBundles()
-    const result = try runTurn(target, prompt)
+    const result = try runTurnResult(target, prompt)
     // Not `match`: a match expression inside a block body keeps its value
     // on the wrong stack, so `reply` would end up null (compiler bug).
     if (result is success(text)) {
       reply = text ?? ""
+      // Nobody can say "keep going" to a one-shot run, so a reply that says
+      // work remains gets more turns. A start target runs a program, not
+      // the brain, and has nothing to continue.
+      if (target == "") {
+        reply = finishUnfinishedTask(reply)
+      }
     } else if (result is failure(problem)) {
       reply = formatTurnFailure("${problem}")
     }

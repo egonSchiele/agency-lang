@@ -1,21 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { execFile } from "child_process";
-import { promisify } from "util";
-import { mkdtempSync, readFileSync, writeFileSync, existsSync } from "fs";
-import { tmpdir } from "os";
+import { readFileSync, writeFileSync } from "fs";
 import path from "path";
-import { safeDeleteDirectoryWithin } from "../utils.js";
-
-const execFileAsync = promisify(execFile);
+import {
+  ROUTE_TO_COORDINATOR,
+  cliIsBuilt,
+  makeTempDir,
+  removeTempDir,
+  runAgency,
+  runAgentWithMocks,
+} from "./cliSpawnTestHelpers.js";
 
 // End-to-end: run the BUILT CLI and observe the budget-exceeded exit code
-// and message. Mirrors runPolicy.spawn.test.ts's harness.
-const CLI = path.resolve("dist/scripts/agency.js");
-
-function rmTemp(dir: string): void {
-  const result = safeDeleteDirectoryWithin(tmpdir(), dir);
-  expect(result.success).toBe(true);
-}
+// and message.
 
 // Sleeps far past the tiny time budget the tests set. The direction is
 // jitter-safe: the EXPECTED outcome is the trip, and a slow runner only
@@ -77,24 +73,9 @@ const SLOW_REPLY_MOCKS = JSON.stringify([{ return: "done", delayMs: 8000 }]);
 const CANCELLED_REQUEST = '"type":"promptCancelled"';
 
 function makeDir(fixture: string = SLEEPER): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "budget-spawn-"));
+  const dir = makeTempDir("budget-spawn-");
   writeFileSync(path.join(dir, "sleeper.agency"), fixture);
   return dir;
-}
-
-// Runs the built CLI and returns its output and exit code. The 60-second
-// timeout kills a child that hangs.
-async function runAgency(dir: string, cliArgs: string[], env: Record<string, string>) {
-  try {
-    const { stdout, stderr } = await execFileAsync(process.execPath, [CLI, ...cliArgs], {
-      cwd: dir,
-      timeout: 60_000,
-      env: { ...process.env, ...env },
-    });
-    return { stdout, stderr, code: 0 };
-  } catch (e: any) {
-    return { stdout: e.stdout ?? "", stderr: e.stderr ?? "", code: e.code ?? 1 };
-  }
 }
 
 async function runCli(dir: string, args: string[], env: Record<string, string> = {}) {
@@ -104,7 +85,7 @@ async function runCli(dir: string, args: string[], env: Record<string, string> =
 }
 
 // Requires the built CLI; skip in a clean checkout (CI runs make first).
-describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
+describe.skipIf(!cliIsBuilt)("root budget (end-to-end)", () => {
   it("--max-time flag trips the root guard: exit 3 + overrun message", async () => {
     const dir = makeDir();
     try {
@@ -112,7 +93,7 @@ describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
       expect(r.stderr).toMatch(/Exceeded time limit/);
       expect(r.code).toBe(3);
     } finally {
-      rmTemp(dir);
+      removeTempDir(dir);
     }
   }, 90_000);
 
@@ -124,7 +105,7 @@ describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
       expect(r.stderr).toMatch(/Exceeded time limit/);
       expect(r.code).toBe(3);
     } finally {
-      rmTemp(dir);
+      removeTempDir(dir);
     }
   }, 90_000);
 
@@ -139,7 +120,7 @@ describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
       expect(r.code).toBe(3);
       expect(readFileSync(log, "utf-8")).toContain(CANCELLED_REQUEST);
     } finally {
-      rmTemp(dir);
+      removeTempDir(dir);
     }
   }, 90_000);
 
@@ -150,7 +131,7 @@ describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
       expect(r.stderr + r.stdout).toMatch(/max-time/);
       expect(r.code).toBe(2);
     } finally {
-      rmTemp(dir);
+      removeTempDir(dir);
     }
   }, 90_000);
 
@@ -165,56 +146,35 @@ describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
       expect(r.stderr).not.toMatch(/Exceeded time limit/);
       expect(r.code).toBe(0);
     } finally {
-      rmTemp(dir);
+      removeTempDir(dir);
     }
   }, 90_000);
 });
 
-// The router makes the agent's first model call, so it gets its own queue
-// with a decision answer. The coordinator's reply takes 9 seconds and then
-// returns, so a broken limit makes the run finish late instead of hanging.
-const AGENT_SLOW_REPLY_MOCKS = JSON.stringify({
-  router: [
-    {
-      decide: {
-        answer: { type: "choice", choice: "coordinator", confidence: 0.9, probabilities: {} },
-      },
-    },
-  ],
+// The router makes the agent's first model call, so it gets its own queue.
+// The coordinator's reply takes 9 seconds and then returns, so a broken limit
+// makes the run finish late instead of hanging.
+const AGENT_SLOW_REPLY_MOCKS = {
+  router: [ROUTE_TO_COORDINATOR],
   "*": [{ return: "all done", delayMs: 9000 }],
-});
+};
 
-// The agent reads and writes its settings under HOME, so the test gives it a
-// throwaway one inside the temp folder. The placeholder keys make the agent
-// start, and pick the router's default model, the same way whether or not the
-// machine has real keys.
-async function runAgent(dir: string, args: string[], env: Record<string, string>) {
-  const home = path.join(dir, "home");
-  const agentHome = path.join(home, ".agency-agent");
-  return runAgency(dir, ["agent", "--agent-home", agentHome, ...args], {
-    HOME: home,
-    ANTHROPIC_API_KEY: "test-key",
-    OPENROUTER_API_KEY: "test-key",
-    ...env,
-  });
-}
-
-describe.skipIf(!existsSync(CLI))("root budget in agency agent (end-to-end)", () => {
+describe.skipIf(!cliIsBuilt)("root budget in agency agent (end-to-end)", () => {
   it("--max-time stops a -p run while the coordinator waits on the model", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "budget-agent-"));
+    const dir = makeTempDir("budget-agent-");
     try {
       const log = path.join(dir, "log.jsonl");
-      const r = await runAgent(
+      const r = await runAgentWithMocks(
         dir,
         ["--brain", "coordinator", "--max-time", "5s", "--log", log, "-p", "wait a while"],
-        { AGENCY_LLM_MOCKS: AGENT_SLOW_REPLY_MOCKS },
+        AGENT_SLOW_REPLY_MOCKS,
       );
       expect(r.stdout).not.toMatch(/all done/);
       expect(r.stderr).toMatch(/Exceeded time limit/);
       expect(r.code).toBe(3);
       expect(readFileSync(log, "utf-8")).toContain(CANCELLED_REQUEST);
     } finally {
-      rmTemp(dir);
+      removeTempDir(dir);
     }
   }, 90_000);
 });

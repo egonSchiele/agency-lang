@@ -202,6 +202,43 @@ the context percentage, the session title, the resume transcript, and
 `searchSessions` read the thread the id names
 (`docs/dev/agents/agent-sessions.md`, `docs/dev/agents/agent-compaction.md`).
 
+## The end of a one-shot turn
+
+A `-p` run ends when the brain's turn returns, and nobody is there to say
+"keep going". So `oneShot` in `agent.agency` checks the reply first
+(`finishUnfinishedTask` in `lib/endCheck.agency`). The router's decision
+model reads the reply on a thread of its own and picks one of three labels:
+
+```
+type ReplyState = "finished" | "unfinished" | "blocked"
+```
+
+- `"finished"` and `"blocked"` end the run, as before. A blocked reply needs
+  something only a person can give, so another turn cannot help.
+- `"unfinished"` runs the brain again with the message "The task is not
+  finished. Continue it now, or say why you can't." The run prints the last
+  reply.
+
+The run gets at most 2 extra turns, and the root budget still applies.
+
+The check runs only after a turn that succeeded, and only for the brain,
+not a start target. With no router model, or when the question fails, the
+reply counts as finished: a check that cannot run never keeps a run going.
+Each answer is emitted as an `agencyAgent.endCheck` event.
+
+The extra turn goes through `runContinueTurn` in `lib/turn.agency`. Its
+message is the harness's, not the user's, so it gets no slash expansion, no
+project block, and no attachments, and it is marked rewritten
+(`setMessageRewritten`), so the router does not route it. Routing it would
+let the router send "continue" to the coder or the researcher, when the
+coordinator is the one that knows what is left and can brief the coder.
+
+Measured on 104 final replies from the agency-plans sweeps, the check marked
+one finished reply unfinished (a reply that asked whether to run more
+tests). A keyword scan of the replies it marked finished found none that
+said work remained. The tests are in
+`lib/cli/agentEndCheck.spawn.test.ts`.
+
 ## The safety boundary
 
 The rule, in one sentence: **every turn runs inside the one

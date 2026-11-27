@@ -1,0 +1,97 @@
+/** @module
+  @summary The check at the end of a one-shot turn. A run nobody watches
+  ends on the brain's first text reply, so the router's decision model reads
+  that reply, and a reply that says work remains gets up to two more turns.
+  See docs/dev/agents/agent-brains.md.
+*/
+import { modelOptions } from "std::llm"
+import { emit } from "std::statelog"
+import { userMessage } from "std::thread"
+
+import { getRouterModel, getRouterProvider } from "../shared.agency"
+import { runContinueTurn } from "./turn.agency"
+import { formatTurnFailure } from "./utils.agency"
+
+type ReplyState = "finished" | "unfinished" | "blocked"
+
+static const MAX_CONTINUE_TURNS = 2
+static const END_CHECK_TIMEOUT = 10s
+
+export static const CONTINUE_MESSAGE = "The task is not finished. Continue it now, or say why you can't."
+
+static const END_CHECK_QUESTION = """That was the last reply an agent wrote at the end of a task. Nobody is watching the run, so the agent cannot ask a question and wait for an answer. Which one is true?
+finished: the reply says the task is done. A reply that says the task is done is finished even when it adds that a final check could not be repeated, or offers optional extra work.
+unfinished: the reply says work remains that the agent could still do now, for example "continuing with the next tasks" or "not fully implemented".
+blocked: the reply says the agent cannot go on without something it does not have, such as access, a decision, or an answer from a person."""
+
+// The question runs on a thread of its own, so the conversation does not
+// change.
+def askEndCheck(reply: string, model: string, provider: string): ReplyState {
+  let state: ReplyState = "finished"
+  thread(label: "end-check") {
+    userMessage(reply)
+    const answer: ReplyState = llm(
+      END_CHECK_QUESTION,
+      {
+        ...modelOptions(model, provider),
+        type: "decision",
+        retries: 0,
+        timeout: END_CHECK_TIMEOUT
+      },
+    )
+    state = answer
+  }
+  return state
+}
+
+// True only when the check ran and said "unfinished". No router model, or a
+// failed question, reads as finished: a check that cannot run never keeps a
+// run going.
+def replyIsUnfinished(reply: string): boolean {
+  const model = getRouterModel()
+  if (model == "") {
+    return false
+  }
+  const asked = try askEndCheck(reply, model, getRouterProvider())
+  if (isFailure(asked)) {
+    emit(
+      {
+        type: "agencyAgent.endCheck",
+        state: "failed",
+        error: asked.error
+      },
+    )
+    return false
+  }
+  emit({
+    type: "agencyAgent.endCheck",
+    state: asked.value
+  })
+  return asked.value == "unfinished"
+}
+
+export def finishUnfinishedTask(reply: string): string {
+  """
+  Give the brain up to two more turns while its reply says work remains,
+  and return the last reply. Call only after a turn that succeeded.
+
+  @param reply - The brain's reply to the user's message
+  """
+  let current = reply
+  let extraTurns = 0
+  let keepGoing = replyIsUnfinished(current)
+  while (keepGoing) {
+    const next = try runContinueTurn(CONTINUE_MESSAGE)
+    extraTurns = extraTurns + 1
+    if (next is failure(problem)) {
+      return "${current}\n\n${formatTurnFailure("${problem}")}"
+    } else if (next is success(text)) {
+      current = text ?? ""
+    }
+    keepGoing = false
+    if (extraTurns < MAX_CONTINUE_TURNS) {
+      keepGoing = replyIsUnfinished(current)
+    }
+  }
+  return current
+}

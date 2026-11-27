@@ -8,7 +8,7 @@ import { map } from "std::array"
 import { expandSlash } from "std::skills"
 import { Attachment, currentThreadId } from "std::thread"
 
-import { answerTurn } from "./answer.agency"
+import { answerTurnResult, replyText } from "./answer.agency"
 import { detectAttachments, modalityFilter } from "./attachments.agency"
 import { guardStopHandler } from "./budget.agency"
 import { slashCommands } from "./commandPalette.agency"
@@ -100,37 +100,66 @@ def checkForAttachments(expanded: string): Attachment[] {
   return attachments
 }
 
-def dispatchToBrain(target: string, userMsg: string): string {
+// `fromHarness` marks a message the harness wrote, not the user. It gets no
+// slash expansion, no project block, and no attachments, and the router does
+// not route it.
+def dispatchToBrain(target: string, userMsg: string, fromHarness: boolean): Result<string> {
   if (_brainName == "") {
     throw(NO_BRAIN)
-    return ""
+    return failure(NO_BRAIN)
+  }
+  if (fromHarness) {
+    setMessageRewritten(true)
+    return answerTurnResult(_brainName, userMsg, [])
   }
   // A coder may have changed the agent's working directory on an earlier
   // turn. The model then needs that folder's instructions with this message.
   const expanded = withProjectContextIfMoved(expandSlash(userMsg, slashCommands()))
   setMessageRewritten(expanded != userMsg)
   if (target != "") {
-    return runStartTarget(target, expanded)
+    return success(runStartTarget(target, expanded))
   }
   const attachments = checkForAttachments(expanded)
-  return answerTurn(_brainName, expanded, attachments)
+  return answerTurnResult(_brainName, expanded, attachments)
 }
 
-export def runTurn(target: string, userMsg: string): string {
-  """
-  Run one user turn. A subagent's budget trip that no inner handler owns is
-  answered here as a hard stop, so the subagent returns its best result and
-  the brain continues. A whole-agent limit comes only from the `--max-time`
-  and `--max-cost` flags, which the runtime enforces as a root budget.
-  """
+// One turn on the conversation thread. A subagent's budget trip that no
+// inner handler owns is answered here as a hard stop, so the subagent
+// returns its best result and the brain continues.
+def turnResult(target: string, userMsg: string, fromHarness: boolean): Result<string> {
   // The turn runs on this run's active thread, which is the conversation.
   // Recorded before the turn too, so a turn the user cancels still leaves
   // the id behind.
   setConversationThread(currentThreadId())
-  let reply = ""
+  let result: Result<string> = failure("the turn did not run")
   handle {
-    reply = dispatchToBrain(target, userMsg)
+    result = dispatchToBrain(target, userMsg, fromHarness)
   } with guardStopHandler
   setConversationThread(currentThreadId())
-  return reply
+  return result
+}
+
+export def runTurn(target: string, userMsg: string): string {
+  """
+  Run one user turn and return the text the user reads. A whole-agent limit
+  comes only from the `--max-time` and `--max-cost` flags, which the runtime
+  enforces as a root budget.
+  """
+  return replyText("The agent", turnResult(target, userMsg, false))
+}
+
+export def runTurnResult(target: string, userMsg: string): Result<string> {
+  """
+  Run one user turn and return its result, so the caller can tell a reply
+  from a turn that failed.
+  """
+  return turnResult(target, userMsg, false)
+}
+
+export def runContinueTurn(message: string): Result<string> {
+  """
+  Run one more turn of the brain with a message the harness wrote, such as
+  a nudge to finish the task.
+  """
+  return turnResult("", message, true)
 }

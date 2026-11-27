@@ -1,0 +1,23 @@
+{
+  "sourceFile": "trip-time-after-callback.agency",
+  "tests": [
+    {
+      "nodeName": "midRequestAfterCallback",
+      "description": "A 100ms guard trips while a 5-second model request is out, even though a callback ran an Agency function just before the request.",
+      "input": "",
+      "expectedOutput": "\"tripped\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "never-delivered",
+          "delayMs": 5000
+        }
+      ]
+    }
+  ]
+}

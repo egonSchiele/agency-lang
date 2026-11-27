@@ -228,13 +228,12 @@ export class Runner {
 
   // ── Halt ──
 
+  /** Stop this runner: every later step is skipped. A halt never pauses a
+   *  time guard, because every `return` halts, and a callback's function
+   *  can return just before the runtime waits on a model, with no step
+   *  after it to restart the clock. See "Time limits and stops" in
+   *  docs/dev/runtime/interrupts.md. */
   halt(result: any): void {
-    // Charge in-flight elapsed time to any TimeGuards on the stack
-    // BEFORE flipping the halted flag, so the elapsed delta captures
-    // every ms up to the halt boundary. Idempotent: subsequent halts
-    // from outer Runners propagating the same interrupt see "paused"
-    // and no-op. CostGuards' pause() is a no-op.
-    this.stack?.guards.forEach((g) => g.pause());
     this.halted = true;
     this.haltResult = result;
   }
@@ -242,10 +241,11 @@ export class Runner {
   /** Resume any paused guards on the active stack. Idempotent — a
    *  guard already in "running" state no-ops. Called at the top of
    *  every step-equivalent entry point (step, hook, pipe, thread,
-   *  fork, debugger). After a halt, the first step entry re-arms
-   *  TimeGuards' timers; subsequent entries within the same active
-   *  window are no-ops. Also rebuilds non-serialized runtime state
-   *  (AbortController, abortSignal composition) after deserialization. */
+   *  fork, debugger). After a pause (an input() wait, a fork), the
+   *  first step entry re-arms TimeGuards' timers; subsequent entries
+   *  within the same active window are no-ops. Also rebuilds
+   *  non-serialized runtime state (AbortController, abortSignal
+   *  composition) after deserialization. */
   private beforeStep(): void {
     this.stack?.guards.forEach((g) => g.resume(this.stack!));
   }

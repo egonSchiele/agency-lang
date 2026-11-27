@@ -1,23 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { execFile } from "child_process";
-import { promisify } from "util";
-import { mkdtempSync, writeFileSync, existsSync, realpathSync, rmSync } from "fs";
-import { tmpdir } from "os";
+import { readFileSync, writeFileSync } from "fs";
 import path from "path";
-
-const execFileAsync = promisify(execFile);
+import {
+  ROUTE_TO_COORDINATOR,
+  cliIsBuilt,
+  makeTempDir,
+  removeTempDir,
+  runAgency,
+  runAgentWithMocks,
+} from "./cliSpawnTestHelpers.js";
 
 // End-to-end: run the BUILT CLI and observe the budget-exceeded exit code
-// and message. Mirrors runPolicy.spawn.test.ts's harness.
-const CLI = path.resolve("dist/scripts/agency.js");
-
-function rmTemp(dir: string): void {
-  const root = realpathSync(tmpdir());
-  const resolved = realpathSync(dir);
-  if (resolved !== root && resolved.startsWith(root + path.sep)) {
-    rmSync(resolved, { recursive: true, force: true });
-  }
-}
+// and message.
 
 // Sleeps far past the tiny time budget the tests set. The direction is
 // jitter-safe: the EXPECTED outcome is the trip, and a slow runner only
@@ -47,29 +41,51 @@ node main() {
 }
 `;
 
+// A callback calls an Agency function just before each model request, as
+// the agent's trace callbacks do. Time spent waiting on the model must still
+// count against --max-time.
+const CALLBACK_THEN_SLOW_MODEL = `
+let loud = false
+
+def isLoud(): boolean {
+  return loud
+}
+
+callback("onLLMCallStart") as data {
+  if (isLoud()) {
+    print("starting")
+  }
+}
+
+node main() {
+  const r: string = llm("go")
+  print(r)
+}
+`;
+
+// The scripted reply takes 8 seconds and then returns, so a broken limit
+// makes the run finish late instead of hanging the test.
+const SLOW_REPLY_MOCKS = JSON.stringify([{ return: "done", delayMs: 8000 }]);
+
+// The statelog event a model request the limit cut off writes. Its presence
+// proves the limit tripped while the model call was out, not earlier, so a
+// slow start-up cannot make these tests pass without exercising the wait.
+const CANCELLED_REQUEST = '"type":"promptCancelled"';
+
 function makeDir(fixture: string = SLEEPER): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "budget-spawn-"));
+  const dir = makeTempDir("budget-spawn-");
   writeFileSync(path.join(dir, "sleeper.agency"), fixture);
   return dir;
 }
 
 async function runCli(dir: string, args: string[], env: Record<string, string> = {}) {
-  try {
-    const { stdout, stderr } = await execFileAsync(
-      process.execPath,
-      // Agency's flags go before the filename; everything after it is the
-      // program's own command line.
-      [CLI, "run", ...args, "sleeper.agency"],
-      { cwd: dir, timeout: 60_000, env: { ...process.env, ...env } },
-    );
-    return { stdout, stderr, code: 0 };
-  } catch (e: any) {
-    return { stdout: e.stdout ?? "", stderr: e.stderr ?? "", code: e.code ?? 1 };
-  }
+  // Agency's flags go before the filename; everything after it is the
+  // program's own command line.
+  return runAgency(dir, ["run", ...args, "sleeper.agency"], env);
 }
 
 // Requires the built CLI; skip in a clean checkout (CI runs make first).
-describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
+describe.skipIf(!cliIsBuilt)("root budget (end-to-end)", () => {
   it("--max-time flag trips the root guard: exit 3 + overrun message", async () => {
     const dir = makeDir();
     try {
@@ -77,7 +93,7 @@ describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
       expect(r.stderr).toMatch(/Exceeded time limit/);
       expect(r.code).toBe(3);
     } finally {
-      rmTemp(dir);
+      removeTempDir(dir);
     }
   }, 90_000);
 
@@ -89,7 +105,22 @@ describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
       expect(r.stderr).toMatch(/Exceeded time limit/);
       expect(r.code).toBe(3);
     } finally {
-      rmTemp(dir);
+      removeTempDir(dir);
+    }
+  }, 90_000);
+
+  it("--max-time counts time spent waiting on a model after a callback ran", async () => {
+    const dir = makeDir(CALLBACK_THEN_SLOW_MODEL);
+    try {
+      const log = path.join(dir, "log.jsonl");
+      const r = await runCli(dir, ["--max-time", "2s", "--log-file", log], {
+        AGENCY_LLM_MOCKS: SLOW_REPLY_MOCKS,
+      });
+      expect(r.stderr).toMatch(/Exceeded time limit/);
+      expect(r.code).toBe(3);
+      expect(readFileSync(log, "utf-8")).toContain(CANCELLED_REQUEST);
+    } finally {
+      removeTempDir(dir);
     }
   }, 90_000);
 
@@ -100,7 +131,7 @@ describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
       expect(r.stderr + r.stdout).toMatch(/max-time/);
       expect(r.code).toBe(2);
     } finally {
-      rmTemp(dir);
+      removeTempDir(dir);
     }
   }, 90_000);
 
@@ -115,7 +146,35 @@ describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
       expect(r.stderr).not.toMatch(/Exceeded time limit/);
       expect(r.code).toBe(0);
     } finally {
-      rmTemp(dir);
+      removeTempDir(dir);
+    }
+  }, 90_000);
+});
+
+// The router makes the agent's first model call, so it gets its own queue.
+// The coordinator's reply takes 9 seconds and then returns, so a broken limit
+// makes the run finish late instead of hanging.
+const AGENT_SLOW_REPLY_MOCKS = {
+  router: [ROUTE_TO_COORDINATOR],
+  "*": [{ return: "all done", delayMs: 9000 }],
+};
+
+describe.skipIf(!cliIsBuilt)("root budget in agency agent (end-to-end)", () => {
+  it("--max-time stops a -p run while the coordinator waits on the model", async () => {
+    const dir = makeTempDir("budget-agent-");
+    try {
+      const log = path.join(dir, "log.jsonl");
+      const r = await runAgentWithMocks(
+        dir,
+        ["--brain", "coordinator", "--max-time", "5s", "--log", log, "-p", "wait a while"],
+        AGENT_SLOW_REPLY_MOCKS,
+      );
+      expect(r.stdout).not.toMatch(/all done/);
+      expect(r.stderr).toMatch(/Exceeded time limit/);
+      expect(r.code).toBe(3);
+      expect(readFileSync(log, "utf-8")).toContain(CANCELLED_REQUEST);
+    } finally {
+      removeTempDir(dir);
     }
   }, 90_000);
 });

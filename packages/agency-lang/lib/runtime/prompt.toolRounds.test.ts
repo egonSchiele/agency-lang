@@ -14,7 +14,8 @@ import { AgencyCancelledError } from "./errors.js";
 import { interrupt } from "./interrupts.js";
 import { DEFAULT_ROUND_WARNING, type WarnAtRoundsLeft } from "./roundWarning.js";
 import { labelOf } from "./state/messageMetadata.js";
-import { makeCtx, pingTool, RecordingClient } from "./promptTestHelpers.js";
+import { makeCtx, pingTool, RecordingClient, stdlibShapedSaveDraft } from "./promptTestHelpers.js";
+import { isFailure } from "./result.js";
 
 /** The round cap, `maxToolCallRounds`: where its value comes from, and
  *  what happens at the cap. See "The round cap" in
@@ -155,6 +156,76 @@ describe("the round cap", () => {
     );
     expect(s.runs()).toBe(4);
     expect(refusals(thread)).toHaveLength(0);
+  });
+});
+
+/** `saveDraft` at the cap: no longer offered, refused like any call, and a
+ *  model that keeps calling tools there ends the call. */
+describe("the round cap and saveDraft", () => {
+  const save = (value: string): LLMMock => ({ toolCall: { name: "saveDraft", args: { value } } });
+  const ping: LLMMock = { toolCall: { name: "ping", args: {} } };
+
+  /** One llm() call at a cap of 3 that offers ping and saveDraft, run in a
+   *  frame of its own, as a function's llm() call is. */
+  async function capped(mocks: LLMMock[]) {
+    const s = setup(mocks);
+    const thread = new MessageThread();
+    const ownerFrame = s.ctx.stateStack.getNewState();
+    const result = await runInTestContext(s.ctx, s.ctx.stateStack, s.threads, (run) =>
+      runPrompt(run, {
+        prompt: "call ping",
+        messages: thread,
+        clientConfig: {
+          tools: [s.ping, stdlibShapedSaveDraft()],
+          maxToolCallRounds: 3,
+          maxRepeatedToolCalls: 0,
+        } as any,
+        maxToolCallRounds: 10,
+      }),
+    );
+    return { s, thread, ownerFrame, result };
+  }
+
+  it("the request at the cap offers no tools, saveDraft included", async () => {
+    const { s, result } = await capped([ping, ping, ping, { return: "done" }]);
+    expect(result).toBe("done");
+    const both = ["ping", "saveDraft"];
+    expect(s.client.offered).toEqual([both, both, both, []]);
+  });
+
+  it("a saveDraft call at the cap is refused and saves nothing", async () => {
+    const { thread, ownerFrame, result } = await capped([
+      ping,
+      ping,
+      ping,
+      save("late"),
+      { return: "done" },
+    ]);
+    expect(result).toBe("done");
+    expect(refusals(thread)).toHaveLength(1);
+    expect(ownerFrame.savedDraft).toBeUndefined();
+  });
+
+  it("a model that keeps calling tools at the cap ends the call with a failure", async () => {
+    const { s, thread, result } = await capped([ping, ping, ping, save("a"), save("b"), ping]);
+    expect(isFailure(result)).toBe(true);
+    expect(result.error).toBe("The model kept calling tools after its 3 tool rounds were used up.");
+    // Both rounds past the cap were refused and answered, so the thread has
+    // no dangling tool call, and no request followed the second one.
+    expect(refusals(thread)).toHaveLength(2);
+    expect(s.client.offered).toHaveLength(5);
+  });
+
+  it("rounds that only call saveDraft count toward the cap", async () => {
+    const { s, ownerFrame, result } = await capped([
+      save("one"),
+      save("two"),
+      save("three"),
+      { return: "done" },
+    ]);
+    expect(result).toBe("done");
+    expect(s.client.offered.at(-1)).toEqual([]);
+    expect(ownerFrame.savedDraft).toEqual({ value: "three" });
   });
 });
 

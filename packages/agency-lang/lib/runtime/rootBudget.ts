@@ -51,8 +51,10 @@ function pushRootGuard(stack: StateStack, guard: CostGuard | TimeGuard): void {
  *  which meters the subprocess through the branch clone.
  *
  *  pushGuard() installs immediately, so a time budget's clock starts at run
- *  start — the intended whole-run semantics. Interrupt halts and input() waits
- *  still pause it like any other time guard. */
+ *  start — the intended whole-run semantics. input() waits and interrupt
+ *  handlers pause it like any other time guard. An interrupt that goes to a
+ *  person ends the run's leg, and the resume starts from the checkpoint's
+ *  elapsed time. */
 export function installRootBudget(
   stack: StateStack,
   host: Host,

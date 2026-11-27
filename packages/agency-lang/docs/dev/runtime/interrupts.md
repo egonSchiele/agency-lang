@@ -483,6 +483,53 @@ them. PR 3 adds two raise surfaces and the join rule:
   limit cannot raise a question about work that is already done, and a
   late timer cannot turn a computed success into a failure.
 
+## Time limits and stops
+
+A time guard counts working time, and its clock pauses in only three places:
+
+1. `input()` pauses it while it waits for the user to type (`inputImpl` in
+   `lib/stdlib/builtins.ts`).
+2. While an interrupt handler runs, every guard installed after that handler
+   was registered is suspended (`StateStack.beginSuspension`).
+3. A fork pauses the parent's clock and gives each branch a clone
+   (`runBatch`).
+
+`Runner.beforeStep` restarts the clock at every step entry.
+
+`Runner.halt` never pauses the clock. Every `return` compiles to
+`runner.halt(value)`, so a halt is ordinary control flow, not a stop. Here
+is why that matters:
+
+```
+def isLoud(): boolean {
+  return loud
+}
+
+callback("onLLMCallStart") as data {
+  if (isLoud()) {
+    print("starting")
+  }
+}
+```
+
+The runtime calls the callback from TypeScript just before it sends a model
+request. `isLoud()` returns, and if its halt paused the clock, nothing would
+restart it: no Agency step runs while the runtime waits on the model. Every
+model call after such a callback would go uncounted. The trace callbacks in
+`agency agent` have this shape.
+
+An interrupt that goes to a person does not need a pause either, because
+the run stops:
+
+- The checkpoint is captured at the raise, and `TimeGuard.toJSON` saves
+  `currentElapsed()`, which includes the running window.
+- The run's leg then ends, and `RuntimeContext.cleanup` pops every guard.
+- The resume is a new leg. It restores the guards from the checkpoint, so
+  the time the person took is never added.
+
+A debugger stop and a `spawn` question held for `agency attach` end the leg
+the same way.
+
 ## The feedback channel (resumable guards, PR 4)
 
 `approve({message})` delivers reviewer feedback to the model. Two

@@ -1,0 +1,41 @@
+{
+  "sourceFile": "brainCoordinatorResearchStep.agency",
+  "tests": [
+    {
+      "nodeName": "researchThenCode",
+      "description": "research called as a tool hands back to the coordinator, which goes on to call the coder; the turn's reply is the coordinator's last one, not the research answer",
+      "input": "",
+      "expectedOutput": "\"all done\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCall": { "name": "researchAgent", "args": { "userMsg": "Read-only check of the layout module." } } },
+        { "return": "The layout module draws tables." },
+        { "toolCall": { "name": "codeAgent", "args": { "userMsg": "Fix the layout module." } } },
+        { "return": "code done" },
+        { "return": "all done" }
+      ]
+    },
+    {
+      "nodeName": "handBackCarriesTheAnswer",
+      "description": "the hand-back after research says the user has not seen the answer and carries all of it",
+      "input": "",
+      "expectedOutput": "\"The layout module draws tables, as the research found.|true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCall": { "name": "researchAgent", "args": { "userMsg": "What does the layout module do?" } } },
+        { "return": "The layout module draws tables.\nIt also measures columns.\nLAST LINE 42" },
+        { "return": "The layout module draws tables, as the research found." }
+      ]
+    }
+  ]
+}

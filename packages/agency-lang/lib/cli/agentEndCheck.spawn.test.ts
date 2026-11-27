@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import path from "path";
 import {
   ROUTE_TO_COORDINATOR,
   cliIsBuilt,
@@ -25,17 +27,20 @@ function reply(text: string) {
   return { return: text };
 }
 
+/** One `-p` run: its output, exit code, and statelog. */
 async function oneShot(
   mocks: Record<string, unknown[]>,
   extraArgs: string[] = [],
-): Promise<CliRun> {
+): Promise<CliRun & { log: string }> {
   const dir = makeTempDir("agent-end-check-");
+  const logPath = path.join(dir, "log.jsonl");
   try {
-    return await runAgentWithMocks(
+    const run = await runAgentWithMocks(
       dir,
-      ["--brain", "coordinator", ...extraArgs, "-p", "Implement the plan."],
+      ["--brain", "coordinator", "--log", logPath, ...extraArgs, "-p", "Implement the plan."],
       mocks,
     );
+    return { ...run, log: readFileSync(logPath, "utf-8") };
   } finally {
     removeTempDir(dir);
   }
@@ -102,7 +107,7 @@ describe.skipIf(!cliIsBuilt)("the end check in agency agent -p (end-to-end)", ()
     expect(r.stdout).not.toContain("All tasks are done.");
   }, 90_000);
 
-  it("a check that fails reads as finished", async () => {
+  it("a check that fails reads as finished and is recorded in the log", async () => {
     // With no endCheck queue, the check's call falls back to `*`, whose next
     // entry is text where a decision is expected, so the check fails.
     const r = await oneShot({
@@ -111,6 +116,7 @@ describe.skipIf(!cliIsBuilt)("the end check in agency agent -p (end-to-end)", ()
     });
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("Continuing with the next tasks.");
+    expect(r.log).toContain("end check failed");
     expect(r.stdout).not.toContain("request failed");
   }, 90_000);
 

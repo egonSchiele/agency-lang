@@ -224,7 +224,9 @@ The run gets at most 2 extra turns, and the root budget still applies.
 The check runs only after a turn that succeeded, and only for the brain,
 not a start target. With no router model, or when the question fails, the
 reply counts as finished: a check that cannot run never keeps a run going.
-Each answer is emitted as an `agencyAgent.endCheck` event.
+Each answer, and a failed question with its error, is a `debug` event in
+the run's statelog ("end check" and "end check failed"). It is not printed,
+because a one-shot run's output is the reply and the session's cost.
 
 The extra turn goes through `runContinueTurn` in `lib/turn.agency`. Its
 message is the harness's, not the user's, so it gets no slash expansion, no
@@ -232,12 +234,6 @@ project block, and no attachments, and it is marked rewritten
 (`setMessageRewritten`), so the router does not route it. Routing it would
 let the router send "continue" to the coder or the researcher, when the
 coordinator is the one that knows what is left and can brief the coder.
-
-Measured on 104 final replies from the agency-plans sweeps, the check marked
-one finished reply unfinished (a reply that asked whether to run more
-tests). A keyword scan of the replies it marked finished found none that
-said work remained. The tests are in
-`lib/cli/agentEndCheck.spawn.test.ts`.
 
 ## The safety boundary
 

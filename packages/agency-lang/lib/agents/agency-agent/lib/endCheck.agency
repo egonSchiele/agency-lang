@@ -5,12 +5,12 @@
   See docs/dev/agents/agent-brains.md.
 */
 import { modelOptions } from "std::llm"
-import { emit } from "std::statelog"
 import { userMessage } from "std::thread"
 
 import { getRouterModel, getRouterProvider } from "../shared.agency"
 import { runContinueTurn } from "./turn.agency"
 import { formatTurnFailure } from "./utils.agency"
+import { _debug } from "agency-lang/stdlib-lib/statelog.js"
 
 type ReplyState = "finished" | "unfinished" | "blocked"
 
@@ -52,19 +52,16 @@ def replyIsUnfinished(reply: string): boolean {
   if (model == "") {
     return false
   }
+  // Recorded in the statelog, not printed: a one-shot run's output is the
+  // reply and the session's cost, and nothing else.
   const asked = try askEndCheck(reply, model, getRouterProvider())
   if (isFailure(asked)) {
-    emit(
-      {
-        type: "agencyAgent.endCheck",
-        state: "failed",
-        error: asked.error
-      },
-    )
+    _debug("end check failed", {
+      error: asked.error
+    })
     return false
   }
-  emit({
-    type: "agencyAgent.endCheck",
+  _debug("end check", {
     state: asked.value
   })
   return asked.value == "unfinished"

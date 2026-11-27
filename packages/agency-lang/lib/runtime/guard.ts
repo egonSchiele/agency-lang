@@ -50,9 +50,11 @@ function clampGrant(delta: number, g: { dimension: "cost" | "time"; label?: stri
  *   1. `install(stack)`  — on push. May mutate the stack
  *      (e.g. compose an AbortController into `stack.abortSignal`).
  *   2. `resume(stack)`   — at every Runner step entry; idempotent.
- *      First call after a halt or fresh deserialize actually arms
+ *      First call after a pause or fresh deserialize actually arms
  *      timers / rebuilds runtime state, subsequent calls are no-ops.
- *   3. `pause()`         — on Runner.halt; idempotent.
+ *   3. `pause()`         — while waiting on a person (input(), an
+ *      interrupt handler) and across a fork; idempotent. Never on a
+ *      Runner halt: a run that stops ends its leg instead.
  *   4. `check(stack)`    — at every LLM-cost-accumulation site and
  *      inside `Runner.shouldSkip`; returns the trip error or null.
  *   5. `uninstall(stack)` — on pop. Must undo whatever install() did.

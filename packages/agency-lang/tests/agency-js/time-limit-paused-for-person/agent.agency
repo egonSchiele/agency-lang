@@ -1,0 +1,20 @@
+effect test::gate { step: number }
+
+// The interrupt is two calls deep, and both functions have statements after
+// the call, so the run halts in three frames on its way out.
+def inner(): string {
+  raise test::gate("ok to continue?", { step: 1 })
+  const after = "after"
+  return after
+}
+
+def outer(): string {
+  const first = inner()
+  const more = "more"
+  return "${first} ${more}"
+}
+
+node main(): string {
+  const value = outer()
+  return value
+}

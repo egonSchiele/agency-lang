@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { mkdtempSync, writeFileSync, existsSync, realpathSync, rmSync } from "fs";
+import { mkdtempSync, writeFileSync, existsSync } from "fs";
 import { tmpdir } from "os";
 import path from "path";
+import { safeDeleteDirectoryWithin } from "../utils.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -12,11 +13,8 @@ const execFileAsync = promisify(execFile);
 const CLI = path.resolve("dist/scripts/agency.js");
 
 function rmTemp(dir: string): void {
-  const root = realpathSync(tmpdir());
-  const resolved = realpathSync(dir);
-  if (resolved !== root && resolved.startsWith(root + path.sep)) {
-    rmSync(resolved, { recursive: true, force: true });
-  }
+  const result = safeDeleteDirectoryWithin(tmpdir(), dir);
+  expect(result.success).toBe(true);
 }
 
 // Sleeps far past the tiny time budget the tests set. The direction is
@@ -47,25 +45,58 @@ node main() {
 }
 `;
 
+// A callback that calls an Agency function just before each model request,
+// as the agent's trace callbacks do. The function's `return` used to pause
+// the clock, and nothing restarted it while the request was out, so time
+// spent waiting on a model never counted.
+const CALLBACK_THEN_SLOW_MODEL = `
+let loud = false
+
+def isLoud(): boolean {
+  return loud
+}
+
+callback("onLLMCallStart") as data {
+  if (isLoud()) {
+    print("starting")
+  }
+}
+
+node main() {
+  const r: string = llm("go")
+  print(r)
+}
+`;
+
+// The scripted reply takes 8 seconds and then returns, so a broken limit
+// makes the run finish late instead of hanging the test.
+const SLOW_REPLY_MOCKS = JSON.stringify([{ return: "done", delayMs: 8000 }]);
+
 function makeDir(fixture: string = SLEEPER): string {
   const dir = mkdtempSync(path.join(tmpdir(), "budget-spawn-"));
   writeFileSync(path.join(dir, "sleeper.agency"), fixture);
   return dir;
 }
 
-async function runCli(dir: string, args: string[], env: Record<string, string> = {}) {
+// Runs the built CLI and returns its output and exit code. The 60-second
+// timeout kills a child that hangs.
+async function runAgency(dir: string, cliArgs: string[], env: Record<string, string>) {
   try {
-    const { stdout, stderr } = await execFileAsync(
-      process.execPath,
-      // Agency's flags go before the filename; everything after it is the
-      // program's own command line.
-      [CLI, "run", ...args, "sleeper.agency"],
-      { cwd: dir, timeout: 60_000, env: { ...process.env, ...env } },
-    );
+    const { stdout, stderr } = await execFileAsync(process.execPath, [CLI, ...cliArgs], {
+      cwd: dir,
+      timeout: 60_000,
+      env: { ...process.env, ...env },
+    });
     return { stdout, stderr, code: 0 };
   } catch (e: any) {
     return { stdout: e.stdout ?? "", stderr: e.stderr ?? "", code: e.code ?? 1 };
   }
+}
+
+async function runCli(dir: string, args: string[], env: Record<string, string> = {}) {
+  // Agency's flags go before the filename; everything after it is the
+  // program's own command line.
+  return runAgency(dir, ["run", ...args, "sleeper.agency"], env);
 }
 
 // Requires the built CLI; skip in a clean checkout (CI runs make first).
@@ -86,6 +117,17 @@ describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
     try {
       const r = await runCli(dir, ["--max-time", "100ms"]);
       expect(r.stdout).not.toMatch(/GUARD_ABSORBED/);
+      expect(r.stderr).toMatch(/Exceeded time limit/);
+      expect(r.code).toBe(3);
+    } finally {
+      rmTemp(dir);
+    }
+  }, 90_000);
+
+  it("--max-time counts time spent waiting on a model after a callback ran", async () => {
+    const dir = makeDir(CALLBACK_THEN_SLOW_MODEL);
+    try {
+      const r = await runCli(dir, ["--max-time", "2s"], { AGENCY_LLM_MOCKS: SLOW_REPLY_MOCKS });
       expect(r.stderr).toMatch(/Exceeded time limit/);
       expect(r.code).toBe(3);
     } finally {
@@ -114,6 +156,46 @@ describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
       const r = await runCli(dir, [], { AGENCY_MAX_TIME: "100" });
       expect(r.stderr).not.toMatch(/Exceeded time limit/);
       expect(r.code).toBe(0);
+    } finally {
+      rmTemp(dir);
+    }
+  }, 90_000);
+});
+
+// The router makes the agent's first model call, so it gets its own queue
+// with a decision answer. The coordinator's reply takes 9 seconds and then
+// returns, so a broken limit makes the run finish late instead of hanging.
+const AGENT_SLOW_REPLY_MOCKS = JSON.stringify({
+  router: [
+    {
+      decide: {
+        answer: { type: "choice", choice: "coordinator", confidence: 0.9, probabilities: {} },
+      },
+    },
+  ],
+  "*": [{ return: "all done", delayMs: 9000 }],
+});
+
+// The agent reads and writes its settings under HOME, so the test gives it a
+// throwaway one inside the temp folder.
+async function runAgent(dir: string, args: string[], env: Record<string, string>) {
+  const home = path.join(dir, "home");
+  const agentHome = path.join(home, ".agency-agent");
+  return runAgency(dir, ["agent", "--agent-home", agentHome, ...args], { HOME: home, ...env });
+}
+
+describe.skipIf(!existsSync(CLI))("root budget in agency agent (end-to-end)", () => {
+  it("--max-time stops a -p run while the coordinator waits on the model", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "budget-agent-"));
+    try {
+      const r = await runAgent(
+        dir,
+        ["--brain", "coordinator", "--max-time", "5s", "-p", "wait a while"],
+        { AGENCY_LLM_MOCKS: AGENT_SLOW_REPLY_MOCKS },
+      );
+      expect(r.stdout).not.toMatch(/all done/);
+      expect(r.stderr).toMatch(/Exceeded time limit/);
+      expect(r.code).toBe(3);
     } finally {
       rmTemp(dir);
     }

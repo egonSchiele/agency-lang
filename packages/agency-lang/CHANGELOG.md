@@ -1,3 +1,32 @@
+## Nov 27 2026 — v0.47.0
+
+### Highlights:
+
+- Workflows can branch with `match` steps and loop with `each` steps.
+- Time limits now count time spent waiting on a model, so `--max-time` and the subagents' time budgets fire as they should.
+
+### Workflows
+
+Added conditionals and loops to workflows through `match` and `each` steps.
+
+### Evals
+
+- **New `"gradeWhenAgentFails": true` in `test.json`** runs the test's graders on a run that stopped early (an error, the time limit, or the cost cap), as long as it left a trace.
+- **New `eval.limits.memoryMb` config** sets the agent's memory limit, which was fixed at 512 MB. For `--agent-cmd` agents it also applies to every Node process the agent starts.
+- **`runs list` and the runs explorer now score a run whose must-pass gate failed as 0,** instead of showing it as not graded or showing its raw weighted mean.
+
+### Agent
+
+- **New trial brain `learntest`** (`agency agent --brain learntest`) is the minimal brain plus a `learn` tool, which turns functions from an Agency file into tools when the model needs them.
+- The learned-tool records moved to the new `std::agents/lib/learning` module so that stdlib brains can use them.
+
+### Fixes
+
+- **A `return` no longer pauses the time limit's clock.** A callback that returned just before a model request left the clock paused for the whole request. Waits for a person (`input()`, interrupts) still pause it.
+- A def named `valueOf` or `toString` no longer crashes the compiler.
+- `agency fmt` no longer writes `{ "$ref": "x" }` as `{ $ref: "x" }`, which does not parse.
+- **A `thread` block inside a loop now starts a fresh conversation every round.** Before, every round reopened the first round's thread, so an `llm()` call in round 10 resent rounds 1 to 9. `session:` and `continue:` options are now read every round, so `thread(session: "review-${file}")` opens one session per file.
+
 ## Nov 25 2026 — v0.46.0
 
 ### Highlights:

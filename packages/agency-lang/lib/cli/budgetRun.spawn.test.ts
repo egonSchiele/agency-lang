@@ -177,11 +177,18 @@ const AGENT_SLOW_REPLY_MOCKS = JSON.stringify({
 });
 
 // The agent reads and writes its settings under HOME, so the test gives it a
-// throwaway one inside the temp folder.
+// throwaway one inside the temp folder. The placeholder keys make the agent
+// start, and pick the router's default model, the same way whether or not the
+// machine has real keys.
 async function runAgent(dir: string, args: string[], env: Record<string, string>) {
   const home = path.join(dir, "home");
   const agentHome = path.join(home, ".agency-agent");
-  return runAgency(dir, ["agent", "--agent-home", agentHome, ...args], { HOME: home, ...env });
+  return runAgency(dir, ["agent", "--agent-home", agentHome, ...args], {
+    HOME: home,
+    ANTHROPIC_API_KEY: "test-key",
+    OPENROUTER_API_KEY: "test-key",
+    ...env,
+  });
 }
 
 describe.skipIf(!existsSync(CLI))("root budget in agency agent (end-to-end)", () => {

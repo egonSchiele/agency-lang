@@ -1,7 +1,5 @@
 // A guard(time:) block counts time spent waiting on a model even when a
-// callback ran Agency code just before the request. The callback's function
-// returns right before the request goes out, and no step runs while it is
-// out, so a return that paused the clock would hide the whole request.
+// callback ran Agency code just before the request.
 //
 // Wall-clock on purpose, like the in-flight nodes in trip-time.agency: the
 // mock's delay is a real timer that honors the abort signal, and nothing can

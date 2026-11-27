@@ -517,8 +517,6 @@ request. `isLoud()` returns, and if its halt paused the clock, nothing would
 restart it: no Agency step runs while the runtime waits on the model. Every
 model call after such a callback would go uncounted. The trace callbacks in
 `agency agent` have this shape.
-`lib/cli/budgetRun.spawn.test.ts` covers it for `agency run` and for
-`agency agent -p`.
 
 An interrupt that goes to a person does not need a pause either, because
 the run stops:
@@ -530,9 +528,7 @@ the run stops:
   the time the person took is never added.
 
 A debugger stop and a `spawn` question held for `agency attach` end the leg
-the same way. `tests/agency-js/time-limit-paused-for-person` waits longer
-than the limit before it answers an interrupt raised two calls deep, and the
-run finishes.
+the same way.
 
 ## The feedback channel (resumable guards, PR 4)
 

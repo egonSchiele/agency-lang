@@ -243,8 +243,9 @@ export class Runner {
    *  every step-equivalent entry point (step, hook, pipe, thread,
    *  fork, debugger). After a pause (an input() wait, a fork), the
    *  first step entry re-arms TimeGuards' timers; subsequent entries
-   *  within the same active window are no-ops. Also rebuilds non-serialized runtime state
-   *  (AbortController, abortSignal composition) after deserialization. */
+   *  within the same active window are no-ops. Also rebuilds
+   *  non-serialized runtime state (AbortController, abortSignal
+   *  composition) after deserialization. */
   private beforeStep(): void {
     this.stack?.guards.forEach((g) => g.resume(this.stack!));
   }

@@ -183,9 +183,10 @@ findings in its data as `draft`.
 
 **The coordinator's research call fails on a budget trip.** `researchAgent`
 (`stdlib/agents/brains/coordinator/research.agency`)
-ends the turn with the researcher's answer (`endTurn`), so a draft the
-guard returned as a success would reach the user as the reply, with the
-note meant for a model. It passes `keepDraft: false` to `researcherAgent`
+hands its answer back to the coordinator with a message saying the user
+has not seen it and to reply with it in full, so a draft the guard
+returned as a success would reach the user as the reply, with the note
+meant for a model. It passes `keepDraft: false` to `researcherAgent`
 and `agencyResearcherAgent`, so a trip is a failure, the handoff hands
 back with "stopped before finishing", and the coordinator says what is
 unfinished from the work above.

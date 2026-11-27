@@ -102,6 +102,29 @@ describe.skipIf(!cliIsBuilt)("the end check in agency agent -p (end-to-end)", ()
     expect(r.stdout).not.toContain("All tasks are done.");
   }, 90_000);
 
+  it("a check that fails reads as finished", async () => {
+    // With no endCheck queue, the check's call falls back to `*`, whose next
+    // entry is text where a decision is expected, so the check fails.
+    const r = await oneShot({
+      router: [ROUTE_TO_COORDINATOR],
+      "*": [reply("Continuing with the next tasks."), reply("Not a decision.")],
+    });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("Continuing with the next tasks.");
+    expect(r.stdout).not.toContain("request failed");
+  }, 90_000);
+
+  it("an extra turn that fails keeps the earlier reply and says what failed", async () => {
+    const r = await oneShot({
+      router: [ROUTE_TO_COORDINATOR],
+      endCheck: [endCheck("unfinished")],
+      // A decision answer where the coordinator expects text fails the call.
+      "*": [reply("Step one."), endCheck("finished")],
+    });
+    expect(r.stdout).toContain("Step one.");
+    expect(r.stdout).toContain("The request failed");
+  }, 90_000);
+
   it("makes no check after a turn that failed", async () => {
     // A decision answer where the coordinator expects text makes its call
     // fail, so the turn fails.

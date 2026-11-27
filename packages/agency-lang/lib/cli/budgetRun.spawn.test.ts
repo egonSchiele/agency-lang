@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { writeFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import path from "path";
 import {
   ROUTE_TO_COORDINATOR,
@@ -68,6 +68,11 @@ node main() {
 // makes the run finish late instead of hanging the test.
 const SLOW_REPLY_MOCKS = JSON.stringify([{ return: "done", delayMs: 8000 }]);
 
+// The statelog event a model request the limit cut off writes. Its presence
+// proves the limit tripped while the model call was out, not earlier, so a
+// slow start-up cannot make these tests pass without exercising the wait.
+const CANCELLED_REQUEST = '"type":"promptCancelled"';
+
 function makeDir(fixture: string = SLEEPER): string {
   const dir = makeTempDir("budget-spawn-");
   writeFileSync(path.join(dir, "sleeper.agency"), fixture);
@@ -108,9 +113,13 @@ describe.skipIf(!cliIsBuilt)("root budget (end-to-end)", () => {
   it("--max-time counts time spent waiting on a model after a callback ran", async () => {
     const dir = makeDir(CALLBACK_THEN_SLOW_MODEL);
     try {
-      const r = await runCli(dir, ["--max-time", "2s"], { AGENCY_LLM_MOCKS: SLOW_REPLY_MOCKS });
+      const log = path.join(dir, "log.jsonl");
+      const r = await runCli(dir, ["--max-time", "2s", "--log-file", log], {
+        AGENCY_LLM_MOCKS: SLOW_REPLY_MOCKS,
+      });
       expect(r.stderr).toMatch(/Exceeded time limit/);
       expect(r.code).toBe(3);
+      expect(readFileSync(log, "utf-8")).toContain(CANCELLED_REQUEST);
     } finally {
       removeTempDir(dir);
     }
@@ -155,14 +164,16 @@ describe.skipIf(!cliIsBuilt)("root budget in agency agent (end-to-end)", () => {
   it("--max-time stops a -p run while the coordinator waits on the model", async () => {
     const dir = makeTempDir("budget-agent-");
     try {
+      const log = path.join(dir, "log.jsonl");
       const r = await runAgentWithMocks(
         dir,
-        ["--brain", "coordinator", "--max-time", "5s", "-p", "wait a while"],
+        ["--brain", "coordinator", "--max-time", "5s", "--log", log, "-p", "wait a while"],
         AGENT_SLOW_REPLY_MOCKS,
       );
       expect(r.stdout).not.toMatch(/all done/);
       expect(r.stderr).toMatch(/Exceeded time limit/);
       expect(r.code).toBe(3);
+      expect(readFileSync(log, "utf-8")).toContain(CANCELLED_REQUEST);
     } finally {
       removeTempDir(dir);
     }

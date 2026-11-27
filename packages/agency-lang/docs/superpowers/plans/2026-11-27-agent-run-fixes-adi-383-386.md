@@ -407,6 +407,17 @@ I will read every `"unfinished"` and every `"blocked"`, plus a sample of the
 description. If more than a few finished replies come out `"unfinished"`, I
 will stop and bring the question back to you before wiring it in.
 
+**Found while building.** The sweeps had 104 final replies, not 113: nine
+runs recorded none. With the question as written above, the check called 14
+replies unfinished, and 5 of them were wrong: three said the work was done
+but could not be re-checked because a tool was unavailable, and two were
+done and offered optional extra work. One sentence was added to the
+`finished` line: "A reply that says the task is done is finished even when
+it adds that a final check could not be repeated, or offers optional extra
+work." The second measurement called 10 unfinished, and 1 was wrong (a
+finished reply that asked whether to run more tests). A keyword scan of the
+93 replies it called finished found none that said work remained.
+
 ### What I am not doing
 
 - **The coder continuing on its own after its round limit.** For `-p`, the

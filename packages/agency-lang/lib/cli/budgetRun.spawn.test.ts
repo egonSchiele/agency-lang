@@ -41,10 +41,9 @@ node main() {
 }
 `;
 
-// A callback that calls an Agency function just before each model request,
-// as the agent's trace callbacks do. The function's `return` used to pause
-// the clock, and nothing restarted it while the request was out, so time
-// spent waiting on a model never counted.
+// A callback calls an Agency function just before each model request, as
+// the agent's trace callbacks do. Time spent waiting on the model must still
+// count against --max-time.
 const CALLBACK_THEN_SLOW_MODEL = `
 let loud = false
 

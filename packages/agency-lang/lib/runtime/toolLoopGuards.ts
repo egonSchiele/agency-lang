@@ -8,7 +8,6 @@ import { sha256Text } from "../utils/hash.js";
 import type * as smoltalk from "smoltalk";
 import type { AgencyFunction, FuncParam } from "./agencyFunction.js";
 import { tooManyHandoffsMessage } from "./handoff.js";
-import { findIntrinsic } from "./intrinsicTools.js";
 
 /** A call is refused once the same tool, with the same arguments, has
  *  returned the same result this many times in a row, with no other call in
@@ -276,19 +275,27 @@ export function roundCap(
 }
 
 /** The tools a request may offer. Below the cap, all of them. At the cap,
- *  which is the request after the last allowed round, only the intrinsic
- *  tools (saveDraft), which the cap never applied to: with nothing else to
- *  call the model can only answer. The `tooManyRounds` refusal is the
- *  fallback for a model that calls a tool it was not offered.
- *  `functions` are the tools' functions, for telling an intrinsic one. */
-export function toolsOffered<T extends { name: string }>(
-  tools: T[],
-  functions: AgencyFunction[],
-  atCap: boolean,
-): T[] {
-  if (!atCap) return tools;
-  const intrinsicNames = functions.filter((fn) => findIntrinsic(fn)).map((fn) => fn.name);
-  return tools.filter((tool) => intrinsicNames.includes(tool.name));
+ *  which is the request after the last allowed round, none, intrinsic
+ *  tools included: with nothing to call, the model can only answer. The
+ *  `tooManyRounds` refusal is the fallback for a model that calls a tool
+ *  it was not offered, and `pastRoundCap` ends the call if it keeps
+ *  doing so. */
+export function toolsOffered<T>(tools: T[], atCap: boolean): T[] {
+  return atCap ? [] : tools;
+}
+
+/** True when this round's calls came from a second request past the cap.
+ *  The first request past the cap had its calls refused and was told to
+ *  answer; a model that sends calls again would be refused forever, so
+ *  the llm() call ends instead. Read from the persisted round counter, so
+ *  a resumed pass decides the same way. */
+export function pastRoundCap(round: number, roundLimit: number): boolean {
+  return round > roundLimit;
+}
+
+/** The failure an llm() call returns when `pastRoundCap` ends it. */
+export function pastRoundCapMessage(roundLimit: number): string {
+  return `The model kept calling tools after its ${roundLimit} tool rounds were used up.`;
 }
 
 /** The request config at the cap: provider-hosted tools dropped, since

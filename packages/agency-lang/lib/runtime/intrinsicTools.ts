@@ -68,17 +68,23 @@ export function findIntrinsic(fn: AgencyFunction): IntrinsicTool | undefined {
 /** One round's calls, split once, declaratively: intrinsic entries
  *  (with their original call-list index, for stable step keys) and
  *  everything else, which dispatches concurrently as always. The loop
- *  never re-derives membership — these two lists are the answer. */
+ *  never re-derives membership — these two lists are the answer. Past
+ *  the round cap no call is intrinsic: every call goes to the gate,
+ *  which refuses it like any other call. */
 export function partitionIntrinsicCalls<
   T extends { id: string; name: string; arguments: Record<string, unknown> },
 >(
   toolCalls: T[],
   toolFunctions: AgencyFunction[],
+  pastCap: boolean,
 ): {
   intrinsicCalls: { toolCall: T; callIndex: number; intrinsic: IntrinsicTool }[];
   dispatchCalls: T[];
 } {
   const intrinsicOf = (toolCall: T) => {
+    if (pastCap) {
+      return undefined;
+    }
     const handler = toolFunctions.find((fn) => fn.name === toolCall.name);
     return handler ? findIntrinsic(handler) : undefined;
   };

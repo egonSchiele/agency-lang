@@ -59,6 +59,29 @@ export class RecordingClient implements LLMClient {
   }
 }
 
+/** A tool shaped like the stdlib `saveDraft`: the same registered name and
+ *  module, so the tool loop treats it as the intrinsic. */
+export function stdlibShapedSaveDraft(): AgencyFunction {
+  return new AgencyFunction({
+    name: "saveDraft",
+    module: "stdlib/index.agency",
+    fn: () => null,
+    params: [
+      {
+        name: "value",
+        hasDefault: false,
+        defaultValue: undefined,
+        variadic: false,
+      } as any,
+    ],
+    toolDefinition: {
+      name: "saveDraft",
+      description: "the def's own description",
+      schema: z.object({ value: z.any() }),
+    },
+  });
+}
+
 /** A tool that counts how many times it ran. */
 export function pingTool(): { ping: AgencyFunction; runs: () => number } {
   let count = 0;

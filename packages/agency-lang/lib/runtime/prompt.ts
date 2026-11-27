@@ -59,6 +59,8 @@ import {
   repeatKey,
   resetRepeat,
   configOffered,
+  pastRoundCap,
+  pastRoundCapMessage,
   roundCap,
   toolsOffered,
   type GateState,
@@ -561,7 +563,7 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
   };
   /** Send the thread to the model and keep what it returned. */
   const sendRequest = async (atCap: boolean): Promise<void> => {
-    const offered = toolsOffered(tools, exposedFunctions, atCap);
+    const offered = toolsOffered(tools, atCap);
     const result = await _runPrompt({
       run,
       messages,
@@ -1142,8 +1144,13 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         const round = self.toolCallRound;
 
         // Partition the round once: intrinsic calls handle inline (in
-        // order, below); everything else dispatches concurrently.
-        const { intrinsicCalls, dispatchCalls } = partitionIntrinsicCalls(toolCalls, toolFunctions);
+        // order, below); everything else dispatches concurrently. Past
+        // the cap every call dispatches, so the gate refuses it.
+        const { intrinsicCalls, dispatchCalls } = partitionIntrinsicCalls(
+          toolCalls,
+          toolFunctions,
+          round >= roundLimit,
+        );
 
         // Ordered interception (partials-ergonomics spec Part 2):
         // intrinsic calls run inline at their call-list position, so
@@ -1152,8 +1159,8 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
         // awaited in order). The stack here is [..., owner, runPrompt]
         // (setupFunction pushed our frame), so setSavedDraft's
         // callerFrame() write lands on the owner, same as the def
-        // path. Intrinsics deliberately ignore maxToolCallRounds and
-        // removedTools. The ack rides the LIVE thread; the next
+        // path. Below the cap, intrinsics deliberately ignore
+        // maxToolCallRounds and removedTools. The ack rides the LIVE thread; the next
         // interrupt-path checkpoint's snapshotMessages() captures it —
         // do NOT add a redundant snapshot here. (A lost ack would be a
         // dangling tool_use, which real providers reject.)
@@ -1626,6 +1633,14 @@ async function runToolLoop(run: Run, args: RunPromptArgs): Promise<any> {
           // call has no next round to raise it at. See guardGate.initial.
           await pr.step("guardGate.final", guardGate);
           return turnEnded.returnValue;
+        }
+        if (pastRoundCap(round, roundLimit)) {
+          // This round's calls are already refused and answered, so the
+          // thread has no dangling tool call.
+          await pr.step("guardGate.final", guardGate);
+          const message = pastRoundCapMessage(roundLimit);
+          run.log.error({ errorType: "limitExceeded", message });
+          return failure(message);
         }
         tools = tools.filter((t) => !removedTools.includes(t.name));
         toolFunctions = toolFunctions.filter((fn) => !removedTools.includes(fn.name));
